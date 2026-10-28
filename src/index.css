@@ -3437,3 +3437,91 @@ body {
     font-size: 14px;
   }
 }
+
+/* ---------- Splash ---------- */
+
+.splash {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.splash__photo {
+  position: absolute;
+  inset: 0 0 auto 0;
+  width: 100%;
+  height: 64%;
+  object-fit: cover;
+  object-position: 50% 45%;
+  opacity: 0.55;
+}
+
+.splash__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(13, 18, 12, 0.6) 0%,
+    rgba(13, 18, 12, 0.15) 32%,
+    var(--surface) 66%
+  );
+}
+
+.splash__inner {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 22px 24px;
+}
+
+.splash__copy {
+  margin-top: auto;
+  margin-bottom: 36px;
+}
+
+.splash__brand {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.splash__brand b {
+  color: var(--on-surface-variant);
+}
+
+.splash__title {
+  font-size: 36px;
+  line-height: 40px;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  color: var(--on-surface);
+  max-width: 300px;
+}
+
+.splash__sub {
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--on-surface-muted);
+  max-width: 290px;
+}
+
+.splash__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.splash__note {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+  text-align: center;
+}

@@ -55,6 +55,7 @@ import RecapScreen from './screens/RecapScreen';
 import LibraryScreen from './screens/LibraryScreen';
 import AdaptScreen from './screens/AdaptScreen';
 import Onboarding from './components/Onboarding';
+import SplashScreen from './screens/SplashScreen';
 import Recovery from './components/Recovery';
 import {
   AdjustSheet,
@@ -117,6 +118,7 @@ export default function App() {
   const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(INITIAL));
   const [conflict, setConflict] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [showSplash, setShowSplash] = useState(true);
   const [recovery, setRecovery] = useState<{ message: string; raw: string } | null>(
     INITIAL.status === 'corrupt'
       ? { message: INITIAL.error ?? 'Saved data could not be read.', raw: INITIAL.raw ?? '' }
@@ -490,6 +492,15 @@ export default function App() {
             setNotice('Started with empty data.');
           }}
         />
+      </PhoneFrame>
+    );
+  }
+
+  // A resumed session must never wait behind the splash.
+  if (showSplash && !current) {
+    return (
+      <PhoneFrame>
+        <SplashScreen onStart={() => setShowSplash(false)} />
       </PhoneFrame>
     );
   }
