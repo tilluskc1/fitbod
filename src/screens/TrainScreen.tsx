@@ -6,7 +6,8 @@ import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
-import type { PerformedSet, WorkoutRecord } from '../types';
+import { displayValue, unitLabel } from '../lib/units';
+import type { PerformedSet, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 
@@ -16,6 +17,8 @@ interface Props {
   now: number;
   /** Weights the chosen setup owns. Never free-typed. */
   loadOptions: number[];
+  /** Display unit. Records stay in kilograms. */
+  unit: Unit;
   onMinimize: () => void;
   onFinish: () => void;
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => void;
@@ -55,9 +58,11 @@ function detailOf(exerciseId: string): string {
   );
 }
 
-function setSummary(reps: number, weight: number, mode: LoadMode): string {
+function setSummary(reps: number, weight: number, mode: LoadMode, unit: Unit): string {
   const load =
-    weight > 0 ? ` @ ${weight} kg${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}` : '';
+    weight > 0
+      ? ` @ ${displayValue(weight, unit)} ${unitLabel(unit)}${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}`
+      : '';
   return `${reps} reps${load}`;
 }
 
@@ -66,6 +71,7 @@ export default function TrainScreen({
   history,
   now,
   loadOptions,
+  unit,
   onMinimize,
   onFinish,
   onUpdateSet,
@@ -112,7 +118,14 @@ export default function TrainScreen({
   const activeSet = exercise.performed.findIndex((set) => !set.done);
   const mode = loadModeOf(exercise.exerciseId);
   const detail = detailOf(exercise.exerciseId);
-  const weightLabel = mode === 'total' ? 'kg total' : mode === 'each' ? 'kg each' : 'bodyweight';
+  const weightLabel =
+    mode === 'total'
+      ? `${unitLabel(unit)} total`
+      : mode === 'each'
+        ? `${unitLabel(unit)} each`
+        : 'bodyweight';
+  /** Loads are stored in kilograms; only the readout converts. */
+  const showWeight = (kg: number) => displayValue(kg, unit);
   const recorded = lastPerformance(history, exercise.exerciseId);
   const last = recorded
     ? { reps: recorded.reps, weight: recorded.weight }
@@ -135,7 +148,7 @@ export default function TrainScreen({
     : activeValues
       ? `Log set ${activeSet + 1} · ${
           activeValues.weight > 0
-            ? `${activeValues.reps} reps @ ${activeValues.weight} kg`
+            ? `${activeValues.reps} reps @ ${showWeight(activeValues.weight)} ${unitLabel(unit)}`
             : `${activeValues.reps} reps`
         }`
       : 'Log set';
@@ -170,7 +183,7 @@ export default function TrainScreen({
               <div className="set-card__sub">Editing saved set</div>
             </div>
             <span className="set-card__target">
-              Saved: {set.reps} reps{set.weight > 0 ? ` · ${set.weight} kg` : ''}
+              Saved: {set.reps} reps{set.weight > 0 ? ` · ${showWeight(set.weight)} ${unitLabel(unit)}` : ''}
             </span>
           </div>
 
@@ -187,7 +200,7 @@ export default function TrainScreen({
                     aria-pressed={draft.weight === weight}
                     onClick={() => patchDraft({ weight })}
                   >
-                    {weight}
+                    {showWeight(weight)}
                   </button>
                 ))}
               </div>
@@ -238,7 +251,7 @@ export default function TrainScreen({
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <span className="aw-set__label">
-              Set {setIndex + 1}: {setSummary(set.reps, set.weight, mode)}
+              Set {setIndex + 1}: {setSummary(set.reps, set.weight, mode, unit)}
             </span>
           </span>
           <button
@@ -261,7 +274,7 @@ export default function TrainScreen({
             {setIndex + 1}
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
-            <span className="aw-set__label">{setSummary(set.reps, set.weight, mode)}</span>
+            <span className="aw-set__label">{setSummary(set.reps, set.weight, mode, unit)}</span>
           </span>
         </div>
       );
@@ -279,7 +292,9 @@ export default function TrainScreen({
           </div>
           <span className="set-card__target">
             Target: {plannedTarget?.reps ?? 0} reps
-            {(plannedTarget?.weight ?? 0) > 0 ? ` · ${plannedTarget.weight} kg` : ''}
+            {(plannedTarget?.weight ?? 0) > 0
+              ? ` · ${showWeight(plannedTarget.weight)} ${unitLabel(unit)}`
+              : ''}
           </span>
         </div>
 
@@ -296,7 +311,7 @@ export default function TrainScreen({
                   aria-pressed={set.weight === weight}
                   onClick={() => onUpdateSet(index, setIndex, { weight })}
                 >
-                  {weight}
+                  {showWeight(weight)}
                 </button>
               ))}
             </div>
@@ -376,20 +391,20 @@ export default function TrainScreen({
             <div className="aw-loadline">
               <Icon name="fitness_center" size={18} />
               {(plannedTarget?.weight ?? 0) > 0
-                ? `${plannedTarget.weight} ${weightLabel} · ${detail}`
+                ? `${showWeight(plannedTarget.weight)} ${weightLabel} · ${detail}`
                 : `Bodyweight · ${detail}`}
             </div>
             <div className="aw-history">
               <div className="aw-history__line">
                 <Icon name="history" size={16} />
                 {last
-                  ? `Last session: ${last.reps.join(' · ')} reps @ ${last.weight} kg${mode === 'total' ? ' total' : ' each'}`
+                  ? `Last session: ${last.reps.join(' · ')} reps @ ${showWeight(last.weight)} ${unitLabel(unit)}${mode === 'total' ? ' total' : ' each'}`
                   : 'No previous session recorded'}
               </div>
               <div className="aw-history__line aw-history__line--target">
                 <Icon name="flag" size={16} />
                 Today’s target: {targetReps}
-                {targetWeight > 0 ? ` @ ${targetWeight} ${weightLabel}` : ''}
+                {targetWeight > 0 ? ` @ ${showWeight(targetWeight)} ${weightLabel}` : ''}
               </div>
             </div>
           </div>
@@ -423,7 +438,7 @@ export default function TrainScreen({
             <h2>Sets ({exercise.performed.length} total)</h2>
             <span>
               Target: {targetReps}
-              {targetWeight > 0 ? ` @ ${targetWeight} ${weightLabel}` : ''}
+              {targetWeight > 0 ? ` @ ${showWeight(targetWeight)} ${weightLabel}` : ''}
             </span>
           </div>
 
@@ -444,7 +459,7 @@ export default function TrainScreen({
               <span className="up-next__meta" style={{ display: 'block' }}>
                 {next.planned.length} {next.planned.length === 1 ? 'set' : 'sets'}
                 {next.planned[0]?.weight
-                  ? ` @ ${next.planned[0].weight} kg${
+                  ? ` @ ${showWeight(next.planned[0].weight)} ${unitLabel(unit)}${
                       loadModeOf(next.exerciseId) === 'total' ? ' total' : ' each'
                     }`
                   : ''}

@@ -520,6 +520,7 @@ export default function App() {
         history={state.history}
         now={now}
         loadOptions={loadOptions(constraints.equipment)}
+        unit={unit}
         onMinimize={() => {
           setView('tabs');
           setTab('today');

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS } from '../data/exercises';
-import type { Equipment, Experience, Goal, Profile, SupportEquipment } from '../types';
+import type { Equipment, Experience, Goal, Profile, SupportEquipment, Unit } from '../types';
 
 interface Props {
   onComplete: (profile: Profile) => void;
@@ -22,6 +22,7 @@ const EXPERIENCES: { value: Experience; label: string; blurb: string }[] = [
 export default function Onboarding({ onComplete }: Props) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
+  const [unit, setUnit] = useState<Unit>('kg');
   const [goal, setGoal] = useState<Goal>('Build Muscle');
   const [experience, setExperience] = useState<Experience>('Beginner');
   const [daysPerWeek, setDaysPerWeek] = useState(3);
@@ -50,7 +51,7 @@ export default function Onboarding({ onComplete }: Props) {
       exclusions: [],
       loads: {},
       name: name.trim() || 'Athlete',
-      unit: 'kg',
+      unit,
       sessionMinutes: 35,
     });
   };
@@ -85,6 +86,24 @@ export default function Onboarding({ onComplete }: Props) {
             placeholder="Your first name"
             autoComplete="given-name"
           />
+
+          <span className="setup-label">Units</span>
+          <div className="unit-toggle" role="group" aria-label="Weight units">
+            <button
+              className={unit === 'kg' ? 'on' : ''}
+              aria-pressed={unit === 'kg'}
+              onClick={() => setUnit('kg')}
+            >
+              kg
+            </button>
+            <button
+              className={unit === 'lb' ? 'on' : ''}
+              aria-pressed={unit === 'lb'}
+              onClick={() => setUnit('lb')}
+            >
+              lb
+            </button>
+          </div>
 
           <span className="setup-label">Your goal</span>
           <div className="option-list">
