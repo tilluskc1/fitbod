@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fitbod clone — design mockups</title>
+    <link rel="stylesheet" href="../src/index.css" />
+    <style>
+      /* Mockup chrome only — everything inside .mk-app is the app's own design language. */
+      body {
+        padding: 34px 24px 60px;
+      }
+
+      .mk-doc {
+        max-width: 1320px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+
+      .mk-doc-head {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: 720px;
+      }
+
+      .mk-kicker {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 2px;
+        color: var(--accent-2);
+      }
+
+      .mk-doc-head h1 {
+        font-size: 34px;
+        font-weight: 800;
+        letter-spacing: -0.8px;
+      }
+
+      .mk-doc-head p {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .mk-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 34px;
+        align-items: flex-start;
+      }
+
+      .mk-slot {
+        width: 390px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .mk-slot-head {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .mk-slot-title {
+        font-size: 14px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .mk-slot-num {
+        display: grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .mk-slot-note {
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      .mk-frame {
+        width: 390px;
+        height: 812px;
+        border-radius: 30px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .mk-app {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .mk-status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 22px 4px;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+        letter-spacing: 0.3px;
+      }
+
+      .mk-body {
+        padding: 14px 18px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        overflow: hidden;
+      }
+
+      .mk-tight .mk-body {
+        gap: 12px;
+      }
+
+      .mk-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .mk-seg {
+        display: flex;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 2px;
+        background: var(--panel);
+        flex: none;
+      }
+
+      .mk-seg span {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+        padding: 5px 9px;
+        border-radius: 7px;
+        color: var(--muted);
+      }
+
+      .mk-seg span.on {
+        background: var(--panel-2);
+        color: var(--text);
+      }
+
+      .mk-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .mk-card.is-accent {
+        border-color: rgba(255, 77, 109, 0.45);
+        box-shadow: 0 0 0 1px rgba(255, 77, 109, 0.18) inset;
+      }
+
+      .mk-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .mk-card-title {
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      .mk-hint {
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      .mk-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 2px;
+      }
+
+      .mk-chips .chip {
+        padding: 7px 11px;
+        font-size: 12.5px;
+        font-weight: 700;
+        border-radius: 9px;
+      }
+
+      .mk-add {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 4px;
+      }
+
+      .mk-add input {
+        flex: 1;
+        min-width: 0;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+        padding: 9px 11px;
+        outline: none;
+      }
+
+      .mk-add input::placeholder {
+        color: #6c6c7a;
+      }
+
+      .mk-unit {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--muted);
+      }
+
+      .mk-sticky {
+        margin-top: auto;
+        padding: 12px 0 0;
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .mk-sticky .muted {
+        font-size: 11px;
+        text-align: center;
+      }
+
+      .mk-stepper {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 4px;
+        width: fit-content;
+      }
+
+      .mk-stepper button {
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 9px;
+        background: var(--panel);
+        color: var(--text);
+        font-size: 17px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .mk-stepper strong {
+        min-width: 74px;
+        text-align: center;
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      .mk-plate-row {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 5px;
+        height: 62px;
+        padding: 8px 0;
+        margin: 4px 0;
+      }
+
+      .mk-plate {
+        width: 15px;
+        border-radius: 4px;
+        background: linear-gradient(180deg, #3a3a46, #24242d);
+        border: 1px solid #45454f;
+        display: grid;
+        place-items: center;
+        font-size: 8px;
+        font-weight: 800;
+        color: var(--muted);
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+      }
+
+      .mk-plate.bar {
+        width: 26px;
+        height: 5px;
+        border-radius: 3px;
+        background: #565663;
+        writing-mode: horizontal-tb;
+        color: transparent;
+        align-self: center;
+      }
+
+      .mk-plate.p20 { height: 54px; }
+      .mk-plate.p15 { height: 46px; }
+      .mk-plate.p10 { height: 38px; }
+      .mk-plate.p5 { height: 29px; }
+      .mk-plate.p2 { height: 21px; }
+      .mk-plate.p1 { height: 16px; width: 11px; }
+
+      .mk-chart {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      .mk-chart-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .mk-metric-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .mk-metric {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px 11px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .mk-metric strong {
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: -0.3px;
+      }
+
+      .mk-metric span {
+        font-size: 10.5px;
+        color: var(--muted);
+        letter-spacing: 0.2px;
+      }
+
+      .mk-list {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+
+      .mk-list-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 9px 12px;
+      }
+
+      .mk-list-left {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .mk-list-date {
+        font-size: 11px;
+        color: var(--muted);
+      }
+
+      .mk-list-sets {
+        font-size: 12.5px;
+        font-weight: 700;
+        letter-spacing: 0.1px;
+      }
+
+      .mk-pr {
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.7px;
+        color: #ffb74d;
+        border: 1px solid rgba(255, 183, 77, 0.45);
+        background: rgba(255, 183, 77, 0.1);
+        border-radius: 999px;
+        padding: 2px 6px;
+      }
+
+      .mk-next {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: linear-gradient(180deg, rgba(255, 77, 109, 0.16), rgba(216, 30, 70, 0.08));
+        border: 1px solid rgba(255, 77, 109, 0.4);
+      }
+
+      .mk-next strong {
+        display: block;
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      .mk-next span {
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+
+      .mk-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .mk-actions .btn {
+        flex: 1;
+      }
+
+      .mk-nav {
+        margin-top: auto;
+        display: flex;
+        justify-content: space-around;
+        border-top: 1px solid var(--border);
+        padding: 10px 6px 14px;
+        background: rgba(11, 11, 14, 0.96);
+        font-size: 10.5px;
+        font-weight: 700;
+        color: var(--muted);
+      }
+
+      .mk-nav .on {
+        color: var(--accent-2);
+      }
+
+      .mk-nav div {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .mk-nav i {
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        border: 1.5px solid currentColor;
+        display: block;
+      }
+
+      .mk-footer-note {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+        padding-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mk-doc">
+      <div class="mk-doc-head">
+        <div class="mk-kicker">FITBOD CLONE · DESIGN MOCKUPS</div>
+        <h1>Three screens for the next phase</h1>
+        <p>
+          Static mockups in the app’s existing dark/red language, drawn from the limitations now listed in
+          the README: no load-inventory editor, no deload, and a PR that only tracks the heaviest load.
+          Nothing here is wired to app state — it is a visual proposal.
+        </p>
+      </div>
+
+      <div class="mk-grid">
+        <!-- 01 — Load inventory editor -->
+        <div class="mk-slot">
+          <div class="mk-slot-head">
+            <div class="mk-slot-title"><span class="mk-slot-num">01</span> Your weights</div>
+            <div class="mk-slot-note">
+              The step and rounding source. Replaces the invisible <code>loads</code> field with a real
+              editor, so a fixed dumbbell rack snaps to weights you actually own.
+            </div>
+          </div>
+
+          <div class="mk-frame">
+            <div class="mk-status"><span>9:41</span><span>▮▮▮ ▮</span></div>
+            <div class="mk-app">
+              <div class="mk-body">
+                <header class="page-header">
+                  <div>
+                    <div class="card-eyebrow">TRAINING SETUP</div>
+                    <h1 class="greeting" style="font-size: 26px">Your weights</h1>
+                  </div>
+                  <div class="mk-seg"><span class="on">KG</span><span>LB</span></div>
+                </header>
+
+                <p class="mk-hint">
+                  Tell us what you actually own. Prescriptions round to the closest weight on this list.
+                </p>
+
+                <div class="mk-card">
+                  <div class="mk-card-head">
+                    <span class="mk-card-title">Dumbbells</span>
+                    <span class="status-chip ok">9 pairs</span>
+                  </div>
+                  <div class="mk-chips">
+                    <button class="chip selected">5</button>
+                    <button class="chip selected">7.5</button>
+                    <button class="chip selected">10</button>
+                    <button class="chip selected">12.5</button>
+                    <button class="chip selected">15</button>
+                    <button class="chip selected">17.5</button>
+                    <button class="chip selected">20</button>
+                    <button class="chip selected">22.5</button>
+                    <button class="chip selected">25</button>
+                    <button class="chip">27.5</button>
+                    <button class="chip">30</button>
+                  </div>
+                  <div class="mk-add">
+                    <input value="27.5" />
+                    <span class="mk-unit">kg</span>
+                    <button class="btn btn-small">Add</button>
+                  </div>
+                </div>
+
+                <div class="mk-card">
+                  <div class="mk-card-head">
+                    <span class="mk-card-title">Barbell</span>
+                    <span class="status-chip ok">20 kg bar</span>
+                  </div>
+                  <div class="mk-plate-row">
+                    <span class="mk-plate p1">1.25</span>
+                    <span class="mk-plate p2">2.5</span>
+                    <span class="mk-plate p5">5</span>
+                    <span class="mk-plate p10">10</span>
+                    <span class="mk-plate bar">bar</span>
+                    <span class="mk-plate p10">10</span>
+                    <span class="mk-plate p5">5</span>
+                    <span class="mk-plate p2">2.5</span>
+                    <span class="mk-plate p1">1.25</span>
+                  </div>
+                  <div class="mk-row">
+                    <span class="mk-hint">Plates per side</span>
+                    <span class="mk-hint" style="color: var(--text); font-weight: 700">smallest jump 2.5 kg</span>
+                  </div>
+                </div>
+
+                <div class="mk-card">
+                  <div class="mk-card-head">
+                    <span class="mk-card-title">Machine stack</span>
+                    <span class="status-chip limited">approx.</span>
+                  </div>
+                  <div class="mk-chips">
+                    <button class="chip selected">5 – 60</button>
+                    <button class="chip">10 – 100</button>
+                    <button class="chip">Custom</button>
+                  </div>
+                  <div class="mk-add">
+                    <input value="5" />
+                    <span class="mk-unit">kg steps</span>
+                    <button class="btn btn-small btn-ghost">Edit</button>
+                  </div>
+                </div>
+
+                <div class="mk-sticky">
+                  <button class="btn btn-primary btn-block">Save inventory</button>
+                  <span class="muted">Changes apply to the next workout. History is untouched.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 02 — Deload on Home -->
+        <div class="mk-slot">
+          <div class="mk-slot-head">
+            <div class="mk-slot-title"><span class="mk-slot-num">02</span> Plateau &amp; deload</div>
+            <div class="mk-slot-note">
+              Autoregulation where the app is silent today: a stalled lift is detected, a back-off is
+              proposed, and the reason is stated instead of silently repeating the load.
+            </div>
+          </div>
+
+          <div class="mk-frame">
+            <div class="mk-status"><span>9:41</span><span>▮▮▮ ▮</span></div>
+            <div class="mk-app">
+              <div class="mk-body">
+                <header class="page-header">
+                  <div>
+                    <div class="logo">FIT<span class="logo-dot">·</span>BOD</div>
+                    <h1 class="greeting">Tuesday</h1>
+                    <p class="muted">Push day · 3rd of 8 in this block</p>
+                  </div>
+                  <div class="avatar">K</div>
+                </header>
+
+                <div class="card next-card">
+                  <div class="card-eyebrow">NEXT UP</div>
+                  <h2>Push</h2>
+                  <span class="tag">Chest · Shoulders · Triceps</span>
+                  <div class="feasibility ok" style="margin-top: 10px">
+                    <div class="feasibility-head">
+                      <span class="status-chip ok">Ready</span>
+                      <span class="feasibility-reason">6 exercises · 4–22 sets planned</span>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary btn-block">Start workout</button>
+                </div>
+
+                <div class="mk-card is-accent">
+                  <div class="mk-card-head">
+                    <span class="card-eyebrow" style="margin: 0">PLATEAU DETECTED</span>
+                    <span class="mk-pr">3 SESSIONS</span>
+                  </div>
+                  <div class="mk-card-title" style="font-size: 17px">Bench press has stalled</div>
+                  <p class="mk-hint">
+                    62.5 kg × 6 for three sessions, and the last two sets dropped to 5 reps. A 10% back-off
+                    week usually restores the climb.
+                  </p>
+                  <div class="mk-row" style="margin-top: 2px">
+                    <div>
+                      <span class="mk-hint">This week</span>
+                      <div style="font-size: 20px; font-weight: 800">55 kg × 6–10</div>
+                    </div>
+                    <div style="text-align: right">
+                      <span class="mk-hint">Then</span>
+                      <div style="font-size: 15px; font-weight: 700; color: var(--accent-2)">62.5 kg</div>
+                    </div>
+                  </div>
+                  <div class="mk-actions" style="margin-top: 6px">
+                    <button class="btn btn-primary btn-small">Deload to 55 kg</button>
+                    <button class="btn btn-ghost btn-small">Not now</button>
+                  </div>
+                  <p class="mk-hint" style="font-size: 11px">
+                    Uses the nearest load in your inventory · one week only
+                  </p>
+                </div>
+
+                <div class="stat-row">
+                  <div class="stat-card">
+                    <span class="stat-value">3</span>
+                    <span class="stat-label">this week</span>
+                  </div>
+                  <div class="stat-card">
+                    <span class="stat-value">12</span>
+                    <span class="stat-label">streak</span>
+                  </div>
+                  <div class="stat-card">
+                    <span class="stat-value">4.2t</span>
+                    <span class="stat-label">volume</span>
+                  </div>
+                </div>
+
+                <div class="mk-footer-note" style="margin-top: auto">
+                  Suggested, never applied silently — the session still starts from your plan.
+                </div>
+              </div>
+              <div class="mk-nav">
+                <div class="on"><i></i>Home</div>
+                <div><i></i>Workout</div>
+                <div><i></i>History</div>
+                <div><i></i>Library</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 03 — Exercise progress -->
+        <div class="mk-slot">
+          <div class="mk-slot-head">
+            <div class="mk-slot-title"><span class="mk-slot-num">03</span> Exercise progress</div>
+            <div class="mk-slot-note">
+              Turns “PR = heaviest load” into a trend you can read: top set over time, an estimated 1RM, and
+              the exact next prescription.
+            </div>
+          </div>
+
+          <div class="mk-frame">
+            <div class="mk-status"><span>9:41</span><span>▮▮▮ ▮</span></div>
+            <div class="mk-app">
+              <div class="mk-body">
+                <div class="mk-row">
+                  <button class="btn btn-small btn-ghost" style="padding: 6px 10px">‹ Back</button>
+                  <span class="logo small">LIBRARY</span>
+                </div>
+
+                <div>
+                  <div class="card-eyebrow">CHEST · BARBELL</div>
+                  <h1 class="greeting" style="font-size: 24px; margin-top: 2px">Barbell Bench Press</h1>
+                  <span class="tag">8 sessions · last trained Oct 27</span>
+                </div>
+
+                <div class="mk-metric-row">
+                  <div class="mk-metric"><strong>62.5<span style="font-size: 11px"> kg</span></strong><span>BEST LOAD</span></div>
+                  <div class="mk-metric"><strong>77<span style="font-size: 11px"> kg</span></strong><span>EST. 1RM</span></div>
+                  <div class="mk-metric"><strong>7<span style="font-size: 11px"> reps</span></strong><span>BEST SET</span></div>
+                </div>
+
+                <div class="mk-card">
+                  <div class="mk-card-head">
+                    <span class="mk-card-title">Top set</span>
+                    <span class="status-chip limited">PLATEAU</span>
+                  </div>
+                  <svg class="mk-chart" viewBox="0 0 320 128" role="img" aria-label="Top set weight over eight sessions">
+                    <defs>
+                      <linearGradient id="mkFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#ff4d6d" stop-opacity="0.35" />
+                        <stop offset="100%" stop-color="#ff4d6d" stop-opacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <line x1="10" y1="24" x2="310" y2="24" stroke="#2a2a33" stroke-dasharray="3 4" />
+                    <line x1="10" y1="110" x2="310" y2="110" stroke="#2a2a33" />
+                    <path d="M10,96 L53,81 L96,67 L139,53 L181,39 L224,39 L267,24 L310,24 L310,110 L10,110 Z" fill="url(#mkFill)" />
+                    <polyline
+                      points="10,96 53,81 96,67 139,53 181,39 224,39 267,24 310,24"
+                      fill="none"
+                      stroke="#ff4d6d"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <circle cx="310" cy="24" r="4" fill="#ff4d6d" stroke="#0b0b0e" stroke-width="2" />
+                  </svg>
+                  <div class="mk-chart-meta">
+                    <span>Sep 8</span><span>Oct 27</span>
+                  </div>
+                </div>
+
+                <div class="mk-next">
+                  <div>
+                    <span>Next prescription</span>
+                    <strong>4 × 7 @ 62.5 kg</strong>
+                  </div>
+                  <span class="status-chip ok">+1 REP</span>
+                </div>
+
+                <div class="mk-list">
+                  <div class="mk-list-row">
+                    <div class="mk-list-left">
+                      <span class="mk-list-sets">62.5 × 6, 6, 5, 5</span>
+                      <span class="mk-list-date">Oct 27 · 1,375 kg</span>
+                    </div>
+                    <span class="mk-pr">STALL</span>
+                  </div>
+                  <div class="mk-list-row">
+                    <div class="mk-list-left">
+                      <span class="mk-list-sets">62.5 × 7, 6, 6, 6</span>
+                      <span class="mk-list-date">Oct 22 · 1,562 kg</span>
+                    </div>
+                    <span class="mk-pr">PR</span>
+                  </div>
+                  <div class="mk-list-row">
+                    <div class="mk-list-left">
+                      <span class="mk-list-sets">62.5 × 6, 6, 6, 6</span>
+                      <span class="mk-list-date">Oct 19 · 1,500 kg</span>
+                    </div>
+                    <span class="mk-pr">PR</span>
+                  </div>
+                  <div class="mk-list-row">
+                    <div class="mk-list-left">
+                      <span class="mk-list-sets">60 × 10, 9, 8, 8</span>
+                      <span class="mk-list-date">Oct 15 · 2,100 kg</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mk-footer-note" style="margin-top: auto">
+                  Estimated 1RM uses Epley on the best set (62.5 × 7 ≈ 77 kg). Not a tested max.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

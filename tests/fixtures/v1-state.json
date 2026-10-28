@@ -1,0 +1,128 @@
+{
+  "profile": {
+    "goal": "Lose Fat",
+    "experience": "Beginner",
+    "daysPerWeek": 3,
+    "equipment": ["Barbell", "Dumbbell", "Machine", "Cable"]
+  },
+  "plan": [
+    { "name": "Push", "focus": ["Chest", "Shoulders", "Triceps"] },
+    { "name": "Pull", "focus": ["Back", "Biceps", "Core"] },
+    { "name": "Legs", "focus": ["Quads", "Hamstrings", "Glutes", "Calves", "Core"] }
+  ],
+  "history": [
+    {
+      "id": "nn7i3ndqmvr4zife",
+      "date": "2026-10-27T20:27:04.586Z",
+      "name": "Push",
+      "exercises": [
+        {
+          "exerciseId": "face-pull",
+          "name": "Face Pull",
+          "sets": [
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false }
+          ]
+        },
+        {
+          "exerciseId": "arnold-press",
+          "name": "Arnold Press",
+          "sets": [
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false }
+          ]
+        },
+        {
+          "exerciseId": "rear-delt-fly",
+          "name": "Rear Delt Fly",
+          "sets": [
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false }
+          ]
+        },
+        {
+          "exerciseId": "cable-fly",
+          "name": "Cable Fly",
+          "sets": [
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false }
+          ]
+        },
+        {
+          "exerciseId": "skull-crusher",
+          "name": "Skull Crusher",
+          "sets": [
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false }
+          ]
+        }
+      ]
+    }
+  ],
+  "current": {
+    "workout": {
+      "id": "dq9aetd6mvr59g6m",
+      "date": "2026-10-27T20:34:48.238Z",
+      "name": "Pull",
+      "exercises": [
+        {
+          "exerciseId": "rear-delt-fly",
+          "name": "Rear Delt Fly",
+          "sets": [
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false }
+          ]
+        },
+        {
+          "exerciseId": "good-morning",
+          "name": "Good Morning",
+          "sets": [
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false }
+          ]
+        },
+        {
+          "exerciseId": "lat-pulldown",
+          "name": "Lat Pulldown",
+          "sets": [
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false }
+          ]
+        },
+        {
+          "exerciseId": "plank",
+          "name": "Plank",
+          "sets": [
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false }
+          ]
+        },
+        {
+          "exerciseId": "cable-crunch",
+          "name": "Cable Crunch",
+          "sets": [
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false },
+            { "weight": 0, "reps": 10, "done": false }
+          ]
+        }
+      ]
+    },
+    "dayIndex": 1
+  }
+}

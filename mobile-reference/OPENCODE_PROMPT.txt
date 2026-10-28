@@ -1,0 +1,33 @@
+Work in my existing fitness app repository. Read mobile-reference/HANDOFF.md first.
+
+GOAL
+Turn the approved mobile prototype into the working UI of my existing app. The current charcoal/lime design is locked. This milestone is UI integration and reliable workout behavior; live AI comes after this foundation passes.
+
+DESIGN CONTRACT
+- Match mobile-reference/reference/approved-design.png and reference/current-prototype.jpg. Run the reference source to inspect every interactive state.
+- Preserve the large personal greeting, full-width workout photograph, inline coach, outlined Adjust today button, first-exercise comparison, compact exercise rows, lime Start button, and Today/Plan/Progress/Coach bottom tabs.
+- Preserve the same visual language on adjustment, training, history, memory, settings, recap, and weekly-review screens.
+- Mobile comes first. Check 360, 390, and 430px widths, safe areas, scroll behavior, readable type and accessible tap targets. Desktop should present the mobile app, not become a dashboard.
+- Do not invent a new theme, switch to light mode, add a sidebar, or replace the artwork with generic placeholders. Use real HTML controls and live data, not a flattened screenshot.
+
+AUDIT BEFORE EDITING
+Inspect the actual stack, state flow, exercise catalog, generator, logging schema, persistence and existing tests. Read the original HANDOFF.md if present, but verify its claims against code. Briefly report what can be reused, then proceed with implementation without waiting for routine approval.
+
+IMPORTANT: TWO DIFFERENT CODEBASES
+mobile-reference is a plain-JavaScript prototype with 10 sample exercises, localStorage and guided coach responses. My original app was described as React/Vite with 51 exercises; verify its actual current state. Keep my existing stack, full catalog, records and working features. Do not replace the application with the reference demo, shrink the catalog, copy sample history into personal records, or assume its illustrative prescriptions are a production training engine.
+
+IMPLEMENT THIS MILESTONE
+1. Port the approved views into maintainable components using the current project conventions. Connect them to the real application state. Reuse the existing media/catalog when appropriate and preserve the supplied reference appearance.
+2. Make every visible control functional. Share one resolved workout between preview, details, Start and logging so exercises, sets, loads, units and duration agree.
+3. Preserve A/B sequence continuity, per-set weights/reps, kg/lb conversion, timestamp-based pause/rest timers, resume after refresh, partial completion, history corrections and duplicate-safe finish.
+4. Persist actual set records. Reuse durable storage if present; if it is missing, implement a versioned storage adapter with migration and recovery. Preserve existing data. Validate export/restore before replacing records; failed saves and concurrent tabs must not silently discard work.
+5. Handle equipment infeasibility by movement coverage and exercise requirements, not just total exercise count. Never generate an empty or silently incomplete session. Show missing coverage and offer explicit supported alternatives. Keep temporary equipment changes scoped to the session. Never transfer a working weight directly to a different exercise; use separate history or a user-selected starting load.
+6. Keep current demo coach responses clearly identified. Personal reviews must use actual records and confirmed context, not example data. Proposals need an explicit preview and acceptance. Do not add a frontend API secret or pretend live AI is connected.
+
+VALIDATE
+Run the existing relevant checks plus focused regressions for changed behavior. The reference has 74 checks in checks.mjs; port the relevant scenarios rather than claiming that running its isolated harness tests the React app.
+Browser-test: Today -> Adjust -> 20 minutes/bodyweight -> preview -> approve -> Start -> edit/log a set -> reload/resume -> finish early -> verify the exact set in history -> correct that set. Also verify Plan sequence, all four tabs, memory edits and an unsupported kettlebell-only request.
+Compare actual rendered screenshots with the approved references at phone widths. Fix discrepancies before reporting completion.
+
+DELIVER
+Summarize files changed, migrations, exact checks/results, screenshots and remaining gaps. Stop after this milestone. Do not redesign the product, add unrelated features, reset my records, publish a new service, or claim that the live AI/progression engine is finished.
