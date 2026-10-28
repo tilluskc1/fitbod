@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, EXERCISES, SUPPORT_OPTIONS } from '../data/exercises';
-import { FULL_BODY_A, programSetCount } from '../data/flagship';
+import { FULL_BODY_A, programExercise, programSetCount, repsTarget, setText } from '../data/flagship';
 import { capabilitiesFor, provides } from '../lib/capabilities';
 import { prescribeExercise } from '../lib/progression';
 import { formatWeight } from '../lib/units';
@@ -149,16 +149,22 @@ export default function PlanScreen({
 
           <div className="exercise-list">
             {available.slice(0, 6).map((exercise) => {
+              const program = programExercise(exercise.id);
               const prescription = prescribeExercise(exercise, profile, history);
+              // A program movement keeps the program's own numbers: the generic
+              // engine has no notion of a hold and would print "12 reps" for the plank.
+              const sets = program?.sets ?? prescription.sets;
+              const weight = program?.weight ?? prescription.weight;
+              const reps = (program ? repsTarget(exercise.id, sets) : null) ?? setText(exercise.id, prescription.reps);
               return (
                 <button className="exercise-row" key={exercise.id} onClick={onOpenLibrary}>
                   <Demo exerciseId={exercise.id} name={exercise.name} className="row-photo" />
                   <span className="row-body">
                     <strong className="row-name">{exercise.name}</strong>
                     <span className="row-meta">
-                      {prescription.sets} sets · {prescription.reps} reps
-                      {prescription.weight > 0
-                        ? ` · ${formatWeight(prescription.weight, unit, { perSide: exercise.equipment === 'Dumbbell' })}`
+                      {sets} {sets === 1 ? 'set' : 'sets'} · {reps}
+                      {weight > 0
+                        ? ` · ${formatWeight(weight, unit, { perSide: exercise.equipment === 'Dumbbell' })}`
                         : ''}
                     </span>
                   </span>

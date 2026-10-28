@@ -206,14 +206,14 @@ export function WhySheet({
       <p className="sheet-copy">
         {last ? (
           <>
-            Each exercise keeps its own record. The next target is derived from the last completed
-            session for <strong>{exerciseName}</strong>, not from the rest of the workout.
+            Each exercise keeps its own record. Today’s target for <strong>{exerciseName}</strong> is
+            set from that movement alone, never copied from another exercise in the workout. The sets
+            you completed are listed below for comparison.
           </>
         ) : (
           <>
             No session has been recorded for <strong>{exerciseName}</strong> yet, so today’s target is
-            simply what the program prescribes. Nothing here is derived from a workout you have not
-            done.
+            the starting prescription rather than a number taken from your history.
           </>
         )}
       </p>

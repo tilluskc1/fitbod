@@ -1,7 +1,8 @@
-import type { Profile, WorkoutRecord } from '../types';
+import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
-import { exerciseMeta, loadLabel, setText, targetSummary } from '../data/flagship';
+import { formatWeight, unitOf } from '../lib/units';
+import { exerciseMeta, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { EQUIPMENT_OPTIONS } from '../lib/adapt';
@@ -43,16 +44,21 @@ function initials(name: string): string {
     .join('');
 }
 
-function coachInsight(last: LastPerformance | null, first: ProgramExercise): string {
+function coachInsight(last: LastPerformance | null, first: ProgramExercise, unit: Unit): string {
   if (!last) {
     return `First session on the ${first.name.toLowerCase()}. Start light enough that every rep looks the same.`;
   }
   const reps = setText(first.exerciseId, last.reps);
+  // The load is what was actually logged, never the prescribed one.
+  const load =
+    last.weight > 0
+      ? ` at ${formatWeight(last.weight, unit, { perSide: first.load === 'each' })}`
+      : '';
   const target = first.targetReps?.[0];
   if (target !== undefined && target > Math.min(...last.reps)) {
-    return `You finished ${reps} last time. Keep ${loadLabel(first)} and aim for one more rep.`;
+    return `You finished ${reps} last time${load}. Aim for one more rep at the same load.`;
   }
-  return `You finished ${reps} last time at ${loadLabel(first)}. Repeat that, and stop the set when form goes.`;
+  return `You finished ${reps} last time${load}. Repeat that, and stop the set when form goes.`;
 }
 
 export default function TodayScreen({
@@ -72,6 +78,7 @@ export default function TodayScreen({
   onOpenSettings,
   onOpenExercise,
 }: Props) {
+  const unit = unitOf(profile);
   const name = profile.name?.trim() || 'Athlete';
   const week = workoutsThisWeek(history, now);
   const targetDays = profile.daysPerWeek;
@@ -147,7 +154,7 @@ export default function TodayScreen({
                   : current
                     ? `Session open. ${progress} of ${total} sets logged so far.`
                     : first
-                      ? coachInsight(last, first)
+                      ? coachInsight(last, first, unit)
                       : 'Pick a workout you can keep. The program follows from that.'}
               </p>
             </div>
