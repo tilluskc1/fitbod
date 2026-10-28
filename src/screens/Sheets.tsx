@@ -9,7 +9,7 @@ import {
   type Constraints,
   type EquipmentChoice,
 } from '../lib/adapt';
-import { repsTarget } from '../data/flagship';
+import { repsTarget, setText } from '../data/flagship';
 import {
   MINUTE_OPTIONS,
   PRESETS,
@@ -204,14 +204,24 @@ export function WhySheet({
   return (
     <Sheet title="Why this target" onClose={onClose}>
       <p className="sheet-copy">
-        Each exercise keeps its own record. The next target is derived from the last completed
-        session for <strong>{exerciseName}</strong>, not from the rest of the workout.
+        {last ? (
+          <>
+            Each exercise keeps its own record. The next target is derived from the last completed
+            session for <strong>{exerciseName}</strong>, not from the rest of the workout.
+          </>
+        ) : (
+          <>
+            No session has been recorded for <strong>{exerciseName}</strong> yet, so today’s target is
+            simply what the program prescribes. Nothing here is derived from a workout you have not
+            done.
+          </>
+        )}
       </p>
 
       <div className="context-list" style={{ marginTop: 16 }}>
         <div className="context-row">
           <span>Last completed sets</span>
-          <span>{last ? last.reps.join(' · ') : 'None yet'}</span>
+          <span>{last ? setText(exerciseId, last.reps) : 'None yet'}</span>
         </div>
         <div className="context-row">
           <span>Working load</span>
@@ -272,7 +282,9 @@ export function ExerciseSheet({
         </div>
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Last recorded</span>
-          <span>{last ? `${formatWeight(last.weight, unit)} · ${last.reps.join(', ')} reps` : 'No history'}</span>
+          <span>
+            {last ? `${formatWeight(last.weight, unit)} · ${setText(exerciseId, last.reps)}` : 'No history'}
+          </span>
         </div>
       </div>
 

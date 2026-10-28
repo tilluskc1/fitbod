@@ -1,6 +1,7 @@
 import type { Profile, WorkoutRecord } from '../types';
-import { workoutsThisWeek } from '../lib/plan';
-import { LAST_SESSIONS, exerciseMeta, loadLabel, targetSummary } from '../data/flagship';
+import { lastPerformance, workoutsThisWeek } from '../lib/plan';
+import type { LastPerformance } from '../lib/plan';
+import { exerciseMeta, loadLabel, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { EQUIPMENT_OPTIONS } from '../lib/adapt';
@@ -42,33 +43,16 @@ function initials(name: string): string {
     .join('');
 }
 
-/**
- * The last completed sets for a movement, from real records first and the
- * sample program's own last session second. Records always win.
- */
-function lastSets(history: WorkoutRecord[], exerciseId: string): { reps: number[]; weight: number } | null {
-  for (const workout of history) {
-    const exercise = workout.exercises.find((item) => item.exerciseId === exerciseId);
-    if (!exercise) continue;
-    const done = exercise.performed.filter((set) => set.done);
-    if (done.length === 0) continue;
-    return { reps: done.map((set) => set.reps), weight: done[0].weight };
-  }
-  return LAST_SESSIONS[exerciseId] ?? null;
-}
-
-function coachInsight(history: WorkoutRecord[], first: ProgramExercise | undefined): string {
-  if (!first) return 'Pick a workout you can keep. The program follows from that.';
-  const last = lastSets(history, first.exerciseId);
+function coachInsight(last: LastPerformance | null, first: ProgramExercise): string {
   if (!last) {
     return `First session on the ${first.name.toLowerCase()}. Start light enough that every rep looks the same.`;
   }
-  const reps = last.reps.join(', ');
+  const reps = setText(first.exerciseId, last.reps);
   const target = first.targetReps?.[0];
   if (target !== undefined && target > Math.min(...last.reps)) {
-    return `You finished ${reps} reps last time. Keep ${loadLabel(first)} and aim for one more rep.`;
+    return `You finished ${reps} last time. Keep ${loadLabel(first)} and aim for one more rep.`;
   }
-  return `You finished ${reps} reps last time at ${loadLabel(first)}. Repeat that, and stop the set when form goes.`;
+  return `You finished ${reps} last time at ${loadLabel(first)}. Repeat that, and stop the set when form goes.`;
 }
 
 export default function TodayScreen({
@@ -96,7 +80,7 @@ export default function TodayScreen({
   const first = adapted.exercises[0];
   const heroId = first?.exerciseId ?? 'dumbbell-floor-press';
   const photo = exercisePhoto(heroId);
-  const last = first ? lastSets(history, first.exerciseId) : null;
+  const last = first ? lastPerformance(history, first.exerciseId) : null;
   const progress = current
     ? current.exercises.reduce(
         (sum, exercise) => sum + exercise.performed.filter((set) => set.done).length,
@@ -162,7 +146,9 @@ export default function TodayScreen({
                   ? adapted.note
                   : current
                     ? `Session open. ${progress} of ${total} sets logged so far.`
-                    : coachInsight(history, first)}
+                    : first
+                      ? coachInsight(last, first)
+                      : 'Pick a workout you can keep. The program follows from that.'}
               </p>
             </div>
           </div>
@@ -226,7 +212,7 @@ export default function TodayScreen({
                         {last ? 'Last session' : 'No history yet'}
                       </span>
                       <span className="compare-line__value">
-                        {last ? `${last.reps.join(' · ')} reps` : '—'}
+                        {last && first ? setText(first.exerciseId, last.reps) : '—'}
                       </span>
                     </span>
                     <span className="compare-line">

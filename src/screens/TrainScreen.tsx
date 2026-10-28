@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { exerciseById } from '../data/exercises';
-import { FULL_BODY_A, LAST_SESSIONS, repsTarget } from '../data/flagship';
+import { FULL_BODY_A, repsTarget, setText, setUnit } from '../data/flagship';
 import type { LoadMode } from '../data/flagship';
 import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
@@ -58,12 +58,18 @@ function detailOf(exerciseId: string): string {
   );
 }
 
-function setSummary(reps: number, weight: number, mode: LoadMode, unit: Unit): string {
+function setSummary(
+  exerciseId: string,
+  reps: number,
+  weight: number,
+  mode: LoadMode,
+  unit: Unit,
+): string {
   const load =
     weight > 0
       ? ` @ ${displayValue(weight, unit)} ${unitLabel(unit)}${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}`
       : '';
-  return `${reps} reps${load}`;
+  return `${setText(exerciseId, reps)}${load}`;
 }
 
 export default function TrainScreen({
@@ -126,10 +132,8 @@ export default function TrainScreen({
         : 'bodyweight';
   /** Loads are stored in kilograms; only the readout converts. */
   const showWeight = (kg: number) => displayValue(kg, unit);
-  const recorded = lastPerformance(history, exercise.exerciseId);
-  const last = recorded
-    ? { reps: recorded.reps, weight: recorded.weight }
-    : (LAST_SESSIONS[exercise.exerciseId] ?? null);
+  const last = lastPerformance(history, exercise.exerciseId);
+  const holdUnit = setUnit(exercise.exerciseId) === 'seconds';
   const plannedTarget = exercise.planned[activeSet === -1 ? exercise.planned.length - 1 : activeSet];
   /** "9 · 9" list for per-set targets, "8–10 reps" for a range, never "2 × 9". */
   const targetReps =
@@ -148,8 +152,8 @@ export default function TrainScreen({
     : activeValues
       ? `Log set ${activeSet + 1} · ${
           activeValues.weight > 0
-            ? `${activeValues.reps} reps @ ${showWeight(activeValues.weight)} ${unitLabel(unit)}`
-            : `${activeValues.reps} reps`
+            ? `${setText(exercise.exerciseId, activeValues.reps)} @ ${showWeight(activeValues.weight)} ${unitLabel(unit)}`
+            : setText(exercise.exerciseId, activeValues.reps)
         }`
       : 'Log set';
 
@@ -183,7 +187,8 @@ export default function TrainScreen({
               <div className="set-card__sub">Editing saved set</div>
             </div>
             <span className="set-card__target">
-              Saved: {set.reps} reps{set.weight > 0 ? ` · ${showWeight(set.weight)} ${unitLabel(unit)}` : ''}
+              Saved: {setText(exercise.exerciseId, set.reps)}
+              {set.weight > 0 ? ` · ${showWeight(set.weight)} ${unitLabel(unit)}` : ''}
             </span>
           </div>
 
@@ -211,20 +216,22 @@ export default function TrainScreen({
 
           <div className="reps-field">
             <div>
-              <div className="reps-field__label">Reps completed</div>
+              <div className="reps-field__label">
+                {holdUnit ? 'Seconds held' : 'Reps completed'}
+              </div>
               <div className="reps-field__hint">Tap + or − to adjust</div>
             </div>
             <div className="stepper">
               <button
                 onClick={() => patchDraft({ reps: Math.max(0, draft.reps - 1) })}
-                aria-label="Decrease reps"
+                aria-label={holdUnit ? 'Decrease seconds' : 'Decrease reps'}
               >
                 <Icon name="remove" size={20} />
               </button>
               <output aria-live="polite">{draft.reps}</output>
               <button
                 onClick={() => patchDraft({ reps: draft.reps + 1 })}
-                aria-label="Increase reps"
+                aria-label={holdUnit ? 'Increase seconds' : 'Increase reps'}
               >
                 <Icon name="add" size={20} />
               </button>
@@ -251,7 +258,7 @@ export default function TrainScreen({
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <span className="aw-set__label">
-              Set {setIndex + 1}: {setSummary(set.reps, set.weight, mode, unit)}
+              Set {setIndex + 1}: {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit)}
             </span>
           </span>
           <button
@@ -274,7 +281,9 @@ export default function TrainScreen({
             {setIndex + 1}
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
-            <span className="aw-set__label">{setSummary(set.reps, set.weight, mode, unit)}</span>
+            <span className="aw-set__label">
+              {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit)}
+            </span>
           </span>
         </div>
       );
@@ -291,7 +300,7 @@ export default function TrainScreen({
             <div className="set-card__sub">Current set</div>
           </div>
           <span className="set-card__target">
-            Target: {plannedTarget?.reps ?? 0} reps
+            Target: {setText(exercise.exerciseId, plannedTarget?.reps ?? 0)}
             {(plannedTarget?.weight ?? 0) > 0
               ? ` · ${showWeight(plannedTarget.weight)} ${unitLabel(unit)}`
               : ''}
@@ -322,20 +331,22 @@ export default function TrainScreen({
 
         <div className="reps-field">
           <div>
-            <div className="reps-field__label">Reps completed</div>
+            <div className="reps-field__label">
+              {holdUnit ? 'Seconds held' : 'Reps completed'}
+            </div>
             <div className="reps-field__hint">Tap + or − to adjust</div>
           </div>
           <div className="stepper">
             <button
               onClick={() => onUpdateSet(index, setIndex, { reps: Math.max(0, set.reps - 1) })}
-              aria-label="Decrease reps"
+              aria-label={holdUnit ? 'Decrease seconds' : 'Decrease reps'}
             >
               <Icon name="remove" size={20} />
             </button>
             <output aria-live="polite">{set.reps}</output>
             <button
               onClick={() => onUpdateSet(index, setIndex, { reps: set.reps + 1 })}
-              aria-label="Increase reps"
+              aria-label={holdUnit ? 'Increase seconds' : 'Increase reps'}
             >
               <Icon name="add" size={20} />
             </button>
@@ -398,7 +409,7 @@ export default function TrainScreen({
               <div className="aw-history__line">
                 <Icon name="history" size={16} />
                 {last
-                  ? `Last session: ${last.reps.join(' · ')} reps @ ${showWeight(last.weight)} ${unitLabel(unit)}${mode === 'total' ? ' total' : ' each'}`
+                  ? `Last session: ${setText(exercise.exerciseId, last.reps)}${last.weight > 0 ? ` @ ${showWeight(last.weight)} ${unitLabel(unit)}${mode === 'total' ? ' total' : ' each'}` : ''}`
                   : 'No previous session recorded'}
               </div>
               <div className="aw-history__line aw-history__line--target">

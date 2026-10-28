@@ -97,17 +97,20 @@ export const HOME_DUMBBELLS = [10, 15, 18];
 export const HOTEL_DUMBBELLS = [10, 15, 18, 22, 25];
 
 /**
- * The last completed floor-press session in the sample program. Real records
- * take precedence; this keeps the first-run screens honest and concrete.
+ * A hold's seconds are stored in the existing rep field, so the unit of a
+ * printed count comes from the movement.
+ * shortcut: no stored unit field, so add one before a movement mixes reps and
+ * holds in the same set.
  */
-export interface SessionSummary {
-  reps: number[];
-  weight: number;
+export function setUnit(exerciseId: string): 'reps' | 'seconds' {
+  return programExercise(exerciseId)?.holdSeconds ? 'seconds' : 'reps';
 }
 
-export const LAST_SESSIONS: Record<string, SessionSummary> = {
-  'dumbbell-floor-press': { reps: [9, 9, 8], weight: 15 },
-};
+/** "9 reps", "45s", or "45 · 45s" for a list — the movement's own unit. */
+export function setText(exerciseId: string, value: number | number[]): string {
+  const text = Array.isArray(value) ? value.join(' · ') : String(value);
+  return setUnit(exerciseId) === 'seconds' ? `${text}s` : `${text} reps`;
+}
 
 export function programSetCount(program: Program): number {
   return program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
