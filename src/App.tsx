@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { downloadText } from './lib/download';
-import { buildPlan, generateWorkout } from './lib/generator';
-import {
-  activeOverride,
-  dayKey,
-  minutesOf,
-  resolveWorkout,
-  targetCountForMinutes,
-} from './lib/plan';
+import { buildPlan } from './lib/generator';
+import { activeOverride, dayKey, minutesOf } from './lib/plan';
 import {
   adaptWorkout,
   DEFAULT_CONSTRAINTS,
@@ -201,16 +195,6 @@ export default function App() {
   const today = useMemo(() => new Date(now), [now]);
   const override = useMemo(() => activeOverride(state, today), [state, today]);
   const minutes = profile ? minutesOf(profile, override) : 35;
-
-  const activeDayIndex = state.current?.dayIndex;
-
-  const resolved = useMemo(
-    () =>
-      profile
-        ? resolveWorkout(profile, state.plan, state.history, override, minutes, activeDayIndex)
-        : null,
-    [profile, state.plan, state.history, override, minutes, activeDayIndex],
-  );
 
   /** Today's constraint state: the approved adaptation, or the program itself. */
   const constraints: Constraints = useMemo(() => {
@@ -607,11 +591,9 @@ export default function App() {
             onOpenExercise={(exerciseId) => setSheet({ kind: 'exercise', exerciseId })}
           />
         )}
-        {tab === 'plan' && (
-          <PlanScreen
+        {tab === 'plan' && (            <PlanScreen
             profile={profile}
             history={state.history}
-            resolved={resolved}
             unit={unit}
             now={today}
             onOpenSettings={() => setSheet({ kind: 'settings' })}
@@ -633,8 +615,10 @@ export default function App() {
           <CoachScreen
             profile={profile}
             history={state.history}
-            resolved={resolved}
-            onWhy={() => setSheet({ kind: 'why', exerciseId: resolved?.exercises[0]?.exerciseId ?? '' })}
+            program={{ name: adapted.name, minutes: adapted.minutes }}
+            onWhy={() =>
+              setSheet({ kind: 'why', exerciseId: adapted.exercises[0]?.exerciseId ?? '' })
+            }
             onEdit={() => setSheet({ kind: 'settings' })}
           />
         )}
@@ -714,7 +698,6 @@ export default function App() {
         (() => {
           const planned =
             todayExercises.find((exercise) => exercise.exerciseId === sheet.exerciseId)?.planned ??
-            resolved?.exercises.find((exercise) => exercise.exerciseId === sheet.exerciseId)?.planned ??
             [];
           return (
             <ExerciseSheet
@@ -729,9 +712,7 @@ export default function App() {
 
       {sheet.kind === 'why' &&
         (() => {
-          const exercise =
-            todayExercises.find((item) => item.exerciseId === sheet.exerciseId) ??
-            resolved?.exercises.find((item) => item.exerciseId === sheet.exerciseId);
+          const exercise = todayExercises.find((item) => item.exerciseId === sheet.exerciseId);
           if (!exercise) return null;
           return (
             <WhySheet
@@ -745,26 +726,15 @@ export default function App() {
           );
         })()}
 
-      {sheet.kind === 'day' && (() => {
-        const day = state.plan[sheet.dayIndex];
-        if (!day) return null;
-        const generated = generateWorkout(
-          profile,
-          day,
-          sheet.dayIndex,
-          state.history,
-          targetCountForMinutes(profile, minutes),
-        );
-        return (
-          <DaySheet
-            name={day.name}
-            minutes={minutes}
-            exercises={generated.exercises}
-            unit={unit}
-            onClose={closeSheet}
-          />
-        );
-      })()}
+      {sheet.kind === 'day' && (
+        <DaySheet
+          name={adapted.name}
+          minutes={minutes}
+          exercises={todayExercises}
+          unit={unit}
+          onClose={closeSheet}
+        />
+      )}
 
       {sheet.kind === 'finish' && current && (
         <FinishSheet

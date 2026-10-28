@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { exerciseById } from '../data/exercises';
-import { FULL_BODY_A, LAST_SESSIONS } from '../data/flagship';
+import { FULL_BODY_A, LAST_SESSIONS, repsTarget } from '../data/flagship';
 import type { LoadMode } from '../data/flagship';
 import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
+import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
+import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
 import type { PerformedSet, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
@@ -53,17 +55,6 @@ function detailOf(exerciseId: string): string {
   );
 }
 
-/**
- * An edit in progress. The record is untouched until Save set, so Cancel can
- * always discard for free.
- */
-interface EditDraft {
-  exerciseIndex: number;
-  setIndex: number;
-  reps: number;
-  weight: number;
-}
-
 function setSummary(reps: number, weight: number, mode: LoadMode): string {
   const load =
     weight > 0 ? ` @ ${weight} kg${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}` : '';
@@ -87,7 +78,7 @@ export default function TrainScreen({
 
   /** Edit controls write to the draft only; nothing reaches the record here. */
   const patchDraft = (patch: Partial<Pick<EditDraft, 'reps' | 'weight'>>) =>
-    setEditing((draft) => (draft ? { ...draft, ...patch } : draft));
+    setEditing((draft) => (draft ? applyDraft(draft, patch) : draft));
   const progress = sessionProgress(session);
   const rest = restRemaining(session, now);
   const restPaused = Boolean(session.restPausedAt);
@@ -127,8 +118,10 @@ export default function TrainScreen({
     ? { reps: recorded.reps, weight: recorded.weight }
     : (LAST_SESSIONS[exercise.exerciseId] ?? null);
   const plannedTarget = exercise.planned[activeSet === -1 ? exercise.planned.length - 1 : activeSet];
-  /** Rep targets always read as a "9 · 9" list, never "2 × 9". */
-  const targetReps = exercise.planned.map((set) => set.reps).join(' · ');
+  /** "9 · 9" list for per-set targets, "8–10 reps" for a range, never "2 × 9". */
+  const targetReps =
+    repsTarget(exercise.exerciseId, exercise.planned.length) ??
+    exercise.planned.map((set) => set.reps).join(' · ');
   const targetWeight = exercise.planned[0]?.weight ?? 0;
   const canPickWeight = mode !== 'none' && loadOptions.length > 0;
 
@@ -155,12 +148,7 @@ export default function TrainScreen({
       setEditing(null);
       return;
     }
-    onUpdateSet(editing.exerciseIndex, editing.setIndex, {
-      reps: editing.reps,
-      weight: editing.weight,
-      done: true,
-      completedAt: set.completedAt,
-    });
+    onUpdateSet(editing.exerciseIndex, editing.setIndex, saveDraft(editing, set));
     setEditing(null);
   };
 
@@ -256,7 +244,7 @@ export default function TrainScreen({
           <button
             className="aw-set__edit"
             onClick={() =>
-              setEditing({ exerciseIndex: index, setIndex, reps: set.reps, weight: set.weight })
+              setEditing(openDraft(index, setIndex, set))
             }
             aria-label={`Edit set ${setIndex + 1}`}
           >

@@ -148,6 +148,22 @@ export function targetSummary(
   return exercise.weight > 0 ? `${reps} @ ${loadLabel(exercise)}` : reps;
 }
 
+export function programExercise(exerciseId: string): ProgramExercise | undefined {
+  return FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === exerciseId);
+}
+
+/**
+ * "9 · 9 · 9" when the program carries per-set targets, "8–10 reps" when it
+ * prescribes a range. A range must never collapse to its low bound on screen.
+ */
+export function repsTarget(exerciseId: string, count: number): string | null {
+  const program = programExercise(exerciseId);
+  if (!program) return null;
+  if (program.holdSeconds) return `${program.holdSeconds}s`;
+  if (program.targetReps) return program.targetReps.slice(0, count).join(' · ');
+  return `${program.repRange[0]}–${program.repRange[1]} reps`;
+}
+
 /** "3 sets · 8–10 reps · 15 kg each" for a workout row. */
 export function exerciseMeta(
   exercise: ProgramExercise,

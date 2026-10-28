@@ -9,6 +9,7 @@ import {
   type Constraints,
   type EquipmentChoice,
 } from '../lib/adapt';
+import { repsTarget } from '../data/flagship';
 import {
   MINUTE_OPTIONS,
   PRESETS,
@@ -155,10 +156,14 @@ export function AdjustSheet({ constraints, originalMinutes, onClose, onPreview }
 
 /* ---------------- Why this target ---------------- */
 
-/** "9 · 9 @ 15 kg". The target reads as its per-set rep list, never a multiplier. */
-function targetLine(planned: { weight: number; reps: number }[], unit: Unit): string {
+/** "9 · 9 @ 15 kg" for per-set targets, "8–10 reps @ 18 kg" for a range. */
+function targetLine(
+  planned: { weight: number; reps: number }[],
+  unit: Unit,
+  exerciseId: string,
+): string {
   if (planned.length === 0) return '—';
-  const reps = planned.map((set) => set.reps).join(' · ');
+  const reps = repsTarget(exerciseId, planned.length) ?? planned.map((set) => set.reps).join(' · ');
   return planned[0].weight > 0 ? `${reps} @ ${formatWeight(planned[0].weight, unit)}` : reps;
 }
 
@@ -196,7 +201,7 @@ export function WhySheet({
         </div>
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Today’s target</span>
-          <span>{targetLine(planned, unit)}</span>
+          <span>{targetLine(planned, unit, exerciseId)}</span>
         </div>
       </div>
 
@@ -245,7 +250,7 @@ export function ExerciseSheet({
         </div>
         <div className="context-row">
           <span>Today</span>
-          <span>{targetLine(planned, unit)}</span>
+          <span>{targetLine(planned, unit, exerciseId)}</span>
         </div>
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Last recorded</span>

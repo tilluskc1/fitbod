@@ -1,10 +1,8 @@
 import { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, EXERCISES, SUPPORT_OPTIONS } from '../data/exercises';
-import { buildPlan, generateWorkout } from '../lib/generator';
+import { FULL_BODY_A, programSetCount } from '../data/flagship';
 import { capabilitiesFor, provides } from '../lib/capabilities';
 import { prescribeExercise } from '../lib/progression';
-import { targetCountForMinutes } from '../lib/plan';
-import type { ResolvedWorkout } from '../lib/plan';
 import { formatWeight } from '../lib/units';
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
@@ -13,7 +11,6 @@ import { ArrowIcon, ChevronIcon, SettingsIcon } from '../components/ui/Icons';
 interface Props {
   profile: Profile;
   history: WorkoutRecord[];
-  resolved: ResolvedWorkout | null;
   unit: Unit;
   now: Date;
   onOpenSettings: () => void;
@@ -26,7 +23,6 @@ const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 export default function PlanScreen({
   profile,
   history,
-  resolved,
   unit,
   now,
   onOpenSettings,
@@ -34,8 +30,8 @@ export default function PlanScreen({
   onOpenLibrary,
 }: Props) {
   const [tab, setTab] = useState<'week' | 'equipment'>('week');
-  const plan = useMemo(() => buildPlan(profile), [profile]);
   const minutes = profile.sessionMinutes ?? 35;
+  const sessionSets = programSetCount(FULL_BODY_A);
 
   const week = useMemo(() => {
     const start = new Date(now);
@@ -57,31 +53,11 @@ export default function PlanScreen({
     });
   }, [history, now]);
 
-  const dayCounts = useMemo(
-    () =>
-      plan.map((day, index) => {
-        if (resolved && index === resolved.dayIndex) return resolved.exercises.length;
-        const generated = generateWorkout(
-          profile,
-          day,
-          index,
-          history,
-          targetCountForMinutes(profile, minutes),
-        );
-        return generated.exercises.length;
-      }),
-    [history, minutes, plan, profile, resolved],
-  );
-
   const available = useMemo(() => {
     const caps = capabilitiesFor(profile);
     const excluded = new Set(profile.exclusions);
     return EXERCISES.filter((exercise) => provides(caps, exercise.needs) && !excluded.has(exercise.id));
   }, [profile]);
-
-  const totalSets = resolved
-    ? resolved.exercises.reduce((sum, exercise) => sum + exercise.planned.length, 0)
-    : 0;
 
   return (
     <div className="screen">
@@ -94,7 +70,7 @@ export default function PlanScreen({
         </button>
       </header>
       <p className="page-sub">
-        {plan.length} sessions · {minutes} minutes ·{' '}
+        {FULL_BODY_A.exercises.length} exercises · {sessionSets} sets · {minutes} minutes ·{' '}
         {profile.equipment.length === 0 ? 'Bodyweight' : profile.equipment.length >= 3 ? 'Full gym' : 'Home'}
       </p>
 
@@ -124,34 +100,24 @@ export default function PlanScreen({
             ))}
           </div>
 
-          <p className="note-card">
-            Train in sequence. A missed day doesn’t erase your progress or add catch-up work.
-          </p>
-
           <div>
-            {plan.map((day, index) => {
-              const isNext = resolved?.dayIndex === index;
-              return (
-                <div className="plan-item" key={`${day.name}-${index}`}>
-                  <span className="plan-index">{String(index + 1).padStart(2, '0')}</span>
-                  <div>
-                    <span className="plan-kicker">{isNext ? 'UP NEXT' : 'PLANNED'}</span>
-                    <strong className="plan-name">{day.name}</strong>
-                    <span className="plan-meta">
-                      {minutes} min · {dayCounts[index]} {dayCounts[index] === 1 ? 'exercise' : 'exercises'}
-                      {isNext && totalSets > 0 ? ` · ${totalSets} sets` : ''}
-                    </span>
-                    <span className="plan-foot">
-                      Your selected equipment
-                      <button className="text-link" onClick={() => onViewDay(index)}>
-                        View session
-                        <ArrowIcon size={17} />
-                      </button>
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+            <div className="plan-item">
+              <span className="plan-index">01</span>
+              <div>
+                <span className="plan-kicker">UP NEXT</span>
+                <strong className="plan-name">{FULL_BODY_A.name}</strong>
+                <span className="plan-meta">
+                  {minutes} min · {FULL_BODY_A.exercises.length} exercises · {sessionSets} sets
+                </span>
+                <span className="plan-foot">
+                  Your selected equipment
+                  <button className="text-link" onClick={() => onViewDay(0)}>
+                    View session
+                    <ArrowIcon size={17} />
+                  </button>
+                </span>
+              </div>
+            </div>
           </div>
         </>
       ) : (

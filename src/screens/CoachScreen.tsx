@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import type { Profile, WorkoutRecord } from '../types';
-import type { ResolvedWorkout } from '../lib/plan';
 import { ArrowIcon, DumbbellIcon, EditIcon, GoalIcon, ClockIcon } from '../components/ui/Icons';
 
 interface Props {
   profile: Profile;
   history: WorkoutRecord[];
-  resolved: ResolvedWorkout | null;
+  program: { name: string; minutes: number };
   onWhy: () => void;
   onEdit: (section: 'equipment' | 'minutes' | 'goal' | 'units') => void;
 }
@@ -34,7 +33,7 @@ function reply(question: string, history: WorkoutRecord[]): string {
   return 'This is a scripted demo reply, not a live model. Use Progress for recorded loads, and Coach → What I know to change equipment or session length.';
 }
 
-export default function CoachScreen({ profile, history, resolved, onWhy, onEdit }: Props) {
+export default function CoachScreen({ profile, history, program, onWhy, onEdit }: Props) {
   const [tab, setTab] = useState<CoachTab>('review');
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -132,7 +131,9 @@ export default function CoachScreen({ profile, history, resolved, onWhy, onEdit 
               </div>
               <div className="context-row" style={{ borderBottom: 0 }}>
                 <span>Next session</span>
-                <span>{resolved ? `${resolved.day.name} · ${resolved.minutes} min` : 'Not planned yet'}</span>
+                <span>
+                  {program.name} · {program.minutes} min
+                </span>
               </div>
             </div>
             <p className="data-note">
