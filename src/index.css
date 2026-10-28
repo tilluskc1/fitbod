@@ -2510,6 +2510,12 @@ body {
   color: var(--on-surface-variant);
 }
 
+.time-step {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .time-grid button[aria-pressed='true'] {
   background: var(--primary);
   color: var(--on-primary);

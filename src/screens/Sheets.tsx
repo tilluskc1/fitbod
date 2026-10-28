@@ -122,6 +122,24 @@ export function AdjustSheet({ constraints, originalMinutes, onClose, onPreview }
                 </button>
               ))}
             </div>
+            <div className="time-step">
+              <button
+                className="pill-quiet"
+                style={{ flex: 1 }}
+                onClick={() => apply({ minutes: current.minutes - 15 })}
+                aria-label="15 minutes less"
+              >
+                −15 min
+              </button>
+              <button
+                className="pill-quiet"
+                style={{ flex: 1 }}
+                onClick={() => apply({ minutes: current.minutes + 15 })}
+                aria-label="15 minutes more"
+              >
+                +15 min
+              </button>
+            </div>
           </div>
 
           <div>
@@ -468,10 +486,10 @@ export function SettingsSheet({
           id="session-minutes"
           type="range"
           min={15}
-          max={60}
+          max={90}
           step={5}
           value={minutes}
-          style={{ ['--fill' as string]: `${((minutes - 15) / 45) * 100}%` }}
+          style={{ ['--fill' as string]: `${((minutes - 15) / 75) * 100}%` }}
           onChange={(event) => onChange({ sessionMinutes: Number(event.target.value) })}
         />
         <div className="time-read">

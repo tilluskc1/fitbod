@@ -61,7 +61,8 @@ export const PRESETS: Preset[] = [
   { id: 'bodyweight', label: 'Bodyweight', icon: 'accessibility_new', patch: { equipment: 'bodyweight' } },
 ];
 
-export const MINUTE_OPTIONS = [15, 20, 30, 45];
+/** Offered session lengths. The −/+ controls go beyond this list. */
+export const MINUTE_OPTIONS = [30, 45, 60];
 
 export function mergeConstraints(current: Constraints, patch: Partial<Constraints>): Constraints {
   return {
