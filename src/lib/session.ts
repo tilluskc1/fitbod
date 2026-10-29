@@ -161,6 +161,73 @@ export function removePerformedSet(
   return next;
 }
 
+/**
+ * What the UI proposes for the remaining work. Loads come from the
+ * replacement's own prescription or history, never from the exercise it
+ * replaces; with no history the weight is 0 so nothing is invented.
+ */
+export interface SwapCandidate {
+  exerciseId: string;
+  name: string;
+  weight: number;
+  reps: number;
+}
+
+/**
+ * Swap one exercise's remaining work. Completed sets stay under their original
+ * exercise with their values and completion timestamps, exactly once; the
+ * replacement inherits exactly the pending working-set budget, never its own
+ * default set count. An exercise with nothing pending is returned unchanged,
+ * so a stale swap callback cannot overwrite a set logged while the sheet was
+ * open.
+ */
+export function swapPendingExercise(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  candidate: SwapCandidate,
+): WorkoutRecord {
+  const original = session.exercises[exerciseIndex];
+  if (!original) return session;
+  const pending = original.performed.filter((set) => !set.done);
+  if (pending.length === 0) return session;
+
+  const keptIndices: number[] = [];
+  original.performed.forEach((set, setIndex) => {
+    if (set.done) keptIndices.push(setIndex);
+  });
+
+  const next = copyRecord(session);
+  const originalEntry: WorkoutExercise | null
+    = keptIndices.length > 0
+      ? {
+          exerciseId: original.exerciseId,
+          name: original.name,
+          planned: keptIndices.map((setIndex) => original.planned[setIndex]),
+          performed: keptIndices.map((setIndex) => original.performed[setIndex]),
+        }
+      : null;
+
+  const plannedSets = Array.from({ length: pending.length }, () => ({
+    weight: candidate.weight,
+    reps: candidate.reps,
+  }));
+  const replacement: WorkoutExercise = {
+    exerciseId: candidate.exerciseId,
+    name: candidate.name,
+    planned: plannedSets,
+    performed: plannedSets.map((set) => ({
+      weight: set.weight,
+      reps: set.reps,
+      done: false,
+      completedAt: null,
+    })),
+  };
+
+  if (originalEntry) next.exercises.splice(exerciseIndex, 1, originalEntry, replacement);
+  else next.exercises.splice(exerciseIndex, 1, replacement);
+  return next;
+}
+
 export interface SessionProgress {
   total: number;
   done: number;

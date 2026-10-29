@@ -390,7 +390,12 @@ export default function TrainScreen({
                 <span className="aw-setcount">
                   Set {Math.max(1, activeSet + 1)} of {exercise.performed.length}
                 </span>
-                <button className="aw-swap" onClick={() => onSwap(index)}>
+                {/* Only the remaining work can change exercise; nothing pending means nothing to swap. */}
+                <button
+                  className="aw-swap"
+                  onClick={() => onSwap(index)}
+                  disabled={!exercise.performed.some((set) => !set.done)}
+                >
                   <Icon name="swap_horiz" size={16} />
                   Swap
                 </button>
