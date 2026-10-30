@@ -7,6 +7,7 @@ import {
   applyFinish,
   completeSession,
   createSession,
+  latestDoneSet,
   logSet,
   removePerformedSet,
   sessionProgress,
@@ -326,4 +327,14 @@ test('history corrections change performed values only', () => {
 
   const unknown = applyCorrection(state, 'missing', 0, 0, { weight: 1 }, LATER);
   assert.equal(unknown, state);
+});
+
+test('a swap-back sees the load already logged in the open session', () => {
+  // Log one press set, swap the 2 pending sets away, then ask what the press
+  // is holding: the answer must be the logged 10 kg x 10, not a first-time 0.
+  let session = logSet(pressSession(), 0, 0, LATER);
+  session = swapPendingExercise(session, 0, PUSHUP_CANDIDATE);
+  const done = latestDoneSet(session, 'dumbbell-floor-press');
+  assert.deepEqual(done, { weight: 10, reps: 10 });
+  assert.equal(latestDoneSet(session, 'goblet-squat'), null);
 });

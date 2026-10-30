@@ -174,6 +174,25 @@ export interface SwapCandidate {
 }
 
 /**
+ * The latest set actually completed for an exercise in the still-open
+ * session, across every segment a swap may have split it into. Same variant
+ * only: the recorded values never cross to another exercise.
+ */
+export function latestDoneSet(
+  session: WorkoutRecord,
+  exerciseId: string,
+): { weight: number; reps: number } | null {
+  let latest: { weight: number; reps: number } | null = null;
+  for (const exercise of session.exercises) {
+    if (exercise.exerciseId !== exerciseId) continue;
+    for (const set of exercise.performed) {
+      if (set.done) latest = { weight: set.weight, reps: set.reps };
+    }
+  }
+  return latest;
+}
+
+/**
  * Swap one exercise's remaining work. Completed sets stay under their original
  * exercise with their values and completion timestamps, exactly once; the
  * replacement inherits exactly the pending working-set budget, never its own

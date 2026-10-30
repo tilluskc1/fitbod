@@ -16,6 +16,7 @@ import {
   applyFinish,
   createSession,
   extendRest,
+  latestDoneSet,
   logSet,
   sessionProgress,
   swapPendingExercise,
@@ -119,7 +120,9 @@ export default function App() {
   const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(INITIAL));
   const [conflict, setConflict] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [showSplash, setShowSplash] = useState(true);
+  // A stored profile means onboarding already happened: a reload must never
+  // drop a resumed or just-finished session behind the splash again.
+  const [showSplash, setShowSplash] = useState(() => INITIAL.state.profile === null);
   const [recovery, setRecovery] = useState<{ message: string; raw: string } | null>(
     INITIAL.status === 'corrupt'
       ? { message: INITIAL.error ?? 'Saved data could not be read.', raw: INITIAL.raw ?? '' }
@@ -447,7 +450,10 @@ export default function App() {
     if (!target) return;
     // The replacement's own prescription only; the session action decides how
     // many sets it receives and keeps every completed set where it is.
-    const prescription = prescribeExercise(target, profile, state.history);
+    // A swap-back first sees the load already logged in the open session, so
+    // the segment cannot render as bodyweight with a first-time rep target.
+    const open = state.current ? latestDoneSet(state.current, target.id) : null;
+    const prescription = open ?? prescribeExercise(target, profile, state.history);
     const candidate: SwapCandidate = {
       exerciseId: target.id,
       name: target.name,
