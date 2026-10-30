@@ -12,6 +12,7 @@ It applies to every turn and every agent, not just the turn where it was invoked
 - No preamble, no recap, no closing pleasantries.
 - Errors: cause and fix, matter of fact.
 - Cap visible lists at 5 items.
+- Whenever work is handed back, end the reply with a copy-pasteable prompt for the dev chat, naming the next issue and its stop conditions.
 
 It stays on until the user says "normal mode" or "stop adhd mode". Those words end it for the rest of the session.
 
