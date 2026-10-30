@@ -1,4 +1,11 @@
-import type { AppState, Profile, TodayOverride, WorkoutRecord } from '../types.ts';
+import type {
+  AppState,
+  PerformedSet,
+  Profile,
+  TodayOverride,
+  WorkoutExercise,
+  WorkoutRecord,
+} from '../types.ts';
 
 /** Local calendar day key, used to scope a one-day override. */
 export function dayKey(now: Date): string {
@@ -37,21 +44,61 @@ export interface LastPerformance {
   weight: number;
 }
 
+export interface ExerciseInWorkout {
+  /** Every segment of this exercise in the workout, in record order. */
+  segments: WorkoutExercise[];
+  /** Completed sets across all segments, in record order. */
+  done: PerformedSet[];
+  /** Sum of prescribed set counts across segments. */
+  plannedTotal: number;
+  /**
+   * What this session required: the original prescription kept through swaps,
+   * never smaller than the segments that remain. Old records without markers
+   * fall back to their planned totals.
+   */
+  requirement: number;
+  /** First prescribed set of the first segment, or null. */
+  firstPlanned: { weight: number; reps: number } | null;
+}
+
+/** All the work one exercise did in a workout, across repeated segments. */
+export function exerciseInWorkout(
+  workout: WorkoutRecord,
+  exerciseId: string,
+): ExerciseInWorkout | null {
+  const segments = workout.exercises.filter((exercise) => exercise.exerciseId === exerciseId);
+  if (segments.length === 0) return null;
+  const done: PerformedSet[] = [];
+  let plannedTotal = 0;
+  let marked = 0;
+  for (const segment of segments) {
+    plannedTotal += segment.planned.length;
+    marked = Math.max(marked, segment.originalPlannedSets ?? 0);
+    for (const set of segment.performed) {
+      if (set.done) done.push(set);
+    }
+  }
+  return {
+    segments,
+    done,
+    plannedTotal,
+    requirement: Math.max(plannedTotal, marked),
+    firstPlanned: segments[0].planned[0] ?? null,
+  };
+}
+
 /** Most recent completed session that actually trained an exercise. */
 export function lastPerformance(
   history: WorkoutRecord[],
   exerciseId: string,
 ): LastPerformance | null {
   for (const workout of history) {
-    const exercise = workout.exercises.find((item) => item.exerciseId === exerciseId);
-    if (!exercise) continue;
-    const done = exercise.performed.filter((set) => set.done);
-    // A session whose sets were never completed is not a record of work.
-    if (done.length === 0) continue;
+    const found = exerciseInWorkout(workout, exerciseId);
+    if (!found || found.done.length === 0) continue;
     return {
       workout,
-      reps: done.map((set) => set.reps),
-      weight: done[0].weight,
+      reps: found.done.map((set) => set.reps),
+      weight: found.done[0].weight,
     };
   }
   return null;

@@ -5,6 +5,7 @@ import type {
   Profile,
   WorkoutRecord,
 } from '../types.ts';
+import { exerciseInWorkout } from './plan.ts';
 
 /**
  * Phase 2 progression policy: double progression.
@@ -144,8 +145,8 @@ export function lastExercisePerformance(
   let latestTime = Number.NEGATIVE_INFINITY;
   for (const workout of history) {
     if (workout.status !== 'completed') continue;
-    const entry = workout.exercises.find((exercise) => exercise.exerciseId === exerciseId);
-    if (!entry) continue;
+    const found = exerciseInWorkout(workout, exerciseId);
+    if (!found) continue;
     const time = new Date(workout.date).getTime();
     if (!(time > latestTime)) continue;
     latestTime = time;
@@ -153,12 +154,12 @@ export function lastExercisePerformance(
       workoutId: workout.id,
       workoutName: workout.name,
       date: workout.date,
-      plannedSets: entry.planned.length,
-      plannedWeight: entry.planned[0]?.weight ?? 0,
-      plannedReps: entry.planned[0]?.reps ?? 0,
-      done: entry.performed
-        .filter((set) => set.done)
-        .map((set) => ({ weight: set.weight, reps: set.reps })),
+      // The slot's original requirement, preserved across swaps; old records
+      // without split markers fall back to their planned totals.
+      plannedSets: found.requirement,
+      plannedWeight: found.firstPlanned?.weight ?? 0,
+      plannedReps: found.firstPlanned?.reps ?? 0,
+      done: found.done.map((set) => ({ weight: set.weight, reps: set.reps })),
     };
   }
   return latest;

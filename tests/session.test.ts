@@ -168,6 +168,53 @@ test('the full swap journey preserves both completed sets through finish', () =>
   assert.equal(pushupSet?.completedAt, pushupCompletedAt);
 });
 
+test('the swap-back journey logs and corrects the returned set under the original exercise', () => {
+  let session = logSet(pressSession(), 0, 0, LATER);
+  session = swapPendingExercise(session, 0, PUSHUP_CANDIDATE);
+  session = logSet(session, 1, 0, LATER);
+  session = swapPendingExercise(session, 1, PRESS_CANDIDATE);
+
+  // The returned press segment is a separate entry; its active set can be
+  // logged like any other and carries the original prescription's marker.
+  const returned = session.exercises[2];
+  assert.equal(returned.exerciseId, 'dumbbell-floor-press');
+  assert.equal(returned.originalPlannedSets, 3);
+  session = logSet(session, 2, 0, LATER);
+  const progress = sessionProgress(session);
+  assert.equal(progress.done, 3);
+  assert.equal(progress.total, 3);
+  assert.equal(progress.complete, true);
+
+  const state: AppState = { ...withHistory(), current: session };
+  const finished = applyFinish(state, session.id, { early: true, now: FINISH });
+  assert.equal(finished.history[0].exercises[2].performed[0].done, true);
+
+  // Correcting the returned set edits only that set, by the same indices the
+  // history screen uses.
+  const corrected = applyCorrection(finished, session.id, 2, 0, { weight: 12.5, reps: 7 }, LATER);
+  assert.equal(corrected.history[0].exercises[2].performed[0].weight, 12.5);
+  assert.equal(corrected.history[0].exercises[2].performed[0].reps, 7);
+  assert.equal(corrected.history[0].exercises[0].performed[0].weight, 10);
+  assert.equal(corrected.history[0].exercises[1].performed[0].weight, 0);
+});
+
+test('completing 1 of an originally 3-set exercise preserves the requirement', () => {
+  let session = logSet(pressSession(), 0, 0, LATER);
+  session = swapPendingExercise(session, 0, PUSHUP_CANDIDATE);
+
+  const state: AppState = { ...withHistory(), current: session };
+  const finished = applyFinish(state, session.id, { early: true, now: FINISH });
+  const workout = finished.history[0];
+
+  // The kept press segment and the replacement both carry the slot's original
+  // 3-set requirement; neither earned a full session.
+  assert.equal(workout.exercises[0].originalPlannedSets, 3);
+  assert.equal(workout.exercises[1].originalPlannedSets, 3);
+
+  const pressed = workout.exercises[0].performed.filter((set) => set.done);
+  assert.equal(pressed.length, 1);
+});
+
 test('a fully completed exercise has no pending work to swap', () => {
   let session = logSet(pressSession(), 0, 0, LATER);
   session = logSet(session, 0, 1, LATER);

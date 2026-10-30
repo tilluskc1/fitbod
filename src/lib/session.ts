@@ -180,6 +180,10 @@ export interface SwapCandidate {
  * default set count. An exercise with nothing pending is returned unchanged,
  * so a stale swap callback cannot overwrite a set logged while the sheet was
  * open.
+ *
+ * Both split segments carry the slot's original prescribed set count, so
+ * progression judges the original requirement instead of the shrunken
+ * remainder: swapping away unfinished sets must not earn a load increase.
  */
 export function swapPendingExercise(
   session: WorkoutRecord,
@@ -190,6 +194,7 @@ export function swapPendingExercise(
   if (!original) return session;
   const pending = original.performed.filter((set) => !set.done);
   if (pending.length === 0) return session;
+  const slotRequirement = original.originalPlannedSets ?? Math.max(1, original.planned.length);
 
   const keptIndices: number[] = [];
   original.performed.forEach((set, setIndex) => {
@@ -202,6 +207,7 @@ export function swapPendingExercise(
       ? {
           exerciseId: original.exerciseId,
           name: original.name,
+          originalPlannedSets: slotRequirement,
           planned: keptIndices.map((setIndex) => original.planned[setIndex]),
           performed: keptIndices.map((setIndex) => original.performed[setIndex]),
         }
@@ -214,6 +220,7 @@ export function swapPendingExercise(
   const replacement: WorkoutExercise = {
     exerciseId: candidate.exerciseId,
     name: candidate.name,
+    originalPlannedSets: slotRequirement,
     planned: plannedSets,
     performed: plannedSets.map((set) => ({
       weight: set.weight,

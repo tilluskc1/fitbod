@@ -190,6 +190,12 @@ function validateExercise(value: unknown, path: string): WorkoutExercise {
   return {
     exerciseId: nonEmptyString(raw.exerciseId, `${path}.exerciseId`),
     name: nonEmptyString(raw.name, `${path}.name`),
+    // Preserved across restore: a swap split's original requirement must not
+    // silently widen back to the remaining segments.
+    originalPlannedSets:
+      raw.originalPlannedSets === undefined
+        ? undefined
+        : integer(raw.originalPlannedSets, `${path}.originalPlannedSets`, 1, MAX_SETS),
     planned: plannedRaw.map((item, i) => validatePlannedSet(item, `${path}.planned[${i}]`)),
     performed: performedRaw.map((item, i) => validatePerformedSet(item, `${path}.performed[${i}]`)),
   };

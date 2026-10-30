@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { formatWeight, inputValue, toKg } from '../lib/units';
-import { hasWork } from '../lib/plan';
+import { exerciseInWorkout, hasWork } from '../lib/plan';
 import type { Unit, WorkoutRecord } from '../types';
 import { ArrowIcon, BarIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
 
@@ -77,10 +77,12 @@ export default function ProgressScreen({
     if (!activeExerciseId) return [];
     return sessions
       .map((workout) => {
-        const exercise = workout.exercises.find((item) => item.exerciseId === activeExerciseId);
-        if (!exercise) return null;
-        const done = exercise.performed.filter((set) => set.done);
-        const source = done.length > 0 ? done : exercise.performed;
+        // Repeated segments (a swap keeps the done sets and returns the rest)
+        // all count; the first segment alone would understate the chart.
+        const found = exerciseInWorkout(workout, activeExerciseId);
+        if (!found) return null;
+        const performed = found.segments.flatMap((segment) => segment.performed);
+        const source = found.done.length > 0 ? found.done : performed;
         const best = source.reduce((max, set) => Math.max(max, set.weight), 0);
         return { date: workout.date, best, reps: source[0]?.reps ?? 0 };
       })
