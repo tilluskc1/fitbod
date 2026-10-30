@@ -9,6 +9,8 @@ import {
   toWorkoutExercises,
 } from './lib/adapt';
 import type { Constraints, EquipmentChoice } from './lib/adapt';
+import { defaultConstraints } from './lib/constraints';
+import type { ConstraintNotice } from './lib/constraints';
 import { FULL_BODY_A, programSetCount } from './data/flagship';
 import {
   applyCancel,
@@ -100,6 +102,8 @@ function initialSaveUi(load: LoadedState): SaveUi {
   return load.status === 'empty' ? { kind: 'idle' } : { kind: 'saved' };
 }
 
+const NO_EXCLUSIONS: string[] = [];
+
 function backupRaw(raw: string): boolean {
   try {
     globalThis.localStorage?.setItem(CORRUPT_BACKUP_KEY, raw);
@@ -115,6 +119,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('today');
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' });
   const [pending, setPending] = useState<Constraints | null>(null);
+  const [pendingNotices, setPendingNotices] = useState<ConstraintNotice[]>([]);
   const [recapId, setRecapId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(INITIAL));
@@ -202,21 +207,28 @@ export default function App() {
   const override = useMemo(() => activeOverride(state, today), [state, today]);
   const minutes = profile ? minutesOf(profile, override) : 35;
 
-  /** Today's constraint state: the approved adaptation, or the program itself. */
+  /**
+   * Today's constraint state: the approved adaptation, the saved equipment
+   * and session length, or the home default before onboarding finishes.
+   */
   const constraints: Constraints = useMemo(() => {
-    if (!override) return DEFAULT_CONSTRAINTS;
+    if (!override) return profile ? defaultConstraints(profile) : DEFAULT_CONSTRAINTS;
     return {
       minutes: override.minutes,
       equipment:
         override.choice ?? (override.equipment.includes('Dumbbell') ? 'home' : 'bodyweight'),
     };
-  }, [override]);
+  }, [override, profile]);
 
-  const adapted = useMemo(() => adaptWorkout(FULL_BODY_A, constraints), [constraints]);
+  const exclusions = profile?.exclusions ?? NO_EXCLUSIONS;
+  const adapted = useMemo(
+    () => adaptWorkout(FULL_BODY_A, constraints, exclusions),
+    [constraints, exclusions],
+  );
 
   const pendingAdapted = useMemo(
-    () => (pending ? adaptWorkout(FULL_BODY_A, pending) : null),
-    [pending],
+    () => (pending ? adaptWorkout(FULL_BODY_A, pending, exclusions) : null),
+    [pending, exclusions],
   );
 
   const current = state.current;
@@ -265,7 +277,7 @@ export default function App() {
    * so the preview, the review and the logger can never disagree.
    */
   const startSession = (next: Constraints): boolean => {
-    const workout = adaptWorkout(FULL_BODY_A, next);
+    const workout = adaptWorkout(FULL_BODY_A, next, profile?.exclusions ?? []);
     if (workout.exercises.length === 0) {
       setNotice('No movement in this workout can be done with that setup.');
       return false;
@@ -298,6 +310,7 @@ export default function App() {
   /** Review changes → start: persist today's adaptation, then open the session. */
   const acceptAdaptation = (next: Constraints) => {
     if (!startSession(next)) return;
+    setPendingNotices([]);
     const choice: EquipmentChoice = next.equipment;
     const approved: TodayOverride = {
       date: dayKey(new Date()),
@@ -568,6 +581,7 @@ export default function App() {
         originalSets={programSetCount(FULL_BODY_A)}
         adapted={pendingAdapted}
         constraints={pending}
+        notices={pendingNotices}
         onStart={() => acceptAdaptation(pending)}
         onEdit={() => {
           setView('tabs');
@@ -575,6 +589,7 @@ export default function App() {
         }}
         onKeep={() => {
           setPending(null);
+          setPendingNotices([]);
           setView(current ? 'train' : 'tabs');
           setTab('today');
           setSheet({ kind: 'none' });
@@ -685,10 +700,12 @@ export default function App() {
           originalMinutes={FULL_BODY_A.minutes}
           onClose={() => {
             setPending(null);
+            setPendingNotices([]);
             closeSheet();
           }}
-          onPreview={(next) => {
+          onPreview={(next, notices) => {
             setPending(next);
+            setPendingNotices(notices);
             setSheet({ kind: 'none' });
             setView('adapt');
           }}

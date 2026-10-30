@@ -1,6 +1,7 @@
 import type { AdaptedWorkout } from '../lib/adapt';
 import { EQUIPMENT_OPTIONS } from '../lib/adapt';
 import type { Constraints } from '../lib/adapt';
+import { noticeText, type ConstraintNotice } from '../lib/constraints';
 import { targetSummary } from '../data/flagship';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -9,6 +10,7 @@ interface Props {
   originalSets: number;
   adapted: AdaptedWorkout;
   constraints: Constraints;
+  notices: ConstraintNotice[];
   onStart: () => void;
   onKeep: () => void;
   onEdit: () => void;
@@ -46,6 +48,7 @@ export default function AdaptScreen({
   originalSets,
   adapted,
   constraints,
+  notices,
   onStart,
   onKeep,
   onEdit,
@@ -103,6 +106,11 @@ export default function AdaptScreen({
             </button>
           </div>
           <p className="review__lede">{summaryLine(adapted, originalSets)}</p>
+          {notices.map((notice) => (
+            <p key={notice.kind} className="constraint-notice" role="status">
+              {noticeText(notice)}
+            </p>
+          ))}
         </div>
 
         <section className="diff-card" aria-label="What changes today">
@@ -185,7 +193,11 @@ export default function AdaptScreen({
             {adapted.skipped.map((item) => (
               <div className="review-row review-row--skipped" key={`skipped-${item.exerciseId}`}>
                 <span className="review-row__tag">
-                  {item.reason === 'time' ? 'Skipped today' : 'Needs equipment'}
+                  {item.reason === 'time'
+                    ? 'Skipped today'
+                    : item.reason === 'excluded'
+                      ? 'Excluded'
+                      : 'Needs equipment'}
                 </span>
                 <div className="review-row__main">
                   <div className="review-row__photo review-row__strike-photo" aria-hidden="true">
@@ -197,7 +209,9 @@ export default function AdaptScreen({
                       {item.sets} {item.sets === 1 ? 'set' : 'sets'}{' '}
                       {item.reason === 'time'
                         ? `skipped to fit ${adapted.minutes} min`
-                        : 'not available with this setup'}
+                        : item.reason === 'excluded'
+                          ? 'excluded in your library'
+                          : 'not available with this setup'}
                     </div>
                   </div>
                 </div>

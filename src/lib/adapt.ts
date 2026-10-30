@@ -81,7 +81,7 @@ export interface SkippedExercise {
   name: string;
   /** Sets that were in the program. */
   sets: number;
-  reason: 'time' | 'equipment';
+  reason: 'time' | 'equipment' | 'excluded';
 }
 
 export interface AdaptedWorkout {
@@ -118,9 +118,20 @@ export function setBudget(program: Program, minutes: number): number {
   return clamp(Math.round((total * minutes) / program.minutes), 1, total);
 }
 
+/**
+ * Inverse of setBudget: what the work that survived the constraints takes.
+ * Two sets left of an 35-minute program is not a 35-minute session.
+ */
+export function estimatedMinutes(program: Program, sets: number): number {
+  const total = program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
+  if (total === 0 || sets === 0) return 0;
+  return Math.max(1, Math.round((program.minutes * sets) / total));
+}
+
 export function adaptWorkout(
   program: Program = FULL_BODY_A,
   constraints: Constraints = DEFAULT_CONSTRAINTS,
+  excluded: string[] = [],
 ): AdaptedWorkout {
   const minutes = clamp(Math.round(constraints.minutes), 10, 120);
   const setup = EQUIPMENT_OPTIONS[constraints.equipment] ?? EQUIPMENT_OPTIONS.home;
@@ -131,6 +142,15 @@ export function adaptWorkout(
   // 1. Equipment first: a movement that needs a load the user does not have is
   //    dropped, never re-loaded with a number from somewhere else.
   for (const exercise of program.exercises) {
+    if (excluded.includes(exercise.exerciseId)) {
+      skipped.push({
+        exerciseId: exercise.exerciseId,
+        name: exercise.name,
+        sets: exercise.sets,
+        reason: 'excluded',
+      });
+      continue;
+    }
     const unusable =
       (exercise.requires === 'dumbbell' && !setup.allowsLoads) ||
       (exercise.weight > 0 && !setup.loads.includes(exercise.weight));
@@ -210,6 +230,10 @@ export function adaptWorkout(
   }
   if (forEquipment.length > 0) {
     note += ` ${listOf(forEquipment.map((item) => item.name))} need${forEquipment.length === 1 ? 's' : ''} a load that is not available today.`;
+  }
+  const forExcluded = skipped.filter((item) => item.reason === 'excluded');
+  if (forExcluded.length > 0) {
+    note += ` ${listOf(forExcluded.map((item) => item.name))} excluded in your library.`;
   }
 
   return {

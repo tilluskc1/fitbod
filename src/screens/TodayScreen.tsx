@@ -2,10 +2,10 @@ import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
 import { formatWeight, unitOf } from '../lib/units';
-import { exerciseMeta, setText, targetSummary } from '../data/flagship';
+import { exerciseMeta, programSetCount, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
-import { EQUIPMENT_OPTIONS } from '../lib/adapt';
+import { EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
 import { exercisePhoto } from '../lib/media';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -46,7 +46,9 @@ function initials(name: string): string {
 
 function coachInsight(last: LastPerformance | null, first: ProgramExercise, unit: Unit): string {
   if (!last) {
-    return `First session on the ${first.name.toLowerCase()}. Start light enough that every rep looks the same.`;
+    return first.holdSeconds
+      ? `First session on the ${first.name.toLowerCase()}. Hold it only as long as the set still looks strong.`
+      : `First session on the ${first.name.toLowerCase()}. Start light enough that every rep looks the same.`;
   }
   const reps = setText(first.exerciseId, last.reps);
   // The load is what was actually logged, never the prescribed one.
@@ -83,7 +85,12 @@ export default function TodayScreen({
   const week = workoutsThisWeek(history, now);
   const targetDays = profile.daysPerWeek;
   const setup = EQUIPMENT_OPTIONS[equipment];
-  const minutes = current ? (current.durationMin ?? adapted.minutes) : adapted.minutes;
+  // Equipment or exclusions can leave far less work than the requested time.
+  const estimated =
+    !current && adapted.totalSets < programSetCount(program)
+      ? estimatedMinutes(program, adapted.totalSets)
+      : adapted.minutes;
+  const minutes = current ? (current.durationMin ?? adapted.minutes) : estimated;
   const first = adapted.exercises[0];
   const heroId = first?.exerciseId ?? 'dumbbell-floor-press';
   const photo = exercisePhoto(heroId);
@@ -138,6 +145,7 @@ export default function TodayScreen({
             </span>
             <span className="hero-card__meta">
               <Icon name="timer" size={17} />
+              {estimated < adapted.minutes && !current ? '≈' : ''}
               {minutes} min <span aria-hidden="true">·</span> {setup.short}
             </span>
           </span>
@@ -177,6 +185,7 @@ export default function TodayScreen({
           <div className="list-head">
             <h2>The workout</h2>
             <span>
+              {estimated < adapted.minutes && !current ? '≈' : ''}
               {minutes} min · {adapted.totalSets} {adapted.totalSets === 1 ? 'set' : 'sets'}
             </span>
           </div>
@@ -245,7 +254,11 @@ export default function TodayScreen({
                       <span className="workout-row__name">
                         {item.name}
                         <span className="skipped-badge">
-                          {item.reason === 'time' ? 'Skipped today' : 'No equipment'}
+                          {item.reason === 'time'
+                            ? 'Skipped today'
+                            : item.reason === 'excluded'
+                              ? 'Excluded'
+                              : 'No equipment'}
                         </span>
                       </span>
                       <span className="workout-row__meta">

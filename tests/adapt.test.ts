@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { adaptWorkout, setBudget, toWorkoutExercises } from '../src/lib/adapt.ts';
+import { adaptWorkout, estimatedMinutes, setBudget, toWorkoutExercises } from '../src/lib/adapt.ts';
 import { keywordParser } from '../src/lib/constraints.ts';
 import { FULL_BODY_A, programSetCount } from '../src/data/flagship.ts';
 
@@ -132,4 +132,25 @@ test('the local parser only fills constraints', () => {
   });
   assert.deepEqual(keywordParser.parse('bodyweight only'), { equipment: 'bodyweight' });
   assert.deepEqual(keywordParser.parse(''), {});
+});
+
+test('the time estimate follows the work that survived, not the request', () => {
+  assert.equal(estimatedMinutes(FULL_BODY_A, 11), FULL_BODY_A.minutes);
+  assert.ok(estimatedMinutes(FULL_BODY_A, 2) < 10);
+  assert.equal(estimatedMinutes(FULL_BODY_A, 0), 0);
+});
+
+test('excluded movements are skipped as excluded, never reloaded', () => {
+  const adapted = adaptWorkout(
+    FULL_BODY_A,
+    { minutes: 35, equipment: 'home' },
+    ['dumbbell-row'],
+  );
+  assert.deepEqual(
+    adapted.skipped.map((item) => [item.exerciseId, item.reason]),
+    [['dumbbell-row', 'excluded']],
+  );
+  assert.ok(
+    adapted.exercises.every((exercise) => exercise.exerciseId !== 'dumbbell-row'),
+  );
 });

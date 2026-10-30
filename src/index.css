@@ -2392,6 +2392,17 @@ body {
   color: #889182;
 }
 
+.constraint-notice {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-container);
+  border: 1px solid rgba(197, 247, 119, 0.35);
+  color: var(--on-surface);
+  font-size: 13px;
+  line-height: 18px;
+}
+
 .preset-row {
   display: flex;
   gap: 8px;

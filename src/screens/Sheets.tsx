@@ -16,7 +16,10 @@ import {
   constraintSentence,
   isPresetActive,
   keywordParser,
-  mergeConstraints,
+  noticeText,
+  resolveConstraints,
+  type ConstraintNotice,
+  type ParsedConstraints,
 } from '../lib/constraints';
 import Sheet from '../components/ui/Sheet';
 import Demo from '../components/ui/Demo';
@@ -29,7 +32,7 @@ interface AdjustProps {
   constraints: Constraints;
   originalMinutes: number;
   onClose: () => void;
-  onPreview: (next: Constraints) => void;
+  onPreview: (next: Constraints, notices: ConstraintNotice[]) => void;
 }
 
 /**
@@ -40,17 +43,25 @@ the others.
 export function AdjustSheet({ constraints, originalMinutes, onClose, onPreview }: AdjustProps) {
   const [current, setCurrent] = useState(constraints);
   const [text, setText] = useState(constraintSentence(constraints));
+  const [notices, setNotices] = useState<ConstraintNotice[]>([]);
+  // Nothing understood is not the same as nothing to change, so say so.
+  const [unread, setUnread] = useState(false);
 
-  const apply = (patch: Partial<Constraints>) => {
-    const next = mergeConstraints(current, patch);
-    setCurrent(next);
-    setText(constraintSentence(next));
+  const apply = (patch: ParsedConstraints) => {
+    const resolved = resolveConstraints(current, patch);
+    setCurrent(resolved.constraints);
+    setNotices(resolved.notices);
+    setUnread(false);
+    setText(constraintSentence(resolved.constraints));
   };
 
   const onText = (value: string) => {
     setText(value);
     const parsed = keywordParser.parse(value);
-    setCurrent((previous) => mergeConstraints(previous, parsed));
+    const resolved = resolveConstraints(current, parsed);
+    setCurrent(resolved.constraints);
+    setNotices(resolved.notices);
+    setUnread(value.trim().length > 0 && Object.keys(parsed).length === 0);
   };
 
   const delta = current.minutes - originalMinutes;
@@ -65,7 +76,7 @@ export function AdjustSheet({ constraints, originalMinutes, onClose, onPreview }
       variant="adjust"
       footer={
         <>
-          <button className="pill-primary" onClick={() => onPreview(current)}>
+          <button className="pill-primary" onClick={() => onPreview(current, notices)}>
             Preview changes
             <Icon name="arrow_forward" size={20} />
           </button>
@@ -82,6 +93,17 @@ export function AdjustSheet({ constraints, originalMinutes, onClose, onPreview }
           onChange={(event) => onText(event.target.value)}
         />
       </div>
+
+      {notices.map((notice) => (
+        <p key={notice.kind} className="constraint-notice" role="status">
+          {noticeText(notice)}
+        </p>
+      ))}
+      {unread && (
+        <p className="data-note" role="status">
+          No change from that sentence. Use a chip or Edit details so the plan can be adjusted.
+        </p>
+      )}
 
       <div className="preset-row">
         {PRESETS.map((preset) => (
