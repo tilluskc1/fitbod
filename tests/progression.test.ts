@@ -72,6 +72,44 @@ function sets(weight: number, reps: number, count = 4) {
   return Array.from({ length: count }, () => ({ weight, reps }));
 }
 
+/** One exercise slot in a workout, possibly split into repeated segments. */
+interface Segment {
+  planned: { weight: number; reps: number }[];
+  performed: { weight: number; reps: number; done: boolean }[];
+  originalPlannedSets?: number;
+}
+
+function slotRecord(
+  id: string,
+  date: string,
+  exerciseId: string,
+  segments: Segment[],
+): WorkoutRecord {
+  return {
+    id,
+    date,
+    name: 'Push',
+    dayIndex: 0,
+    status: 'completed',
+    completedEarly: false,
+    endedAt: null,
+    exercises: segments.map((segment) => ({
+      exerciseId,
+      name: meta(exerciseId).name,
+      planned: segment.planned,
+      performed: segment.performed.map((set) => ({
+        weight: set.weight,
+        reps: set.reps,
+        done: set.done,
+        completedAt: set.done ? date : null,
+      })),
+      ...(segment.originalPlannedSets === undefined
+        ? {}
+        : { originalPlannedSets: segment.originalPlannedSets }),
+    })),
+  };
+}
+
 test('a first prescription invents no load and starts inside the rep range', () => {
   const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), []);
 
@@ -136,6 +174,73 @@ test('the rep climb is capped at the top of the range', () => {
   const prescription = prescribeExercise(meta('lateral-raise'), makeProfile(), history);
   assert.equal(prescription.reps, 15);
   assert.equal(prescription.weight, 10);
+});
+
+test('repeated segments all count: one swapped-off set of three never progresses', () => {
+  // The original 3-set press: 1 set logged, 2 swapped away to push-ups,
+  // 1 of those returned and logged. Segments add to 2 of 3, not a 1-of-1 win.
+  const history = [
+    slotRecord('w1', '2026-01-05T10:00:00.000Z', 'barbell-bench-press', [
+      {
+        planned: [sets(60, 10, 1)[0]],
+        performed: [{ weight: 60, reps: 10, done: true }],
+        originalPlannedSets: 3,
+      },
+      {
+        planned: [sets(60, 10, 1)[0]],
+        performed: [{ weight: 60, reps: 10, done: false }],
+        originalPlannedSets: 3,
+      },
+    ]),
+  ];
+
+  const last = lastExercisePerformance(history, 'barbell-bench-press');
+  assert.equal(last?.plannedSets, 3);
+  assert.equal(last?.done.length, 1);
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history);
+  assert.equal(prescription.basis, 'repeat');
+  assert.equal(prescription.weight, 60);
+  assert.equal(prescription.reps, 10);
+});
+
+test('sets logged across repeated segments all contribute', () => {
+  const history = [
+    slotRecord('w1', '2026-01-05T10:00:00.000Z', 'barbell-bench-press', [
+      {
+        planned: [sets(60, 10, 1)[0]],
+        performed: [{ weight: 60, reps: 10, done: true }],
+        originalPlannedSets: 3,
+      },
+      {
+        planned: [sets(60, 9, 1)[0]],
+        performed: [{ weight: 60, reps: 9, done: true }],
+      },
+    ]),
+  ];
+
+  const last = lastExercisePerformance(history, 'barbell-bench-press');
+  assert.equal(last?.done.length, 2);
+  // 2 of the original 3 required sets: still unfinished.
+  assert.equal(last?.plannedSets, 3);
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history);
+  assert.equal(prescription.basis, 'repeat');
+});
+
+test('a swap replacement that completes the whole slot still earns its step', () => {
+  // The full 3-set slot was completed under push-ups; bodyweight caps as hold.
+  const history = [
+    slotRecord('w1', '2026-01-05T10:00:00.000Z', 'push-up', [
+      {
+        planned: sets(0, 10, 3),
+        performed: sets(0, 10, 3).map((set) => ({ ...set, done: true })),
+        originalPlannedSets: 3,
+      },
+    ]),
+  ];
+
+  const prescription = prescribeExercise(meta('push-up'), makeProfile(), history);
+  assert.equal(prescription.basis, 'hold');
+  assert.equal(prescription.reps, 10);
 });
 
 test('an unfinished exercise repeats its load instead of progressing', () => {

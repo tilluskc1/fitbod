@@ -7,8 +7,10 @@ import {
   applyFinish,
   completeSession,
   createSession,
+  logSet,
   removePerformedSet,
   sessionProgress,
+  swapPendingExercise,
   updatePerformedSet,
 } from '../src/lib/session.ts';
 import type { AppState, WorkoutRecord } from '../src/types.ts';
@@ -40,6 +42,45 @@ function makeSession(): WorkoutRecord {
   });
 }
 
+/** The flagship session model: three working sets on one exercise. */
+function pressSession(): WorkoutRecord {
+  return createSession({
+    id: 'workout-press',
+    name: 'Full body A',
+    dayIndex: 0,
+    now: START,
+    exercises: [
+      {
+        exerciseId: 'dumbbell-floor-press',
+        name: 'Dumbbell floor press',
+        planned: [
+          { weight: 10, reps: 10 },
+          { weight: 10, reps: 10 },
+          { weight: 10, reps: 10 },
+        ],
+        performed: [
+          { weight: 10, reps: 10, done: false, completedAt: null },
+          { weight: 10, reps: 10, done: false, completedAt: null },
+          { weight: 10, reps: 10, done: false, completedAt: null },
+        ],
+      },
+    ],
+  });
+}
+
+const PRESS_CANDIDATE = {
+  exerciseId: 'dumbbell-floor-press',
+  name: 'Dumbbell floor press',
+  weight: 10,
+  reps: 10,
+};
+const PUSHUP_CANDIDATE = {
+  exerciseId: 'push-up',
+  name: 'Push-Up',
+  weight: 0,
+  reps: 10,
+};
+
 function withHistory(): AppState {
   return {
     profile: {
@@ -56,6 +97,134 @@ function withHistory(): AppState {
     current: makeSession(),
   };
 }
+
+test('a swap keeps completed sets and hands only the pending budget to the replacement', () => {
+  let session = logSet(pressSession(), 0, 0, LATER);
+  const completedAt = session.exercises[0].performed[0].completedAt;
+  const before = sessionProgress(session);
+
+  session = swapPendingExercise(session, 0, PUSHUP_CANDIDATE);
+
+  // Completed work stays under its original exercise, exactly as logged.
+  const kept = session.exercises[0];
+  assert.equal(kept.exerciseId, 'dumbbell-floor-press');
+  assert.equal(kept.performed.length, 1);
+  assert.equal(kept.performed[0].done, true);
+  assert.equal(kept.performed[0].weight, 10);
+  assert.equal(kept.performed[0].reps, 10);
+  assert.equal(kept.performed[0].completedAt, completedAt);
+
+  // The replacement inherits the remaining budget, not a default workout.
+  const replacement = session.exercises[1];
+  assert.equal(replacement.exerciseId, 'push-up');
+  assert.equal(replacement.performed.length, 2);
+  assert.equal(replacement.performed.every((set) => !set.done), true);
+  assert.equal(replacement.planned.length, 2);
+
+  const after = sessionProgress(session);
+  assert.equal(after.total, before.total);
+  assert.equal(after.done, before.done);
+});
+
+test('the full swap journey preserves both completed sets through finish', () => {
+  let session = logSet(pressSession(), 0, 0, LATER);
+  const pressCompletedAt = session.exercises[0].performed[0].completedAt;
+
+  session = swapPendingExercise(session, 0, PUSHUP_CANDIDATE);
+  session = logSet(session, 1, 0, '2026-01-01T11:05:00.000Z');
+  const pushupCompletedAt = session.exercises[1].performed[0].completedAt;
+  session = swapPendingExercise(session, 1, PRESS_CANDIDATE);
+
+  // Two remaining sets gave the replacement two, logging one left one, and
+  // swapping back handed exactly that one to the floor press.
+  const backEntry = session.exercises[2];
+  assert.equal(backEntry.exerciseId, 'dumbbell-floor-press');
+  assert.equal(backEntry.performed.length, 1);
+  assert.equal(backEntry.performed[0].done, false);
+
+  const progress = sessionProgress(session);
+  assert.equal(progress.done, 2);
+  assert.equal(progress.total, 3);
+
+  const state: AppState = { ...withHistory(), current: session };
+  const finished = applyFinish(state, session.id, { early: true, now: FINISH });
+  const workout = finished.history[0];
+
+  const completedPresses = workout.exercises.filter(
+    (exercise) => exercise.exerciseId === 'dumbbell-floor-press' && exercise.performed.some((set) => set.done),
+  );
+  const completedPushups = workout.exercises.filter(
+    (exercise) => exercise.exerciseId === 'push-up' && exercise.performed.some((set) => set.done),
+  );
+  assert.equal(completedPresses.length, 1);
+  assert.equal(completedPushups.length, 1);
+  const pressSet = completedPresses[0].performed.find((set) => set.done);
+  const pushupSet = completedPushups[0].performed.find((set) => set.done);
+  assert.deepEqual(
+    { weight: pressSet?.weight, reps: pressSet?.reps, completedAt: pressSet?.completedAt },
+    { weight: 10, reps: 10, completedAt: pressCompletedAt },
+  );
+  assert.equal(pushupSet?.reps, 10);
+  assert.equal(pushupSet?.completedAt, pushupCompletedAt);
+});
+
+test('the swap-back journey logs and corrects the returned set under the original exercise', () => {
+  let session = logSet(pressSession(), 0, 0, LATER);
+  session = swapPendingExercise(session, 0, PUSHUP_CANDIDATE);
+  session = logSet(session, 1, 0, LATER);
+  session = swapPendingExercise(session, 1, PRESS_CANDIDATE);
+
+  // The returned press segment is a separate entry; its active set can be
+  // logged like any other and carries the original prescription's marker.
+  const returned = session.exercises[2];
+  assert.equal(returned.exerciseId, 'dumbbell-floor-press');
+  assert.equal(returned.originalPlannedSets, 3);
+  session = logSet(session, 2, 0, LATER);
+  const progress = sessionProgress(session);
+  assert.equal(progress.done, 3);
+  assert.equal(progress.total, 3);
+  assert.equal(progress.complete, true);
+
+  const state: AppState = { ...withHistory(), current: session };
+  const finished = applyFinish(state, session.id, { early: true, now: FINISH });
+  assert.equal(finished.history[0].exercises[2].performed[0].done, true);
+
+  // Correcting the returned set edits only that set, by the same indices the
+  // history screen uses.
+  const corrected = applyCorrection(finished, session.id, 2, 0, { weight: 12.5, reps: 7 }, LATER);
+  assert.equal(corrected.history[0].exercises[2].performed[0].weight, 12.5);
+  assert.equal(corrected.history[0].exercises[2].performed[0].reps, 7);
+  assert.equal(corrected.history[0].exercises[0].performed[0].weight, 10);
+  assert.equal(corrected.history[0].exercises[1].performed[0].weight, 0);
+});
+
+test('completing 1 of an originally 3-set exercise preserves the requirement', () => {
+  let session = logSet(pressSession(), 0, 0, LATER);
+  session = swapPendingExercise(session, 0, PUSHUP_CANDIDATE);
+
+  const state: AppState = { ...withHistory(), current: session };
+  const finished = applyFinish(state, session.id, { early: true, now: FINISH });
+  const workout = finished.history[0];
+
+  // The kept press segment and the replacement both carry the slot's original
+  // 3-set requirement; neither earned a full session.
+  assert.equal(workout.exercises[0].originalPlannedSets, 3);
+  assert.equal(workout.exercises[1].originalPlannedSets, 3);
+
+  const pressed = workout.exercises[0].performed.filter((set) => set.done);
+  assert.equal(pressed.length, 1);
+});
+
+test('a fully completed exercise has no pending work to swap', () => {
+  let session = logSet(pressSession(), 0, 0, LATER);
+  session = logSet(session, 0, 1, LATER);
+  session = logSet(session, 0, 2, LATER);
+
+  const unchanged = swapPendingExercise(session, 0, PUSHUP_CANDIDATE);
+  assert.equal(unchanged, session);
+  const outOfRange = swapPendingExercise(session, 9, PUSHUP_CANDIDATE);
+  assert.equal(outOfRange, session);
+});
 
 test('performed edits never mutate the prescription or the previous object', () => {
   const session = makeSession();

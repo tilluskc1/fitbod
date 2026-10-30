@@ -18,9 +18,11 @@ import {
   extendRest,
   logSet,
   sessionProgress,
+  swapPendingExercise,
   toggleRestPause,
   updatePerformedSet,
 } from './lib/session';
+import type { SwapCandidate } from './lib/session';
 import {
   EMPTY_STATE,
   STORAGE_KEY,
@@ -42,7 +44,6 @@ import type {
   PerformedSet,
   Profile,
   TodayOverride,
-  WorkoutExercise,
 } from './types';
 import { PhoneFrame, TabBar } from './components/ui/Chrome';
 import type { Tab } from './components/ui/Chrome';
@@ -444,29 +445,22 @@ export default function App() {
     if (!profile) return;
     const target = EXERCISES.find((exercise) => exercise.id === nextExerciseId);
     if (!target) return;
+    // The replacement's own prescription only; the session action decides how
+    // many sets it receives and keeps every completed set where it is.
     const prescription = prescribeExercise(target, profile, state.history);
-    const replacement: WorkoutExercise = {
+    const candidate: SwapCandidate = {
       exerciseId: target.id,
       name: target.name,
-      planned: Array.from({ length: prescription.sets }, () => ({
-        weight: prescription.weight,
-        reps: prescription.reps,
-      })),
-      performed: Array.from({ length: prescription.sets }, () => ({
-        weight: prescription.weight,
-        reps: prescription.reps,
-        done: false,
-        completedAt: null,
-      })),
+      weight: prescription.weight,
+      reps: prescription.reps,
     };
-    setState((currentState) => {
-      if (!currentState.current) return currentState;
-      const exercises = [...currentState.current.exercises];
-      exercises[exerciseIndex] = replacement;
-      return { ...currentState, current: { ...currentState.current, exercises } };
-    });
+    setState((currentState) =>
+      currentState.current
+        ? { ...currentState, current: swapPendingExercise(currentState.current, exerciseIndex, candidate) }
+        : currentState,
+    );
     setSheet({ kind: 'none' });
-    setNotice(`${target.name} swapped in. Its loads start from its own history.`);
+    setNotice(`${target.name} swapped in for the remaining sets. Completed sets stay put.`);
   };
 
   /* ---------- render ---------- */

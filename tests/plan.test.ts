@@ -44,3 +44,25 @@ test('lastPerformance reports only completed sets', () => {
   assert.deepEqual(last?.reps, [9]);
   assert.equal(last?.weight, 15);
 });
+
+test('lastPerformance aggregates repeated segments of the same exercise', () => {
+  const base = workout([{ reps: 10, done: true }]);
+  const swappedBack: WorkoutRecord = {
+    ...base,
+    exercises: [
+      ...base.exercises,
+      {
+        exerciseId: 'dumbbell-floor-press',
+        name: 'Dumbbell floor press',
+        planned: [{ weight: 15, reps: 9 }],
+        performed: [
+          { weight: 12.5, reps: 8, done: true, completedAt: '2026-10-27T18:12:00.000Z' },
+        ],
+      },
+    ],
+  };
+
+  const last = lastPerformance([swappedBack], 'dumbbell-floor-press');
+  assert.deepEqual(last?.reps, [10, 8]);
+  assert.equal(last?.weight, 15);
+});

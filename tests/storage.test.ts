@@ -175,6 +175,52 @@ test('storage unavailability is surfaced instead of pretending to save', () => {
   assert.equal(saved.reason, 'unavailable');
 });
 
+test('a swap split preserves its original requirement through export and restore', () => {
+  const state: AppState = {
+    ...EMPTY_STATE,
+    history: [
+      {
+        id: 'w-seg',
+        date: '2026-02-01T10:00:00.000Z',
+        name: 'Full body A',
+        dayIndex: 0,
+        status: 'completed',
+        completedEarly: true,
+        endedAt: '2026-02-01T11:00:00.000Z',
+        exercises: [
+          {
+            exerciseId: 'dumbbell-floor-press',
+            name: 'Dumbbell floor press',
+            originalPlannedSets: 3,
+            planned: [{ weight: 10, reps: 10 }],
+            performed: [
+              { weight: 10, reps: 10, done: true, completedAt: '2026-02-01T10:05:00.000Z' },
+            ],
+          },
+          {
+            exerciseId: 'dumbbell-floor-press',
+            name: 'Dumbbell floor press',
+            originalPlannedSets: 3,
+            planned: [{ weight: 10, reps: 10 }],
+            performed: [
+              { weight: 10, reps: 10, done: false, completedAt: null },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  const parsed = parseState(serializeExport(state, '2026-02-02T10:00:00.000Z'));
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  const exercises = parsed.state.history[0].exercises;
+  assert.deepEqual(
+    exercises.map((exercise) => exercise.originalPlannedSets),
+    [3, 3],
+  );
+});
+
 test('export round-trips performed values and restore is idempotent', () => {
   installStorage({ [STORAGE_KEY]: FIXTURE });
   const loaded = loadState();

@@ -142,6 +142,12 @@ export interface WorkoutExercise {
   name: string;
   planned: PlannedSet[];
   performed: PerformedSet[];
+  /**
+   * Set count this session slot originally prescribed, kept when a swap split
+   * the work. Unset on untouched entries. Individual sets still hold no
+   * identity — `shortcut: segments stay anonymous, one field per segment`.
+   */
+  originalPlannedSets?: number;
 }
 
 export type WorkoutStatus = 'active' | 'completed';
