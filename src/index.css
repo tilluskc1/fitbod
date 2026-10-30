@@ -2795,7 +2795,7 @@ body {
 
 .aw-exercise__media {
   position: relative;
-  height: 128px;
+  height: 152px;
   overflow: hidden;
 }
 
@@ -2803,9 +2803,10 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.45;
+  opacity: 0.95;
 }
 
+/* Scrim only behind the text: clear through the middle so the photo reads. */
 .aw-exercise__overlay {
   position: absolute;
   inset: 0;
@@ -2813,7 +2814,12 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  background: linear-gradient(to top, var(--surface-container-low) 4%, rgba(20, 25, 19, 0.55) 60%, transparent);
+  background: linear-gradient(
+    180deg,
+    rgba(13, 18, 12, 0.55) 0%,
+    rgba(13, 18, 12, 0) 42%,
+    rgba(13, 18, 12, 0.86) 100%
+  );
 }
 
 .aw-exercise__top {
@@ -3343,7 +3349,7 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
-  opacity: 0.45;
+  opacity: 0.95;
 }
 
 @media (max-width: 719px) {
