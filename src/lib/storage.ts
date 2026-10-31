@@ -322,6 +322,11 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
     active = current.current;
     activeSessionKept = true;
   }
+  // Completed history wins over an older active-session backup.
+  if (active && (importedIds.has(active.id) || currentIds.has(active.id))) {
+    active = null;
+    activeSessionKept = false;
+  }
 
   return {
     state: {

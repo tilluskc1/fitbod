@@ -386,6 +386,29 @@ test('legacy backups can also be restored through the import path', () => {
   assert.equal(parsed.state.current?.status, 'active');
 });
 
+test('restoring an older active backup after finish keeps one completed workout on reload', () => {
+  installStorage();
+  const active = { ...EMPTY_STATE, current: activeRecord('finished-A') };
+  const backup = parseState(serializeExport(active));
+  assert.equal(backup.ok, true);
+  if (!backup.ok) return;
+  const finished = applyFinish(active, 'finished-A', { early: false, now: '2026-01-01T11:00:00.000Z' });
+  let state = finished;
+  let revision = 0;
+  for (let restore = 0; restore < 2; restore++) {
+    state = mergeImport(state, backup.state).state;
+    const saved = saveState(state, revision);
+    assert.equal(saved.ok, true);
+    if (!saved.ok) return;
+    revision = saved.revision;
+    const reopened = loadState();
+    assert.equal(reopened.status, 'ok');
+    assert.equal(reopened.state.current, null);
+    assert.deepEqual(reopened.state.history, finished.history);
+    state = reopened.state;
+  }
+});
+
 test('restore keeps local-only workouts and an unrelated active session', () => {
   const profile = {
     goal: 'Build Muscle' as const,
