@@ -38,3 +38,7 @@ This package supports Codex subagents. Read [Codex orchestration](codex-orchestr
 
 Never commit credentials, project tokens, field IDs or option IDs. The controller resolves mutable GitHub IDs from the configured names each run.
 
+
+## Upgrade an existing run
+
+Adopt a new controller version at a safe boundary. Stop/complete the old manager's writers and release its lease using that version before switching the skill. The old whitespace lock format is not a valid new JSON lease; a malformed/legacy lock stops the new controller for explicit reconciliation. Do not delete a live lock to make preflight pass. Preserve issue comments, branches, worker/evidence records and current PR heads during adoption; inspect them before starting new workers.

@@ -74,6 +74,14 @@ read_lock() {
   fi
 }
 valid_id() { case $1 in ''|*[!a-zA-Z0-9._-]*) return 1 ;; *) return 0 ;; esac; }
+# Host worker IDs are opaque (Codex may return /root/task). Keep raw IDs in
+# records, and encode only the filename; the prefix also prevents hidden keys.
+worker_path() {
+  [ -n "$2" ] || refuse "worker identity is empty"
+  local key
+  key=$(jq -nr --arg id "$2" '$id | @uri') || die "worker identity encoding failed"
+  printf '%s/workers/%s/id-%s.json\n' "$STATE_ROOT" "$1" "$key"
+}
 write_lock() {
   local tmp="$LOCK.tmp.$$"
   (umask 077; jq -n --arg owner "$1" --arg token "$2" --arg role "$3" --argjson time "$(now)" '{owner:$owner,token:$token,role:$role,time:$time}' > "$tmp") && mv "$tmp" "$LOCK"
@@ -226,8 +234,12 @@ open_pr_for() {
   one_or_none "open PRs for #$1" "$matches"
 }
 dev_worktree() {
-  local matches
-  matches=$(git -C "$REPO" worktree list --porcelain | sed -n 's/^worktree //p' | grep -F "$WT_ROOT/$1-" | grep -v -- '-verify$')
+  local matches inventory
+  inventory=$(git -C "$REPO" worktree list --porcelain) || return 1
+  matches=$(awk -v prefix="refs/heads/$BRANCH_PREFIX$1-" '
+    /^worktree / { path=substr($0,10) }
+    /^branch / { if (index(substr($0,8),prefix)==1) print path }
+  ' <<< "$inventory") || return 1
   one_or_none "worktrees for #$1" "$matches"
 }
 local_branch() {
@@ -274,7 +286,7 @@ doctor() {
     git -C "$REPO" rev-parse -q --verify "origin/$BASE_BRANCH" > /dev/null 2>&1 || failures="${failures}${failures:+$'\n'}missing origin/$BASE_BRANCH"
   fi
   [ -z "$failures" ] || ok=false
-  read_lock; if [ -n "$L_OWNER" ]; then lock_desc="$L_OWNER $L_STATE age=$(( $(now) - ${L_TIME:-0} ))s"; else lock_desc=none; fi
+  read_lock; if [ -n "$L_OWNER" ]; then lock_desc="$L_OWNER $L_ROLE age=$(( $(now) - ${L_TIME:-0} ))s"; else lock_desc=none; fi
   if [ "$json" = 1 ]; then
     jq -n --argjson ok "$ok" --argjson offline "$([ "$offline" = 1 ] && echo true || echo false)" --arg repo "$REPO" --arg config "$CONFIG" --arg lock "$lock_desc" --arg failures "$failures" \
       '{ok:$ok,offline:$offline,repository:$repo,configuration:$config,lock:$lock,failures:($failures|split("\n")|map(select(length>0)))}'
@@ -409,12 +421,12 @@ park() {
 worker() {
   role manager
   local n=$1 id=$2 assigned=$3 status=$4 head=$5 dir file other
-  load_issue "$n"; valid_id "$id" || refuse "invalid worker id"
+  load_issue "$n"; [ -n "$id" ] || refuse "worker identity is empty"
   case $assigned in implementer|qa|standards|product|reliability|requirements) ;; *) refuse "unknown worker role" ;; esac
   case $status in running|complete|stopped) ;; *) refuse "unknown worker status" ;; esac
   if [ "$head" != - ]; then head=$(git -C "$REPO" rev-parse --verify "$head^{commit}") || refuse "unknown worker commit"; fi
   [ "$status" != complete ] || [ "$assigned" = requirements ] || [ "$head" != - ] || refuse "completed worker needs commit"
-  dir="$STATE_ROOT/workers/$n"; file="$dir/$id.json"
+  dir="$STATE_ROOT/workers/$n"; file=$(worker_path "$n" "$id") || return $?
   if [ -f "$file" ]; then
     [ "$(jq -r .role "$file")" = "$assigned" ] || refuse "worker id cannot change roles"
   fi
@@ -466,8 +478,7 @@ review() {
   ' "$input" >/dev/null 2>&1 || refuse "invalid, self-reviewed or unsupported review report"
   head=$(jq -r .headSha "$input"); base=$(jq -r .baseSha "$input"); r=$(jq -r .role "$input")
   reviewer=$(jq -r .reviewerId "$input"); implementer=$(jq -r .implementerId "$input")
-  valid_id "$reviewer" && valid_id "$implementer" || refuse "invalid reviewer identity"
-  registered="$STATE_ROOT/workers/$n/$implementer.json"
+  registered=$(worker_path "$n" "$implementer") || return $?
   [ -f "$registered" ] && jq -e --arg head "$head" '.role == "implementer" and .status == "complete" and .headSha == $head' "$registered" >/dev/null || refuse "missing completed implementer for this commit"
   if [ "$r" = acceptance ]; then
     role product-verifier
@@ -475,7 +486,7 @@ review() {
     [ "$reviewer" != "$(jq -r .owner "$registered")" ] || refuse "implementing manager cannot provide product acceptance"
   else
     role manager
-    registered="$STATE_ROOT/workers/$n/$reviewer.json"
+    registered=$(worker_path "$n" "$reviewer") || return $?
     [ -f "$registered" ] && jq -e --arg r "$r" --arg head "$head" '.role == $r and .status == "complete" and .headSha == $head' "$registered" >/dev/null || refuse "missing completed reviewer provenance"
   fi
   fetch; load_prs
@@ -515,13 +526,13 @@ ready() {
     jq -e --arg head "$head" --arg base "$base" --arg repo "$GH_REPO" --argjson n "$n" --arg role "$r" '.repository == $repo and .issue == $n and .role == $role and .verdict == "PASS" and .headSha == $head and .baseSha == $base and .reviewerId != .implementerId and (.checks|length > 0 and all(.[];.exitCode == 0)) and (.evidence|length > 0)' "$receipt" >/dev/null || refuse "failed, blocked or stale $r receipt"
     [ -z "$implementer" ] && implementer=$(jq -r .implementerId "$receipt")
     [ "$implementer" = "$(jq -r .implementerId "$receipt")" ] || refuse "reviewed implementers differ"
-    registered="$STATE_ROOT/workers/$n/$implementer.json"
+    registered=$(worker_path "$n" "$implementer") || return $?
     [ -f "$registered" ] && jq -e --arg head "$head" '.status == "complete" and .role == "implementer" and .headSha == $head' "$registered" >/dev/null || refuse "implementer is not complete at head"
     if [ "$r" = acceptance ]; then
       [ "$(jq -r .reviewerId "$receipt")" = "$GITHUB_WORK_BOARD_OWNER" ] || refuse "acceptance belongs to another product session"
       [ "$GITHUB_WORK_BOARD_OWNER" != "$(jq -r .owner "$registered")" ] || refuse "implementing manager cannot provide product acceptance"
     else
-      registered="$STATE_ROOT/workers/$n/$(jq -r .reviewerId "$receipt").json"
+      registered=$(worker_path "$n" "$(jq -r .reviewerId "$receipt")") || return $?
       [ -f "$registered" ] && jq -e --arg r "$r" --arg head "$head" '.status == "complete" and .role == $r and .headSha == $head' "$registered" >/dev/null || refuse "reviewer provenance changed"
     fi
   done

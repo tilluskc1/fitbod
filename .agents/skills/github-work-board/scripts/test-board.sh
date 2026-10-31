@@ -110,6 +110,8 @@ g branch -D work/1-first work/1-second > /dev/null
 
 # ---- lock ----
 check "claim free" "$($B claim A token-A)" "claimed"
+check "doctor succeeds with live lease" "$(code doctor --offline --json)" "0"
+check "doctor live lease output" "$($B doctor --offline --json | jq -r .lock | cut -d' ' -f1-2)" "A manager"
 ( GITHUB_WORK_BOARD_CLAIM_HOLD=1 $B claim A token-A > "$T/claim-a" ) & claim_pid=$!
 sleep 0.1
 GITHUB_WORK_BOARD_OWNER=B GITHUB_WORK_BOARD_TOKEN=token-B $B claim B token-B > "$T/claim-b"
@@ -155,6 +157,17 @@ EOF
 echo '{"comments":[]}' > "$S/pr-20.json"
 check "state number" "$($B state --json | jq -r 'map(.number)|join(",")')" "1,3"
 check "state head" "$($B state --json 1 | jq -r '.[0].head')" "$H"
+MANAGED="$T/managed-checkout/Fitbod"
+mkdir -p "$(dirname "$MANAGED")"
+g worktree move "$WT" "$MANAGED"
+WT=$MANAGED
+check "state finds managed worktree by branch" "$($B state --json 1 | jq -r '.[0].worktree')" "$WT"
+check "state finds managed worktree head" "$($B state --json 1 | jq -r '.[0].head')" "$H"
+check "worktree reuses managed checkout" "$($B worktree 1)" "$WT"
+g worktree add -q -b work/1-other "$T/another-managed/Fitbod" "$H"
+check "multiple issue worktrees refuse" "$(code state --json 1)" "1"
+g worktree remove "$T/another-managed/Fitbod"
+g branch -D work/1-other >/dev/null
 check "verify at" "$($B verify-at 1 "$H")" "$T/wt/1-verify"
 check "verify clean" "$($B verify-check 1 "$H")" "clean"
 check "unknown verifier commit refused" "$(code verify-at 1 nonexistent-commit)" "3"
@@ -177,14 +190,23 @@ echo '[[{"state":"open","number":99}]]' > "$S/deps-1.json"
 check "native dependency waits" "$($B triage 1 | cut -f4)" "WAIT"
 echo '[[]]' > "$S/deps-1.json"
 check "reviewer cannot complete without dispatch" "$(code worker 1 never-dispatched qa complete "$H")" "3"
-$B worker 1 implementer-1 implementer running - >/dev/null
+$B worker 1 /root/controller22 implementer running - >/dev/null
 check "second implementer refused" "$(code worker 3 implementer-2 implementer running -)" "3"
 check "running worker blocks release" "$(code release)" "3"
-$B worker 1 implementer-1 implementer complete "$H" >/dev/null
+$B worker 1 /root/controller22 implementer complete "$H" >/dev/null
+STATE_DIR="$(g rev-parse --path-format=absolute --git-common-dir)/github-work-board"
+check "raw canonical worker identity retained" "$(jq -r .id "$STATE_DIR/workers/1/id-%2Froot%2Fcontroller22.json" 2>/dev/null)" "/root/controller22"
+$B worker 1 '../../escape' requirements running - >/dev/null
+check "opaque identity cannot escape registry" "$([ -f "$STATE_DIR/workers/1/id-..%2F..%2Fescape.json" ] && [ ! -e "$STATE_DIR/escape.json" ] && echo safe)" "safe"
+$B worker 1 '../../escape' requirements stopped - >/dev/null
+COMPLETE_BEFORE=$(cat "$STATE_DIR/workers/1/id-%2Froot%2Fcontroller22.json")
+jq '.time=0' "$T/lock" > "$T/expired-lock"; mv "$T/expired-lock" "$T/lock"
+$B reclaim A token-A --workers-stopped >/dev/null
+check "reclaim preserves completed worker record" "$(cat "$STATE_DIR/workers/1/id-%2Froot%2Fcontroller22.json")" "$COMPLETE_BEFORE"
 for role in qa standards product; do
-  $B worker 1 "reviewer-$role" "$role" running "$H" >/dev/null
-  $B worker 1 "reviewer-$role" "$role" complete "$H" >/dev/null
-  jq -n --arg role "$role" --arg head "$H" --arg base "$BASE" '{repository:"acme/widget",issue:1,headSha:$head,baseSha:$base,role:$role,reviewerId:("reviewer-"+$role),implementerId:"implementer-1",verdict:"PASS",checks:[{command:"test",exitCode:0}],evidence:["https://example.test/evidence"],notVerified:[]}' > "$T/review-$role.json"
+  $B worker 1 "/root/reviewer-$role" "$role" running "$H" >/dev/null
+  $B worker 1 "/root/reviewer-$role" "$role" complete "$H" >/dev/null
+  jq -n --arg role "$role" --arg head "$H" --arg base "$BASE" '{repository:"acme/widget",issue:1,headSha:$head,baseSha:$base,role:$role,reviewerId:("/root/reviewer-"+$role),implementerId:"/root/controller22",verdict:"PASS",checks:[{command:"test",exitCode:0}],evidence:["https://example.test/evidence"],notVerified:[]}' > "$T/review-$role.json"
   $B review 1 "$T/review-$role.json" >/dev/null
 done
 jq '.role="acceptance" | .reviewerId="A"' "$T/review-qa.json" > "$T/manager-acceptance.json"
@@ -209,7 +231,7 @@ check "release manager" "$($B release)" "released"
 export GITHUB_WORK_BOARD_OWNER=product-chat GITHUB_WORK_BOARD_TOKEN=product-token GITHUB_WORK_BOARD_ROLE=product-verifier
 $B claim product-chat product-token >/dev/null
 check "missing acceptance refused" "$($B ready 1 "$H" "$H" | cut -d' ' -f1)" "refused"
-jq -n --arg head "$H" --arg base "$BASE" '{repository:"acme/widget",issue:1,headSha:$head,baseSha:$base,role:"acceptance",reviewerId:"product-chat",implementerId:"implementer-1",verdict:"PASS",checks:[{command:"acceptance",exitCode:0}],evidence:["https://example.test/acceptance"],notVerified:[]}' > "$T/acceptance.json"
+jq -n --arg head "$H" --arg base "$BASE" '{repository:"acme/widget",issue:1,headSha:$head,baseSha:$base,role:"acceptance",reviewerId:"product-chat",implementerId:"/root/controller22",verdict:"PASS",checks:[{command:"acceptance",exitCode:0}],evidence:["https://example.test/acceptance"],notVerified:[]}' > "$T/acceptance.json"
 jq '.reviewerId="different-product-chat"' "$T/acceptance.json" > "$T/other-acceptance.json"
 check "acceptance actor must match product session" "$(code review 1 "$T/other-acceptance.json")" "3"
 $B review 1 "$T/acceptance.json" >/dev/null
