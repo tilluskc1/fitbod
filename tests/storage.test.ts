@@ -377,6 +377,28 @@ test('malformed and incompatible restore files are rejected', () => {
   assert.equal(parseState(JSON.stringify(mismatched)).ok, false);
 });
 
+test('incompatible backup wrappers cannot change good saved data', () => {
+  for (const metadata of [
+    { app: 'some-other-app', schemaVersion: 2 },
+    { app: 'fitbod-clone', schemaVersion: 99 },
+    { schemaVersion: 2 },
+    { app: 'fitbod-clone' },
+    {},
+  ]) {
+    const storage = installStorage({ [STORAGE_KEY]: FIXTURE });
+    const local = loadState();
+    const before = storage.data.get(STORAGE_KEY);
+    const incoming = { ...local.state, history: [record('incompatible-workout')] };
+    const parsed = parseState(JSON.stringify({ ...metadata, state: incoming }));
+    // Exercise the same accepted-import chain as the App restore handler.
+    if (parsed.ok) saveState(mergeImport(local.state, parsed.state).state, local.revision);
+    assert.equal(parsed.ok, false);
+    assert.equal(storage.data.get(STORAGE_KEY), before);
+    assert.equal(loadState().revision, local.revision);
+    assert.equal(loadState().state.history[0].id, 'nn7i3ndqmvr4zife');
+  }
+});
+
 test('legacy backups can also be restored through the import path', () => {
   const parsed = parseState(FIXTURE);
   assert.equal(parsed.ok, true);

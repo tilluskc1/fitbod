@@ -1,11 +1,9 @@
 import type { AppState, WorkoutRecord } from '../types.ts';
-import { validateState } from './validate.ts';
+import { APP_MARKER, SCHEMA_VERSION, validateState } from './validate.ts';
+export { SCHEMA_VERSION } from './validate.ts';
 
 export const STORAGE_KEY = 'fitbod-clone-v1';
 export const LEGACY_BACKUP_KEY = 'fitbod-clone-v1:legacy-backup';
-export const SCHEMA_VERSION = 2;
-
-const APP_MARKER = 'fitbod-clone';
 
 export const EMPTY_STATE: AppState = {
   profile: null,

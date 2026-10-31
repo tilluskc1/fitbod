@@ -14,6 +14,9 @@ import type {
   WorkoutRecord,
 } from '../types.ts';
 
+export const APP_MARKER = 'fitbod-clone';
+export const SCHEMA_VERSION = 2;
+
 const GOALS: Goal[] = ['Build Muscle', 'Lose Fat', 'Get Stronger', 'General Fitness'];
 const EXPERIENCES: Experience[] = ['Beginner', 'Intermediate', 'Advanced'];
 const EQUIPMENT: Equipment[] = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell', 'Bodyweight'];
@@ -412,6 +415,9 @@ export function parseState(text: string): { ok: true; state: AppState; migrated:
     return { ok: false, error: 'Not valid JSON. Nothing was changed.' };
   }
   if (isRecord(parsed) && 'state' in parsed) {
+    if (parsed.app !== APP_MARKER || parsed.schemaVersion !== SCHEMA_VERSION) {
+      return { ok: false, error: 'Unsupported backup app or schema version. Nothing was changed.' };
+    }
     return validateState(parsed.state);
   }
   return validateState(parsed);
