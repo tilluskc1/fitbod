@@ -88,6 +88,8 @@ export interface AdaptedWorkout {
   programId: string;
   name: string;
   minutes: number;
+  /** Set when the request exceeded what the program holds: asked vs applied. */
+  cappedMinutes: { asked: number; applied: number } | null;
   originalMinutes: number;
   exercises: AdaptedExercise[];
   skipped: SkippedExercise[];
@@ -216,6 +218,11 @@ export function adaptWorkout(
   const forTime = skipped.filter((item) => item.reason === 'time');
   const forEquipment = skipped.filter((item) => item.reason === 'equipment');
   const timeTrimmed = trimmedSets || forTime.length > 0;
+  // The program is the ceiling: a request above its own minutes cannot add
+  // work, so cap the label at what the surviving sets take. Trimming (the
+  // 20/30-minute direction) is untouched; only the extend direction is capped.
+  const capped = !timeTrimmed && minutes > estimatedMinutes(program, totalSets);
+  const appliedMinutes = capped ? estimatedMinutes(program, totalSets) : minutes;
 
   let note: string;
   if (kept.length === 0) {
@@ -239,7 +246,8 @@ export function adaptWorkout(
   return {
     programId: program.id,
     name: program.name,
-    minutes,
+    minutes: appliedMinutes,
+    cappedMinutes: capped ? { asked: minutes, applied: appliedMinutes } : null,
     originalMinutes: program.minutes,
     exercises: kept,
     skipped,

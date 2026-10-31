@@ -8,8 +8,8 @@ import {
   loadOptions,
   toWorkoutExercises,
 } from './lib/adapt';
-import type { Constraints, EquipmentChoice } from './lib/adapt';
-import { defaultConstraints } from './lib/constraints';
+import type { AdaptedWorkout, Constraints, EquipmentChoice } from './lib/adapt';
+import { defaultConstraints, programCeilingNotice } from './lib/constraints';
 import type { ConstraintNotice } from './lib/constraints';
 import { FULL_BODY_A, programSetCount } from './data/flagship';
 import {
@@ -276,11 +276,11 @@ export default function App() {
    * Starting is always built from the same engine output the screens showed,
    * so the preview, the review and the logger can never disagree.
    */
-  const startSession = (next: Constraints): boolean => {
+  const startSession = (next: Constraints): AdaptedWorkout | null => {
     const workout = adaptWorkout(FULL_BODY_A, next, profile?.exclusions ?? []);
     if (workout.exercises.length === 0) {
       setNotice('No movement in this workout can be done with that setup.');
-      return false;
+      return null;
     }
     if (
       current &&
@@ -288,7 +288,7 @@ export default function App() {
         `"${current.name}" is still in progress. Discard it and start "${workout.name}"? Logged sets from the active session will be lost.`,
       )
     ) {
-      return false;
+      return null;
     }
     const session = createSession({
       id: uid(),
@@ -300,7 +300,7 @@ export default function App() {
     });
     setState((currentState) => ({ ...currentState, current: session }));
     setView('train');
-    return true;
+    return workout;
   };
 
   const startWorkout = () => {
@@ -309,12 +309,13 @@ export default function App() {
 
   /** Review changes → start: persist today's adaptation, then open the session. */
   const acceptAdaptation = (next: Constraints) => {
-    if (!startSession(next)) return;
+    const workout = startSession(next);
+    if (!workout) return;
     setPendingNotices([]);
     const choice: EquipmentChoice = next.equipment;
     const approved: TodayOverride = {
       date: dayKey(new Date()),
-      minutes: next.minutes,
+      minutes: workout.minutes,
       equipment: choice === 'home' || choice === 'hotel' ? ['Dumbbell'] : [],
       support: [],
       appliedAt: new Date().toISOString(),
@@ -704,8 +705,10 @@ export default function App() {
             closeSheet();
           }}
           onPreview={(next, notices) => {
+            const previewed = adaptWorkout(FULL_BODY_A, next, exclusions);
+            const ceiling = programCeilingNotice(previewed);
             setPending(next);
-            setPendingNotices(notices);
+            setPendingNotices(ceiling ? [...notices, ceiling] : notices);
             setSheet({ kind: 'none' });
             setView('adapt');
           }}

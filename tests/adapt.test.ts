@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { adaptWorkout, estimatedMinutes, setBudget, toWorkoutExercises } from '../src/lib/adapt.ts';
-import { keywordParser } from '../src/lib/constraints.ts';
+import { keywordParser, programCeilingNotice } from '../src/lib/constraints.ts';
 import { FULL_BODY_A, programSetCount } from '../src/data/flagship.ts';
 
 const home = (minutes: number) =>
@@ -67,6 +67,22 @@ test('35 minutes leaves the programmed workout unchanged', () => {
   assert.deepEqual(adapted.exercises[0].targetReps, [9, 9, 9]);
   assert.equal(adapted.skipped.length, 0);
   assert.equal(adapted.note, 'Same exercises, weights and sets as your program.');
+});
+
+test('asking for more time than the program holds caps at the program', () => {
+  const sixty = home(60);
+  assert.equal(sixty.totalSets, 11);
+  assert.equal(sixty.minutes, 35);
+  assert.equal(sixty.skipped.length, 0);
+  assert.equal(sixty.note, 'Same exercises, weights and sets as your program.');
+
+  const seventyFive = home(75);
+  assert.equal(seventyFive.totalSets, 11);
+  assert.equal(seventyFive.minutes, 35);
+  assert.deepEqual(sixty.cappedMinutes, { asked: 60, applied: 35 });
+  assert.equal(programCeilingNotice(sixty)?.kind, 'program-ceiling');
+  assert.equal(home(20).cappedMinutes, null);
+  assert.equal(programCeilingNotice(home(35)), null);
 });
 
 test('the engine only ever returns loads from the program', () => {

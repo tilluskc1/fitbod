@@ -96,7 +96,7 @@ export default function AdaptScreen({
           <div className="review__chips">
             <button className="flow-chip" onClick={onEdit}>
               <Icon name="schedule" size={14} />
-              {constraints.minutes} min
+              {adapted.minutes} min
               <Icon name="expand_more" size={14} />
             </button>
             <button className="flow-chip" onClick={onEdit}>
