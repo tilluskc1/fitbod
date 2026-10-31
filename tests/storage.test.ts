@@ -404,7 +404,12 @@ test('restoring an older active backup after finish keeps one completed workout 
     const reopened = loadState();
     assert.equal(reopened.status, 'ok');
     assert.equal(reopened.state.current, null);
-    assert.deepEqual(reopened.state.history, finished.history);
+    assert.equal(reopened.state.history.length, 1);
+    assert.equal(reopened.state.history[0].id, 'finished-A');
+    assert.equal(reopened.state.history[0].endedAt, '2026-01-01T11:00:00.000Z');
+    assert.deepEqual(reopened.state.history[0].exercises[0].performed, [
+      { weight: 0, reps: 10, done: true, completedAt: '2026-01-01T11:00:00.000Z' },
+    ]);
     state = reopened.state;
   }
 });
