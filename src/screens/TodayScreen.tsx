@@ -213,7 +213,7 @@ export default function TodayScreen({
                   <span className="workout-row__text">
                     <span className="workout-row__name">{exercise.name}</span>
                     <span className="workout-row__meta">
-                      {exerciseMeta(exercise)}
+                      {exerciseMeta(exercise, exercise.sets, true, unit)}
                     </span>
                   </span>
                   <span className="workout-row__chev">
@@ -234,7 +234,7 @@ export default function TodayScreen({
                     <span className="compare-line">
                       <span className="compare-line__label">Today’s target</span>
                       <span className="compare-line__value compare-line__value--target">
-                        {targetSummary(exercise, exercise.sets)}
+                        {targetSummary(exercise, exercise.sets, unit)}
                       </span>
                     </span>
                   </span>
@@ -262,7 +262,7 @@ export default function TodayScreen({
                         </span>
                       </span>
                       <span className="workout-row__meta">
-                        {source ? exerciseMeta(source) : `${item.sets} sets`}
+                        {source ? exerciseMeta(source, source.sets, true, unit) : `${item.sets} sets`}
                       </span>
                     </span>
                     <span className="workout-row__chev" aria-hidden="true" />
