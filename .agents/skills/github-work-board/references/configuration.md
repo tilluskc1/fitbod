@@ -22,6 +22,12 @@ Use [the example configuration](../assets/work-board.example.json) as the starti
 
 Optional `worktreeRoot` may be absolute or relative to the repository parent. Without it, the controller uses `<repo-parent>/<repo-name>-worktrees`.
 
+Optional `requiredReviewRoles` adds mandatory roles (`qa`, `standards`, `product`, `reliability`, `acceptance`) to the built-in gates; it cannot remove them. Review receipts pin the current remote base as well as the head. See [acceptance evidence](acceptance-evidence.md) for recording reports.
+
+## Codex sessions
+
+This package supports Codex subagents. Read [Codex orchestration](codex-orchestration.md) before starting workers. The developer manager stops each delivery at Review and continues eligible work; a separate product-verifier session controls Ready to merge. Session owner/token/role belong in local environment variables, not committed configuration or GitHub comments. Controller role checks are operational guardrails, not an authentication system.
+
 ## Onboarding procedure
 
 1. Read repository instructions and detect the exact GitHub repository from `origin`.

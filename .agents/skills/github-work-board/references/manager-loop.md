@@ -1,61 +1,66 @@
 # Manager loop
 
-Use a stable lock owner without whitespace. Every wake-up begins at step 0. Durable progress belongs in `[work-board]` issue/PR comments and any repository task record required by `AGENTS.md`.
+## 0. Establish a run and reconcile
 
-## 0. Preflight and reconcile
+Read `AGENTS.md`, current product decisions and configuration. Run `B doctor --json`, `B status`, `B state --json`, then `B triage --json`. Read failures stop selection. These inspections do not claim a lease or mutate GitHub.
 
-Run `B doctor --json`, `B status`, then `B claim OWNER`. If another live owner holds the lock, stop. Run `B state --json`; reconcile its branch, worktree, PR head and latest note with repository records. A failed read is an error, never an empty board.
+Use a unique `GITHUB_WORK_BOARD_OWNER`, unpredictable `GITHUB_WORK_BOARD_TOKEN` and `GITHUB_WORK_BOARD_ROLE=manager` for this developer-chat session. `B claim OWNER TOKEN` begins the lease; it never takes over an expired foreign lease automatically. `B renew` refreshes a live owned lease. Keep tokens local and renew between bounded worker waits before one third of the configured lease duration elapses.
 
-## 1. Resume first
+Reconcile actual worker IDs, worktrees, PR heads and durable issue notes. An expired lease stops writes, not proof that old workers finished. Explicit recovery requires established stopped writers; use the controller's reclaim command only after that reconciliation. A lost/unknown worker or conflicting checkout parks its issue. A quiet worker is not a reason to spawn a replacement.
 
-Resume every in-flight issue before selecting a new one:
+## 1. Resume before selecting
 
-- active worker: wait;
-- completed worker: continue its recorded step;
-- worktree without worker: assign a read-only resume assessment;
-- dirty, conflicting or ambiguous state: park.
+For each in-flight issue distinguish:
 
-Never start a second implementation worker.
+- Running worker: resume/wait for the same worker; no second implementer.
+- Returned worker: inspect its result, checkout and PR before recording completion.
+- Delivered to Review awaiting product acceptance: leave Review, expose the handoff, then select another unblocked issue.
+- Dirty/conflicting/ambiguous work: assess read-only, park with a bounded next action if unresolved.
 
-## 2. Triage
+The worker registry records role, actual host worker ID, assigned head and lifecycle. Before dispatch and after completion, reconcile it with actual host tools; it is not a process supervisor. Keep durable run notes sufficient to find these workers after interruption.
 
-Run `B triage --json`. Leave `WAIT` items untouched, report `PARK` items, and select the first `CHECK` item. The controller applies configured priority order and then board order.
+## 2. Select and establish requirements
 
-## 3. Requirements check
+Run `B triage --json`. Priority order comes from configuration, then board order. `WAIT` means open dependencies: leave it unstarted and continue. `PARK` needs a bounded decision or recovery. Select the first eligible `CHECK` issue.
 
-Assign the Requirements-review role from `worker-roles.md`. It must establish testable scope, acceptance criteria, permissions, failure states, dependencies and open decisions from repository-authoritative sources. Anything unresolved parks the issue.
+Dispatch a read-only Requirements reviewer. READY requires testable scope, current brief revision, relevant failure/recovery paths, required checks/review roles, dependencies and any approved product decisions. An unresolved decision gets one question, a recommended default and safe fallback in the issue; continue other eligible work.
 
-## 4. Start and plan
+If a separate Requirements worker is unavailable, leave the unstarted issue in its configured Todo/ready status, record/park the capability blocker and continue only work whose prerequisites can be met. Do not move unbuilt work to Review or self-approve Requirements.
 
-Run `B start N`, then `B worktree N`. Assign the Implementer in plan phase. Review the plan against repository instructions and the issue. Scope expansion, architectural decisions lacking authority, hosted changes or unclear behavior park the issue.
+Immediately before implementation, `B start N` rechecks eligibility and dependencies. Then `B worktree N` creates/reuses only that issue's isolated checkout. A dependency or GitHub error stops that issue; a failed read never authorizes a start.
 
-## 5. Implement
+## 3. Plan and implement
 
-Continue the same Implementer in build phase. It writes tests where appropriate, implements the smallest approved change, runs proportionate checks, commits, pushes the exact feature branch and opens or updates a draft PR linked to the issue. `B state N` must show local head equal to PR head.
+Dispatch one Implementer in plan phase with a bounded scope and absolute checkout. Approve its plan against the issue; product decisions or new dependencies/data changes lacking approval park the issue.
 
-## 6. Independent verification
+Continue the same Implementer in build phase. It performs meaningful tests, commits and pushes the feature branch, and opens/updates a draft PR linked to the issue. Attach every created PR through the Codex app's artifact tool when available. The implementer reports exact head, checks and incomplete criteria. Manager independently reads local/PR state before accepting the result.
 
-Set `B move N "<reviewStatus>"`, record reviewed SHA `R`, and run `B verify-at N R`.
+## 4. Internal verification at one head
 
-1. Assign QA at exactly `R`; then run `B verify-check N R`.
-2. Run `B changed --json N origin/<baseBranch> R`. When UI changed, assign Product review at exactly `R` using real local behavior and synthetic/test data only.
-3. Assign Reliability/security review when the diff or repository policy makes it applicable.
+Move the issue to the configured Review status using `B move N STATUS`. Pin full PR head R and base B. Prepare a clean verifier checkout with `B verify-at N R`. Never repoint a dirty verifier or overwrite evidence.
 
-A verdict on another SHA is void. Record findings as `[work-board]` comments without changing the reviewed branch.
+Dispatch separate QA and Standards workers. Product/mobile review is required when UI or affected user journeys require it; reliability review covers persistence, authentication, authorization and other relevant failure risks. Repository policy can require more, never fewer mandatory acceptance checks. Record actual worker lifecycle and reports using the controller evidence contract.
 
-## 7. Repair
+Run `B verify-check N R` after verification. Inspect raw command results and acceptance evidence, not only a worker's PASS. Browser evidence must correspond to R and the served source. For Fitbod, affected mobile journeys run at 390×844 and 360×780; source probes do not substitute for browser checks.
 
-Send exact defects to the Implementer. Review the new SHA from scratch for affected areas; never reuse a verdict across changed executable inputs without explaining why it remains valid. After two unsuccessful repair rounds, park.
+Missing subagent capability, mandatory checks or usable environments keeps Review with BLOCKED evidence. Same-agent self-review can provide findings but cannot produce independent readiness.
 
-## 8. Ready to merge
+## 5. Repair or hand off
 
-Confirm the base branch is an ancestor of the feature head, the worktree is clean, local head equals PR head, selected checks passed, all applicable reviewers passed, and all unverified areas are reported. Run `B ready N R R`; it refuses mismatched or unreviewed heads and never merges. Remove the verifier worktree and notify the user.
+FAIL returns a bounded correction to the same implementer: source location, reproduction, expected/actual, violated requirement and reviewed head. Re-run affected checks and reviewers at its new SHA; old PASS records do not transfer. After two unsuccessful repair rounds, park with a concrete next correction and safe fallback. Continue unrelated eligible work.
 
-## 9. Repeat or finish
+If internal checks and reviews pass, post a concise GitHub delivery comment: issue/brief, PR, base/head, raw evidence locations, actual commands/results, incomplete areas and exact product acceptance steps. Keep status Review and the PR draft while final acceptance is pending. Waiting for ordinary product acceptance is not a `needs-info` park.
 
-Return to step 0. When no eligible or in-flight issues remain, release the lock and report completed, parked and waiting issues plus checks not run. Do not keep polling unless the user explicitly asked for monitoring and the host provides a safe wake/automation mechanism.
+## 6. Continue or yield
 
-## Dry run
+After delivery or park, return to reconciliation and select the next unblocked issue. Before ending a bounded run, establish stopped/completed writers, record the next step and release the manager lease. On explicit stop, interrupt only owned workers, record their real stopped state and release. Never leave a writer running while releasing merely to give another manager access.
 
-Run doctor, status, state and triage only. A read-only Requirements-review worker may inspect each `CHECK` issue. Do not claim a live manager's lock, change GitHub, create worktrees, push branches, open PRs or start implementation/review workers.
+When the product chat needs the lease, yield at this same safe boundary. It may perform read-only acceptance earlier. Do not send another chat a message unless the user explicitly authorized that messaging.
 
+When no eligible issues remain, report delivered heads, parked reasons and checks not run. Do not poll indefinitely. Monitoring requires a user request and a supported scheduler; a skill invocation alone does not keep a chat awake.
+
+## 7. Product acceptance
+
+Only the separate product-verifier session follows [acceptance evidence](acceptance-evidence.md) to record final acceptance and request readiness. Recheck current PR head/base, checks, reviewer independence, worker completion and clean checkouts. The controller refuses missing/stale/failed evidence and the developer manager role.
+
+A product FAIL produces a correction brief and leaves Review. A product BLOCKED names missing evidence/environment. PASS permits Ready to merge only; no merge, deployment, issue close or Done.
