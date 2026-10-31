@@ -135,6 +135,7 @@ export default function App() {
   );
 
   const revisionRef = useRef(INITIAL.revision);
+  const pendingWriteRef = useRef<string | undefined>(undefined);
   const skipSaveRef = useRef(true);
   const adoptingRef = useRef(false);
   const forceSaveRef = useRef(INITIAL.status === 'corrupt');
@@ -146,13 +147,18 @@ export default function App() {
    * retry after freeing space or unblocking storage persists exactly once.
    */
   const attemptSave = useCallback(() => {
-    const result = saveState(state, revisionRef.current, { force: forceSaveRef.current });
+    const result = saveState(state, revisionRef.current, {
+      force: forceSaveRef.current,
+      pendingWrite: pendingWriteRef.current,
+    });
     if (result.ok) {
+      pendingWriteRef.current = undefined;
       forceSaveRef.current = false;
       revisionRef.current = result.revision;
       setSaveUi({ kind: 'saved' });
       setConflict(null);
     } else {
+      if (result.pendingWrite) pendingWriteRef.current = result.pendingWrite;
       setSaveUi({ kind: 'error', reason: result.reason, message: result.error });
       if (result.reason === 'stale') setConflict(result.error);
     }

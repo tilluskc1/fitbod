@@ -170,6 +170,92 @@ test('a failed write is reported honestly and leaves storage unchanged', () => {
   assert.equal(retried.ok, true);
 });
 
+test('a throwing verification read stays unsaved and Retry verifies the existing write once', () => {
+  installStorage();
+  const store = globalThis.localStorage;
+  const read = store.getItem;
+  let reads = 0;
+  store.getItem = (key) => {
+    if (++reads === 2) throw new Error('read-back unavailable');
+    return read(key);
+  };
+  const state = { ...EMPTY_STATE, history: [record('saved-once')] };
+  const failed = saveState(state, 0);
+  assert.equal(failed.ok, false);
+  if (failed.ok) return;
+  assert.equal(failed.reason, 'verify');
+  store.getItem = read;
+  const retried = saveState(state, 0, { pendingWrite: failed.pendingWrite });
+  assert.equal(retried.ok, true);
+  if (!retried.ok) return;
+  assert.equal(retried.revision, 1);
+  const loaded = loadState();
+  assert.equal(loaded.status, 'ok');
+  assert.deepEqual(loaded.state.history.map((workout) => workout.id), ['saved-once']);
+});
+
+test('an unverified write allows later edits but never authorizes another tab’s state', () => {
+  installStorage();
+  const store = globalThis.localStorage;
+  const read = store.getItem;
+  let failRead = false;
+  const write = store.setItem;
+  store.setItem = (key, value) => { write(key, value); failRead = true; };
+  store.getItem = (key) => {
+    if (failRead) throw new Error('read-back unavailable');
+    return read(key);
+  };
+  const first = saveState(EMPTY_STATE, 0);
+  assert.equal(first.ok, false);
+  if (first.ok) return;
+  store.getItem = read;
+  store.setItem = write;
+  const state = { ...EMPTY_STATE, history: [record('edited-after-failure')] };
+  const edited = saveState(state, 0, { pendingWrite: first.pendingWrite });
+  assert.equal(edited.ok, true);
+  if (!edited.ok) return;
+  assert.equal(edited.revision, 2);
+  assert.deepEqual(loadState().state.history.map((workout) => workout.id), ['edited-after-failure']);
+
+  // Even a competing write at the same revision must not match our receipt.
+  const other = JSON.parse(first.pendingWrite ?? '{}');
+  other.state.history = [record('other-tab')];
+  write(STORAGE_KEY, JSON.stringify(other));
+  const stale = saveState(state, 0, { pendingWrite: first.pendingWrite });
+  assert.equal(stale.ok, false);
+  if (stale.ok) return;
+  assert.equal(stale.reason, 'stale');
+  assert.deepEqual(loadState().state.history.map((workout) => workout.id), ['other-tab']);
+});
+
+test('repeated verification-read failures retain edits until a readable Retry', () => {
+  installStorage();
+  const store = globalThis.localStorage;
+  const read = store.getItem;
+  const write = store.setItem;
+  let failRead = false;
+  store.getItem = (key) => {
+    if (failRead) throw new Error('read-back unavailable');
+    return read(key);
+  };
+  store.setItem = (key, value) => { write(key, value); failRead = true; };
+  const first = saveState(EMPTY_STATE, 0);
+  assert.equal(first.ok, false);
+  if (first.ok) return;
+  failRead = false;
+  const state = { ...EMPTY_STATE, history: [record('latest-edit')] };
+  const second = saveState(state, 0, { pendingWrite: first.pendingWrite });
+  assert.equal(second.ok, false);
+  if (second.ok) return;
+  assert.equal(second.reason, 'verify');
+  failRead = false;
+  const retry = saveState(state, 0, { pendingWrite: second.pendingWrite });
+  assert.equal(retry.ok, true);
+  if (!retry.ok) return;
+  assert.equal(retry.revision, 2);
+  assert.deepEqual(loadState().state.history.map((workout) => workout.id), ['latest-edit']);
+});
+
 test('storage unavailability is surfaced instead of pretending to save', () => {
   const storage = installStorage();
   storage.removeStorage();

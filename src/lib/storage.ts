@@ -36,7 +36,7 @@ export type SaveFailureReason = 'stale' | 'quota' | 'unavailable' | 'verify';
 
 export type SaveResult =
   | { ok: true; revision: number; savedAt: string }
-  | { ok: false; reason: SaveFailureReason; error: string; remoteRevision?: number };
+  | { ok: false; reason: SaveFailureReason; error: string; remoteRevision?: number; pendingWrite?: string };
 
 function storage(): Storage | null {
   try {
@@ -200,6 +200,8 @@ export interface SaveOptions {
    * Revision still moves forward monotonically.
    */
   force?: boolean;
+  /** Exact unverified write from this caller; never persisted separately. */
+  pendingWrite?: string;
 }
 
 export function saveState(
@@ -220,8 +222,14 @@ export function saveState(
   }
 
   const current = parseEnvelope(currentRaw);
+  const ownWrite = current !== null && currentRaw === options.pendingWrite &&
+    current.revision > expectedRevision;
+  if (ownWrite && JSON.stringify(current.state) === JSON.stringify(state)) {
+    return { ok: true, revision: current.revision, savedAt: current.savedAt };
+  }
+  const acknowledgedRevision = ownWrite ? current.revision : expectedRevision;
   if (!options.force) {
-    if (current && current.revision !== expectedRevision) {
+    if (current && current.revision !== acknowledgedRevision) {
       return {
         ok: false,
         reason: 'stale',
@@ -241,7 +249,7 @@ export function saveState(
 
   const baseRevision = options.force
     ? Math.max(expectedRevision, current?.revision ?? 0)
-    : expectedRevision;
+    : acknowledgedRevision;
   const savedAt = new Date().toISOString();
   const envelope: Envelope = {
     app: APP_MARKER,
@@ -251,8 +259,9 @@ export function saveState(
     state,
   };
 
+  const pendingWrite = JSON.stringify(envelope);
   try {
-    store.setItem(STORAGE_KEY, JSON.stringify(envelope));
+    store.setItem(STORAGE_KEY, pendingWrite);
   } catch (error) {
     return {
       ok: false,
@@ -263,11 +272,17 @@ export function saveState(
     };
   }
 
-  const check = parseEnvelope(store.getItem(STORAGE_KEY));
-  if (!check || check.revision !== envelope.revision || check.savedAt !== savedAt) {
+  let verified = false;
+  try {
+    verified = store.getItem(STORAGE_KEY) === pendingWrite;
+  } catch {
+    // The write may exist; only an exact read on Retry may acknowledge it.
+  }
+  if (!verified) {
     return {
       ok: false,
       reason: 'verify',
+      pendingWrite,
       error: 'The write could not be verified. Treat this change as unsaved.',
     };
   }
