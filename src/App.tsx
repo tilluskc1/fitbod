@@ -6,9 +6,12 @@ import {
   adaptWorkout,
   DEFAULT_CONSTRAINTS,
   loadOptions,
+  swapCandidateFor,
   toWorkoutExercises,
 } from './lib/adapt';
 import type { Constraints, EquipmentChoice } from './lib/adapt';
+import { createProposal, decideProposalApproval } from './lib/proposal';
+import type { Proposal, ProposalContext } from './lib/proposal';
 import { defaultConstraints } from './lib/constraints';
 import type { ConstraintNotice } from './lib/constraints';
 import { FULL_BODY_A, programSetCount } from './data/flagship';
@@ -18,14 +21,12 @@ import {
   applyFinish,
   createSession,
   extendRest,
-  latestDoneSet,
   logSet,
   sessionProgress,
   swapPendingExercise,
   toggleRestPause,
   updatePerformedSet,
 } from './lib/session';
-import type { SwapCandidate } from './lib/session';
 import {
   EMPTY_STATE,
   STORAGE_KEY,
@@ -39,7 +40,6 @@ import {
 import type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
 import { parseState } from './lib/validate';
 import { unitOf } from './lib/units';
-import { prescribeExercise } from './lib/progression';
 import { EXERCISES, exerciseById } from './data/exercises';
 import { capabilitiesFor, provides } from './lib/capabilities';
 import type {
@@ -118,7 +118,7 @@ export default function App() {
   const [view, setView] = useState<View>('tabs');
   const [tab, setTab] = useState<Tab>('today');
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' });
-  const [pending, setPending] = useState<Constraints | null>(null);
+  const [pending, setPending] = useState<Proposal | null>(null);
   const [pendingNotices, setPendingNotices] = useState<ConstraintNotice[]>([]);
   const [recapId, setRecapId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -134,6 +134,7 @@ export default function App() {
       : null,
   );
 
+  const appliedProposalRef = useRef<string | null>(null);
   const revisionRef = useRef(INITIAL.revision);
   const skipSaveRef = useRef(true);
   const adoptingRef = useRef(false);
@@ -227,7 +228,7 @@ export default function App() {
   );
 
   const pendingAdapted = useMemo(
-    () => (pending ? adaptWorkout(FULL_BODY_A, pending, exclusions) : null),
+    () => (pending ? adaptWorkout(FULL_BODY_A, pending.constraints, exclusions) : null),
     [pending, exclusions],
   );
 
@@ -307,9 +308,41 @@ export default function App() {
     startSession(constraints);
   };
 
-  /** Review changes → start: persist today's adaptation, then open the session. */
-  const acceptAdaptation = (next: Constraints) => {
+  /** Fingerprint of everything a preview was built against. */
+  const proposalBase = (): ProposalContext => ({
+    sessionId: current?.id ?? null,
+    done: current ? sessionProgress(current).done : 0,
+    historyLength: state.history.length,
+    equipmentKey: [
+      ...(profile?.equipment ?? []),
+      ...(profile?.support ?? []),
+      ...(profile?.exclusions ?? []),
+    ].join(','),
+  });
+
+  /**
+   * Review changes → start: refuse a preview built before intervening logging
+   * or equipment changes, then persist today's adaptation and open the
+   * session. A second approval of the same preview only navigates.
+   */
+  const acceptAdaptation = (proposal: Proposal) => {
+    const decision = decideProposalApproval(proposal, proposalBase(), appliedProposalRef.current);
+    if (decision === 'already-applied') {
+      setView(current ? 'train' : 'tabs');
+      return;
+    }
+    if (decision === 'stale') {
+      setNotice(
+        'That preview is stale — a set was logged or equipment changed. Preview again for a fresh approval.',
+      );
+      setView('tabs');
+      setTab('today');
+      setSheet({ kind: 'adjust' });
+      return;
+    }
+    const next = proposal.constraints;
     if (!startSession(next)) return;
+    appliedProposalRef.current = proposal.id;
     setPendingNotices([]);
     const choice: EquipmentChoice = next.equipment;
     const approved: TodayOverride = {
@@ -462,17 +495,10 @@ export default function App() {
     const target = EXERCISES.find((exercise) => exercise.id === nextExerciseId);
     if (!target) return;
     // The replacement's own prescription only; the session action decides how
-    // many sets it receives and keeps every completed set where it is.
-    // A swap-back first sees the load already logged in the open session, so
-    // the segment cannot render as bodyweight with a first-time rep target.
-    const open = state.current ? latestDoneSet(state.current, target.id) : null;
-    const prescription = open ?? prescribeExercise(target, profile, state.history);
-    const candidate: SwapCandidate = {
-      exerciseId: target.id,
-      name: target.name,
-      weight: prescription.weight,
-      reps: prescription.reps,
-    };
+    // many sets it receives and keeps every completed set where it is. A
+    // program movement with nothing logged keeps the program's own numbers,
+    // so a swap-back cannot render as bodyweight with a first-time target.
+    const candidate = swapCandidateFor(target, profile, state.history, state.current);
     setState((currentState) =>
       currentState.current
         ? { ...currentState, current: swapPendingExercise(currentState.current, exerciseIndex, candidate) }
@@ -580,8 +606,9 @@ export default function App() {
       <AdaptScreen
         originalSets={programSetCount(FULL_BODY_A)}
         adapted={pendingAdapted}
-        constraints={pending}
+        constraints={pending.constraints}
         notices={pendingNotices}
+        unit={unit}
         onStart={() => acceptAdaptation(pending)}
         onEdit={() => {
           setView('tabs');
@@ -696,7 +723,7 @@ export default function App() {
 
       {sheet.kind === 'adjust' && (
         <AdjustSheet
-          constraints={pending ?? constraints}
+          constraints={pending?.constraints ?? constraints}
           originalMinutes={FULL_BODY_A.minutes}
           onClose={() => {
             setPending(null);
@@ -704,7 +731,7 @@ export default function App() {
             closeSheet();
           }}
           onPreview={(next, notices) => {
-            setPending(next);
+            setPending(createProposal(next, proposalBase()));
             setPendingNotices(notices);
             setSheet({ kind: 'none' });
             setView('adapt');

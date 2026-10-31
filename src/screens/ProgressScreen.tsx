@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { formatWeight, inputValue, toKg } from '../lib/units';
+import { formatWeight, inputValue, toKg, unitLabel } from '../lib/units';
 import { exerciseInWorkout, hasWork } from '../lib/plan';
 import type { Unit, WorkoutRecord } from '../types';
 import { ArrowIcon, BarIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
@@ -304,7 +304,7 @@ export default function ProgressScreen({
                                     })
                                   }
                                 />
-                                kg ×
+                                {unitLabel(unit)} ×
                                 <input
                                   type="number"
                                   aria-label={`Correct reps for set ${setIndex + 1} of ${exercise.name}`}

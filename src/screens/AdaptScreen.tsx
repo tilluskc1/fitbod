@@ -2,6 +2,7 @@ import type { AdaptedWorkout } from '../lib/adapt';
 import { EQUIPMENT_OPTIONS } from '../lib/adapt';
 import type { Constraints } from '../lib/adapt';
 import { noticeText, type ConstraintNotice } from '../lib/constraints';
+import type { Unit } from '../types.ts';
 import { targetSummary } from '../data/flagship';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -11,6 +12,7 @@ interface Props {
   adapted: AdaptedWorkout;
   constraints: Constraints;
   notices: ConstraintNotice[];
+  unit?: Unit;
   onStart: () => void;
   onKeep: () => void;
   onEdit: () => void;
@@ -49,6 +51,7 @@ export default function AdaptScreen({
   adapted,
   constraints,
   notices,
+  unit = 'kg',
   onStart,
   onKeep,
   onEdit,
@@ -184,7 +187,7 @@ export default function AdaptScreen({
                   />
                   <div>
                     <div className="review-row__name">{exercise.name}</div>
-                    <div className="review-row__load">{targetSummary(exercise)}</div>
+                    <div className="review-row__load">{targetSummary(exercise, exercise.sets, unit)}</div>
                   </div>
                 </div>
               </div>

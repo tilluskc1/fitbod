@@ -7,6 +7,9 @@
  * ever overwritten by logging.
  */
 
+import { displayValue, unitLabel } from '../lib/units.ts';
+import type { Unit } from '../types.ts';
+
 export type LoadMode = 'each' | 'total' | 'none';
 
 export interface ProgramExercise {
@@ -116,10 +119,12 @@ export function programSetCount(program: Program): number {
   return program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
 }
 
-/** "15 kg each" / "18 kg total" / "Bodyweight". */
-export function loadLabel(exercise: Pick<ProgramExercise, 'weight' | 'load'>): string {
+/** "15 kg each" / "33 lb each" / "Bodyweight". Stored loads stay kilograms. */
+export function loadLabel(exercise: Pick<ProgramExercise, 'weight' | 'load'>, unit: Unit = 'kg'): string {
   if (exercise.load === 'none' || exercise.weight <= 0) return 'Bodyweight';
-  return `${exercise.weight} kg ${exercise.load}`;
+  const value = displayValue(exercise.weight, unit);
+  const text = Number.isInteger(value) ? String(value) : value.toFixed(1);
+  return `${text} ${unitLabel(unit)}${exercise.load === 'each' ? ' each' : ' total'}`;
 }
 
 /** "9 · 9 · 9" or "8–10" when the program has no per-set targets. */
@@ -142,13 +147,14 @@ export function repLabel(
 export function targetSummary(
   exercise: Pick<ProgramExercise, 'targetReps' | 'repRange' | 'holdSeconds' | 'weight' | 'load'>,
   count?: number,
+  unit: Unit = 'kg',
 ): string {
   const reps = exercise.holdSeconds
     ? `${exercise.holdSeconds}s`
     : exercise.targetReps
       ? repLabel(exercise, count)
       : `${repLabel(exercise, count)} reps`;
-  return exercise.weight > 0 ? `${reps} @ ${loadLabel(exercise)}` : reps;
+  return exercise.weight > 0 ? `${reps} @ ${loadLabel(exercise, unit)}` : reps;
 }
 
 export function programExercise(exerciseId: string): ProgramExercise | undefined {
@@ -172,6 +178,7 @@ export function exerciseMeta(
   exercise: ProgramExercise,
   count = exercise.sets,
   includeSets = true,
+  unit: Unit = 'kg',
 ): string {
   const sets = `${count} ${count === 1 ? 'set' : 'sets'}`;
   const reps = exercise.holdSeconds
@@ -181,6 +188,6 @@ export function exerciseMeta(
       : `${repLabel(exercise, count)} reps`;
   // Targets read "9 · 9 @ 15 kg each"; ranges read "8–10 reps · 18 kg total".
   const load =
-    exercise.weight > 0 ? `${exercise.targetReps ? ' @ ' : ' · '}${loadLabel(exercise)}` : '';
+    exercise.weight > 0 ? `${exercise.targetReps ? ' @ ' : ' · '}${loadLabel(exercise, unit)}` : '';
   return includeSets ? `${sets} · ${reps}${load}` : `${reps}${load}`;
 }

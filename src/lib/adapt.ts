@@ -1,6 +1,9 @@
 import type { Program, ProgramExercise } from '../data/flagship.ts';
 import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS } from '../data/flagship.ts';
-import type { WorkoutExercise } from '../types.ts';
+import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import { latestDoneSet } from './session.ts';
+import type { SwapCandidate } from './session.ts';
+import { prescribeExercise } from './progression.ts';
 
 /**
  * The deterministic plan engine.
@@ -271,6 +274,40 @@ export function toWorkoutExercises(adapted: AdaptedWorkout): WorkoutExercise[] {
       })),
     };
   });
+}
+
+/**
+ * What a swap target prescribes for the remaining work. The open session's
+ * logged values win; a program movement with nothing logged keeps the
+ * program's own numbers. Without this a swap-back renders as bodyweight with
+ * a first-time rep target the program never prescribed.
+ */
+export function swapCandidateFor(
+  target: Exercise,
+  profile: Profile,
+  history: WorkoutRecord[],
+  session: WorkoutRecord | null,
+): SwapCandidate {
+  const open = session ? latestDoneSet(session, target.id) : null;
+  if (open) {
+    return { exerciseId: target.id, name: target.name, weight: open.weight, reps: open.reps };
+  }
+  const program = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === target.id);
+  if (program) {
+    return {
+      exerciseId: target.id,
+      name: target.name,
+      weight: program.weight,
+      reps: program.targetReps?.[0] ?? program.holdSeconds ?? program.repRange[0],
+    };
+  }
+  const prescription = prescribeExercise(target, profile, history);
+  return {
+    exerciseId: target.id,
+    name: target.name,
+    weight: prescription.weight,
+    reps: prescription.reps,
+  };
 }
 
 /** Weights the logger may offer, for the chosen setup only. */
