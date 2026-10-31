@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "repository": "tilluskc1/fitbod",
+  "projectOwner": "tilluskc1",
+  "projectNumber": 11,
+  "baseBranch": "main",
+  "statusField": "Status",
+  "statusKey": "status",
+  "priorityKey": "priority",
+  "priorityOrder": ["P0", "P1", "P2"],
+  "readyStatuses": ["Todo"],
+  "inProgressStatus": "In Progress",
+  "reviewStatus": "Review",
+  "readyToMergeStatus": "Ready to merge",
+  "ownedLabel": "ready-for-agent",
+  "blockedLabel": "needs-info",
+  "branchPrefix": "work/",
+  "uiPatterns": ["src/screens/*", "src/components/*", "src/*.tsx", "src/*.css", "*.tsx", "*.css"]
+}
