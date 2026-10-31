@@ -316,17 +316,12 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
   const localOnly = current.history.filter((workout) => !importedIds.has(workout.id));
   const history: WorkoutRecord[] = [...imported.history, ...localOnly];
 
-  let active = imported.current ?? current.current;
-  let activeSessionKept = false;
-  if (imported.current && current.current && imported.current.id !== current.current.id) {
-    active = current.current;
-    activeSessionKept = true;
-  }
-  // Completed history wins over an older active-session backup.
-  if (active && (importedIds.has(active.id) || currentIds.has(active.id))) {
-    active = null;
-    activeSessionKept = false;
-  }
+  // Completed history disqualifies candidates before choosing which active session to keep.
+  const completedIds = new Set(history.map((workout) => workout.id));
+  const localActive = current.current && !completedIds.has(current.current.id) ? current.current : null;
+  const importedActive = imported.current && !completedIds.has(imported.current.id) ? imported.current : null;
+  const activeSessionKept = Boolean(localActive && importedActive && localActive.id !== importedActive.id);
+  const active = activeSessionKept ? localActive : importedActive ?? localActive;
 
   return {
     state: {

@@ -414,6 +414,27 @@ test('restoring an older active backup after finish keeps one completed workout 
   }
 });
 
+test('restore chooses the surviving active session when completed history replaces the other candidate', () => {
+  for (const localFinished of [false, true]) {
+    installStorage();
+    const activeA = { ...EMPTY_STATE, current: activeRecord('workout-A') };
+    const completedA = { ...EMPTY_STATE, history: [record('workout-A')], current: activeRecord('workout-B') };
+    const local = localFinished ? completedA : activeA;
+    const backup = parseState(serializeExport(localFinished ? activeA : completedA));
+    assert.equal(backup.ok, true);
+    if (!backup.ok) return;
+    const merged = mergeImport(local, backup.state);
+    assert.equal(merged.state.current?.id, 'workout-B');
+    const saved = saveState(merged.state, 0);
+    assert.equal(saved.ok, true);
+    const reopened = loadState();
+    assert.equal(reopened.status, 'ok');
+    assert.equal(reopened.state.current?.id, 'workout-B');
+    assert.equal(reopened.state.current?.exercises[0].performed[0].reps, 10);
+    assert.deepEqual(reopened.state.history.map((workout) => workout.id), ['workout-A']);
+  }
+});
+
 test('restore keeps local-only workouts and an unrelated active session', () => {
   const profile = {
     goal: 'Build Muscle' as const,
