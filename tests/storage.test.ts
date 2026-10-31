@@ -11,7 +11,13 @@ import {
   serializeExport,
 } from '../src/lib/storage.ts';
 import { parseState } from '../src/lib/validate.ts';
-import type { AppState, WorkoutRecord } from '../src/types.ts';
+import {
+  applyFinish,
+  createSession,
+  logSet,
+  swapPendingExercise,
+} from '../src/lib/session.ts';
+import type { AppState, WorkoutExercise, WorkoutRecord } from '../src/types.ts';
 
 const FIXTURE = readFileSync(new URL('./fixtures/v1-state.json', import.meta.url), 'utf8');
 
@@ -329,6 +335,75 @@ test('restore keeps local-only workouts and an unrelated active session', () => 
   assert.equal(merged.summary.activeSessionKept, true);
   assert.equal(merged.state.current?.id, 'local-active');
   assert.equal(merged.state.profile?.goal, 'Build Muscle');
+});
+
+test('an integrated log, swap, reload, resume and finish keeps each set once', () => {
+  installStorage();
+  const exercises: WorkoutExercise[] = [
+    {
+      exerciseId: 'dumbbell-floor-press',
+      name: 'Dumbbell floor press',
+      originalPlannedSets: 3,
+      planned: [
+        { weight: 15, reps: 9 },
+        { weight: 15, reps: 9 },
+        { weight: 15, reps: 9 },
+      ],
+      performed: [0, 1, 2].map(() => ({ weight: 15, reps: 9, done: false, completedAt: null })),
+    },
+  ];
+  let state: AppState = {
+    ...EMPTY_STATE,
+    current: createSession({
+      id: 's1',
+      name: 'Full body A',
+      dayIndex: 0,
+      exercises,
+      now: '2026-02-01T10:00:00.000Z',
+    }),
+  };
+  state = { ...state, current: logSet(state.current!, 0, 0, '2026-02-01T10:05:00.000Z') };
+  state = {
+    ...state,
+    current: swapPendingExercise(state.current!, 0, {
+      exerciseId: 'push-up',
+      name: 'Push-Up',
+      weight: 0,
+      reps: 8,
+    }),
+  };
+  state = { ...state, current: logSet(state.current!, 1, 0, '2026-02-01T10:10:00.000Z') };
+
+  const saved = saveState(state, 0);
+  assert.equal(saved.ok, true);
+  if (!saved.ok) return;
+
+  // Reopen: the browser is gone, only the stored envelope survives.
+  const reopened = loadState();
+  assert.equal(reopened.status, 'ok');
+  assert.equal(reopened.state.current?.id, 's1');
+  assert.deepEqual(
+    reopened.state.current?.exercises.map((exercise) => exercise.exerciseId),
+    ['dumbbell-floor-press', 'push-up'],
+  );
+  assert.equal(
+    reopened.state.current?.exercises[0].performed[0].completedAt,
+    '2026-02-01T10:05:00.000Z',
+  );
+
+  const finished = applyFinish(reopened.state, 's1', { early: true, now: '2026-02-01T10:20:00.000Z' });
+  const repeated = applyFinish(finished, 's1', { early: true, now: '2026-02-01T10:21:00.000Z' });
+  assert.equal(repeated.history.length, 1);
+  assert.equal(repeated.current, null);
+  assert.deepEqual(
+    repeated.history[0].exercises.map((exercise) => exercise.exerciseId),
+    ['dumbbell-floor-press', 'push-up'],
+  );
+
+  assert.equal(saveState(repeated, saved.revision).ok, true);
+  const afterFinish = loadState();
+  assert.equal(afterFinish.state.history.length, 1);
+  assert.equal(afterFinish.state.current, null);
 });
 
 test('explicit recovery save overwrites an unsupported schema with a forward revision', () => {

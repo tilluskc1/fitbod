@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { downloadText } from './lib/download';
 import { buildPlan } from './lib/generator';
 import { activeOverride, dayKey, minutesOf } from './lib/plan';
@@ -141,6 +141,23 @@ export default function App() {
 
   /* ---------- persistence ---------- */
 
+  /**
+   * One write attempt. The failed-save banner's Retry runs the same path, so a
+   * retry after freeing space or unblocking storage persists exactly once.
+   */
+  const attemptSave = useCallback(() => {
+    const result = saveState(state, revisionRef.current, { force: forceSaveRef.current });
+    if (result.ok) {
+      forceSaveRef.current = false;
+      revisionRef.current = result.revision;
+      setSaveUi({ kind: 'saved' });
+      setConflict(null);
+    } else {
+      setSaveUi({ kind: 'error', reason: result.reason, message: result.error });
+      if (result.reason === 'stale') setConflict(result.error);
+    }
+  }, [state]);
+
   useEffect(() => {
     if (recovery) {
       skipSaveRef.current = false;
@@ -154,17 +171,8 @@ export default function App() {
       adoptingRef.current = false;
       return;
     }
-    const result = saveState(state, revisionRef.current, { force: forceSaveRef.current });
-    if (result.ok) {
-      forceSaveRef.current = false;
-      revisionRef.current = result.revision;
-      setSaveUi({ kind: 'saved' });
-      setConflict(null);
-    } else {
-      setSaveUi({ kind: 'error', reason: result.reason, message: result.error });
-      if (result.reason === 'stale') setConflict(result.error);
-    }
-  }, [state, recovery]);
+    attemptSave();
+  }, [state, recovery, attemptSave]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -687,6 +695,7 @@ export default function App() {
             <span>
               <strong>Not saved.</strong> {saveUi.message}
             </span>
+            <button onClick={attemptSave}>Retry</button>
             <button onClick={() => setSheet({ kind: 'settings' })}>Data</button>
           </div>
         </div>
