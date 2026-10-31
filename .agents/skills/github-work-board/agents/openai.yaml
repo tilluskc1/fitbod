@@ -1,0 +1,7 @@
+interface:
+  display_name: "GitHub Work Board"
+  short_description: "Run GitHub issues through implementation and review"
+  default_prompt: "Use $github-work-board to inspect the configured GitHub Project and dry-run the next eligible issue."
+policy:
+  allow_implicit_invocation: true
+
