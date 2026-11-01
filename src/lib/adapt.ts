@@ -147,9 +147,11 @@ export function adaptWorkout(
 ): AdaptedWorkout {
   const minutes = clamp(Math.round(constraints.minutes), 10, 120);
   const setup = EQUIPMENT_OPTIONS[constraints.equipment] ?? EQUIPMENT_OPTIONS.home;
-  const inventory = (constraints.loads ?? [])
-    .filter((value) => Number.isFinite(value) && value > 0)
-    .sort((a, b) => a - b);
+  // The saved rack is a home rack: it must not cap a hotel gym or a
+  // bodyweight session the user asked for.
+  const inventory = setup.allowsLoads && constraints.equipment === 'home'
+    ? (constraints.loads ?? []).filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b)
+    : [];
   const knownInventory = inventory.length > 0;
   const limited: { name: string; from: number; to: number }[] = [];
   const skipped: SkippedExercise[] = [];
@@ -348,9 +350,13 @@ export function swapCandidateFor(
  * rack, so no selector can offer a dumbbell the user does not own.
  */
 export function loadOptions(equipment: EquipmentChoice, inventory?: number[]): number[] {
+  const setup = EQUIPMENT_OPTIONS[equipment];
+  // A setup with no external load has nothing to select from, and a rack the
+  // user confirmed at home is not the rack in a hotel gym.
+  if (!setup?.allowsLoads || equipment !== 'home') return setup?.loads ?? [];
   const confirmed = (inventory ?? []).filter((value) => Number.isFinite(value) && value > 0);
   if (confirmed.length > 0) return [...confirmed].sort((a, b) => a - b);
-  return EQUIPMENT_OPTIONS[equipment]?.loads ?? [];
+  return setup.loads;
 }
 
 

@@ -43,6 +43,32 @@ test('a contradictory sentence changes nothing and says so', () => {
   assert.match(noticeText(resolved.notices[0]), /nothing changed/);
 });
 
+test('a contradiction leaves the time and the rack alone, not just the setup', () => {
+  const parsed = keywordParser.parse('20 minutes, no dumbbells, 5 kg');
+  assert.ok(parsed.contradiction);
+  const resolved = resolveConstraints({ minutes: 35, equipment: 'home' }, parsed);
+  assert.equal(resolved.constraints.minutes, 35);
+  assert.equal(resolved.constraints.equipment, 'home');
+  assert.equal(resolved.constraints.loads, undefined);
+  assert.match(noticeText(resolved.notices[0]), /nothing changed/);
+});
+
+test('a number too large to be a load becomes neither minutes nor a load', () => {
+  const parsed = keywordParser.parse('I have 1200 lb plates');
+  assert.equal(parsed.loads, undefined);
+  assert.equal(parsed.minutes, undefined);
+});
+
+test('the home rack never caps a hotel gym or a bodyweight session', () => {
+  assert.deepEqual(loadOptions('hotel', [5, 7.5]), loadOptions('hotel'));
+  assert.deepEqual(loadOptions('bodyweight', [5, 7.5]), []);
+  const hotel = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'hotel', loads: [5, 7.5] }, []);
+  assert.deepEqual(
+    [...new Set(hotel.exercises.filter((exercise) => exercise.weight > 0).map((exercise) => exercise.weight))].sort((a, b) => a - b),
+    [15, 18],
+  );
+});
+
 test('a confirmed rack reaches Start: no target offers a load the user does not own', () => {
   const constraints = defaultConstraints(sparseRack);
   assert.deepEqual(constraints.loads, [5, 7.5]);

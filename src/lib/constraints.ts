@@ -45,7 +45,8 @@ export const keywordParser: ConstraintParser = {
     // Loads come out first: "5 kg dumbbells" is a weight, not five minutes.
     const weights: number[] = [];
     const withoutLoads = text.replace(
-      /(\d{1,3}(?:[.,]\d+)?)\s*(kg|kgs?|kilos?|kilograms?|lb|lbs?|pounds?)\b/gi,
+      // A digit must not start mid-number, so "1200 lb" is not read as 200 lb.
+      /(?:^|[^\d.,])(\d{1,3}(?:[.,]\d+)?)\s*(kg|kgs?|kilos?|kilograms?|lb|lbs?|pounds?)\b/gi,
       (_match, raw: string, unit: string) => {
         const value = Number(raw.replace(',', '.'));
         if (Number.isFinite(value) && value > 0) {
@@ -57,7 +58,8 @@ export const keywordParser: ConstraintParser = {
     if (weights.length > 0) result.loads = [...new Set(weights)].sort((a, b) => a - b);
 
     const withUnit = /(\d{1,3})\s*(?:-|\s)?\s*(?:minutes?|mins?)\b/i.exec(withoutLoads);
-    const bare = withUnit ? null : /(\d{1,3})/.exec(withoutLoads);
+    // Standalone token only: a slice of a longer number is not a session length.
+    const bare = withUnit ? null : /(?:^|[^\d.,])(\d{1,3})(?![\d.,])/.exec(withoutLoads);
     const match = withUnit ?? bare;
     if (match) {
       const value = Number(match[1]);
@@ -147,6 +149,16 @@ export function resolveConstraints(
   patch: ParsedConstraints,
 ): ResolvedConstraints {
   const notices: ConstraintNotice[] = [];
+  // A contradictory sentence changes nothing at all — not the time, not the
+  // rack, not the setup — or the notice would be lying.
+  if (patch.contradiction !== undefined) {
+    notices.push({
+      kind: 'contradictory-input',
+      asked: patch.contradiction,
+      applied: EQUIPMENT_OPTIONS[current.equipment].chip,
+    });
+    return { constraints: current, notices };
+  }
   const loads = patch.loads && patch.loads.length > 0
     ? [...new Set(patch.loads)].sort((a, b) => a - b)
     : current.loads;
@@ -165,14 +177,7 @@ export function resolveConstraints(
     }
   }
   let equipment = current.equipment;
-  // A contradictory sentence changes nothing: the user has to resolve it first.
-  if (patch.contradiction !== undefined) {
-    notices.push({
-      kind: 'contradictory-input',
-      asked: patch.contradiction,
-      applied: EQUIPMENT_OPTIONS[equipment].chip,
-    });
-  } else if (patch.equipment !== undefined) {
+  if (patch.equipment !== undefined) {
     equipment = patch.equipment;
   } else if (patch.unsupportedEquipment !== undefined) {
     notices.push({
