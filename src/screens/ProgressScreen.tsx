@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { formatWeight, inputValue, toKg } from '../lib/units';
+import { setText, setUnit } from '../data/flagship';
+import { formatWeight, inputValue, toKg, unitLabel } from '../lib/units';
 import { exerciseInWorkout, hasWork } from '../lib/plan';
 import type { Unit, WorkoutRecord } from '../types';
 import { ArrowIcon, BarIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
@@ -281,12 +282,15 @@ export default function ProgressScreen({
                     </p>
                     {workout.exercises.map((exercise, exerciseIndex) => {
                       const done = exercise.performed.filter((set) => set.done).length;
+                      const timed = setUnit(exercise.exerciseId) === 'seconds';
                       return (
                         <div className="history-ex" key={`${exercise.exerciseId}-${exerciseIndex}`}>
                           <div className="history-ex-head">
                             <span>{exercise.name}</span>
                             <span className="tag">
-                              {exercise.planned.length} × {exercise.planned[0]?.reps ?? 0} prescribed
+                              {timed
+                                ? `${exercise.planned.length} ${exercise.planned.length === 1 ? 'set' : 'sets'} · ${setText(exercise.exerciseId, exercise.planned.map((set) => set.reps))}`
+                                : `${exercise.planned.length} × ${exercise.planned[0]?.reps ?? 0}`} prescribed
                               {' · '}
                               {done} done
                             </span>
@@ -294,20 +298,24 @@ export default function ProgressScreen({
                           <div className="history-sets">
                             {exercise.performed.map((set, setIndex) => (
                               <span className={`mini-set ${set.done ? 'done' : ''}`} key={setIndex}>
+                                {!timed && (
+                                  <>
+                                    <input
+                                      type="number"
+                                      aria-label={`Correct weight for set ${setIndex + 1} of ${exercise.name}`}
+                                      value={inputValue(set.weight, unit)}
+                                      onChange={(event) =>
+                                        onCorrect(workout.id, exerciseIndex, setIndex, {
+                                          weight: toKg(Number(event.target.value) || 0, unit),
+                                        })
+                                      }
+                                    />
+                                    {unitLabel(unit)} ×
+                                  </>
+                                )}
                                 <input
                                   type="number"
-                                  aria-label={`Correct weight for set ${setIndex + 1} of ${exercise.name}`}
-                                  value={inputValue(set.weight, unit)}
-                                  onChange={(event) =>
-                                    onCorrect(workout.id, exerciseIndex, setIndex, {
-                                      weight: toKg(Number(event.target.value) || 0, unit),
-                                    })
-                                  }
-                                />
-                                kg ×
-                                <input
-                                  type="number"
-                                  aria-label={`Correct reps for set ${setIndex + 1} of ${exercise.name}`}
+                                  aria-label={`Correct ${timed ? 'seconds' : 'reps'} for set ${setIndex + 1} of ${exercise.name}`}
                                   value={set.reps || ''}
                                   onChange={(event) =>
                                     onCorrect(workout.id, exerciseIndex, setIndex, {
@@ -315,6 +323,7 @@ export default function ProgressScreen({
                                     })
                                   }
                                 />
+                                {timed && ' seconds'}
                                 <button
                                   onClick={() =>
                                     onCorrect(workout.id, exerciseIndex, setIndex, {

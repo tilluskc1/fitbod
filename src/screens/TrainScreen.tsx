@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { exerciseById } from '../data/exercises';
-import { FULL_BODY_A, repsTarget, setText, setUnit } from '../data/flagship';
+import { loadModeOf, detailOf, repsTarget, setText, setUnit } from '../data/flagship';
 import type { LoadMode } from '../data/flagship';
 import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
@@ -43,19 +42,6 @@ function restClock(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
-}
-
-function loadModeOf(exerciseId: string): LoadMode {
-  const program = FULL_BODY_A.exercises.find((entry) => entry.exerciseId === exerciseId);
-  if (program) return program.load;
-  return exerciseById(exerciseId)?.equipment === 'Dumbbell' ? 'each' : 'none';
-}
-
-function detailOf(exerciseId: string): string {
-  return (
-    FULL_BODY_A.exercises.find((entry) => entry.exerciseId === exerciseId)?.detail ??
-    (exerciseById(exerciseId)?.equipment === 'Dumbbell' ? 'Dumbbell' : 'Floor mat')
-  );
 }
 
 function setSummary(
@@ -137,7 +123,7 @@ export default function TrainScreen({
   const plannedTarget = exercise.planned[activeSet === -1 ? exercise.planned.length - 1 : activeSet];
   /** "9 · 9" list for per-set targets, "8–10 reps" for a range, never "2 × 9". */
   const targetReps =
-    repsTarget(exercise.exerciseId, exercise.planned.length) ??
+    repsTarget(exercise.exerciseId, exercise.planned.length, exercise.planned) ??
     exercise.planned.map((set) => set.reps).join(' · ');
   const targetWeight = exercise.planned[0]?.weight ?? 0;
   const canPickWeight = mode !== 'none' && loadOptions.length > 0;

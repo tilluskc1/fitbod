@@ -5,7 +5,7 @@ import { formatWeight, unitOf } from '../lib/units';
 import { exerciseMeta, programSetCount, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
-import { EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
+import { currentWorkout, EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
 import { exercisePhoto } from '../lib/media';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -25,7 +25,7 @@ interface Props {
   onWhy: () => void;
   onRestore: () => void;
   onOpenSettings: () => void;
-  onOpenExercise: (exerciseId: string) => void;
+  onOpenExercise: (exerciseId: string, exerciseIndex: number) => void;
 }
 
 function greeting(now: Date): string {
@@ -66,7 +66,7 @@ function coachInsight(last: LastPerformance | null, first: ProgramExercise, unit
 export default function TodayScreen({
   profile,
   program,
-  adapted,
+  adapted: proposedWorkout,
   equipment,
   adjusted,
   history,
@@ -80,6 +80,7 @@ export default function TodayScreen({
   onOpenSettings,
   onOpenExercise,
 }: Props) {
+  const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
   const name = profile.name?.trim() || 'Athlete';
   const week = workoutsThisWeek(history, now);
@@ -201,8 +202,8 @@ export default function TodayScreen({
             {adapted.exercises.map((exercise, index) => (
               <button
                 className="workout-row"
-                key={exercise.exerciseId}
-                onClick={() => onOpenExercise(exercise.exerciseId)}
+                key={`${exercise.exerciseId}-${index}`}
+                onClick={() => onOpenExercise(exercise.exerciseId, index)}
               >
                 <span className="workout-row__main">
                   <Demo
@@ -213,7 +214,7 @@ export default function TodayScreen({
                   <span className="workout-row__text">
                     <span className="workout-row__name">{exercise.name}</span>
                     <span className="workout-row__meta">
-                      {exerciseMeta(exercise)}
+                      {exerciseMeta(exercise, exercise.sets, true, unit)}
                     </span>
                   </span>
                   <span className="workout-row__chev">
@@ -234,7 +235,7 @@ export default function TodayScreen({
                     <span className="compare-line">
                       <span className="compare-line__label">Today’s target</span>
                       <span className="compare-line__value compare-line__value--target">
-                        {targetSummary(exercise, exercise.sets)}
+                        {targetSummary(exercise, exercise.sets, unit)}
                       </span>
                     </span>
                   </span>
@@ -262,7 +263,7 @@ export default function TodayScreen({
                         </span>
                       </span>
                       <span className="workout-row__meta">
-                        {source ? exerciseMeta(source) : `${item.sets} sets`}
+                        {source ? exerciseMeta(source, source.sets, true, unit) : `${item.sets} sets`}
                       </span>
                     </span>
                     <span className="workout-row__chev" aria-hidden="true" />
