@@ -87,6 +87,32 @@ export function exerciseInWorkout(
   };
 }
 
+/**
+ * The one set a chart point may print: greatest load, then most reps, then the
+ * earliest completion. Null when nothing was completed, so a prescription is
+ * never charted as a performance.
+ */
+export function bestCompletedSet(sets: PerformedSet[]): PerformedSet | null {
+  let best: PerformedSet | null = null;
+  for (const set of sets) {
+    if (!set.done) continue;
+    if (best === null) {
+      best = set;
+      continue;
+    }
+    const at = set.completedAt ? Date.parse(set.completedAt) : Infinity;
+    const bestAt = best.completedAt ? Date.parse(best.completedAt) : Infinity;
+    if (
+      set.weight > best.weight ||
+      (set.weight === best.weight &&
+        (set.reps > best.reps || (set.reps === best.reps && at < bestAt)))
+    ) {
+      best = set;
+    }
+  }
+  return best;
+}
+
 /** Most recent completed session that actually trained an exercise. */
 export function lastPerformance(
   history: WorkoutRecord[],

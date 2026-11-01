@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { setText, setUnit } from '../data/flagship';
 import { formatWeight, inputValue, toKg, unitLabel } from '../lib/units';
 import { exerciseInWorkout, hasWork } from '../lib/plan';
+import { bestCompletedSet } from '../lib/plan';
 import type { Unit, WorkoutRecord } from '../types';
 import { ArrowIcon, BarIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
 
@@ -82,15 +83,34 @@ export default function ProgressScreen({
         // all count; the first segment alone would understate the chart.
         const found = exerciseInWorkout(workout, activeExerciseId);
         if (!found) return null;
-        const performed = found.segments.flatMap((segment) => segment.performed);
-        const source = found.done.length > 0 ? found.done : performed;
-        const best = source.reduce((max, set) => Math.max(max, set.weight), 0);
-        return { date: workout.date, best, reps: source[0]?.reps ?? 0 };
+        // Only a completed set is a performance: an untouched prescription is not.
+        const best = bestCompletedSet(found.done);
+        if (!best) return null;
+        return {
+          workoutId: workout.id,
+          workoutName: workout.name,
+          date: workout.date,
+          best: best.weight,
+          reps: best.reps,
+        };
       })
-      .filter((item): item is { date: string; best: number; reps: number } => item !== null)
+      .filter(
+        (item): item is {
+          workoutId: string;
+          workoutName: string;
+          date: string;
+          best: number;
+          reps: number;
+        } => item !== null,
+      )
       .reverse()
       .slice(-8);
   }, [activeExerciseId, sessions]);
+
+  // A bodyweight or hold exercise has no load to chart; its recorded count is
+  // shown as it was logged instead of as a zero-kg strength record.
+  const weighted = series.some((point) => point.best > 0);
+  const latest = series[series.length - 1];
 
   const worked = sessions.filter(hasWork);
   const totalSets = worked.reduce((sum, workout) => sum + setsOf(workout), 0);
@@ -171,9 +191,11 @@ export default function ProgressScreen({
                   ))}
                 </select>
                 <p className="data-note" style={{ marginTop: 10 }}>
-                  Best recorded load per set · {unit}. Open any session to compare the full record.
+                  {weighted ? `Best recorded load per set · ${unit}` : 'Best recorded set per session'}.
+                  Open any session to compare the full record.
                 </p>
                 {series.length > 0 ? (
+                  weighted ? (
                   <>
                     <svg
                       className="chart"
@@ -206,7 +228,7 @@ export default function ProgressScreen({
                       )}
                       {points.map((point, index) => (
                         <circle
-                          key={point.date}
+                          key={point.workoutId}
                           cx={point.x}
                           cy={point.y}
                           r={index === points.length - 1 ? 4.5 : 3}
@@ -217,11 +239,22 @@ export default function ProgressScreen({
                     <div className="context-row" style={{ borderBottom: 0 }}>
                       <span>Latest best set</span>
                       <span>
-                        {formatWeight(series[series.length - 1]?.best ?? 0, unit)} ×{' '}
-                        {series[series.length - 1]?.reps ?? 0}
+                        {formatWeight(latest?.best ?? 0, unit)} × {latest?.reps ?? 0}
                       </span>
                     </div>
                   </>
+                  ) : (
+                    <div style={{ marginTop: 10 }}>
+                      {series.slice(-4).map((point) => (
+                        <div className="context-row" key={point.workoutId} style={{ borderBottom: 0 }}>
+                          <span>
+                            {dateParts(point.date).month} {dateParts(point.date).day} · {point.workoutName}
+                          </span>
+                          <span>{setText(activeExerciseId, point.reps)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )
                 ) : (
                   <p className="data-note" style={{ marginTop: 14 }}>
                     No completed sets recorded for this exercise yet.
