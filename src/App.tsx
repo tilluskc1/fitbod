@@ -181,6 +181,12 @@ export default function App() {
       }
       adoptingRef.current = true;
       revisionRef.current = loaded.revision;
+      // A newer snapshot can merge/reorder even same-ID exercise segments.
+      setSheet((open) =>
+        open.kind === 'exercise' || open.kind === 'why' || open.kind === 'day' || open.kind === 'swap'
+          ? { kind: 'none' }
+          : open,
+      );
       setState(loaded.state);
       setSaveUi({ kind: 'saved' });
     };
@@ -771,9 +777,9 @@ export default function App() {
 
       {sheet.kind === 'exercise' &&
         (() => {
-          const planned =
-            todayExercises[sheet.exerciseIndex]?.planned ??
-            [];
+          const exercise = todayExercises[sheet.exerciseIndex];
+          if (!exercise || exercise.exerciseId !== sheet.exerciseId) return null;
+          const planned = exercise.planned;
           return (
             <ExerciseSheet
               exerciseId={sheet.exerciseId}
@@ -788,7 +794,7 @@ export default function App() {
       {sheet.kind === 'why' &&
         (() => {
           const exercise = todayExercises[sheet.exerciseIndex];
-          if (!exercise) return null;
+          if (!exercise || exercise.exerciseId !== sheet.exerciseId) return null;
           return (
             <WhySheet
               exerciseId={exercise.exerciseId}
