@@ -266,6 +266,7 @@ export function toWorkoutExercises(adapted: AdaptedWorkout): WorkoutExercise[] {
     return {
       exerciseId: exercise.exerciseId,
       name: exercise.name,
+      originalPlannedSets: exercise.originalSets,
       planned,
       performed: planned.map((set) => ({
         weight: set.weight,
