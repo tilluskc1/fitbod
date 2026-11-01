@@ -1,4 +1,5 @@
 import type { Program, ProgramExercise } from '../data/flagship.ts';
+import { exerciseById } from '../data/exercises.ts';
 import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS } from '../data/flagship.ts';
 import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
@@ -315,3 +316,74 @@ export function loadOptions(equipment: EquipmentChoice): number[] {
   return EQUIPMENT_OPTIONS[equipment]?.loads ?? [];
 }
 
+
+/** Display the prescription actually accepted by the open session. */
+export function currentWorkout(adapted: AdaptedWorkout, session: WorkoutRecord): AdaptedWorkout {
+  const exercises: AdaptedExercise[] = session.exercises.map((entry) => {
+    const source = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === entry.exerciseId);
+    const dumbbell = exerciseById(entry.exerciseId)?.equipment === 'Dumbbell';
+    const reps = entry.planned.map((set) => set.reps);
+    return {
+      exerciseId: entry.exerciseId,
+      name: entry.name,
+      sets: entry.planned.length,
+      originalSets: entry.originalPlannedSets ?? entry.planned.length,
+      repRange: source?.repRange ?? [reps[0] ?? 0, reps[0] ?? 0],
+      targetReps: source?.targetReps || !source ? reps : undefined,
+      holdSeconds: source?.holdSeconds,
+      weight: entry.planned[0]?.weight ?? 0,
+      load: source?.load ?? (dumbbell ? 'each' : 'none'),
+      detail: source?.detail ?? (dumbbell ? 'Dumbbell' : 'Floor mat'),
+      requires: dumbbell ? 'dumbbell' : 'bodyweight',
+    };
+  });
+  return {
+    ...adapted,
+    name: session.name,
+    minutes: session.durationMin ?? adapted.minutes,
+    exercises,
+    totalSets: exercises.reduce((sum, exercise) => sum + exercise.sets, 0),
+    skipped: adapted.skipped.filter((item) => !exercises.some((exercise) => exercise.exerciseId === item.exerciseId)),
+  };
+}
+
+/** Undo a temporary adaptation without replacing work already completed. */
+export function restorePendingWorkout(session: WorkoutRecord, original: AdaptedWorkout): WorkoutRecord {
+  const pattern = (id: string) => exerciseById(id)?.pattern ?? id;
+  const completed = session.exercises.flatMap((exercise) => {
+    const indices = exercise.performed.flatMap((set, index) => set.done ? [index] : []);
+    return indices.length > 0 ? [{
+      ...exercise,
+      planned: indices.map((index) => ({ ...exercise.planned[index] })),
+      performed: indices.map((index) => ({ ...exercise.performed[index] })),
+    }] : [];
+  });
+  const kept = new Set<WorkoutExercise>();
+  const exercises: WorkoutExercise[] = [];
+  // shortcut: flagship has one slot per primary pattern; add slot identity before multi-slot programs.
+  for (const prescribed of toWorkoutExercises(original)) {
+    const group = completed.filter((exercise) => pattern(exercise.exerciseId) === pattern(prescribed.exerciseId));
+    group.forEach((exercise) => {
+      kept.add(exercise);
+      exercise.originalPlannedSets = Math.max(exercise.originalPlannedSets ?? 0, prescribed.planned.length);
+    });
+    const done = group.reduce((sum, exercise) => sum + exercise.performed.length, 0);
+    const pending = prescribed.planned.slice(done);
+    const sameVariant = group.find((exercise) => exercise.exerciseId === prescribed.exerciseId);
+    if (sameVariant) {
+      sameVariant.planned.push(...pending.map((set) => ({ ...set })));
+      sameVariant.performed.push(...pending.map((set) => ({ ...set, done: false, completedAt: null })));
+    } else if (pending.length > 0) {
+      group.push({
+        ...prescribed,
+        originalPlannedSets: prescribed.planned.length,
+        planned: pending.map((set) => ({ ...set })),
+        performed: pending.map((set) => ({ ...set, done: false, completedAt: null })),
+      });
+    }
+    exercises.push(...group);
+  }
+  // Completed work stays even when the restored equipment/exclusions no longer prescribe it.
+  exercises.push(...completed.filter((exercise) => !kept.has(exercise)));
+  return { ...session, durationMin: original.minutes, exercises };
+}

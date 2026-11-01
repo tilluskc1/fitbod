@@ -6,6 +6,7 @@ import {
   adaptWorkout,
   DEFAULT_CONSTRAINTS,
   loadOptions,
+  restorePendingWorkout,
   swapCandidateFor,
   toWorkoutExercises,
 } from './lib/adapt';
@@ -135,6 +136,7 @@ export default function App() {
   );
 
   const appliedProposalRef = useRef<string | null>(null);
+  const proposalRevisionRef = useRef(0);
   const revisionRef = useRef(INITIAL.revision);
   const skipSaveRef = useRef(true);
   const adoptingRef = useRef(false);
@@ -311,6 +313,7 @@ export default function App() {
   /** Fingerprint of everything a preview was built against. */
   const proposalBase = (): ProposalContext => ({
     sessionId: current?.id ?? null,
+    revision: proposalRevisionRef.current,
     done: current ? sessionProgress(current).done : 0,
     historyLength: state.history.length,
     equipmentKey: [
@@ -359,8 +362,24 @@ export default function App() {
   };
 
   const restoreOriginal = () => {
-    setState((currentState) => ({ ...currentState, todayOverride: null }));
-    setNotice('Original workout restored. Your program never changed.');
+    setState((currentState) => {
+      const original = adaptWorkout(
+        FULL_BODY_A,
+        currentState.profile ? defaultConstraints(currentState.profile) : DEFAULT_CONSTRAINTS,
+        currentState.profile?.exclusions ?? [],
+      );
+      return {
+        ...currentState,
+        todayOverride: null,
+        current: currentState.current ? restorePendingWorkout(currentState.current, original) : null,
+      };
+    });
+    proposalRevisionRef.current += 1;
+    appliedProposalRef.current = null;
+    setPending(null);
+    setPendingNotices([]);
+    setSheet({ kind: 'none' });
+    setNotice('Original remaining work restored. Logged sets were kept.');
   };
 
   const updateSet = (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => {
@@ -638,7 +657,7 @@ export default function App() {
             onResume={() => setView('train')}
             onAdjust={() => setSheet({ kind: 'adjust' })}
             onWhy={() =>
-              setSheet({ kind: 'why', exerciseId: adapted.exercises[0]?.exerciseId ?? '' })
+              setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '' })
             }
             onRestore={restoreOriginal}
             onOpenSettings={() => setSheet({ kind: 'settings' })}
@@ -669,9 +688,9 @@ export default function App() {
           <CoachScreen
             profile={profile}
             history={state.history}
-            program={{ name: adapted.name, minutes: adapted.minutes }}
+            program={{ name: current?.name ?? adapted.name, minutes: current?.durationMin ?? adapted.minutes }}
             onWhy={() =>
-              setSheet({ kind: 'why', exerciseId: adapted.exercises[0]?.exerciseId ?? '' })
+              setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '' })
             }
             onEdit={() => setSheet({ kind: 'settings' })}
           />
@@ -784,8 +803,8 @@ export default function App() {
 
       {sheet.kind === 'day' && (
         <DaySheet
-          name={adapted.name}
-          minutes={minutes}
+          name={current?.name ?? adapted.name}
+          minutes={current?.durationMin ?? minutes}
           exercises={todayExercises}
           unit={unit}
           onClose={closeSheet}

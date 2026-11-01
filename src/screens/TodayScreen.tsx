@@ -5,7 +5,7 @@ import { formatWeight, unitOf } from '../lib/units';
 import { exerciseMeta, programSetCount, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
-import { EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
+import { currentWorkout, EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
 import { exercisePhoto } from '../lib/media';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -66,7 +66,7 @@ function coachInsight(last: LastPerformance | null, first: ProgramExercise, unit
 export default function TodayScreen({
   profile,
   program,
-  adapted,
+  adapted: proposedWorkout,
   equipment,
   adjusted,
   history,
@@ -80,6 +80,7 @@ export default function TodayScreen({
   onOpenSettings,
   onOpenExercise,
 }: Props) {
+  const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
   const name = profile.name?.trim() || 'Athlete';
   const week = workoutsThisWeek(history, now);
@@ -201,7 +202,7 @@ export default function TodayScreen({
             {adapted.exercises.map((exercise, index) => (
               <button
                 className="workout-row"
-                key={exercise.exerciseId}
+                key={`${exercise.exerciseId}-${index}`}
                 onClick={() => onOpenExercise(exercise.exerciseId)}
               >
                 <span className="workout-row__main">

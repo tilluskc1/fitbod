@@ -7,6 +7,8 @@ import type { Constraints } from './adapt.ts';
  */
 export interface ProposalContext {
   sessionId: string | null;
+  /** In-memory pending-work revision; older callers default to zero. */
+  revision?: number;
   /** Completed sets in the open session when previewed. */
   done: number;
   /** History entries when previewed. */
@@ -58,6 +60,7 @@ export function decideProposalApproval(
 export function isProposalStale(proposal: Proposal, current: ProposalContext): boolean {
   return (
     proposal.base.sessionId !== current.sessionId ||
+    (proposal.base.revision ?? 0) !== (current.revision ?? 0) ||
     proposal.base.done !== current.done ||
     proposal.base.historyLength !== current.historyLength ||
     proposal.base.equipmentKey !== current.equipmentKey

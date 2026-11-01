@@ -140,3 +140,9 @@ test('untouched proposal stays fresh', () => {
     false,
   );
 });
+
+test('Undo invalidates an earlier preview even when session identity and done count stay the same', () => {
+  const before = { sessionId: 'active', done: 1, historyLength: 0, equipmentKey: 'Dumbbell', revision: 0 };
+  const proposal = createProposal({ minutes: 20, equipment: 'home' }, before);
+  assert.equal(decideProposalApproval(proposal, { ...before, revision: 1 }, null), 'stale');
+});
