@@ -182,7 +182,11 @@ export function AdjustSheet({ constraints, originalMinutes, onClose, onPreview }
                   </span>
                   <span>
                     <span className="equipment-choice__name">{option.label}</span>
-                    <span className="equipment-choice__detail">{option.detail}</span>
+                    <span className="equipment-choice__detail">
+                      {key === 'home' && current.loads?.length
+                        ? `Yours: ${current.loads.map((load) => `${load} kg`).join(', ')}`
+                        : option.detail}
+                    </span>
                   </span>
                 </button>
               );
@@ -468,7 +472,17 @@ export function SettingsSheet({
   storageNote,
 }: SettingsProps) {
   const [name, setName] = useState(profile.name ?? '');
+  const [loadsText, setLoadsText] = useState((profile.loads.Dumbbell ?? []).join(', '));
   const minutes = profile.sessionMinutes ?? 35;
+
+  /** Saved inventory: future workouts only, never a frozen active session. */
+  const saveLoads = () => {
+    const values = loadsText
+      .split(/[,\s]+/)
+      .map(Number)
+      .filter((value) => Number.isFinite(value) && value > 0);
+    onChange({ loads: { ...profile.loads, Dumbbell: [...new Set(values)].sort((a, b) => a - b) } });
+  };
 
   const toggle = <T extends string>(list: T[], item: T, key: 'equipment' | 'support') => {
     const next = list.includes(item) ? list.filter((value) => value !== item) : [...list, item];
@@ -543,6 +557,23 @@ export function SettingsSheet({
           </button>
         ))}
       </div>
+
+      <label className="field-label" htmlFor="profile-loads">
+        Dumbbell loads you own (kg, per hand)
+      </label>
+      <input
+        id="profile-loads"
+        className="search"
+        style={{ marginTop: 0 }}
+        inputMode="decimal"
+        value={loadsText}
+        onChange={(event) => setLoadsText(event.target.value)}
+        onBlur={saveLoads}
+        placeholder="Unconfirmed"
+      />
+      <p className="data-note">
+        Used by future workouts. Leave blank to keep your rack unconfirmed.
+      </p>
 
       <span className="field-label">Support equipment</span>
       <div className="chip-row" style={{ flexWrap: 'wrap', padding: '2px 0 6px' }}>
