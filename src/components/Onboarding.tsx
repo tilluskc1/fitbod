@@ -26,6 +26,8 @@ export default function Onboarding({ onComplete }: Props) {
   const [goal, setGoal] = useState<Goal>('Build Muscle');
   const [experience, setExperience] = useState<Experience>('Beginner');
   const [daysPerWeek, setDaysPerWeek] = useState(3);
+  // No preselection: the first plan must not assume a length the user never chose.
+  const [sessionMinutes, setSessionMinutes] = useState<number | null>(null);
   const [equipment, setEquipment] = useState<Equipment[]>(['Dumbbell']);
   const [support, setSupport] = useState<SupportEquipment[]>(['Bench']);
   const [loadsText, setLoadsText] = useState('');
@@ -62,7 +64,7 @@ export default function Onboarding({ onComplete }: Props) {
       loads: equipment.includes('Dumbbell') && loads.length > 0 ? { Dumbbell: loads } : {},
       name: name.trim() || 'Athlete',
       unit,
-      sessionMinutes: 35,
+      sessionMinutes: sessionMinutes ?? 35,
     });
   };
 
@@ -169,6 +171,26 @@ export default function Onboarding({ onComplete }: Props) {
               </button>
             ))}
           </div>
+
+          <span className="setup-label">How long can you train?</span>
+          <p className="muted">
+            Your first plan is built for the length you pick. Pick it here, change it any time.
+          </p>
+          <div className="chip-wrap">
+            {[20, 30, 45, 60].map((value) => (
+              <button
+                key={value}
+                className={`chip ${sessionMinutes === value ? 'on' : ''}`}
+                aria-pressed={sessionMinutes === value}
+                onClick={() => setSessionMinutes(value)}
+              >
+                {value} min
+              </button>
+            ))}
+          </div>
+          {sessionMinutes === null && (
+            <p className="data-note" role="status">Pick a session length to continue.</p>
+          )}
         </section>
       )}
 
@@ -241,7 +263,11 @@ export default function Onboarding({ onComplete }: Props) {
           </button>
         )}
         {step < 3 ? (
-          <button className="primary" onClick={() => setStep((value) => value + 1)}>
+          <button
+            className="primary"
+            disabled={step === 2 && sessionMinutes === null}
+            onClick={() => setStep((value) => value + 1)}
+          >
             Continue
           </button>
         ) : (
