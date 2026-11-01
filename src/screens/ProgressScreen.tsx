@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react';
-import { setText, setUnit } from '../data/flagship';
+import { loadModeOf, setText, setUnit } from '../data/flagship';
 import { formatWeight, inputValue, toKg, unitLabel } from '../lib/units';
-import { exerciseInWorkout, hasWork } from '../lib/plan';
-import { bestCompletedSet } from '../lib/plan';
+import { bestCompletedSet, exerciseInWorkout, hasWork } from '../lib/plan';
 import type { Unit, WorkoutRecord } from '../types';
 import { ArrowIcon, BarIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
 
@@ -109,8 +108,16 @@ export default function ProgressScreen({
 
   // A bodyweight or hold exercise has no load to chart; its recorded count is
   // shown as it was logged instead of as a zero-kg strength record.
+  // shortcut: the flag is per exercise, so a lifted movement that once logged
+  // a zero-kg set still charts that one point on the baseline.
   const weighted = series.some((point) => point.best > 0);
   const latest = series[series.length - 1];
+  // The program owns per-hand vs total; "18 kg" alone would drop that.
+  const loadMode = loadModeOf(activeExerciseId);
+  const loadText = (kg: number) =>
+    `${formatWeight(kg, unit, { perSide: loadMode === 'each' })}${kg > 0 && loadMode === 'total' ? ' total' : ''}`;
+  const sessionLabel = (point: { date: string; workoutName: string }) =>
+    `${dateParts(point.date).month} ${dateParts(point.date).day} · ${point.workoutName}`;
 
   const worked = sessions.filter(hasWork);
   const totalSets = worked.reduce((sum, workout) => sum + setsOf(workout), 0);
@@ -194,8 +201,11 @@ export default function ProgressScreen({
                   {weighted ? `Best recorded load per set · ${unit}` : 'Best recorded set per session'}.
                   Open any session to compare the full record.
                 </p>
-                {series.length > 0 ? (
-                  weighted ? (
+                {series.length === 0 ? (
+                  <p className="data-note" style={{ marginTop: 14 }}>
+                    No completed sets recorded for this exercise yet.
+                  </p>
+                ) : weighted ? (
                   <>
                     <svg
                       className="chart"
@@ -237,28 +247,23 @@ export default function ProgressScreen({
                       ))}
                     </svg>
                     <div className="context-row" style={{ borderBottom: 0 }}>
-                      <span>Latest best set</span>
                       <span>
-                        {formatWeight(latest?.best ?? 0, unit)} × {latest?.reps ?? 0}
+                        Latest best set{latest ? ` · ${sessionLabel(latest)}` : ''}
+                      </span>
+                      <span>
+                        {loadText(latest?.best ?? 0)} × {latest?.reps ?? 0}
                       </span>
                     </div>
                   </>
-                  ) : (
-                    <div style={{ marginTop: 10 }}>
-                      {series.slice(-4).map((point) => (
-                        <div className="context-row" key={point.workoutId} style={{ borderBottom: 0 }}>
-                          <span>
-                            {dateParts(point.date).month} {dateParts(point.date).day} · {point.workoutName}
-                          </span>
-                          <span>{setText(activeExerciseId, point.reps)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )
                 ) : (
-                  <p className="data-note" style={{ marginTop: 14 }}>
-                    No completed sets recorded for this exercise yet.
-                  </p>
+                  <div style={{ marginTop: 10 }}>
+                    {series.slice(-4).map((point) => (
+                      <div className="context-row" key={point.workoutId} style={{ borderBottom: 0 }}>
+                        <span>{sessionLabel(point)}</span>
+                        <span>{setText(activeExerciseId, point.reps)}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </>
             ) : (
