@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { downloadText } from './lib/download';
-import { buildPlan } from './lib/generator';
-import { activeOverride, dayKey, minutesOf } from './lib/plan';
-import {
+import
+ { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import
+ { downloadText } from './lib/download';
+import
+ { buildPlan } from './lib/generator';
+import
+ { activeOverride, dayKey, minutesOf } from './lib/plan';
+import
+ {
   adaptWorkout,
   DEFAULT_CONSTRAINTS,
   loadOptions,
@@ -10,13 +15,20 @@ import {
   swapCandidateFor,
   toWorkoutExercises,
 } from './lib/adapt';
-import type { Constraints, EquipmentChoice } from './lib/adapt';
-import { createProposal, decideProposalApproval } from './lib/proposal';
-import type { Proposal, ProposalContext } from './lib/proposal';
-import { defaultConstraints } from './lib/constraints';
-import type { ConstraintNotice } from './lib/constraints';
-import { FULL_BODY_A, programSetCount } from './data/flagship';
-import {
+import
+ type { Constraints, EquipmentChoice } from './lib/adapt';
+import
+ { createProposal, decideProposalApproval } from './lib/proposal';
+import
+ type { Proposal, ProposalContext } from './lib/proposal';
+import
+ { defaultConstraints } from './lib/constraints';
+import
+ type { ConstraintNotice } from './lib/constraints';
+import
+ { FULL_BODY_A, programSetCount } from './data/flagship';
+import
+ {
   applyCancel,
   applyCorrection,
   applyFinish,
@@ -28,7 +40,8 @@ import {
   toggleRestPause,
   updatePerformedSet,
 } from './lib/session';
-import {
+import
+ {
   EMPTY_STATE,
   STORAGE_KEY,
   exportFilename,
@@ -38,33 +51,54 @@ import {
   serializeExport,
   uid,
 } from './lib/storage';
-import type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
-import { parseState } from './lib/validate';
-import { unitOf } from './lib/units';
-import { EXERCISES, exerciseById } from './data/exercises';
-import { capabilitiesFor, provides } from './lib/capabilities';
-import type {
+import
+ type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
+import
+ { parseState } from './lib/validate';
+import
+ { unitOf } from './lib/units';
+import
+ { EXERCISES, exerciseById } from './data/exercises';
+import
+ { capabilitiesFor, provides } from './lib/capabilities';
+import
+ type {
   AppState,
   PerformedSet,
   Profile,
   TodayOverride,
 } from './types';
-import { PhoneFrame, TabBar } from './components/ui/Chrome';
-import type { Tab } from './components/ui/Chrome';
-import TodayScreen from './screens/TodayScreen';
-import PlanScreen from './screens/PlanScreen';
-import ProgressScreen from './screens/ProgressScreen';
-import CoachScreen from './screens/CoachScreen';
-import TrainScreen from './screens/TrainScreen';
-import RecapScreen from './screens/RecapScreen';
-import LibraryScreen from './screens/LibraryScreen';
-import AdaptScreen from './screens/AdaptScreen';
-import Onboarding from './components/Onboarding';
-import SplashScreen from './screens/SplashScreen';
-import Recovery from './components/Recovery';
-import {
+import
+ { PhoneFrame, TabBar } from './components/ui/Chrome';
+import
+ type { Tab } from './components/ui/Chrome';
+import
+ TodayScreen from './screens/TodayScreen';
+import
+ PlanScreen from './screens/PlanScreen';
+import
+ ProgressScreen from './screens/ProgressScreen';
+import
+ CoachScreen from './screens/CoachScreen';
+import
+ TrainScreen from './screens/TrainScreen';
+import
+ RecapScreen from './screens/RecapScreen';
+import
+ LibraryScreen from './screens/LibraryScreen';
+import
+ AdaptScreen from './screens/AdaptScreen';
+import
+ Onboarding from './components/Onboarding';
+import
+ SplashScreen from './screens/SplashScreen';
+import
+ Recovery from './components/Recovery';
+import
+ {
   AdjustSheet,
   DaySheet,
+  DiscardSessionSheet,
   ExerciseSheet,
   FinishSheet,
   SettingsSheet,
@@ -134,6 +168,9 @@ export default function App() {
       ? { message: INITIAL.error ?? 'Saved data could not be read.', raw: INITIAL.raw ?? '' }
       : null,
   );
+  // Active-session replacement asks in-app (#19); the native prompt blocked
+  // automated renderers and deadlocked a tab.
+  const [replacePrompt, setReplacePrompt] = useState<Constraints | null>(null);
 
   const appliedProposalRef = useRef<string | null>(null);
   const proposalRevisionRef = useRef(0);
@@ -296,24 +333,8 @@ export default function App() {
     setTab('today');
   };
 
-  /**
-   * Starting is always built from the same engine output the screens showed,
-   * so the preview, the review and the logger can never disagree.
-   */
-  const startSession = (next: Constraints): boolean => {
-    const workout = adaptWorkout(FULL_BODY_A, next, profile?.exclusions ?? []);
-    if (workout.exercises.length === 0) {
-      setNotice('No movement in this workout can be done with that setup.');
-      return false;
-    }
-    if (
-      current &&
-      !window.confirm(
-        `"${current.name}" is still in progress. Discard it and start "${workout.name}"? Logged sets from the active session will be lost.`,
-      )
-    ) {
-      return false;
-    }
+  /** One creation path for every start, so preview and logger can never disagree. */
+  const beginSession = (workout: ReturnType<typeof adaptWorkout>) => {
     const session = createSession({
       id: uid(),
       name: workout.name,
@@ -324,11 +345,38 @@ export default function App() {
     });
     setState((currentState) => ({ ...currentState, current: session }));
     setView('train');
+  };
+
+  /**
+   * Starting is always built from the same engine output the screens showed,
+   * so the preview, the review and the logger can never disagree.
+   */
+  const startSession = (next: Constraints): boolean => {
+    const workout = adaptWorkout(FULL_BODY_A, next, profile?.exclusions ?? []);
+    if (workout.exercises.length === 0) {
+      setNotice('No movement in this workout can be done with that setup.');
+      return false;
+    }
+    if (current) {
+      // Ask in-app; only an explicit discard reaches the replacement below.
+      setReplacePrompt(next);
+      return false;
+    }
+    beginSession(workout);
     return true;
   };
 
   const startWorkout = () => {
     startSession(constraints);
+  };
+
+  /** Explicit discard consent from the in-app sheet (#19) runs the replacement once. */
+  const discardAndBegin = () => {
+    const next = replacePrompt;
+    setReplacePrompt(null);
+    if (!next) return;
+    const workout = adaptWorkout(FULL_BODY_A, next, profile?.exclusions ?? []);
+    if (workout.exercises.length > 0) beginSession(workout);
   };
 
   /** Fingerprint of everything a preview was built against. */
@@ -895,6 +943,16 @@ export default function App() {
             />
           );
         })()}
+
+      {replacePrompt && current && (
+        <DiscardSessionSheet
+          currentName={current.name}
+          nextName={adaptWorkout(FULL_BODY_A, replacePrompt, profile?.exclusions ?? []).name}
+          onDiscard={discardAndBegin}
+          onKeep={() => setReplacePrompt(null)}
+          onClose={() => setReplacePrompt(null)}
+        />
+      )}
     </PhoneFrame>
   );
 }

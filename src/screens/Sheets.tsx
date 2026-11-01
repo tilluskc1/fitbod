@@ -409,6 +409,44 @@ export function FinishSheet({
   );
 }
 
+/* ---------------- Replace active session ---------------- */
+
+/**
+ * In-app confirm for starting a workout while one is open (#19). Confirming
+ * discards the open session once; keeping it changes nothing.
+ */
+export function DiscardSessionSheet({
+  currentName,
+  nextName,
+  onDiscard,
+  onKeep,
+  onClose,
+}: {
+  currentName: string;
+  nextName: string;
+  onDiscard: () => void;
+  onKeep: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Sheet title="Replace your open session?" onClose={onClose}>
+      <p className="sheet-copy">
+        <strong>{currentName}</strong> is still in progress. Starting{' '}
+        <strong>{nextName}</strong> discards it — logged sets from the active session will be
+        lost.
+      </p>
+      <div className="sheet-actions">
+        <button className="primary" onClick={onDiscard}>
+          Discard and start {nextName}
+        </button>
+        <button className="secondary" onClick={onKeep}>
+          Keep current workout
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 /* ---------------- Swap exercise ---------------- */
 
 export function SwapSheet({
