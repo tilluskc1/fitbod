@@ -3,7 +3,8 @@ import test from 'node:test';
 import * as adaptation from '../src/lib/adapt.ts';
 import { FULL_BODY_A } from '../src/data/flagship.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
-import { createSession, logSet, sessionProgress, swapPendingExercise } from '../src/lib/session.ts';
+import { applyFinish, createSession, logSet, sessionProgress, swapPendingExercise } from '../src/lib/session.ts';
+import { EMPTY_STATE } from '../src/lib/storage.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
 const profile: Profile = {
@@ -48,6 +49,30 @@ test('Undo counts completed swap variants once and never transfers their loads',
   assert.equal(press?.planned.at(-1)?.weight, 15);
   assert.equal(restored.exercises.find((exercise) => exercise.exerciseId === 'push-up')?.performed[0].weight, 0);
   assert.deepEqual(adaptation.restorePendingWorkout(restored, original), restored);
+});
+
+test('accepting a shortened adaptation mid-session keeps the logged set and trims only pending work', () => {
+  const full = adaptation.adaptWorkout(FULL_BODY_A, defaultConstraints(profile), profile.exclusions);
+  const active = logSet(
+    createSession({ id: 'mid-session', name: full.name, dayIndex: 0, durationMin: full.minutes,
+      now: '2026-10-31T10:00:00.000Z', exercises: adaptation.toWorkoutExercises(full) }),
+    0, 0, '2026-10-31T10:05:00.000Z',
+  );
+  const adapted = adaptation.adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' }, profile.exclusions);
+  const merged = adaptation.restorePendingWorkout(active, adapted);
+  // Same session, new length, completed work untouched.
+  assert.equal(merged.id, active.id);
+  assert.equal(merged.durationMin, 20);
+  assert.equal(sessionProgress(merged).done, 1);
+  assert.deepEqual(done(merged), done(active));
+  assert.equal(merged.exercises[0].planned.length, 2);
+  // The original 3-set obligation survives, so a shortened finish cannot earn progression.
+  assert.equal(merged.exercises[0].originalPlannedSets, 3);
+  const finished = applyFinish({ ...EMPTY_STATE, profile, current: merged }, merged.id,
+    { early: true, now: '2026-10-31T10:30:00.000Z' });
+  assert.equal(finished.history.length, 1);
+  assert.equal(finished.current, null);
+  assert.equal(finished.history[0].exercises[0].performed.filter((set) => set.done).length, 1);
 });
 
 test('Undo uses saved defaults and exclusions while preserving already completed excluded work', () => {

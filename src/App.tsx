@@ -365,9 +365,6 @@ export default function App() {
       return;
     }
     const next = proposal.constraints;
-    if (!startSession(next)) return;
-    appliedProposalRef.current = proposal.id;
-    setPendingNotices([]);
     const choice: EquipmentChoice = next.equipment;
     const approved: TodayOverride = {
       date: dayKey(new Date()),
@@ -377,6 +374,31 @@ export default function App() {
       appliedAt: new Date().toISOString(),
       choice,
     };
+    // An open session keeps its completed sets: the adaptation replaces only
+    // the pending prescriptions, so adjusting mid-workout never discards work.
+    const workout = adaptWorkout(FULL_BODY_A, next, profile?.exclusions ?? []);
+    if (current) {
+      if (workout.exercises.length === 0) {
+        setNotice('No movement in this workout can be done with that setup.');
+        return;
+      }
+      setState((currentState) => ({
+        ...currentState,
+        todayOverride: approved,
+        current: currentState.current
+          ? restorePendingWorkout(currentState.current, workout)
+          : null,
+      }));
+      appliedProposalRef.current = proposal.id;
+      setPendingNotices([]);
+      setPending(null);
+      setSheet({ kind: 'none' });
+      setView('train');
+      return;
+    }
+    if (!startSession(next)) return;
+    appliedProposalRef.current = proposal.id;
+    setPendingNotices([]);
     setState((currentState) => ({ ...currentState, todayOverride: approved }));
     setPending(null);
     setSheet({ kind: 'none' });
