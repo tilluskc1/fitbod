@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { downloadText } from './lib/download';
 import { buildPlan } from './lib/generator';
 import { activeOverride, dayKey, minutesOf } from './lib/plan';
@@ -138,11 +138,34 @@ export default function App() {
   const appliedProposalRef = useRef<string | null>(null);
   const proposalRevisionRef = useRef(0);
   const revisionRef = useRef(INITIAL.revision);
+  const pendingWriteRef = useRef<string | undefined>(undefined);
   const skipSaveRef = useRef(true);
   const adoptingRef = useRef(false);
   const forceSaveRef = useRef(INITIAL.status === 'corrupt');
 
   /* ---------- persistence ---------- */
+
+  /**
+   * One write attempt. The failed-save banner's Retry runs the same path, so a
+   * retry after freeing space or unblocking storage persists exactly once.
+   */
+  const attemptSave = useCallback(() => {
+    const result = saveState(state, revisionRef.current, {
+      force: forceSaveRef.current,
+      pendingWrite: pendingWriteRef.current,
+    });
+    if (result.ok) {
+      pendingWriteRef.current = undefined;
+      forceSaveRef.current = false;
+      revisionRef.current = result.revision;
+      setSaveUi({ kind: 'saved' });
+      setConflict(null);
+    } else {
+      if (result.pendingWrite) pendingWriteRef.current = result.pendingWrite;
+      setSaveUi({ kind: 'error', reason: result.reason, message: result.error });
+      if (result.reason === 'stale') setConflict(result.error);
+    }
+  }, [state]);
 
   useEffect(() => {
     if (recovery) {
@@ -157,17 +180,8 @@ export default function App() {
       adoptingRef.current = false;
       return;
     }
-    const result = saveState(state, revisionRef.current, { force: forceSaveRef.current });
-    if (result.ok) {
-      forceSaveRef.current = false;
-      revisionRef.current = result.revision;
-      setSaveUi({ kind: 'saved' });
-      setConflict(null);
-    } else {
-      setSaveUi({ kind: 'error', reason: result.reason, message: result.error });
-      if (result.reason === 'stale') setConflict(result.error);
-    }
-  }, [state, recovery]);
+    attemptSave();
+  }, [state, recovery, attemptSave]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -351,9 +365,6 @@ export default function App() {
       return;
     }
     const next = proposal.constraints;
-    if (!startSession(next)) return;
-    appliedProposalRef.current = proposal.id;
-    setPendingNotices([]);
     const choice: EquipmentChoice = next.equipment;
     const approved: TodayOverride = {
       date: dayKey(new Date()),
@@ -363,6 +374,31 @@ export default function App() {
       appliedAt: new Date().toISOString(),
       choice,
     };
+    // An open session keeps its completed sets: the adaptation replaces only
+    // the pending prescriptions, so adjusting mid-workout never discards work.
+    const workout = adaptWorkout(FULL_BODY_A, next, profile?.exclusions ?? []);
+    if (current) {
+      if (workout.exercises.length === 0) {
+        setNotice('No movement in this workout can be done with that setup.');
+        return;
+      }
+      setState((currentState) => ({
+        ...currentState,
+        todayOverride: approved,
+        current: currentState.current
+          ? restorePendingWorkout(currentState.current, workout)
+          : null,
+      }));
+      appliedProposalRef.current = proposal.id;
+      setPendingNotices([]);
+      setPending(null);
+      setSheet({ kind: 'none' });
+      setView('train');
+      return;
+    }
+    if (!startSession(next)) return;
+    appliedProposalRef.current = proposal.id;
+    setPendingNotices([]);
     setState((currentState) => ({ ...currentState, todayOverride: approved }));
     setPending(null);
     setSheet({ kind: 'none' });
@@ -502,7 +538,10 @@ export default function App() {
     const merged = mergeImport(state, parsed.state);
     setState({ ...merged.state, todayOverride: state.todayOverride ?? null });
     setNotice(
-      `Restored ${merged.summary.newWorkouts} workout${merged.summary.newWorkouts === 1 ? '' : 's'}; ${merged.summary.duplicateWorkouts} already present.`,
+      `Restored ${merged.summary.newWorkouts} workout${merged.summary.newWorkouts === 1 ? '' : 's'}; ${merged.summary.duplicateWorkouts} already present.` +
+        (merged.summary.activeSessionConflict
+          ? ' Both files had the same open session; the copy with more logged sets was kept.'
+          : ''),
     );
   };
 
@@ -740,6 +779,7 @@ export default function App() {
             <span>
               <strong>Not saved.</strong> {saveUi.message}
             </span>
+            <button onClick={attemptSave}>Retry</button>
             <button onClick={() => setSheet({ kind: 'settings' })}>Data</button>
           </div>
         </div>

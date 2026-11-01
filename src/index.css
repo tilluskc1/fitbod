@@ -1578,6 +1578,10 @@ textarea:focus-visible {
   text-decoration: underline;
   font-size: 12.5px;
   flex: none;
+  /* These are the only recovery actions on a failed save, so keep them tappable. */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .app-alerts {

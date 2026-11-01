@@ -1,11 +1,9 @@
 import type { AppState, WorkoutRecord } from '../types.ts';
-import { validateState } from './validate.ts';
+import { APP_MARKER, SCHEMA_VERSION, validateState } from './validate.ts';
+export { SCHEMA_VERSION } from './validate.ts';
 
 export const STORAGE_KEY = 'fitbod-clone-v1';
 export const LEGACY_BACKUP_KEY = 'fitbod-clone-v1:legacy-backup';
-export const SCHEMA_VERSION = 2;
-
-const APP_MARKER = 'fitbod-clone';
 
 export const EMPTY_STATE: AppState = {
   profile: null,
@@ -36,7 +34,7 @@ export type SaveFailureReason = 'stale' | 'quota' | 'unavailable' | 'verify';
 
 export type SaveResult =
   | { ok: true; revision: number; savedAt: string }
-  | { ok: false; reason: SaveFailureReason; error: string; remoteRevision?: number };
+  | { ok: false; reason: SaveFailureReason; error: string; remoteRevision?: number; pendingWrite?: string };
 
 function storage(): Storage | null {
   try {
@@ -200,6 +198,8 @@ export interface SaveOptions {
    * Revision still moves forward monotonically.
    */
   force?: boolean;
+  /** Exact unverified write from this caller; never persisted separately. */
+  pendingWrite?: string;
 }
 
 export function saveState(
@@ -220,8 +220,14 @@ export function saveState(
   }
 
   const current = parseEnvelope(currentRaw);
+  const ownWrite = current !== null && currentRaw === options.pendingWrite &&
+    current.revision > expectedRevision;
+  if (ownWrite && JSON.stringify(current.state) === JSON.stringify(state)) {
+    return { ok: true, revision: current.revision, savedAt: current.savedAt };
+  }
+  const acknowledgedRevision = ownWrite ? current.revision : expectedRevision;
   if (!options.force) {
-    if (current && current.revision !== expectedRevision) {
+    if (current && current.revision !== acknowledgedRevision) {
       return {
         ok: false,
         reason: 'stale',
@@ -241,7 +247,7 @@ export function saveState(
 
   const baseRevision = options.force
     ? Math.max(expectedRevision, current?.revision ?? 0)
-    : expectedRevision;
+    : acknowledgedRevision;
   const savedAt = new Date().toISOString();
   const envelope: Envelope = {
     app: APP_MARKER,
@@ -251,8 +257,9 @@ export function saveState(
     state,
   };
 
+  const pendingWrite = JSON.stringify(envelope);
   try {
-    store.setItem(STORAGE_KEY, JSON.stringify(envelope));
+    store.setItem(STORAGE_KEY, pendingWrite);
   } catch (error) {
     return {
       ok: false,
@@ -263,11 +270,17 @@ export function saveState(
     };
   }
 
-  const check = parseEnvelope(store.getItem(STORAGE_KEY));
-  if (!check || check.revision !== envelope.revision || check.savedAt !== savedAt) {
+  let verified = false;
+  try {
+    verified = store.getItem(STORAGE_KEY) === pendingWrite;
+  } catch {
+    // The write may exist; only an exact read on Retry may acknowledge it.
+  }
+  if (!verified) {
     return {
       ok: false,
       reason: 'verify',
+      pendingWrite,
       error: 'The write could not be verified. Treat this change as unsaved.',
     };
   }
@@ -282,6 +295,12 @@ export interface ImportSummary {
   profileReplaced: boolean;
   planReplaced: boolean;
   activeSessionKept: boolean;
+  /**
+   * True when both copies held the same active session id, so the merge had
+   * to pick one. Exposed so the restore notice is never silent about which
+   * logged work survived.
+   */
+  activeSessionConflict: boolean;
 }
 
 export interface MergeResult {
@@ -301,12 +320,25 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
   const localOnly = current.history.filter((workout) => !importedIds.has(workout.id));
   const history: WorkoutRecord[] = [...imported.history, ...localOnly];
 
-  let active = imported.current ?? current.current;
-  let activeSessionKept = false;
-  if (imported.current && current.current && imported.current.id !== current.current.id) {
-    active = current.current;
-    activeSessionKept = true;
-  }
+  // Completed history disqualifies candidates before choosing which active session to keep.
+  const completedIds = new Set(history.map((workout) => workout.id));
+  const localActive = current.current && !completedIds.has(current.current.id) ? current.current : null;
+  const importedActive = imported.current && !completedIds.has(imported.current.id) ? imported.current : null;
+  const activeSessionKept = Boolean(localActive && importedActive && localActive.id !== importedActive.id);
+  const activeSessionConflict = Boolean(
+    localActive && importedActive && localActive.id === importedActive.id,
+  );
+  // A backup of the same open session must not roll back sets logged since the
+  // export: More above means the older copy only wins when it holds more work.
+  const loggedSets = (session: WorkoutRecord | null) =>
+    session === null
+      ? -1
+      : session.exercises.reduce((total, exercise) => total + exercise.performed.filter((set) => set.done).length, 0);
+  const active = activeSessionKept
+    ? localActive
+    : loggedSets(importedActive) > loggedSets(localActive)
+      ? importedActive ?? localActive
+      : localActive ?? importedActive;
 
   return {
     state: {
@@ -323,6 +355,7 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
       profileReplaced: imported.profile !== null,
       planReplaced: imported.plan.length > 0,
       activeSessionKept,
+      activeSessionConflict,
     },
   };
 }

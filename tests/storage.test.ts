@@ -11,7 +11,13 @@ import {
   serializeExport,
 } from '../src/lib/storage.ts';
 import { parseState } from '../src/lib/validate.ts';
-import type { AppState, WorkoutRecord } from '../src/types.ts';
+import {
+  applyFinish,
+  createSession,
+  logSet,
+  swapPendingExercise,
+} from '../src/lib/session.ts';
+import type { AppState, WorkoutExercise, WorkoutRecord } from '../src/types.ts';
 
 const FIXTURE = readFileSync(new URL('./fixtures/v1-state.json', import.meta.url), 'utf8');
 
@@ -164,6 +170,92 @@ test('a failed write is reported honestly and leaves storage unchanged', () => {
   assert.equal(retried.ok, true);
 });
 
+test('a throwing verification read stays unsaved and Retry verifies the existing write once', () => {
+  installStorage();
+  const store = globalThis.localStorage;
+  const read = store.getItem;
+  let reads = 0;
+  store.getItem = (key) => {
+    if (++reads === 2) throw new Error('read-back unavailable');
+    return read(key);
+  };
+  const state = { ...EMPTY_STATE, history: [record('saved-once')] };
+  const failed = saveState(state, 0);
+  assert.equal(failed.ok, false);
+  if (failed.ok) return;
+  assert.equal(failed.reason, 'verify');
+  store.getItem = read;
+  const retried = saveState(state, 0, { pendingWrite: failed.pendingWrite });
+  assert.equal(retried.ok, true);
+  if (!retried.ok) return;
+  assert.equal(retried.revision, 1);
+  const loaded = loadState();
+  assert.equal(loaded.status, 'ok');
+  assert.deepEqual(loaded.state.history.map((workout) => workout.id), ['saved-once']);
+});
+
+test('an unverified write allows later edits but never authorizes another tab’s state', () => {
+  installStorage();
+  const store = globalThis.localStorage;
+  const read = store.getItem;
+  let failRead = false;
+  const write = store.setItem;
+  store.setItem = (key, value) => { write(key, value); failRead = true; };
+  store.getItem = (key) => {
+    if (failRead) throw new Error('read-back unavailable');
+    return read(key);
+  };
+  const first = saveState(EMPTY_STATE, 0);
+  assert.equal(first.ok, false);
+  if (first.ok) return;
+  store.getItem = read;
+  store.setItem = write;
+  const state = { ...EMPTY_STATE, history: [record('edited-after-failure')] };
+  const edited = saveState(state, 0, { pendingWrite: first.pendingWrite });
+  assert.equal(edited.ok, true);
+  if (!edited.ok) return;
+  assert.equal(edited.revision, 2);
+  assert.deepEqual(loadState().state.history.map((workout) => workout.id), ['edited-after-failure']);
+
+  // Even a competing write at the same revision must not match our receipt.
+  const other = JSON.parse(first.pendingWrite ?? '{}');
+  other.state.history = [record('other-tab')];
+  write(STORAGE_KEY, JSON.stringify(other));
+  const stale = saveState(state, 0, { pendingWrite: first.pendingWrite });
+  assert.equal(stale.ok, false);
+  if (stale.ok) return;
+  assert.equal(stale.reason, 'stale');
+  assert.deepEqual(loadState().state.history.map((workout) => workout.id), ['other-tab']);
+});
+
+test('repeated verification-read failures retain edits until a readable Retry', () => {
+  installStorage();
+  const store = globalThis.localStorage;
+  const read = store.getItem;
+  const write = store.setItem;
+  let failRead = false;
+  store.getItem = (key) => {
+    if (failRead) throw new Error('read-back unavailable');
+    return read(key);
+  };
+  store.setItem = (key, value) => { write(key, value); failRead = true; };
+  const first = saveState(EMPTY_STATE, 0);
+  assert.equal(first.ok, false);
+  if (first.ok) return;
+  failRead = false;
+  const state = { ...EMPTY_STATE, history: [record('latest-edit')] };
+  const second = saveState(state, 0, { pendingWrite: first.pendingWrite });
+  assert.equal(second.ok, false);
+  if (second.ok) return;
+  assert.equal(second.reason, 'verify');
+  failRead = false;
+  const retry = saveState(state, 0, { pendingWrite: second.pendingWrite });
+  assert.equal(retry.ok, true);
+  if (!retry.ok) return;
+  assert.equal(retry.revision, 2);
+  assert.deepEqual(loadState().state.history.map((workout) => workout.id), ['latest-edit']);
+});
+
 test('storage unavailability is surfaced instead of pretending to save', () => {
   const storage = installStorage();
   storage.removeStorage();
@@ -285,6 +377,28 @@ test('malformed and incompatible restore files are rejected', () => {
   assert.equal(parseState(JSON.stringify(mismatched)).ok, false);
 });
 
+test('incompatible backup wrappers cannot change good saved data', () => {
+  for (const metadata of [
+    { app: 'some-other-app', schemaVersion: 2 },
+    { app: 'fitbod-clone', schemaVersion: 99 },
+    { schemaVersion: 2 },
+    { app: 'fitbod-clone' },
+    {},
+  ]) {
+    const storage = installStorage({ [STORAGE_KEY]: FIXTURE });
+    const local = loadState();
+    const before = storage.data.get(STORAGE_KEY);
+    const incoming = { ...local.state, history: [record('incompatible-workout')] };
+    const parsed = parseState(JSON.stringify({ ...metadata, state: incoming }));
+    // Exercise the same accepted-import chain as the App restore handler.
+    if (parsed.ok) saveState(mergeImport(local.state, parsed.state).state, local.revision);
+    assert.equal(parsed.ok, false);
+    assert.equal(storage.data.get(STORAGE_KEY), before);
+    assert.equal(loadState().revision, local.revision);
+    assert.equal(loadState().state.history[0].id, 'nn7i3ndqmvr4zife');
+  }
+});
+
 test('legacy backups can also be restored through the import path', () => {
   const parsed = parseState(FIXTURE);
   assert.equal(parsed.ok, true);
@@ -292,6 +406,115 @@ test('legacy backups can also be restored through the import path', () => {
   assert.equal(parsed.migrated, true);
   assert.equal(parsed.state.history[0].id, 'nn7i3ndqmvr4zife');
   assert.equal(parsed.state.current?.status, 'active');
+});
+
+test('restoring an older active backup after finish keeps one completed workout on reload', () => {
+  installStorage();
+  const active = { ...EMPTY_STATE, current: activeRecord('finished-A') };
+  const backup = parseState(serializeExport(active));
+  assert.equal(backup.ok, true);
+  if (!backup.ok) return;
+  const finished = applyFinish(active, 'finished-A', { early: false, now: '2026-01-01T11:00:00.000Z' });
+  let state = finished;
+  let revision = 0;
+  for (let restore = 0; restore < 2; restore++) {
+    state = mergeImport(state, backup.state).state;
+    const saved = saveState(state, revision);
+    assert.equal(saved.ok, true);
+    if (!saved.ok) return;
+    revision = saved.revision;
+    const reopened = loadState();
+    assert.equal(reopened.status, 'ok');
+    assert.equal(reopened.state.current, null);
+    assert.equal(reopened.state.history.length, 1);
+    assert.equal(reopened.state.history[0].id, 'finished-A');
+    assert.equal(reopened.state.history[0].endedAt, '2026-01-01T11:00:00.000Z');
+    assert.deepEqual(reopened.state.history[0].exercises[0].performed, [
+      { weight: 0, reps: 10, done: true, completedAt: '2026-01-01T11:00:00.000Z' },
+    ]);
+    state = reopened.state;
+  }
+});
+
+test('restore chooses the surviving active session when completed history replaces the other candidate', () => {
+  for (const localFinished of [false, true]) {
+    installStorage();
+    const activeA = { ...EMPTY_STATE, current: activeRecord('workout-A') };
+    const completedA = { ...EMPTY_STATE, history: [record('workout-A')], current: activeRecord('workout-B') };
+    const local = localFinished ? completedA : activeA;
+    const backup = parseState(serializeExport(localFinished ? activeA : completedA));
+    assert.equal(backup.ok, true);
+    if (!backup.ok) return;
+    const merged = mergeImport(local, backup.state);
+    assert.equal(merged.state.current?.id, 'workout-B');
+    const saved = saveState(merged.state, 0);
+    assert.equal(saved.ok, true);
+    const reopened = loadState();
+    assert.equal(reopened.status, 'ok');
+    assert.equal(reopened.state.current?.id, 'workout-B');
+    assert.equal(reopened.state.current?.exercises[0].performed[0].reps, 10);
+    assert.deepEqual(reopened.state.history.map((workout) => workout.id), ['workout-A']);
+  }
+});
+
+test('restoring a backup of the same open session keeps the sets logged since the export', () => {
+  installStorage();
+  const exercises: WorkoutExercise[] = [
+    {
+      exerciseId: 'dumbbell-floor-press',
+      name: 'Dumbbell floor press',
+      planned: [
+        { weight: 10, reps: 10 },
+        { weight: 10, reps: 10 },
+      ],
+      performed: [
+        { weight: 10, reps: 10, done: false, completedAt: null },
+        { weight: 10, reps: 10, done: false, completedAt: null },
+      ],
+    },
+  ];
+  const fresh = createSession({
+    id: 'live-session',
+    name: 'Push',
+    dayIndex: 0,
+    exercises,
+    now: '2026-01-01T10:00:00.000Z',
+  });
+  const oneSet = logSet(fresh, 0, 0, '2026-01-01T10:01:00.000Z');
+  const twoSets = logSet(oneSet, 0, 1, '2026-01-01T10:05:00.000Z');
+  const doneCount = (session: WorkoutRecord | null) =>
+    session?.exercises[0].performed.filter((set) => set.done).length ?? 0;
+
+  // Export made after the first set, then a second set logged, then restored.
+  const staleExport = parseState(serializeExport({ ...EMPTY_STATE, current: oneSet }));
+  assert.equal(staleExport.ok, true);
+  if (!staleExport.ok) return;
+  const merged = mergeImport({ ...EMPTY_STATE, current: twoSets }, staleExport.state);
+  assert.equal(merged.state.current?.id, 'live-session');
+  assert.equal(doneCount(merged.state.current), 2);
+
+  const saved = saveState(merged.state, 0);
+  assert.equal(saved.ok, true);
+  if (!saved.ok) return;
+  assert.equal(doneCount(loadState().state.current), 2);
+
+  // The richer copy still wins in the other direction: a backup with more sets
+  // than the open session on this device is worth restoring.
+  const richerExport = parseState(serializeExport({ ...EMPTY_STATE, current: twoSets }));
+  assert.equal(richerExport.ok, true);
+  if (!richerExport.ok) return;
+  const repaired = mergeImport({ ...EMPTY_STATE, current: oneSet }, richerExport.state);
+  assert.equal(doneCount(repaired.state.current), 2);
+});
+
+test('a same-id active backup is reported as a conflict with the kept copy', () => {
+  const current = { ...EMPTY_STATE, current: activeRecord('shared-session') };
+  const backup = parseState(serializeExport({ ...EMPTY_STATE, current: activeRecord('shared-session') }));
+  assert.equal(backup.ok, true);
+  if (!backup.ok) return;
+  const merged = mergeImport(current, backup.state);
+  assert.equal(merged.summary.activeSessionConflict, true);
+  assert.equal(merged.state.current?.id, 'shared-session');
 });
 
 test('restore keeps local-only workouts and an unrelated active session', () => {
@@ -329,6 +552,75 @@ test('restore keeps local-only workouts and an unrelated active session', () => 
   assert.equal(merged.summary.activeSessionKept, true);
   assert.equal(merged.state.current?.id, 'local-active');
   assert.equal(merged.state.profile?.goal, 'Build Muscle');
+});
+
+test('an integrated log, swap, reload, resume and finish keeps each set once', () => {
+  installStorage();
+  const exercises: WorkoutExercise[] = [
+    {
+      exerciseId: 'dumbbell-floor-press',
+      name: 'Dumbbell floor press',
+      originalPlannedSets: 3,
+      planned: [
+        { weight: 15, reps: 9 },
+        { weight: 15, reps: 9 },
+        { weight: 15, reps: 9 },
+      ],
+      performed: [0, 1, 2].map(() => ({ weight: 15, reps: 9, done: false, completedAt: null })),
+    },
+  ];
+  let state: AppState = {
+    ...EMPTY_STATE,
+    current: createSession({
+      id: 's1',
+      name: 'Full body A',
+      dayIndex: 0,
+      exercises,
+      now: '2026-02-01T10:00:00.000Z',
+    }),
+  };
+  state = { ...state, current: logSet(state.current!, 0, 0, '2026-02-01T10:05:00.000Z') };
+  state = {
+    ...state,
+    current: swapPendingExercise(state.current!, 0, {
+      exerciseId: 'push-up',
+      name: 'Push-Up',
+      weight: 0,
+      reps: 8,
+    }),
+  };
+  state = { ...state, current: logSet(state.current!, 1, 0, '2026-02-01T10:10:00.000Z') };
+
+  const saved = saveState(state, 0);
+  assert.equal(saved.ok, true);
+  if (!saved.ok) return;
+
+  // Reopen: the browser is gone, only the stored envelope survives.
+  const reopened = loadState();
+  assert.equal(reopened.status, 'ok');
+  assert.equal(reopened.state.current?.id, 's1');
+  assert.deepEqual(
+    reopened.state.current?.exercises.map((exercise) => exercise.exerciseId),
+    ['dumbbell-floor-press', 'push-up'],
+  );
+  assert.equal(
+    reopened.state.current?.exercises[0].performed[0].completedAt,
+    '2026-02-01T10:05:00.000Z',
+  );
+
+  const finished = applyFinish(reopened.state, 's1', { early: true, now: '2026-02-01T10:20:00.000Z' });
+  const repeated = applyFinish(finished, 's1', { early: true, now: '2026-02-01T10:21:00.000Z' });
+  assert.equal(repeated.history.length, 1);
+  assert.equal(repeated.current, null);
+  assert.deepEqual(
+    repeated.history[0].exercises.map((exercise) => exercise.exerciseId),
+    ['dumbbell-floor-press', 'push-up'],
+  );
+
+  assert.equal(saveState(repeated, saved.revision).ok, true);
+  const afterFinish = loadState();
+  assert.equal(afterFinish.state.history.length, 1);
+  assert.equal(afterFinish.state.current, null);
 });
 
 test('explicit recovery save overwrites an unsupported schema with a forward revision', () => {
