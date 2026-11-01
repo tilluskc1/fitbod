@@ -241,6 +241,7 @@ export default function App() {
       minutes: override.minutes,
       equipment:
         override.choice ?? (override.equipment.includes('Dumbbell') ? 'home' : 'bodyweight'),
+      loads: profile && profile.loads.Dumbbell?.length ? profile.loads.Dumbbell : undefined,
     };
   }, [override, profile]);
 
@@ -623,7 +624,7 @@ export default function App() {
         session={current}
         history={state.history}
         now={now}
-        loadOptions={loadOptions(constraints.equipment)}
+        loadOptions={loadOptions(constraints.equipment, constraints.loads)}
         unit={unit}
         onMinimize={() => {
           setView('tabs');

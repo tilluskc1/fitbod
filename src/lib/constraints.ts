@@ -14,10 +14,17 @@ export interface ParsedConstraints {
   minutes?: number;
   equipment?: EquipmentChoice;
   /**
+   * Loads the sentence names, canonical kilograms per hand. A number with a
+   * weight unit is a load, never a session length.
+   */
+  loads?: number[];
+  /**
    * Equipment the user named that no setup covers. Kept visible so the UI
    * can explain the gap instead of silently falling back to home dumbbells.
    */
   unsupportedEquipment?: string;
+  /** Two halves of the sentence that cannot both be true. */
+  contradiction?: string;
 }
 
 export interface ConstraintParser {
@@ -35,8 +42,24 @@ const UNSUPPORTED_EQUIPMENT = ['kettlebell', 'barbell', 'machine', 'cable'] as c
 export const keywordParser: ConstraintParser = {
   parse(text: string): ParsedConstraints {
     const result: ParsedConstraints = {};
-    const withUnit = /(\d{1,3})\s*(?:-|\s)?\s*(?:minutes?|mins?)\b/i.exec(text);
-    const bare = withUnit ? null : /(\d{1,3})/.exec(text);
+    // Loads come out first: "5 kg dumbbells" is a weight, not five minutes.
+    const weights: number[] = [];
+    const withoutLoads = text.replace(
+      // A digit must not start mid-number, so "1200 lb" is not read as 200 lb.
+      /(?:^|[^\d.,])(\d{1,3}(?:[.,]\d+)?)\s*(kg|kgs?|kilos?|kilograms?|lb|lbs?|pounds?)\b/gi,
+      (_match, raw: string, unit: string) => {
+        const value = Number(raw.replace(',', '.'));
+        if (Number.isFinite(value) && value > 0) {
+          weights.push(/^(?:lb|lbs|pound)/i.test(unit) ? Math.round((value / 2.2046226218) * 10) / 10 : value);
+        }
+        return ' ';
+      },
+    );
+    if (weights.length > 0) result.loads = [...new Set(weights)].sort((a, b) => a - b);
+
+    const withUnit = /(\d{1,3})\s*(?:-|\s)?\s*(?:minutes?|mins?)\b/i.exec(withoutLoads);
+    // Standalone token only: a slice of a longer number is not a session length.
+    const bare = withUnit ? null : /(?:^|[^\d.,])(\d{1,3})(?![\d.,])/.exec(withoutLoads);
     const match = withUnit ?? bare;
     if (match) {
       const value = Number(match[1]);
@@ -45,11 +68,17 @@ export const keywordParser: ConstraintParser = {
       if (Number.isFinite(value) && value >= 1 && value <= 999) result.minutes = value;
     }
 
+    const deniesGear = /\b(?:no|without|don'?t have|do not have)\s+(?:any\s+)?(?:dumbbells?|weights?)\b/i.test(text);
+    const affirmsDumbbells = /\b(?:dumbbells?\s+only|only\s+dumbbells?)\b/i.test(text) || weights.length > 0;
+    if (deniesGear && affirmsDumbbells) {
+      result.contradiction = 'dumbbells and no dumbbells';
+    }
+
     if (/hotel|travel(?:l)?ing/i.test(text)) {
       result.equipment = 'hotel';
     } else if (/band/i.test(text)) {
       result.equipment = 'bands';
-    } else if (/(?:body ?weight|nothing|no (?:equipment|gear|weights)|empty room)/i.test(text)) {
+    } else if (/(?:body ?weight|nothing|empty room|no (?:equipment|gear))/i.test(text) || deniesGear) {
       result.equipment = 'bodyweight';
     } else if (/dumbbell|weights|home|garage/i.test(text)) {
       result.equipment = 'home';
@@ -82,6 +111,7 @@ export function mergeConstraints(current: Constraints, patch: Partial<Constraint
   return {
     minutes: patch.minutes === undefined ? current.minutes : snapMinutes(patch.minutes),
     equipment: patch.equipment ?? current.equipment,
+    loads: patch.loads ?? current.loads,
   };
 }
 
@@ -92,7 +122,7 @@ export function isPresetActive(preset: Preset, current: Constraints): boolean {
 }
 
 /** What the user asked for that the plan could not use as asked. */
-export type ConstraintNoticeKind = 'unsupported-equipment' | 'minutes-adjusted';
+export type ConstraintNoticeKind = 'unsupported-equipment' | 'minutes-adjusted' | 'contradictory-input';
 
 export interface ConstraintNotice {
   kind: ConstraintNoticeKind;
@@ -119,6 +149,19 @@ export function resolveConstraints(
   patch: ParsedConstraints,
 ): ResolvedConstraints {
   const notices: ConstraintNotice[] = [];
+  // A contradictory sentence changes nothing at all — not the time, not the
+  // rack, not the setup — or the notice would be lying.
+  if (patch.contradiction !== undefined) {
+    notices.push({
+      kind: 'contradictory-input',
+      asked: patch.contradiction,
+      applied: EQUIPMENT_OPTIONS[current.equipment].chip,
+    });
+    return { constraints: current, notices };
+  }
+  const loads = patch.loads && patch.loads.length > 0
+    ? [...new Set(patch.loads)].sort((a, b) => a - b)
+    : current.loads;
   let minutes = current.minutes;
   if (patch.minutes !== undefined) {
     if (patch.minutes < MIN_MINUTES || patch.minutes > MAX_MINUTES) {
@@ -143,7 +186,7 @@ export function resolveConstraints(
       applied: EQUIPMENT_OPTIONS[equipment].chip,
     });
   }
-  return { constraints: { minutes, equipment }, notices };
+  return { constraints: loads === undefined ? { minutes, equipment } : { minutes, equipment, loads }, notices };
 }
 
 /**
@@ -151,14 +194,24 @@ export function resolveConstraints(
  * home plan, everyone else gets bodyweight. Never assumes home dumbbells.
  */
 export function defaultConstraints(profile: Profile): Constraints {
-  return {
-    minutes: profile.sessionMinutes ?? 35,
-    equipment: profile.equipment.includes('Dumbbell') ? 'home' : 'bodyweight',
-  };
+  const saved = profile.loads.Dumbbell ?? [];
+  return saved.length > 0
+    ? {
+        minutes: profile.sessionMinutes ?? 35,
+        equipment: profile.equipment.includes('Dumbbell') ? 'home' : 'bodyweight',
+        loads: saved,
+      }
+    : {
+        minutes: profile.sessionMinutes ?? 35,
+        equipment: profile.equipment.includes('Dumbbell') ? 'home' : 'bodyweight',
+      };
 }
 
 /** One factual line per adjustment, for the adjust sheet and the review screen. */
 export function noticeText(notice: ConstraintNotice): string {
+  if (notice.kind === 'contradictory-input') {
+    return `Your note asks for ${notice.asked}. Decide which you have — nothing changed, still showing ${notice.applied}.`;
+  }
   if (notice.kind === 'unsupported-equipment') {
     const asked = notice.asked.charAt(0).toUpperCase() + notice.asked.slice(1);
     return `${asked} isn't covered by this program — showing ${notice.applied} instead. Start only if that works for you.`;

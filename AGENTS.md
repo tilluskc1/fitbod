@@ -45,13 +45,14 @@ Status and field IDs are read with `gh project field-list 11 --owner tilluskc1 -
 
 ## Work board loop
 
-`.agents/skills/github-work-board/` drives one issue at a time from a configured board, using `.github/work-board.json` (Project 11, `main`, `work/<issue>-<slug>` branches, `ready-for-agent` once claimed, `needs-info` when parked). It stops at `Ready to merge`; merging and `Done` stay with a human.
+`.agents/skills/orchestrate-github/` drives one issue at a time from a configured board, using `.github/work-board.json` (Project 11, `main`, `work/<issue>-<slug>` branches, `ready-for-agent` once claimed, `needs-info` when parked). It runs each Ready issue through `.agents/skills/orchestrate/` (goal in, plan on defaults, subagent build and per-task review), publishes a draft PR, and stops at `Ready to merge`; merging and `Done` stay with a human. `.agents/skills/github-work-board/` stays available as the lighter controller for single-issue moves.
 
 Each phase runs the skill that fits it, from `.agents/skills/`:
 
 | Phase | Skill |
 | --- | --- |
 | Requirements check | `grilling` (or `grill-with-docs` when `GLOSSARY.md`/ADRs decide it) |
+| Goal loop | `orchestrate` (inside `orchestrate-github`; implementation and review dispatches are separate agents) |
 | Implementation | `tdd`, `diagnosing-bugs` when the defect is not yet reproduced |
 | Independent review | `code-review`, plus `ponytail-review` on the diff size |
 | Handoff between turns | `handoff` |

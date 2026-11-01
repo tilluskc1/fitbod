@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "repository": "owner/repository",
+  "projectOwner": "owner-or-organization",
+  "projectNumber": 1,
+  "baseBranch": "main",
+  "statusField": "Status",
+  "statusKey": "status",
+  "priorityKey": "priority",
+  "priorityOrder": ["P0", "P1", "P2"],
+  "readyStatuses": ["Ready"],
+  "inProgressStatus": "In progress",
+  "reviewStatus": "Review",
+  "readyToMergeStatus": "Ready to merge",
+  "ownedLabel": "agent-run",
+  "blockedLabel": "needs-owner",
+  "branchPrefix": "work/",
+  "uiPatterns": ["src/app/*", "src/components/*", "*.tsx", "*.jsx", "*.vue", "*.svelte", "*.css", "public/*"]
+}

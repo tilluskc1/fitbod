@@ -28,6 +28,7 @@ export default function Onboarding({ onComplete }: Props) {
   const [daysPerWeek, setDaysPerWeek] = useState(3);
   const [equipment, setEquipment] = useState<Equipment[]>(['Dumbbell']);
   const [support, setSupport] = useState<SupportEquipment[]>(['Bench']);
+  const [loadsText, setLoadsText] = useState('');
 
   const toggleEquipment = (item: Equipment) => {
     setEquipment((current) =>
@@ -41,7 +42,16 @@ export default function Onboarding({ onComplete }: Props) {
     );
   };
 
+  const confirmedLoads = () => {
+    const values = loadsText
+      .split(/[,\s]+/)
+      .map(Number)
+      .filter((value) => Number.isFinite(value) && value > 0);
+    return [...new Set(values)].sort((a, b) => a - b);
+  };
+
   const finish = () => {
+    const loads = confirmedLoads();
     onComplete({
       goal,
       experience,
@@ -49,7 +59,7 @@ export default function Onboarding({ onComplete }: Props) {
       equipment,
       support,
       exclusions: [],
-      loads: {},
+      loads: equipment.includes('Dumbbell') && loads.length > 0 ? { Dumbbell: loads } : {},
       name: name.trim() || 'Athlete',
       unit,
       sessionMinutes: 35,
@@ -180,6 +190,26 @@ export default function Onboarding({ onComplete }: Props) {
               </button>
             ))}
           </div>
+
+          {equipment.includes('Dumbbell') ? (
+            <>
+              <label className="setup-label" htmlFor="onboarding-loads">
+                Dumbbell loads you own (kg, per hand)
+              </label>
+              <input
+                id="onboarding-loads"
+                className="search"
+                inputMode="decimal"
+                value={loadsText}
+                onChange={(event) => setLoadsText(event.target.value)}
+                placeholder="e.g. 5, 7.5"
+              />
+              <p className="muted">
+                Nothing is assumed from this list, and no target will offer a dumbbell you did not
+                confirm. Leave it blank to keep it unconfirmed.
+              </p>
+            </>
+          ) : null}
 
           <span className="setup-label">Support equipment</span>
           <p className="muted">

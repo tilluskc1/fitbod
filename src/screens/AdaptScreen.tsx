@@ -21,8 +21,13 @@ interface Props {
 /** A plain description of what changed, derived from the two workouts. */
 function summaryLine(adapted: AdaptedWorkout, originalSets: number): string {
   const trimmed = adapted.exercises.filter((exercise) => exercise.sets < exercise.originalSets);
+  const reweighted = adapted.exercises.filter(
+    (exercise) => (exercise.originalWeight ?? exercise.weight) !== exercise.weight,
+  );
   const parts: string[] = [];
-  if (adapted.exercises.length > 0) parts.push('Same exercises and weights.');
+  if (adapted.exercises.length > 0) {
+    parts.push(reweighted.length > 0 ? 'Same exercises and sets, loads set to what you own.' : 'Same exercises and weights.');
+  }
   if (trimmed.length > 0) {
     const drops = new Set(trimmed.map((exercise) => exercise.originalSets - exercise.sets));
     if (drops.size === 1) {

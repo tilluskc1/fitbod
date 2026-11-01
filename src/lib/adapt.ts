@@ -35,7 +35,8 @@ export const EQUIPMENT_OPTIONS: Record<EquipmentChoice, EquipmentOption> = {
     label: 'Home dumbbells',
     chip: 'Home dumbbells',
     short: 'Home',
-    detail: 'Pairs: 10 kg, 15 kg, 18 kg',
+    // A fixture list, shown only while the rack is unconfirmed.
+    detail: 'Example rack: 10 kg, 15 kg, 18 kg',
     loads: HOME_DUMBBELLS,
     allowsLoads: true,
   },
@@ -43,7 +44,7 @@ export const EQUIPMENT_OPTIONS: Record<EquipmentChoice, EquipmentOption> = {
     label: 'Hotel gym',
     chip: 'Hotel gym',
     short: 'Hotel gym',
-    detail: 'Dumbbells up to 25 kg',
+    detail: 'Example rack: up to 25 kg',
     loads: HOTEL_DUMBBELLS,
     allowsLoads: true,
   },
@@ -68,6 +69,11 @@ export const EQUIPMENT_OPTIONS: Record<EquipmentChoice, EquipmentOption> = {
 export interface Constraints {
   minutes: number;
   equipment: EquipmentChoice;
+  /**
+   * Loads confirmed for this setup, canonical kg per hand. Undefined means the
+   * inventory is unconfirmed, so fixture racks are only a suggestion.
+   */
+  loads?: number[];
 }
 
 export const DEFAULT_CONSTRAINTS: Constraints = { minutes: FULL_BODY_A.minutes, equipment: 'home' };
@@ -78,6 +84,8 @@ export interface AdaptedExercise extends ProgramExercise {
   /** Per-set rep targets for the kept sets. */
   targetReps?: number[];
   originalSets: number;
+  /** Program load before a confirmed rack re-targeted it. */
+  originalWeight?: number;
 }
 
 export interface SkippedExercise {
@@ -139,6 +147,13 @@ export function adaptWorkout(
 ): AdaptedWorkout {
   const minutes = clamp(Math.round(constraints.minutes), 10, 120);
   const setup = EQUIPMENT_OPTIONS[constraints.equipment] ?? EQUIPMENT_OPTIONS.home;
+  // The saved rack is a home rack: it must not cap a hotel gym or a
+  // bodyweight session the user asked for.
+  const inventory = setup.allowsLoads && constraints.equipment === 'home'
+    ? (constraints.loads ?? []).filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b)
+    : [];
+  const knownInventory = inventory.length > 0;
+  const limited: { name: string; from: number; to: number }[] = [];
   const skipped: SkippedExercise[] = [];
   const exercises: AdaptedExercise[] = [];
   const originalSets = program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
@@ -155,9 +170,12 @@ export function adaptWorkout(
       });
       continue;
     }
+    // A confirmed inventory decides what is usable: any owned load can be
+    // re-targeted below, so only a setup with no external load rules a
+    // movement out. Unconfirmed inventory keeps the fixture check.
     const unusable =
       (exercise.requires === 'dumbbell' && !setup.allowsLoads) ||
-      (exercise.weight > 0 && !setup.loads.includes(exercise.weight));
+      (exercise.weight > 0 && !knownInventory && !setup.loads.includes(exercise.weight));
     if (unusable) {
       skipped.push({
         exerciseId: exercise.exerciseId,
@@ -167,8 +185,19 @@ export function adaptWorkout(
       });
       continue;
     }
+    // Never invent a weight: an owned load at or below the program's own is the
+    // only substitution, and it is reported so the review can say so.
+    let weight = exercise.weight;
+    if (knownInventory && weight > 0 && !inventory.includes(weight)) {
+      const below = inventory.filter((value) => value < weight).at(-1);
+      const substitute = below ?? inventory[0];
+      limited.push({ name: exercise.name, from: weight, to: substitute });
+      weight = substitute;
+    }
     exercises.push({
       ...exercise,
+      weight,
+      originalWeight: exercise.weight,
       sets: exercise.sets,
       targetReps: exercise.targetReps?.slice(0, exercise.sets),
       originalSets: exercise.sets,
@@ -234,6 +263,10 @@ export function adaptWorkout(
   }
   if (forEquipment.length > 0) {
     note += ` ${listOf(forEquipment.map((item) => item.name))} need${forEquipment.length === 1 ? 's' : ''} a load that is not available today.`;
+  }
+  if (limited.length > 0) {
+    const loads = [...new Set(limited.map((item) => item.to))].sort((a, b) => a - b);
+    note += ` ${listOf(limited.map((item) => item.name))} use${limited.length === 1 ? 's' : ''} ${loads.join(' / ')} kg — the closest of your confirmed loads, not your program's.`;
   }
   const forExcluded = skipped.filter((item) => item.reason === 'excluded');
   if (forExcluded.length > 0) {
@@ -312,9 +345,18 @@ export function swapCandidateFor(
   };
 }
 
-/** Weights the logger may offer, for the chosen setup only. */
-export function loadOptions(equipment: EquipmentChoice): number[] {
-  return EQUIPMENT_OPTIONS[equipment]?.loads ?? [];
+/**
+ * Weights the logger may offer. A confirmed inventory wins over the fixture
+ * rack, so no selector can offer a dumbbell the user does not own.
+ */
+export function loadOptions(equipment: EquipmentChoice, inventory?: number[]): number[] {
+  const setup = EQUIPMENT_OPTIONS[equipment];
+  // A setup with no external load has nothing to select from, and a rack the
+  // user confirmed at home is not the rack in a hotel gym.
+  if (!setup?.allowsLoads || equipment !== 'home') return setup?.loads ?? [];
+  const confirmed = (inventory ?? []).filter((value) => Number.isFinite(value) && value > 0);
+  if (confirmed.length > 0) return [...confirmed].sort((a, b) => a - b);
+  return setup.loads;
 }
 
 
@@ -333,6 +375,7 @@ export function currentWorkout(adapted: AdaptedWorkout, session: WorkoutRecord):
       targetReps: source?.targetReps || !source || reps.some((rep) => rep !== source.repRange[0]) ? reps : undefined,
       holdSeconds: source?.holdSeconds ? reps[0] : undefined,
       weight: entry.planned[0]?.weight ?? 0,
+      originalWeight: entry.planned[0]?.weight ?? 0,
       load: loadModeOf(entry.exerciseId),
       detail: detailOf(entry.exerciseId),
       requires: dumbbell ? 'dumbbell' : 'bodyweight',
