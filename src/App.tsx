@@ -538,7 +538,10 @@ export default function App() {
     const merged = mergeImport(state, parsed.state);
     setState({ ...merged.state, todayOverride: state.todayOverride ?? null });
     setNotice(
-      `Restored ${merged.summary.newWorkouts} workout${merged.summary.newWorkouts === 1 ? '' : 's'}; ${merged.summary.duplicateWorkouts} already present.`,
+      `Restored ${merged.summary.newWorkouts} workout${merged.summary.newWorkouts === 1 ? '' : 's'}; ${merged.summary.duplicateWorkouts} already present.` +
+        (merged.summary.activeSessionConflict
+          ? ' Both files had the same open session; the copy with more logged sets was kept.'
+          : ''),
     );
   };
 

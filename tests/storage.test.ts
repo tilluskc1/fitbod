@@ -457,6 +457,66 @@ test('restore chooses the surviving active session when completed history replac
   }
 });
 
+test('restoring a backup of the same open session keeps the sets logged since the export', () => {
+  installStorage();
+  const exercises: WorkoutExercise[] = [
+    {
+      exerciseId: 'dumbbell-floor-press',
+      name: 'Dumbbell floor press',
+      planned: [
+        { weight: 10, reps: 10 },
+        { weight: 10, reps: 10 },
+      ],
+      performed: [
+        { weight: 10, reps: 10, done: false, completedAt: null },
+        { weight: 10, reps: 10, done: false, completedAt: null },
+      ],
+    },
+  ];
+  const fresh = createSession({
+    id: 'live-session',
+    name: 'Push',
+    dayIndex: 0,
+    exercises,
+    now: '2026-01-01T10:00:00.000Z',
+  });
+  const oneSet = logSet(fresh, 0, 0, '2026-01-01T10:01:00.000Z');
+  const twoSets = logSet(oneSet, 0, 1, '2026-01-01T10:05:00.000Z');
+  const doneCount = (session: WorkoutRecord | null) =>
+    session?.exercises[0].performed.filter((set) => set.done).length ?? 0;
+
+  // Export made after the first set, then a second set logged, then restored.
+  const staleExport = parseState(serializeExport({ ...EMPTY_STATE, current: oneSet }));
+  assert.equal(staleExport.ok, true);
+  if (!staleExport.ok) return;
+  const merged = mergeImport({ ...EMPTY_STATE, current: twoSets }, staleExport.state);
+  assert.equal(merged.state.current?.id, 'live-session');
+  assert.equal(doneCount(merged.state.current), 2);
+
+  const saved = saveState(merged.state, 0);
+  assert.equal(saved.ok, true);
+  if (!saved.ok) return;
+  assert.equal(doneCount(loadState().state.current), 2);
+
+  // The richer copy still wins in the other direction: a backup with more sets
+  // than the open session on this device is worth restoring.
+  const richerExport = parseState(serializeExport({ ...EMPTY_STATE, current: twoSets }));
+  assert.equal(richerExport.ok, true);
+  if (!richerExport.ok) return;
+  const repaired = mergeImport({ ...EMPTY_STATE, current: oneSet }, richerExport.state);
+  assert.equal(doneCount(repaired.state.current), 2);
+});
+
+test('a same-id active backup is reported as a conflict with the kept copy', () => {
+  const current = { ...EMPTY_STATE, current: activeRecord('shared-session') };
+  const backup = parseState(serializeExport({ ...EMPTY_STATE, current: activeRecord('shared-session') }));
+  assert.equal(backup.ok, true);
+  if (!backup.ok) return;
+  const merged = mergeImport(current, backup.state);
+  assert.equal(merged.summary.activeSessionConflict, true);
+  assert.equal(merged.state.current?.id, 'shared-session');
+});
+
 test('restore keeps local-only workouts and an unrelated active session', () => {
   const profile = {
     goal: 'Build Muscle' as const,

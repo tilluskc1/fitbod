@@ -295,6 +295,12 @@ export interface ImportSummary {
   profileReplaced: boolean;
   planReplaced: boolean;
   activeSessionKept: boolean;
+  /**
+   * True when both copies held the same active session id, so the merge had
+   * to pick one. Exposed so the restore notice is never silent about which
+   * logged work survived.
+   */
+  activeSessionConflict: boolean;
 }
 
 export interface MergeResult {
@@ -319,7 +325,20 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
   const localActive = current.current && !completedIds.has(current.current.id) ? current.current : null;
   const importedActive = imported.current && !completedIds.has(imported.current.id) ? imported.current : null;
   const activeSessionKept = Boolean(localActive && importedActive && localActive.id !== importedActive.id);
-  const active = activeSessionKept ? localActive : importedActive ?? localActive;
+  const activeSessionConflict = Boolean(
+    localActive && importedActive && localActive.id === importedActive.id,
+  );
+  // A backup of the same open session must not roll back sets logged since the
+  // export: More above means the older copy only wins when it holds more work.
+  const loggedSets = (session: WorkoutRecord | null) =>
+    session === null
+      ? -1
+      : session.exercises.reduce((total, exercise) => total + exercise.performed.filter((set) => set.done).length, 0);
+  const active = activeSessionKept
+    ? localActive
+    : loggedSets(importedActive) > loggedSets(localActive)
+      ? importedActive ?? localActive
+      : localActive ?? importedActive;
 
   return {
     state: {
@@ -336,6 +355,7 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
       profileReplaced: imported.profile !== null,
       planReplaced: imported.plan.length > 0,
       activeSessionKept,
+      activeSessionConflict,
     },
   };
 }
