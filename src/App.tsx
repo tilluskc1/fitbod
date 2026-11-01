@@ -179,6 +179,7 @@ export default function App() {
         setConflict('Another tab saved newer data. This tab still has unsaved changes.');
         return;
       }
+      proposalRevisionRef.current += 1;
       adoptingRef.current = true;
       revisionRef.current = loaded.revision;
       // A newer snapshot can merge/reorder even same-ID exercise segments.
