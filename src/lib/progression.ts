@@ -3,8 +3,10 @@ import type {
   Exercise,
   MovementPattern,
   Profile,
+  Unit,
   WorkoutRecord,
 } from '../types.ts';
+import { displayValue, unitLabel } from './units.ts';
 import { exerciseInWorkout } from './plan.ts';
 
 /**
@@ -251,9 +253,14 @@ export function prescribeExercise(
   return { ...base, weight: next, reps: range.min, basis: 'load-increase' };
 }
 
-function fmtLoad(weight: number, equipment: Equipment): string {
+function fmtAmount(kg: number, unit: Unit): string {
+  const value = displayValue(kg, unit);
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function fmtLoad(weight: number, equipment: Equipment, unit: Unit = 'kg'): string {
   if (weight <= 0) return equipment === 'Bodyweight' ? 'bodyweight' : 'no added load';
-  return `${weight} kg`;
+  return `${fmtAmount(weight, unit)} ${unitLabel(unit)}`;
 }
 
 function fmtDate(iso: string): string {
@@ -262,8 +269,8 @@ function fmtDate(iso: string): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-/** One line explaining why today's numbers are what they are. */
-export function describePrescription(prescription: Prescription): string {
+/** One line explaining why today's numbers are what they are. Loads read in the display unit; records stay kilograms. */
+export function describePrescription(prescription: Prescription, unit: Unit = 'kg'): string {
   const { basis, last, range, increment, equipment } = prescription;
   if (!last) {
     return 'First time — no history. Start light and log what you actually lift.';
@@ -276,13 +283,13 @@ export function describePrescription(prescription: Prescription): string {
 
   switch (basis) {
     case 'load-increase':
-      return `${when}: ${setsLabel} at ${range.max} reps, ${fmtLoad(workWeight, equipment)}. One step up (+${increment} kg); reps restart at ${range.min}.`;
+      return `${when}: ${setsLabel} at ${range.max} reps, ${fmtLoad(workWeight, equipment, unit)}. One step up (+${fmtAmount(increment, unit)} ${unitLabel(unit)}); reps restart at ${range.min}.`;
     case 'rep-increase':
-      return `${when}: ${fmtLoad(workWeight, equipment)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
+      return `${when}: ${fmtLoad(workWeight, equipment, unit)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
     case 'repeat':
       return last.done.length === 0
         ? `${when} was not logged. Repeating the same prescription.`
-        : `${when} was unfinished, so the load stays at ${fmtLoad(workWeight, equipment)}. Finish every set to earn the next step.`;
+        : `${when} was unfinished, so the load stays at ${fmtLoad(workWeight, equipment, unit)}. Finish every set to earn the next step.`;
     case 'hold':
       return equipment === 'Bodyweight'
         ? `Bodyweight movement at the top of the rep range (${range.max}). Add external load manually to keep progressing.`

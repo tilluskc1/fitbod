@@ -9,7 +9,7 @@ import {
   type Constraints,
   type EquipmentChoice,
 } from '../lib/adapt';
-import { repsTarget, setText } from '../data/flagship';
+import { loadModeOf, repsTarget, setText } from '../data/flagship';
 import {
   MINUTE_OPTIONS,
   PRESETS,
@@ -203,8 +203,9 @@ function targetLine(
   exerciseId: string,
 ): string {
   if (planned.length === 0) return '—';
-  const reps = repsTarget(exerciseId, planned.length) ?? planned.map((set) => set.reps).join(' · ');
-  return planned[0].weight > 0 ? `${reps} @ ${formatWeight(planned[0].weight, unit)}` : reps;
+  const reps = repsTarget(exerciseId, planned.length, planned) ?? planned.map((set) => set.reps).join(' · ');
+  const mode = loadModeOf(exerciseId);
+  return planned[0].weight > 0 ? `${reps} @ ${formatWeight(planned[0].weight, unit)}${mode === 'each' ? ' each' : mode === 'total' ? ' total' : ''}` : reps;
 }
 
 export function WhySheet({
@@ -347,10 +348,7 @@ export function DaySheet({
           <div className="context-row" key={`${exercise.exerciseId}-${index}`}>
             <span>{exercise.name}</span>
             <span>
-              {exercise.planned.length} × {exercise.planned[0]?.reps ?? 0}
-              {exercise.planned[0]?.weight
-                ? ` @ ${formatWeight(exercise.planned[0].weight, unit)}`
-                : ''}
+              {exercise.planned.length} sets · {targetLine(exercise.planned, unit, exercise.exerciseId)}
             </span>
           </div>
         ))}
