@@ -78,9 +78,9 @@ type SheetState =
   | { kind: 'none' }
   | { kind: 'adjust' }
   | { kind: 'settings' }
-  | { kind: 'exercise'; exerciseId: string }
+  | { kind: 'exercise'; exerciseId: string; exerciseIndex: number }
   | { kind: 'day'; dayIndex: number }
-  | { kind: 'why'; exerciseId: string }
+  | { kind: 'why'; exerciseId: string; exerciseIndex: number }
   | { kind: 'finish' }
   | { kind: 'swap'; exerciseIndex: number };
 
@@ -657,11 +657,11 @@ export default function App() {
             onResume={() => setView('train')}
             onAdjust={() => setSheet({ kind: 'adjust' })}
             onWhy={() =>
-              setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '' })
+              setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
             }
             onRestore={restoreOriginal}
             onOpenSettings={() => setSheet({ kind: 'settings' })}
-            onOpenExercise={(exerciseId) => setSheet({ kind: 'exercise', exerciseId })}
+            onOpenExercise={(exerciseId, exerciseIndex) => setSheet({ kind: 'exercise', exerciseId, exerciseIndex })}
           />
         )}
         {tab === 'plan' && (            <PlanScreen
@@ -690,7 +690,7 @@ export default function App() {
             history={state.history}
             program={{ name: current?.name ?? adapted.name, minutes: current?.durationMin ?? adapted.minutes }}
             onWhy={() =>
-              setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '' })
+              setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
             }
             onEdit={() => setSheet({ kind: 'settings' })}
           />
@@ -772,7 +772,7 @@ export default function App() {
       {sheet.kind === 'exercise' &&
         (() => {
           const planned =
-            todayExercises.find((exercise) => exercise.exerciseId === sheet.exerciseId)?.planned ??
+            todayExercises[sheet.exerciseIndex]?.planned ??
             [];
           return (
             <ExerciseSheet
@@ -787,7 +787,7 @@ export default function App() {
 
       {sheet.kind === 'why' &&
         (() => {
-          const exercise = todayExercises.find((item) => item.exerciseId === sheet.exerciseId);
+          const exercise = todayExercises[sheet.exerciseIndex];
           if (!exercise) return null;
           return (
             <WhySheet

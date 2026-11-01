@@ -7,6 +7,7 @@
  * ever overwritten by logging.
  */
 
+import { exerciseById } from './exercises.ts';
 import { displayValue, unitLabel } from '../lib/units.ts';
 import type { Unit } from '../types.ts';
 
@@ -161,12 +162,32 @@ export function programExercise(exerciseId: string): ProgramExercise | undefined
   return FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === exerciseId);
 }
 
+/** Catalog swaps keep their own equipment; only the program defines special load modes. */
+export function loadModeOf(exerciseId: string): LoadMode {
+  const program = programExercise(exerciseId);
+  if (program) return program.load;
+  const equipment = exerciseById(exerciseId)?.equipment;
+  return equipment === 'Dumbbell' ? 'each' : equipment && equipment !== 'Bodyweight' ? 'total' : 'none';
+}
+
+export function detailOf(exerciseId: string): string {
+  return programExercise(exerciseId)?.detail ?? exerciseById(exerciseId)?.equipment ?? 'Bodyweight';
+}
+
 /**
  * "9 · 9 · 9" when the program carries per-set targets, "8–10 reps" when it
  * prescribes a range. A range must never collapse to its low bound on screen.
  */
-export function repsTarget(exerciseId: string, count: number): string | null {
+export function repsTarget(exerciseId: string, count: number, planned?: { reps: number }[]): string | null {
   const program = programExercise(exerciseId);
+  if (planned) {
+    const reps = planned.map((set) => set.reps);
+    // Keep an unchanged program range; changed accepted targets are explicit.
+    if (!program?.holdSeconds && program && !program.targetReps && reps.every((rep) => rep === program.repRange[0])) {
+      return `${program.repRange[0]}–${program.repRange[1]} reps`;
+    }
+    return setUnit(exerciseId) === 'seconds' ? `${reps.join(' · ')}s` : reps.join(' · ');
+  }
   if (!program) return null;
   if (program.holdSeconds) return `${program.holdSeconds}s`;
   if (program.targetReps) return program.targetReps.slice(0, count).join(' · ');

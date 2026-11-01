@@ -25,7 +25,7 @@ interface Props {
   onWhy: () => void;
   onRestore: () => void;
   onOpenSettings: () => void;
-  onOpenExercise: (exerciseId: string) => void;
+  onOpenExercise: (exerciseId: string, exerciseIndex: number) => void;
 }
 
 function greeting(now: Date): string {
@@ -203,7 +203,7 @@ export default function TodayScreen({
               <button
                 className="workout-row"
                 key={`${exercise.exerciseId}-${index}`}
-                onClick={() => onOpenExercise(exercise.exerciseId)}
+                onClick={() => onOpenExercise(exercise.exerciseId, index)}
               >
                 <span className="workout-row__main">
                   <Demo

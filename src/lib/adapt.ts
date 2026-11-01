@@ -1,6 +1,6 @@
 import type { Program, ProgramExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
-import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS } from '../data/flagship.ts';
+import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } from '../data/flagship.ts';
 import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
@@ -329,11 +329,11 @@ export function currentWorkout(adapted: AdaptedWorkout, session: WorkoutRecord):
       sets: entry.planned.length,
       originalSets: entry.originalPlannedSets ?? entry.planned.length,
       repRange: source?.repRange ?? [reps[0] ?? 0, reps[0] ?? 0],
-      targetReps: source?.targetReps || !source ? reps : undefined,
-      holdSeconds: source?.holdSeconds,
+      targetReps: source?.targetReps || !source || reps.some((rep) => rep !== source.repRange[0]) ? reps : undefined,
+      holdSeconds: source?.holdSeconds ? reps[0] : undefined,
       weight: entry.planned[0]?.weight ?? 0,
-      load: source?.load ?? (dumbbell ? 'each' : 'none'),
-      detail: source?.detail ?? (dumbbell ? 'Dumbbell' : 'Floor mat'),
+      load: loadModeOf(entry.exerciseId),
+      detail: detailOf(entry.exerciseId),
       requires: dumbbell ? 'dumbbell' : 'bodyweight',
     };
   });
