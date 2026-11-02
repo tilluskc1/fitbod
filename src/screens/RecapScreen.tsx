@@ -1,14 +1,21 @@
-import { useState } from 'react';
-import type { WorkoutRecord } from '../types';
+import type { WorkoutFeedback, WorkoutRecord } from '../types';
+import { FEEDBACK_CHOICES } from '../lib/feedback';
 import { ArrowIcon, CheckIcon } from '../components/ui/Icons';
+
+/** The write covering this recap's answer, as the app last observed it. */
+export interface FeedbackWrite {
+  key: string;
+  kind: 'saving' | 'saved' | 'error';
+}
 
 interface Props {
   workout: WorkoutRecord;
+  feedbackWrite: FeedbackWrite | null;
+  onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
+  onRetryFeedback: () => void;
   onViewHistory: () => void;
   onBackToday: () => void;
 }
-
-type Feedback = 'too-much' | 'about-right' | 'too-little';
 
 function minutesOf(workout: WorkoutRecord): number {
   if (workout.endedAt) {
@@ -18,8 +25,15 @@ function minutesOf(workout: WorkoutRecord): number {
   return workout.durationMin ?? 1;
 }
 
-export default function RecapScreen({ workout, onViewHistory, onBackToday }: Props) {
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
+export default function RecapScreen({
+  workout,
+  feedbackWrite,
+  onFeedback,
+  onRetryFeedback,
+  onViewHistory,
+  onBackToday,
+}: Props) {
+  const feedback = workout.feedback;
   const setCount = workout.exercises.reduce(
     (sum, exercise) => sum + exercise.performed.filter((set) => set.done).length,
     0,
@@ -33,6 +47,13 @@ export default function RecapScreen({ workout, onViewHistory, onBackToday }: Pro
       sum + (exercise.skipped ? exercise.performed.filter((set) => !set.done).length : 0),
     0,
   );
+
+  // "Saved" is only ever claimed for a write this app verified. A value that
+  // arrived from storage is already saved; a pending or failed write is not.
+  const key = `${workout.id}:${feedback ?? 'none'}`;
+  const write = feedbackWrite && feedbackWrite.key === key ? feedbackWrite.kind : null;
+  const status: 'idle' | 'saving' | 'saved' | 'error' =
+    write ?? (feedback ? 'saved' : 'idle');
 
   return (
     <div className="screen no-tabs">
@@ -65,32 +86,40 @@ export default function RecapScreen({ workout, onViewHistory, onBackToday }: Pro
         <section className="feedback">
           <h2>How did today fit?</h2>
           <p>
-            Saved for your review. This build does not automatically change prescriptions from
-            feedback, and no catch-up work is added.
+            Optional, and saved with this workout only. It never changes a prescription and adds no
+            catch-up work. Nothing is chosen for you.
           </p>
           <div className="feedback-btns">
-            <button
-              className={feedback === 'too-much' ? 'on' : ''}
-              aria-pressed={feedback === 'too-much'}
-              onClick={() => setFeedback('too-much')}
-            >
-              Too much
-            </button>
-            <button
-              className={feedback === 'about-right' ? 'on' : ''}
-              aria-pressed={feedback === 'about-right'}
-              onClick={() => setFeedback('about-right')}
-            >
-              About right
-            </button>
-            <button
-              className={feedback === 'too-little' ? 'on' : ''}
-              aria-pressed={feedback === 'too-little'}
-              onClick={() => setFeedback('too-little')}
-            >
-              Too little
-            </button>
+            {FEEDBACK_CHOICES.map((choice) => (
+              <button
+                key={choice.value}
+                className={feedback === choice.value ? 'on' : ''}
+                aria-pressed={feedback === choice.value}
+                onClick={() => onFeedback(workout.id, choice.value)}
+              >
+                {choice.label}
+              </button>
+            ))}
           </div>
+          <p className="data-note" role="status">
+            {status === 'saving' && 'Saving…'}
+            {status === 'saved' && 'Saved with this workout.'}
+            {status === 'error' && 'Not saved yet. Your answer is only in this tab.'}
+            {status === 'idle' && 'No answer saved.'}
+            {status === 'error' && (
+              <>
+                {' '}
+                <button className="text-link" onClick={onRetryFeedback}>
+                  Retry save
+                </button>
+              </>
+            )}
+          </p>
+          {feedback && (
+            <button className="text-link" onClick={() => onFeedback(workout.id, null)}>
+              Clear answer
+            </button>
+          )}
         </section>
 
         {skippedCount > 0 && (

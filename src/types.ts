@@ -156,6 +156,13 @@ export interface WorkoutExercise {
   skipped?: boolean;
 }
 
+/**
+ * The user's own assessment of how a finished session fit. Deliberately three
+ * fixed choices with no preselection: it is recorded context, never a training
+ * signal, and it changes no prescription.
+ */
+export type WorkoutFeedback = 'too-much' | 'about-right' | 'too-little';
+
 export type WorkoutStatus = 'active' | 'completed';
 
 export interface WorkoutRecord {
@@ -182,6 +189,11 @@ export interface WorkoutRecord {
   /** True when the user finished before completing every planned set. */
   completedEarly: boolean;
   endedAt: string | null;
+  /**
+   * Optional answer to "how did today fit?". Absent means no answer, which is a
+   * valid state; nothing infers it, and older records stay valid without it.
+   */
+  feedback?: WorkoutFeedback;
   exercises: WorkoutExercise[];
 }
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Profile, WorkoutRecord } from '../types';
+import { feedbackLabel, latestFeedback } from '../lib/feedback';
 import { ArrowIcon, DumbbellIcon, EditIcon, GoalIcon, ClockIcon } from '../components/ui/Icons';
 
 interface Props {
@@ -45,6 +46,8 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
 
   const last = history[0];
   const equipment = profile.equipment.length > 0 ? profile.equipment.join(' · ') : 'Bodyweight only';
+  // Only an answer the user actually gave, with the workout it belongs to.
+  const felt = latestFeedback(history);
 
   const send = () => {
     const text = draft.trim();
@@ -127,7 +130,11 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
               </div>
               <div className="context-row">
                 <span>How it felt</span>
-                <span>No feedback yet</span>
+                <span>
+                  {felt
+                    ? `${feedbackLabel(felt.feedback)} · ${felt.workout.name} · ${new Date(felt.workout.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+                    : 'No feedback yet'}
+                </span>
               </div>
               <div className="context-row" style={{ borderBottom: 0 }}>
                 <span>Next session</span>

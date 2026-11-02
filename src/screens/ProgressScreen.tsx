@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { loadModeOf, setText, setUnit } from '../data/flagship';
 import { formatWeight, inputValue, toKg, unitLabel } from '../lib/units';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from '../lib/plan';
-import type { Unit, WorkoutRecord } from '../types';
+import type { Unit, WorkoutFeedback, WorkoutRecord } from '../types';
+import { FEEDBACK_CHOICES, feedbackLabel } from '../lib/feedback';
 import { ArrowIcon, BarIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
     patch: { weight?: number; reps?: number; done?: boolean },
   ) => void;
   onDelete: (workoutId: string) => void;
+  onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
   onGoTrain: () => void;
 }
 
@@ -51,6 +53,7 @@ export default function ProgressScreen({
   onExport,
   onCorrect,
   onDelete,
+  onFeedback,
   onGoTrain,
 }: Props) {
   const [tab, setTab] = useState<'overview' | 'history'>('overview');
@@ -384,6 +387,41 @@ export default function ProgressScreen({
                         </div>
                       );
                     })}
+                    <div className="history-ex">
+                      <div className="history-ex-head">
+                        <span>How it fit</span>
+                        <span className="tag">
+                          {workout.feedback ? feedbackLabel(workout.feedback) : 'No answer'}
+                        </span>
+                      </div>
+                      <p className="data-note" style={{ marginTop: 0 }}>
+                        Your own answer about this session. Changing or clearing it never touches the
+                        recorded sets.
+                      </p>
+                      <div className="feedback-btns">
+                        {FEEDBACK_CHOICES.map((choice) => (
+                          <button
+                            key={choice.value}
+                            className={workout.feedback === choice.value ? 'on' : ''}
+                            aria-pressed={workout.feedback === choice.value}
+                            aria-label={`${choice.label} for ${workout.name}`}
+                            onClick={() => onFeedback(workout.id, choice.value)}
+                          >
+                            {choice.label}
+                          </button>
+                        ))}
+                        {workout.feedback && (
+                          <button
+                            className="secondary"
+                            aria-label={`Clear feedback for ${workout.name}`}
+                            onClick={() => onFeedback(workout.id, null)}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                     <button
                       className="danger"
                       style={{ marginTop: 10 }}

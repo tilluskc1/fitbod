@@ -11,6 +11,7 @@ import type {
   SupportEquipment,
   WorkoutExercise,
   TodayOverride,
+  WorkoutFeedback,
   WorkoutRecord,
 } from '../types.ts';
 
@@ -21,6 +22,7 @@ const GOALS: Goal[] = ['Build Muscle', 'Lose Fat', 'Get Stronger', 'General Fitn
 const EXPERIENCES: Experience[] = ['Beginner', 'Intermediate', 'Advanced'];
 const EQUIPMENT: Equipment[] = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell', 'Bodyweight'];
 const SUPPORT: SupportEquipment[] = ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'];
+const FEEDBACK: WorkoutFeedback[] = ['too-much', 'about-right', 'too-little'];
 const MUSCLES: MuscleGroup[] = [
   'Chest',
   'Back',
@@ -241,6 +243,10 @@ function validateWorkout(value: unknown, path: string): WorkoutRecord {
       raw.restPausedMs === undefined
         ? undefined
         : finiteNumber(raw.restPausedMs, `${path}.restPausedMs`, 86_400_000),
+    // Optional and enumerated. An old record without it stays valid; an
+    // unrecognised value is rejected rather than replaced with a guess.
+    feedback:
+      raw.feedback === undefined ? undefined : oneOf(raw.feedback, `${path}.feedback`, FEEDBACK),
     exercises: array(raw.exercises, `${path}.exercises`, MAX_EXERCISES).map((item, i) =>
       validateExercise(item, `${path}.exercises[${i}]`),
     ),

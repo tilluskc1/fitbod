@@ -97,6 +97,7 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
                   planReplaced: pending.state.plan.length > 0,
                   activeSessionKept: false,
                   activeSessionConflict: false,
+                  feedbackPreserved: 0,
                 })}
               >
                 Confirm restore
