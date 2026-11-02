@@ -118,6 +118,24 @@ test('export and restore round-trip feedback by workout id without duplicating t
   assert.equal(merged.state.history[0].feedback, 'about-right');
 });
 
+test('clearing then exporting removes the answer from the file that is restored', () => {
+  const answered = setWorkoutFeedback(stateWith([workout('w-1', START)]), 'w-1', 'too-much');
+  const cleared = setWorkoutFeedback(answered, 'w-1', null);
+  // The exported file itself carries no answer at all.
+  assert.equal(serializeExport(cleared).includes('"feedback"'), false);
+  const exported = parseState(serializeExport(cleared));
+  assert.equal(exported.ok, true);
+  if (!exported.ok) return;
+  assert.equal(exported.state.history[0].feedback, undefined);
+
+  // Restoring that file onto the same cleared data cannot resurrect the answer
+  // and cannot duplicate the workout.
+  const merged = mergeImport(cleared, exported.state);
+  assert.equal(merged.state.history.length, 1);
+  assert.equal(merged.state.history[0].feedback, undefined);
+  assert.equal(merged.summary.feedbackPreserved, 0);
+});
+
 test('an older backup cannot silently erase retained feedback', () => {
   const older = stateWith([workout('w-1', START)]);
   const current = setWorkoutFeedback(older, 'w-1', 'about-right');

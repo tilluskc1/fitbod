@@ -607,6 +607,13 @@ export default function App() {
       `Restored ${merged.summary.newWorkouts} workout${merged.summary.newWorkouts === 1 ? '' : 's'}; ${merged.summary.duplicateWorkouts} already present.` +
         (merged.summary.activeSessionConflict
           ? ' Both files had the same open session; the copy with more logged sets was kept.'
+          : '') +
+        // Restore must not drop an answer the backup simply predates, and it
+        // must say so rather than keeping it quietly.
+        (merged.summary.feedbackPreserved > 0
+          ? ` Kept your saved workout feedback on ${merged.summary.feedbackPreserved} workout${
+              merged.summary.feedbackPreserved === 1 ? '' : 's'
+            } the backup did not contain.`
           : ''),
     );
   };
