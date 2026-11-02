@@ -199,6 +199,9 @@ function validateExercise(value: unknown, path: string): WorkoutExercise {
       raw.originalPlannedSets === undefined
         ? undefined
         : integer(raw.originalPlannedSets, `${path}.originalPlannedSets`, 1, MAX_SETS),
+    // Optional. Records and backups written before skipping existed stay valid,
+    // and no migration is implied by its absence.
+    skipped: raw.skipped === undefined ? undefined : boolean(raw.skipped, `${path}.skipped`),
     planned: plannedRaw.map((item, i) => validatePlannedSet(item, `${path}.planned[${i}]`)),
     performed: performedRaw.map((item, i) => validatePerformedSet(item, `${path}.performed[${i}]`)),
   };

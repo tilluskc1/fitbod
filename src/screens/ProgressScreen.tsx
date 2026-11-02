@@ -331,6 +331,7 @@ export default function ProgressScreen({
                                 : `${exercise.planned.length} × ${exercise.planned[0]?.reps ?? 0}`} prescribed
                               {' · '}
                               {done} done
+                              {exercise.skipped ? ' · Skipped' : ''}
                             </span>
                           </div>
                           <div className="history-sets">

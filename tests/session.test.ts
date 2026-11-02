@@ -264,10 +264,14 @@ test('sets can be added and removed as a correction, keeping planned in sync', (
 
 test('progress and partial completion are computed from performed sets', () => {
   let session = updatePerformedSet(makeSession(), 0, 0, { weight: 20, reps: 10, done: true }, LATER);
-  assert.deepEqual(sessionProgress(session), { total: 2, done: 1, volume: 200, complete: false });
+  assert.deepEqual(sessionProgress(session), {
+    total: 2, done: 1, skipped: 0, pending: 1, volume: 200, complete: false,
+  });
 
   session = updatePerformedSet(session, 0, 1, { weight: 20, reps: 10, done: true }, LATER);
-  assert.deepEqual(sessionProgress(session), { total: 2, done: 2, volume: 400, complete: true });
+  assert.deepEqual(sessionProgress(session), {
+    total: 2, done: 2, skipped: 0, pending: 0, volume: 400, complete: true,
+  });
 });
 
 test('completeSession records late set timestamps and flags early finishes', () => {

@@ -148,6 +148,12 @@ export interface WorkoutExercise {
    * identity — `shortcut: segments stay anonymous, one field per segment`.
    */
   originalPlannedSets?: number;
+  /**
+   * Pending work the user set aside for this session only. The prescription and
+   * every completed set stay untouched; unskipping restores exactly the sets
+   * that were pending, never a fresh default count.
+   */
+  skipped?: boolean;
 }
 
 export type WorkoutStatus = 'active' | 'completed';
