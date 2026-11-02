@@ -301,6 +301,12 @@ export interface ImportSummary {
    * logged work survived.
    */
   activeSessionConflict: boolean;
+  /**
+   * Duplicate workouts where the imported copy carried no answer but the local
+   * copy did. Counted so an older backup keeping retained feedback is visible
+   * in the restore notice instead of happening silently.
+   */
+  feedbackPreserved: number;
 }
 
 export interface MergeResult {
@@ -318,7 +324,22 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
   const currentIds = new Set(current.history.map((workout) => workout.id));
   const duplicateWorkouts = imported.history.filter((workout) => currentIds.has(workout.id)).length;
   const localOnly = current.history.filter((workout) => !importedIds.has(workout.id));
-  const history: WorkoutRecord[] = [...imported.history, ...localOnly];
+  const localById = new Map(current.history.map((workout) => [workout.id, workout]));
+  // An older backup of a workout the user has since rated carries no answer for
+  // it. Imported data still wins for every other field, but silently dropping a
+  // retained answer is the one thing restore must not do.
+  const feedbackPreserved = imported.history.filter((workout) => {
+    const local = localById.get(workout.id);
+    return Boolean(local && local.feedback !== undefined && workout.feedback === undefined);
+  }).length;
+  const history: WorkoutRecord[] = [
+    ...imported.history.map((workout) => {
+      const local = localById.get(workout.id);
+      if (!local || local.feedback === undefined || workout.feedback !== undefined) return workout;
+      return { ...workout, feedback: local.feedback };
+    }),
+    ...localOnly,
+  ];
 
   // Completed history disqualifies candidates before choosing which active session to keep.
   const completedIds = new Set(history.map((workout) => workout.id));
@@ -356,6 +377,7 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
       planReplaced: imported.plan.length > 0,
       activeSessionKept,
       activeSessionConflict,
+      feedbackPreserved,
     },
   };
 }

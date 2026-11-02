@@ -42,10 +42,9 @@ import
   toggleRestPause,
   unskipExercise,
   updatePerformedSet,
-} from './lib/session';
+} from './lib/session';import { setWorkoutFeedback } from './lib/feedback';
 import
- {
-  EMPTY_STATE,
+ { EMPTY_STATE,
   STORAGE_KEY,
   exportFilename,
   loadState,
@@ -70,6 +69,7 @@ import
   PerformedSet,
   Profile,
   TodayOverride,
+  WorkoutFeedback,
 } from './types';
 import
  { PhoneFrame, TabBar } from './components/ui/Chrome';
@@ -161,6 +161,11 @@ export default function App() {
   const [recapId, setRecapId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(INITIAL));
+  // The one feedback write the screens can speak about. It only becomes "saved"
+  // when saveState verified the write that carried this answer.
+  const [feedbackWrite, setFeedbackWrite] = useState<
+    { key: string; kind: 'saving' | 'saved' | 'error' } | null
+  >(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // A stored profile means onboarding already happened: a reload must never
@@ -200,10 +205,13 @@ export default function App() {
       revisionRef.current = result.revision;
       setSaveUi({ kind: 'saved' });
       setConflict(null);
+      // The write that covered this answer succeeded, so it is genuinely saved.
+      setFeedbackWrite((current) => (current ? { ...current, kind: 'saved' } : current));
     } else {
       if (result.pendingWrite) pendingWriteRef.current = result.pendingWrite;
       setSaveUi({ kind: 'error', reason: result.reason, message: result.error });
       if (result.reason === 'stale') setConflict(result.error);
+      setFeedbackWrite((current) => (current ? { ...current, kind: 'error' } : current));
     }
   }, [state]);
 
@@ -653,6 +661,18 @@ export default function App() {
     setNotice(`${name} is back in today's session. Nothing else changed.`);
   };
 
+  /**
+   * Record the user's explicit choice. The answer is kept in state immediately
+   * (so a failed write is recoverable and retryable), and the recap only calls
+   * it saved once the persistence boundary has confirmed it. A stale id never
+   * attaches an answer to another workout.
+   */
+  const saveFeedback = (workoutId: string, value: WorkoutFeedback | null) => {
+    if (!state.history.some((workout) => workout.id === workoutId)) return;
+    setFeedbackWrite({ key: `${workoutId}:${value ?? 'none'}`, kind: 'saving' });
+    setState((currentState) => setWorkoutFeedback(currentState, workoutId, value));
+  };
+
   /* ---------- render ---------- */
 
   if (recovery) {
@@ -734,6 +754,9 @@ export default function App() {
     ) : view === 'recap' && recap ? (
       <RecapScreen
         workout={recap}
+        feedbackWrite={feedbackWrite}
+        onFeedback={saveFeedback}
+        onRetryFeedback={attemptSave}
         onViewHistory={() => {
           setView('tabs');
           setTab('progress');
@@ -809,6 +832,7 @@ export default function App() {
             onExport={exportData}
             onCorrect={correctSet}
             onDelete={deleteWorkout}
+            onFeedback={saveFeedback}
             onGoTrain={() => setTab('today')}
           />
         )}
