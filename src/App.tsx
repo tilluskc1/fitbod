@@ -35,9 +35,12 @@ import
   createSession,
   extendRest,
   logSet,
+  pendingExerciseIndex,
   sessionProgress,
+  skipExercise,
   swapPendingExercise,
   toggleRestPause,
+  unskipExercise,
   updatePerformedSet,
 } from './lib/session';
 import
@@ -491,9 +494,9 @@ export default function App() {
     setState((currentState) => {
       const session = currentState.current;
       if (!session) return currentState;
-      const exerciseIndex = session.exercises.findIndex((exercise) =>
-        exercise.performed.some((set) => !set.done),
-      );
+      // Skipped work is not offered, so "log next" can never record a set on
+      // an exercise the user set aside.
+      const exerciseIndex = pendingExerciseIndex(session);
       if (exerciseIndex === -1) return currentState;
       const setIndex = session.exercises[exerciseIndex].performed.findIndex((set) => !set.done);
       return { ...currentState, current: logSet(session, exerciseIndex, setIndex, stamp) };
@@ -506,7 +509,7 @@ export default function App() {
   const requestFinish = () => {
     if (current) {
       const progress = sessionProgress(current);
-      if (progress.total > 0 && progress.done === progress.total) {
+      if (progress.total > 0 && progress.pending === 0) {
         saveFinish();
         return;
       }
@@ -533,7 +536,13 @@ export default function App() {
     setRecapId(id);
     setSheet({ kind: 'none' });
     setView('recap');
-    setNotice(early ? 'Saved the completed sets. Unfinished work was not recorded.' : 'Session saved to history.');
+    setNotice(
+      early
+        ? progress.skipped > 0
+          ? 'Saved the completed sets. Skipped and unfinished work was not recorded.'
+          : 'Saved the completed sets. Unfinished work was not recorded.'
+        : 'Session saved to history.',
+    );
   };
 
   const discardSession = () => {
@@ -622,6 +631,28 @@ export default function App() {
     setNotice(`${target.name} swapped in for the remaining sets. Completed sets stay put.`);
   };
 
+  const skipCurrentExercise = (exerciseIndex: number) => {
+    const name = current?.exercises[exerciseIndex]?.name ?? 'That exercise';
+    setState((currentState) => {
+      if (!currentState.current) return currentState;
+      const skipped = skipExercise(currentState.current, exerciseIndex);
+      return skipped === currentState.current ? currentState : { ...currentState, current: skipped };
+    });
+    setNotice(`${name} skipped for today. Nothing was recorded for it.`);
+  };
+
+  const returnToExercise = (exerciseIndex: number) => {
+    const name = current?.exercises[exerciseIndex]?.name ?? 'That exercise';
+    setState((currentState) => {
+      if (!currentState.current) return currentState;
+      const restored = unskipExercise(currentState.current, exerciseIndex);
+      return restored === currentState.current
+        ? currentState
+        : { ...currentState, current: restored };
+    });
+    setNotice(`${name} is back in today's session. Nothing else changed.`);
+  };
+
   /* ---------- render ---------- */
 
   if (recovery) {
@@ -697,6 +728,8 @@ export default function App() {
           )
         }
         onSwap={(exerciseIndex) => setSheet({ kind: 'swap', exerciseIndex })}
+        onSkip={skipCurrentExercise}
+        onReturn={returnToExercise}
       />
     ) : view === 'recap' && recap ? (
       <RecapScreen

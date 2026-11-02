@@ -27,6 +27,12 @@ export default function RecapScreen({ workout, onViewHistory, onBackToday }: Pro
   const exerciseCount = workout.exercises.filter((exercise) =>
     exercise.performed.some((set) => set.done),
   ).length;
+  // Work set aside today, counted from what was actually left pending.
+  const skippedCount = workout.exercises.reduce(
+    (sum, exercise) =>
+      sum + (exercise.skipped ? exercise.performed.filter((set) => !set.done).length : 0),
+    0,
+  );
 
   return (
     <div className="screen no-tabs">
@@ -86,6 +92,13 @@ export default function RecapScreen({ workout, onViewHistory, onBackToday }: Pro
             </button>
           </div>
         </section>
+
+        {skippedCount > 0 && (
+          <p className="recap-note">
+            {skippedCount} {skippedCount === 1 ? 'set was' : 'sets were'} skipped today. Nothing was
+            recorded for that work, and it is not owed later.
+          </p>
+        )}
 
         <p className="recap-note">
           Only completed sets were recorded. There is no automatic catch-up work.

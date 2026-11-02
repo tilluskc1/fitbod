@@ -193,6 +193,45 @@ export function latestDoneSet(
 }
 
 /**
+ * The exercise with work still to log: the first one that is neither skipped
+ * nor fully completed. `-1` means nothing is left to log today, which the
+ * trainer shows as an honest review state rather than a silent next exercise.
+ */
+export function pendingExerciseIndex(session: WorkoutRecord): number {
+  return session.exercises.findIndex(
+    (exercise) => !exercise.skipped && exercise.performed.some((set) => !set.done),
+  );
+}
+
+/**
+ * Skip one exercise's pending work for this session. Only the marker changes:
+ * no set is marked done, no planned set is removed, no target is reduced, and
+ * completed sets keep their values and timestamps. Calling it twice, or on an
+ * exercise with nothing pending, returns the session unchanged, so a repeated
+ * click or a stale callback cannot touch logged work.
+ */
+export function skipExercise(session: WorkoutRecord, exerciseIndex: number): WorkoutRecord {
+  const exercise = session.exercises[exerciseIndex];
+  if (!exercise || exercise.skipped) return session;
+  if (!exercise.performed.some((set) => !set.done)) return session;
+  const next = copyRecord(session);
+  next.exercises[exerciseIndex].skipped = true;
+  return next;
+}
+
+/**
+ * Bring a skipped exercise back, restoring exactly the sets that were pending.
+ * Nothing is re-prescribed and no other logged work is touched.
+ */
+export function unskipExercise(session: WorkoutRecord, exerciseIndex: number): WorkoutRecord {
+  const exercise = session.exercises[exerciseIndex];
+  if (!exercise || !exercise.skipped) return session;
+  const next = copyRecord(session);
+  delete next.exercises[exerciseIndex].skipped;
+  return next;
+}
+
+/**
  * Swap one exercise's remaining work. Completed sets stay under their original
  * exercise with their values and completion timestamps, exactly once; the
  * replacement inherits exactly the pending working-set budget, never its own
@@ -257,13 +296,20 @@ export function swapPendingExercise(
 export interface SessionProgress {
   total: number;
   done: number;
+  /** Pending sets on exercises the user skipped today. */
+  skipped: number;
+  /** Pending sets still on offer, including a session finished early. */
+  pending: number;
   volume: number;
+  /** Every set logged. Skipped work means this stays false, honestly. */
   complete: boolean;
 }
 
 export function sessionProgress(session: WorkoutRecord): SessionProgress {
   let total = 0;
   let done = 0;
+  let skipped = 0;
+  let pending = 0;
   let volume = 0;
   for (const exercise of session.exercises) {
     for (const set of exercise.performed) {
@@ -271,10 +317,14 @@ export function sessionProgress(session: WorkoutRecord): SessionProgress {
       if (set.done) {
         done += 1;
         volume += set.weight * set.reps;
+      } else if (exercise.skipped) {
+        skipped += 1;
+      } else {
+        pending += 1;
       }
     }
   }
-  return { total, done, volume, complete: total > 0 && done === total };
+  return { total, done, skipped, pending, volume, complete: total > 0 && done === total };
 }
 
 /**

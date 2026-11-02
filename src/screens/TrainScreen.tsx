@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { loadModeOf, detailOf, repsTarget, setText, setUnit } from '../data/flagship';
 import type { LoadMode } from '../data/flagship';
-import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
+import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
@@ -25,6 +25,8 @@ interface Props {
   onToggleRestPause: () => void;
   onExtendRest: () => void;
   onSwap: (exerciseIndex: number) => void;
+  onSkip: (exerciseIndex: number) => void;
+  onReturn: (exerciseIndex: number) => void;
 }
 
 function clock(ms: number): string {
@@ -71,6 +73,8 @@ export default function TrainScreen({
   onToggleRestPause,
   onExtendRest,
   onSwap,
+  onSkip,
+  onReturn,
 }: Props) {
   const [editing, setEditing] = useState<EditDraft | null>(null);
 
@@ -81,27 +85,102 @@ export default function TrainScreen({
   const rest = restRemaining(session, now);
   const restPaused = Boolean(session.restPausedAt);
 
-  const activeIndex = session.exercises.findIndex((exercise) =>
-    exercise.performed.some((set) => !set.done),
-  );
-  const index = activeIndex === -1 ? session.exercises.length - 1 : activeIndex;
-  const exercise = session.exercises[index];
-  const next = session.exercises[index + 1];
-  const allDone = progress.done === progress.total && progress.total > 0;
+  // Only unskipped, unfinished work is offered. When nothing is left to log,
+  // the trainer shows a review state instead of quietly landing on the last
+  // exercise as if it were current.
+  const activeIndex = pendingExerciseIndex(session);
+  const index = activeIndex;
+  const exercise = activeIndex === -1 ? undefined : session.exercises[activeIndex];
+  const next = activeIndex === -1 ? undefined : session.exercises[activeIndex + 1];
+  const nothingPending = activeIndex === -1;
+  const skippedToday = session.exercises
+    .map((entry, entryIndex) => ({ entry, entryIndex }))
+    .filter(({ entry }) => entry.skipped);
 
   if (!exercise) {
     return (
       <div className="screen flow-screen">
         <header className="flow-header">
           <div className="flow-header__inner">
-            <button className="flow-back" onClick={onMinimize} aria-label="Back to today">
+            <button className="flow-back" onClick={onMinimize} aria-label="Minimize workout">
               <Icon name="arrow_back_ios_new" size={22} />
             </button>
-            <h1 className="flow-title">{session.name}</h1>
+            <h1 className="flow-title">
+              {session.name} <span>({session.durationMin ?? 35} min)</span>
+            </h1>
+            <div className="flow-header__right">
+              <span className="elapsed-chip">
+                <Icon name="timer" size={16} />
+                {clock(elapsedMs(session, now))}
+              </span>
+              <button className="finish-btn" onClick={onFinish}>
+                Finish
+              </button>
+            </div>
           </div>
         </header>
-        <div className="flow-body">
-          <p className="empty-state">This session has no exercises. Finish it or discard it.</p>
+
+        <div className="flow-body" style={{ gap: 14 }}>
+          <section className="card">
+            <h2 style={{ fontSize: 20, letterSpacing: '-0.02em' }}>
+              {session.exercises.length === 0
+                ? 'This session has no exercises'
+                : 'All remaining work is skipped'}
+            </h2>
+            <p className="data-note" style={{ marginTop: 8 }}>
+              {progress.done} of {progress.total} sets completed · {progress.skipped} skipped
+              {progress.pending > 0 ? ` · ${progress.pending} not logged` : ''}. Skipping records
+              nothing, and Finish saves only completed sets.
+            </p>
+          </section>
+
+          {session.exercises.map((entry, entryIndex) => {
+            const done = entry.performed.filter((set) => set.done).length;
+            const pendingSets = entry.performed.filter((set) => !set.done).length;
+            return (
+              <div className="card" key={`${entry.exerciseId}-${entryIndex}`}>
+                <div className="context-row" style={{ borderBottom: 0 }}>
+                  <span>{entry.name}</span>
+                  <span className="tag">
+                    {done} of {entry.performed.length} sets
+                    {entry.skipped ? ' · Skipped' : ''}
+                    {!entry.skipped && pendingSets > 0 ? ' · Not logged' : ''}
+                  </span>
+                </div>
+                {(entry.originalPlannedSets ?? 0) > entry.performed.length && (
+                  <p className="data-note">
+                    Original prescription: {entry.originalPlannedSets} sets. This session carried{' '}
+                    {entry.performed.length}.
+                  </p>
+                )}
+                {entry.skipped && pendingSets > 0 && (
+                  <button className="pill-quiet" onClick={() => onReturn(entryIndex)}>
+                    Return to exercise
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flow-dock flow-dock--edge">
+          <div className="progress-line">
+            <span>Workout progress</span>
+            <strong>
+              {progress.done} of {progress.total} sets
+            </strong>
+          </div>
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{
+                width: `${progress.total === 0 ? 0 : (progress.done / progress.total) * 100}%`,
+              }}
+            />
+          </div>
+          <button className="save-bar" onClick={onFinish}>
+            {progress.done === 0 ? 'Finish or discard' : 'Finish workout'}
+          </button>
         </div>
       </div>
     );
@@ -133,7 +212,7 @@ export default function TrainScreen({
       ? null
       : exercise.performed[activeSet];
 
-  const logLabel = allDone
+  const logLabel = nothingPending
     ? 'Finish workout'
     : activeValues
       ? `Log set ${activeSet + 1} · ${
@@ -446,7 +525,41 @@ export default function TrainScreen({
 
           {exercise.performed.map((set, setIndex) => renderSet(set, setIndex))}
 
+          <button
+            className="pill-quiet"
+            style={{ marginTop: 12 }}
+            onClick={() => onSkip(index)}
+            disabled={!exercise.performed.some((set) => !set.done)}
+          >
+            Skip remaining for today
+          </button>
+          <p className="data-note" style={{ marginTop: 6 }}>
+            Skipping records nothing. The planned sets stay as they are, and you can return to them
+            before you finish.
+          </p>
         </div>
+
+        {skippedToday.length > 0 && (
+          <section aria-label="Skipped today">
+            <div className="sets-head">
+              <h2>Skipped today</h2>
+              <span>Nothing recorded</span>
+            </div>
+            {skippedToday.map(({ entry, entryIndex }) => {
+              const pendingSets = entry.performed.filter((set) => !set.done).length;
+              return (
+                <div className="context-row" key={`skipped-${entryIndex}`}>
+                  <span>
+                    {entry.name} · {pendingSets} {pendingSets === 1 ? 'set' : 'sets'}
+                  </span>
+                  <button className="pill-quiet" onClick={() => onReturn(entryIndex)}>
+                    Return to exercise
+                  </button>
+                </div>
+              );
+            })}
+          </section>
+        )}
 
         {next && (
           <div className="up-next">
@@ -486,7 +599,7 @@ export default function TrainScreen({
         </div>
         <button
           className="save-bar"
-          onClick={editing ? saveEditing : allDone ? onFinish : onLogNext}
+          onClick={editing ? saveEditing : nothingPending ? onFinish : onLogNext}
         >
           {editing ? 'Save set' : logLabel}
         </button>
