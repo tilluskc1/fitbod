@@ -1,7 +1,7 @@
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
-import { formatWeight, unitOf } from '../lib/units';
+import { formatActualWeight, unitOf } from '../lib/units';
 import { exerciseMeta, programSetCount, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
@@ -58,7 +58,7 @@ function coachInsight(last: LastPerformance | null, first: ProgramExercise, unit
   // The load is what was actually logged, never the prescribed one.
   const load =
     last.weight > 0
-      ? ` at ${formatWeight(last.weight, unit, { perSide: first.load === 'each' })}`
+      ? ` at ${formatActualWeight(last.weight, unit, { perSide: first.load === 'each' })}`
       : '';
   const target = first.targetReps?.[0];
   if (target !== undefined && target > Math.min(...last.reps)) {

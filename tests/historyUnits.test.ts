@@ -33,7 +33,7 @@ test('history editor identifies recorded holds as seconds while ordinary kg/lb r
       assert.match(text, /45s prescribed/);
       assert.match(text, /seconds/);
       assert.match(html, /aria-label="Correct reps for set 1 of Floor Press"[^>]*value="9"/);
-      assert.match(html, new RegExp(`aria-label="Correct weight for set 1 of Floor Press"[^>]*value="${unit === 'kg' ? '15' : '33'}"`));
+      assert.match(html, new RegExp(`aria-label="Correct weight for set 1 of Floor Press"[^>]*value="${unit === 'kg' ? '15' : '33.07'}"`));
       assert.match(text, new RegExp(`${unit} ×`));
     }
     assert.deepEqual(state, before, 'unit labels must not mutate canonical values');

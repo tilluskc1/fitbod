@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
-import { formatWeight } from '../lib/units';
+import { formatActualWeight, formatWeight } from '../lib/units';
 import type { Profile, Unit, WorkoutExercise } from '../types';
 import { lastPerformance } from '../lib/plan';
 import type { WorkoutRecord } from '../types';
@@ -252,7 +252,7 @@ export function WhySheet({
         </div>
         <div className="context-row">
           <span>Working load</span>
-          <span>{last ? formatWeight(last.weight, unit) : '—'}</span>
+          <span>{last ? formatActualWeight(last.weight, unit) : '—'}</span>
         </div>
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Today’s target</span>
@@ -310,7 +310,7 @@ export function ExerciseSheet({
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Last recorded</span>
           <span>
-            {last ? `${formatWeight(last.weight, unit)} · ${setText(exerciseId, last.reps)}` : 'No history'}
+            {last ? `${formatActualWeight(last.weight, unit)} · ${setText(exerciseId, last.reps)}` : 'No history'}
           </span>
         </div>
       </div>

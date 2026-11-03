@@ -35,6 +35,12 @@ export function formatWeight(kg: number, unit: Unit, options: { perSide?: boolea
   return `${text} ${unitLabel(unit)}${options.perSide ? ' each' : ''}`;
 }
 
+/** Format a recorded load without rounding it to a planned plate step. */
+export function formatActualWeight(kg: number, unit: Unit, options: { perSide?: boolean } = {}): string {
+  if (kg <= 0) return 'Bodyweight';
+  return `${calibrationInputValue(kg, unit)} ${unitLabel(unit)}${options.perSide ? ' each' : ''}`;
+}
+
 /** Numeric display value without the unit, used for editable inputs. */
 export function inputValue(kg: number, unit: Unit): string {
   if (kg <= 0) return '';

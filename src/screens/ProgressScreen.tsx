@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { loadModeOf, setText, setUnit } from '../data/flagship';
-import { formatWeight, inputValue, toKg, unitLabel } from '../lib/units';
+import { calibrationInputValue, formatActualWeight, toKg, unitLabel } from '../lib/units';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from '../lib/plan';
 import type { Unit, WorkoutFeedback, WorkoutRecord } from '../types';
 import { FEEDBACK_CHOICES, feedbackLabel } from '../lib/feedback';
@@ -118,7 +118,7 @@ export default function ProgressScreen({
   // The program owns per-hand vs total; "18 kg" alone would drop that.
   const loadMode = loadModeOf(activeExerciseId);
   const loadText = (kg: number) =>
-    `${formatWeight(kg, unit, { perSide: loadMode === 'each' })}${kg > 0 && loadMode === 'total' ? ' total' : ''}`;
+    `${formatActualWeight(kg, unit, { perSide: loadMode === 'each' })}${kg > 0 && loadMode === 'total' ? ' total' : ''}`;
   const sessionLabel = (point: { date: string; workoutName: string }) =>
     `${dateParts(point.date).month} ${dateParts(point.date).day} · ${point.workoutName}`;
 
@@ -345,7 +345,7 @@ export default function ProgressScreen({
                                     <input
                                       type="number"
                                       aria-label={`Correct weight for set ${setIndex + 1} of ${exercise.name}`}
-                                      value={inputValue(set.weight, unit)}
+                                      value={calibrationInputValue(set.weight, unit)}
                                       onChange={(event) =>
                                         onCorrect(workout.id, exerciseIndex, setIndex, {
                                           weight: toKg(Number(event.target.value) || 0, unit),
