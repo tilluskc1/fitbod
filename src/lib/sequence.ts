@@ -113,9 +113,10 @@ export function slotProgram(
       weight,
       load: loadModeOf(entry.exerciseId),
       detail: detailOf(entry.exerciseId),
-      // Any external load disappears on a bodyweight-only day; a movement with
-      // no load at all stays available everywhere.
-      requires: catalog?.equipment === 'Bodyweight' ? 'bodyweight' : 'dumbbell',
+      // Generator already checked the saved equipment and support. Adapt only
+      // excludes those movements when today's setup differs from home.
+      requires: catalog?.needs.length === 0 ? 'bodyweight'
+        : catalog?.equipment === 'Dumbbell' ? 'dumbbell' : 'configured',
     };
   });
   return {
@@ -146,10 +147,11 @@ export function advanceAfterFinish(state: AppState, workout: WorkoutRecord): App
  * as a skip (never a workout, never a set) and earns no progression. Repeating
  * the same skip for the same cursor position cannot log a second one.
  */
-export function skipCurrentSlot(state: AppState, now: string): AppState {
+export function skipCurrentSlot(state: AppState, now: string, offered?: ProgramCursor): AppState {
+  const cursor = cursorFor(state);
+  if (state.current || (offered && (offered.revision !== cursor.revision || offered.seq !== cursor.seq))) return state;
   const slot = currentSlot(state);
   if (!slot) return state;
-  const cursor = cursorFor(state);
   const id = `skip:${cursor.revision}:${cursor.seq}`;
   const skips = state.slotSkips ?? [];
   const recorded = skips.some((skip) => skip.id === id);
@@ -180,6 +182,20 @@ export function revisePlan(state: AppState, profile: Profile): AppState {
     plan: buildPlan(profile),
     planRevision: revision,
     programCursor: { revision, seq: 0 },
-    slotSkips: [],
+    slotSkips: state.slotSkips ?? [],
   };
+}
+
+/** Settings that change future prescriptions start a new plan revision. */
+export function updateProfile(state: AppState, patch: Partial<Profile>): AppState {
+  if (!state.profile) return state;
+  const next = { ...state.profile, ...patch };
+  const planInputs = (profile: Profile) => JSON.stringify([
+    profile.goal, profile.experience, profile.daysPerWeek, profile.equipment,
+    profile.support, profile.exclusions, Object.entries(profile.loads).sort(),
+    profile.sessionMinutes,
+  ]);
+  return planInputs(state.profile) === planInputs(next)
+    ? { ...state, profile: next }
+    : revisePlan(state, next);
 }

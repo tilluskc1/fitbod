@@ -24,7 +24,7 @@ import
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A, programSetCount } from './data/flagship';
-import { planRevisionOf, planSlots, revisePlan, skipCurrentSlot, slotAt, slotProgram } from './lib/sequence';
+import { cursorFor, planRevisionOf, planSlots, revisePlan, skipCurrentSlot, slotAt, slotProgram, updateProfile } from './lib/sequence';
 import
  {
   applyCancel,
@@ -343,16 +343,7 @@ export default function App() {
   /* ---------- actions ---------- */
 
   const patchProfile = (patch: Partial<Profile>) => {
-    setState((currentState) => {
-      if (!currentState.profile) return currentState;
-      const nextProfile = { ...currentState.profile, ...patch };
-      // A different number of training days is a new plan revision: future
-      // sessions follow the new sequence, an open session keeps its own work.
-      if (patch.daysPerWeek !== undefined && patch.daysPerWeek !== currentState.profile.daysPerWeek) {
-        return revisePlan(currentState, nextProfile);
-      }
-      return { ...currentState, profile: nextProfile };
-    });
+    setState((currentState) => updateProfile(currentState, patch));
   };
 
   const completeOnboarding = (nextProfile: Profile) => {
@@ -417,7 +408,8 @@ export default function App() {
       setNotice('Finish or discard the open session before skipping to the next slot.');
       return;
     }
-    setState((currentState) => skipCurrentSlot(currentState, new Date().toISOString()));
+    const offered = cursorFor(state);
+    setState((currentState) => skipCurrentSlot(currentState, new Date().toISOString(), offered));
     setNotice('Slot skipped. A skip is not a workout and earns no progression.');
   };
 

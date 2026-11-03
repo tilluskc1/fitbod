@@ -3,6 +3,7 @@ import test from 'node:test';
 import { buildPlan } from '../src/lib/generator.ts';
 import { applyFinish, createSession, logSet, applyCancel } from '../src/lib/session.ts';
 import { adaptWorkout, toWorkoutExercises } from '../src/lib/adapt.ts';
+import { defaultConstraints } from '../src/lib/constraints.ts';
 import {
   advanceAfterFinish,
   currentSlot,
@@ -11,6 +12,7 @@ import {
   revisePlan,
   skipCurrentSlot,
   slotProgram,
+  updateProfile,
 } from '../src/lib/sequence.ts';
 import type { AppState, Profile } from '../src/types.ts';
 
@@ -199,4 +201,53 @@ test('a session finished under an older plan revision does not move the new sequ
   });
   assert.equal(nextSlotIndex(stale), 0);
   assert.equal(stale.programCursor?.seq, 0);
+});
+
+test('a configured barbell plan keeps its actual Push and Pull lifts in Today', () => {
+  const equipped: Profile = {
+    ...profile,
+    equipment: ['Barbell'],
+    support: ['Rack', 'Bench'],
+    loads: { Barbell: [20, 30, 40] },
+  };
+  const state = fresh({ profile: equipped, plan: buildPlan(equipped) });
+  for (const index of [0, 1]) {
+    const program = slotProgram(equipped, planSlots(state.plan)[index], []);
+    const adapted = adaptWorkout(program, defaultConstraints(equipped), equipped.exclusions);
+    assert.deepEqual(adapted.exercises.map((exercise) => exercise.exerciseId), program.exercises.map((exercise) => exercise.exerciseId));
+  }
+});
+
+test('bodyweight override cannot start a configured Pull slot with only core accessories', () => {
+  const equipped: Profile = { ...profile, equipment: ['Barbell'], support: ['Rack', 'Bench'], loads: { Barbell: [20, 30, 40] } };
+  const program = slotProgram(equipped, planSlots(buildPlan(equipped))[1], []);
+  const adapted = adaptWorkout(program, { minutes: 35, equipment: 'bodyweight' }, []);
+  assert.equal(adapted.exercises.length, 0);
+  assert.match(adapted.note, /main movement/i);
+});
+
+test('a replayed Skip for the offered slot advances only once', () => {
+  const state = fresh();
+  const offered = { revision: 1, seq: 0 };
+  const once = skipCurrentSlot(state, '2026-11-02T09:00:00.000Z', offered);
+  const replay = skipCurrentSlot(once, '2026-11-02T09:01:00.000Z', offered);
+  assert.equal(replay.programCursor?.seq, 1);
+  assert.deepEqual(replay.slotSkips, once.slotSkips);
+});
+
+test('plan revision retains skip evidence from earlier revisions', () => {
+  const skipped = skipCurrentSlot(fresh(), '2026-11-02T09:00:00.000Z');
+  const revised = revisePlan(skipped, { ...profile, daysPerWeek: 5 });
+  assert.deepEqual(revised.slotSkips, skipped.slotSkips);
+  assert.equal(revised.planRevision, 2);
+});
+
+test('plan-affecting settings make a new revision without changing active work', () => {
+  const state = fresh();
+  const active = { ...state, current: runSlot(state).history[0] };
+  const revised = updateProfile(active, { equipment: ['Barbell'], support: ['Rack', 'Bench'] });
+  assert.equal(revised.planRevision, 2);
+  assert.equal(revised.programCursor?.seq, 0);
+  assert.deepEqual(revised.current?.exercises, active.current?.exercises);
+  assert.equal(updateProfile(revised, { name: 'New name' }).planRevision, 2);
 });
