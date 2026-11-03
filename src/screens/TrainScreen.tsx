@@ -5,7 +5,8 @@ import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from 
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
-import { displayValue, unitLabel } from '../lib/units';
+import { displayValue, inputValue, toKg, unitLabel } from '../lib/units';
+import { exerciseById } from '../data/exercises';
 import type { PerformedSet, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -14,7 +15,7 @@ interface Props {
   session: WorkoutRecord;
   history: WorkoutRecord[];
   now: number;
-  /** Weights the chosen setup owns. Never free-typed. */
+  /** Confirmed dumbbell weights for the chosen setup. */
   loadOptions: number[];
   /** Display unit. Records stay in kilograms. */
   unit: Unit;
@@ -188,6 +189,7 @@ export default function TrainScreen({
 
   const activeSet = exercise.performed.findIndex((set) => !set.done);
   const mode = loadModeOf(exercise.exerciseId);
+  const equipment = exerciseById(exercise.exerciseId)?.equipment ?? (mode === 'none' ? 'Bodyweight' : 'Dumbbell');
   const detail = detailOf(exercise.exerciseId);
   const weightLabel =
     mode === 'total'
@@ -205,7 +207,18 @@ export default function TrainScreen({
     repsTarget(exercise.exerciseId, exercise.planned.length, exercise.planned) ??
     exercise.planned.map((set) => set.reps).join(' · ');
   const targetWeight = exercise.planned[0]?.weight ?? 0;
-  const canPickWeight = mode !== 'none' && loadOptions.length > 0;
+  const canPickWeight = equipment === 'Dumbbell' && loadOptions.length > 0;
+  const canEnterWeight = mode !== 'none' && equipment !== 'Dumbbell';
+  const loadEntry = (weight: number, update: (weight: number) => void) => canEnterWeight ? (
+    <input type="number" min="0" step="any" inputMode="decimal"
+      aria-label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`}
+      value={inputValue(weight, unit)}
+      onChange={(event) => {
+        const value = Number(event.target.value);
+        if (event.target.value === '') update(0);
+        else if (Number.isFinite(value) && value >= 0) update(toKg(value, unit));
+      }} />
+  ) : null;
 
   const activeValues =
     activeSet === -1
@@ -260,7 +273,7 @@ export default function TrainScreen({
           <div className="aw-field">
             <div className="aw-field__label">
               <span>Weight ({weightLabel})</span>
-              <span className="aw-field__note">{canPickWeight ? 'Dumbbell' : 'Bodyweight'}</span>
+              <span className="aw-field__note">{equipment}</span>
             </div>
             {canPickWeight ? (
               <div className="weight-pills">
@@ -274,7 +287,7 @@ export default function TrainScreen({
                   </button>
                 ))}
               </div>
-            ) : (
+            ) : canEnterWeight ? loadEntry(draft.weight, (weight) => patchDraft({ weight })) : (
               <p style={{ fontSize: 14, color: 'var(--on-surface-variant)' }}>Bodyweight</p>
             )}
           </div>
@@ -375,7 +388,7 @@ export default function TrainScreen({
         <div className="aw-field">
           <div className="aw-field__label">
             <span>Weight ({weightLabel})</span>
-            <span className="aw-field__note">{canPickWeight ? 'Dumbbell' : 'Bodyweight'}</span>
+            <span className="aw-field__note">{equipment}</span>
           </div>
           {canPickWeight ? (
             <div className="weight-pills">
@@ -389,7 +402,7 @@ export default function TrainScreen({
                 </button>
               ))}
             </div>
-          ) : (
+          ) : canEnterWeight ? loadEntry(set.weight, (weight) => onUpdateSet(index, setIndex, { weight })) : (
             <p style={{ fontSize: 14, color: 'var(--on-surface-variant)' }}>Bodyweight</p>
           )}
         </div>

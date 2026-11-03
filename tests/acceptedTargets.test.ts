@@ -77,6 +77,23 @@ test('accepted weighted catalog swaps keep their saved load and equipment in Tod
   }
 });
 
+test('barbell logger offers calibration without fixture dumbbell weights', async () => {
+  const current = session();
+  current.exercises = [{ exerciseId: 'barbell-row', name: 'Barbell Row', planned: [{ weight: 0, reps: 8 }], performed: [{ weight: 0, reps: 8, done: false }] }];
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
+    const html = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
+      loadOptions: [10, 15, 18], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
+      onToggleRestPause: noop, onExtendRest: noop, onSwap: noop, onSkip: noop, onReturn: noop }));
+    assert.match(html, /Weight \(kg total\)/);
+    assert.match(html, /Barbell/);
+    assert.match(html, /Enter barbell load/);
+    assert.doesNotMatch(html, /weight-pills/);
+    assert.doesNotMatch(html, /Dumbbell/);
+  } finally { await server.close(); }
+});
+
 
 test('accepted target formatting preserves unchanged ranges, hold units and explicit changed reps', () => {
   assert.equal(repsTarget('goblet-squat', 2, [{ reps: 8 }, { reps: 8 }]), '8–10 reps');
