@@ -1,5 +1,6 @@
 import type { WorkoutFeedback, WorkoutRecord } from '../types';
 import { FEEDBACK_CHOICES } from '../lib/feedback';
+import type { ProgressionLine } from '../lib/liveProgression';
 import { ArrowIcon, CheckIcon } from '../components/ui/Icons';
 
 /** The write covering this recap's answer, as the app last observed it. */
@@ -10,6 +11,8 @@ export interface FeedbackWrite {
 
 interface Props {
   workout: WorkoutRecord;
+  /** Original → adapted → actual → next, with the reason, per exercise. */
+  progression: ProgressionLine[];
   feedbackWrite: FeedbackWrite | null;
   onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
   onRetryFeedback: () => void;
@@ -27,6 +30,7 @@ function minutesOf(workout: WorkoutRecord): number {
 
 export default function RecapScreen({
   workout,
+  progression,
   feedbackWrite,
   onFeedback,
   onRetryFeedback,
@@ -127,6 +131,28 @@ export default function RecapScreen({
             {skippedCount} {skippedCount === 1 ? 'set was' : 'sets were'} skipped today. Nothing was
             recorded for that work, and it is not owed later.
           </p>
+        )}
+
+        {progression.length > 0 && (
+          <section aria-label="Progress by exercise">
+            <div className="list-head">
+              <h2>What moved</h2>
+              <span>From your records</span>
+            </div>
+            {progression.map((line) => (
+              <div className="card" key={line.exerciseId} style={{ marginBottom: 10 }}>
+                <div className="context-row" style={{ borderBottom: 0 }}>
+                  <strong>{line.name}</strong>
+                  <span className="tag">{line.adapted}</span>
+                </div>
+                <p className="data-note">
+                  Program: {line.original} · Logged: {line.performed ?? 'nothing logged'}
+                </p>
+                <p className="data-note">Next: {line.next}</p>
+                <p className="data-note">{line.reason}</p>
+              </div>
+            ))}
+          </section>
         )}
 
         <p className="recap-note">

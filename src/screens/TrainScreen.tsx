@@ -18,6 +18,8 @@ interface Props {
   loadOptions: number[];
   /** Display unit. Records stay in kilograms. */
   unit: Unit;
+  /** One factual reason per exercise for today's computed target. */
+  targetNotes?: Record<string, string>;
   onMinimize: () => void;
   onFinish: () => void;
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => void;
@@ -66,6 +68,7 @@ export default function TrainScreen({
   now,
   loadOptions,
   unit,
+  targetNotes,
   onMinimize,
   onFinish,
   onUpdateSet,
@@ -487,6 +490,12 @@ export default function TrainScreen({
                 Today’s target: {targetReps}
                 {targetWeight > 0 ? ` @ ${showWeight(targetWeight)} ${weightLabel}` : ''}
               </div>
+              {targetNotes?.[exercise.exerciseId] && (
+                <div className="aw-history__line">
+                  <Icon name="info" size={16} />
+                  {targetNotes[exercise.exerciseId]}
+                </div>
+              )}
             </div>
           </div>
         </section>

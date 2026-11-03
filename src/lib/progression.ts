@@ -172,6 +172,7 @@ export type ProgressionBasis =
   | 'load-increase'
   | 'rep-increase'
   | 'repeat'
+  | 'mixed-load'
   | 'hold';
 
 export interface Prescription {
@@ -227,6 +228,18 @@ export function prescribeExercise(
       weight: workingWeight,
       reps: clamp(lowestReps, range.min, range.max),
       basis: 'repeat',
+    };
+  }
+
+  // Working sets at different loads are not one qualifying load: the heaviest
+  // set cannot be used to earn a step the session did not complete uniformly.
+  const distinctLoads = new Set(last.done.map((set) => round(set.weight)));
+  if (distinctLoads.size > 1) {
+    return {
+      ...base,
+      weight: workingWeight,
+      reps: clamp(lowestReps, range.min, range.max),
+      basis: 'mixed-load',
     };
   }
 
@@ -286,6 +299,8 @@ export function describePrescription(prescription: Prescription, unit: Unit = 'k
       return `${when}: ${setsLabel} at ${range.max} reps, ${fmtLoad(workWeight, equipment, unit)}. One step up (+${fmtAmount(increment, unit)} ${unitLabel(unit)}); reps restart at ${range.min}.`;
     case 'rep-increase':
       return `${when}: ${fmtLoad(workWeight, equipment, unit)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
+    case 'mixed-load':
+      return `${when}: ${setsLabel} at different loads (heaviest ${fmtLoad(workWeight, equipment, unit)}). The load holds at ${fmtLoad(workWeight, equipment, unit)} — use one working load for every set to earn the next step.`;
     case 'repeat':
       return last.done.length === 0
         ? `${when} was not logged. Repeating the same prescription.`
