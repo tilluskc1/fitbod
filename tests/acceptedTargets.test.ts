@@ -91,6 +91,8 @@ test('barbell logger offers calibration without fixture dumbbell weights', async
     assert.match(html, /Enter barbell load/);
     assert.doesNotMatch(html, /weight-pills/);
     assert.doesNotMatch(html, /Dumbbell/);
+    assert.match(html, /Load not set · Barbell/);
+    assert.doesNotMatch(html, /Bodyweight · Barbell/);
   } finally { await server.close(); }
 });
 

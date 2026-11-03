@@ -486,7 +486,7 @@ export default function TrainScreen({
               <Icon name="fitness_center" size={18} />
               {(plannedTarget?.weight ?? 0) > 0
                 ? `${showWeight(plannedTarget.weight)} ${weightLabel} · ${detail}`
-                : `Bodyweight · ${detail}`}
+                : `${mode === 'none' ? 'Bodyweight' : 'Load not set'} · ${detail}`}
             </div>
             <div className="aw-history">
               <div className="aw-history__line">
