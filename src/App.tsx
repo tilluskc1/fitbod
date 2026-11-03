@@ -860,6 +860,16 @@ export default function App() {
             setTab(next);
             setView('tabs');
           }}
+          workoutAction={
+            current
+              ? /* (#20) An active session is never replaced from here: reopen it. */
+                { kind: 'resume' as const, onActivate: () => setView('train') }
+              : {
+                  kind: 'start' as const,
+                  onActivate: startWorkout,
+                  disabled: adapted.exercises.length === 0,
+                }
+          }
         />
       </>
     );
