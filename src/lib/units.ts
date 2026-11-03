@@ -18,7 +18,7 @@ export function toDisplay(kg: number, unit: Unit): number {
 /** Convert a typed display value back into canonical kilograms. */
 export function toKg(value: number, unit: Unit): number {
   const kg = unit === 'lb' ? value * KG_PER_LB : value;
-  return Math.round(kg * 100) / 100;
+  return Math.round(kg * 1000) / 1000;
 }
 
 /** Display value snapped to a half unit so inputs read like real plates. */

@@ -16,5 +16,5 @@ test('readouts use one decimal only when the plate needs it', () => {
 
 test('editable loads keep calibrated precision without plate rounding', () => {
   assert.equal(calibrationInputValue(42.3, 'kg'), '42.3');
-  assert.equal(calibrationInputValue(toKg(95.3, 'lb'), 'lb'), '95.31');
+  assert.equal(calibrationInputValue(toKg(95.3, 'lb'), 'lb'), '95.3');
 });
