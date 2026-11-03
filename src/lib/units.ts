@@ -51,5 +51,6 @@ export function inputValue(kg: number, unit: Unit): string {
 /** Preserve a calibrated load's stored precision when opening its editor. */
 export function calibrationInputValue(kg: number, unit: Unit): string {
   if (kg <= 0) return '';
+  if (unit === 'kg') return String(kg);
   return String(Math.round(toDisplay(kg, unit) * 100) / 100);
 }
