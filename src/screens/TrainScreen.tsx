@@ -25,6 +25,7 @@ interface Props {
   onToggleRestPause: () => void;
   onExtendRest: () => void;
   onSwap: (exerciseIndex: number) => void;
+  onOpenActions: (exerciseIndex: number) => void;
   onSkip: (exerciseIndex: number) => void;
   onReturn: (exerciseIndex: number) => void;
 }
@@ -73,6 +74,7 @@ export default function TrainScreen({
   onToggleRestPause,
   onExtendRest,
   onSwap,
+  onOpenActions,
   onSkip,
   onReturn,
 }: Props) {
@@ -464,8 +466,24 @@ export default function TrainScreen({
                   <Icon name="swap_horiz" size={16} />
                   Swap
                 </button>
+                {/* The same menu the row opens: instructions, history and the
+                    rest of this exercise's actions. */}
+                <button
+                  className="aw-more"
+                  onClick={() => onOpenActions(index)}
+                  aria-label={`More actions for ${exercise.name}`}
+                  aria-haspopup="dialog"
+                >
+                  <Icon name="more_vert" size={18} />
+                </button>
               </div>
-              <h2 className="aw-exercise__name">{exercise.name}</h2>
+              <button
+                className="aw-exercise__name"
+                onClick={() => onOpenActions(index)}
+                aria-haspopup="dialog"
+              >
+                {exercise.name}
+              </button>
             </div>
           </div>
           <div className="aw-exercise__info">

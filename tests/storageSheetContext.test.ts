@@ -35,7 +35,7 @@ test('adopting another tab closes prescription sheets even when duplicate IDs su
     const source = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
     const body = source.match(/const onStorage = \(event: StorageEvent\) => \{([\s\S]*?)\n    \};/)![1];
     const noop = () => {};
-    for (const kind of ['exercise', 'why', 'day', 'swap', 'settings', 'adjust', 'none']) {
+    for (const kind of ['exercise', 'actions', 'why', 'day', 'swap', 'settings', 'adjust', 'none']) {
       for (const exerciseIndex of [0, 1]) {
         let sheet = { kind, exerciseId: 'dumbbell-floor-press', exerciseIndex };
         let adopted = state;
@@ -54,7 +54,7 @@ test('adopting another tab closes prescription sheets even when duplicate IDs su
         assert.equal(adopted.current?.exercises[1].exerciseId, 'goblet-squat');
         assert.equal(adopted.current?.exercises[0].performed[0].weight, 20);
         assert.equal(adopted.current?.exercises[0].performed[0].reps, 10);
-        assert.equal(sheet.kind, ['exercise', 'why', 'day', 'swap'].includes(kind) ? 'none' : kind,
+        assert.equal(sheet.kind, ['exercise', 'actions', 'why', 'day', 'swap'].includes(kind) ? 'none' : kind,
           `${kind} at index${exerciseIndex} must not retain a stale prescription context`);
       }
     }
