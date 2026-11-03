@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, EXERCISES, SUPPORT_OPTIONS } from '../data/exercises';
-import { FULL_BODY_A, programExercise, programSetCount, repsTarget, setText } from '../data/flagship';
+import { programExercise, programSetCount, repsTarget, setText } from '../data/flagship';
+import type { Program } from '../data/flagship';
 import { capabilitiesFor, provides } from '../lib/capabilities';
 import { prescribeExercise } from '../lib/progression';
 import { formatWeight } from '../lib/units';
@@ -10,6 +11,9 @@ import { ArrowIcon, ChevronIcon, SettingsIcon } from '../components/ui/Icons';
 
 interface Props {
   profile: Profile;
+  /** The slot the sequence is up to: the day this week actually runs. */
+  program: Program;
+  slotLabel?: string;
   history: WorkoutRecord[];
   unit: Unit;
   now: Date;
@@ -22,6 +26,8 @@ const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 export default function PlanScreen({
   profile,
+  program,
+  slotLabel,
   history,
   unit,
   now,
@@ -30,8 +36,8 @@ export default function PlanScreen({
   onOpenLibrary,
 }: Props) {
   const [tab, setTab] = useState<'week' | 'equipment'>('week');
-  const minutes = profile.sessionMinutes ?? 35;
-  const sessionSets = programSetCount(FULL_BODY_A);
+  const minutes = program.minutes;
+  const sessionSets = programSetCount(program);
 
   const week = useMemo(() => {
     const start = new Date(now);
@@ -70,7 +76,7 @@ export default function PlanScreen({
         </button>
       </header>
       <p className="page-sub">
-        {FULL_BODY_A.exercises.length} exercises · {sessionSets} sets · {minutes} minutes ·{' '}
+        {program.exercises.length} exercises · {sessionSets} sets · {minutes} minutes ·{' '}
         {profile.equipment.length === 0 ? 'Bodyweight' : profile.equipment.length >= 3 ? 'Full gym' : 'Home'}
       </p>
 
@@ -104,10 +110,12 @@ export default function PlanScreen({
             <div className="plan-item">
               <span className="plan-index">01</span>
               <div>
-                <span className="plan-kicker">UP NEXT</span>
-                <strong className="plan-name">{FULL_BODY_A.name}</strong>
+                <span className="plan-kicker">
+                  UP NEXT{slotLabel ? ` · ${slotLabel.toUpperCase()}` : ''}
+                </span>
+                <strong className="plan-name">{program.name}</strong>
                 <span className="plan-meta">
-                  {minutes} min · {FULL_BODY_A.exercises.length} exercises · {sessionSets} sets
+                  {minutes} min · {program.exercises.length} exercises · {sessionSets} sets
                 </span>
                 <span className="plan-foot">
                   Your selected equipment

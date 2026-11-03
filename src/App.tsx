@@ -3,8 +3,6 @@ import
 import
  { downloadText } from './lib/download';
 import
- { buildPlan } from './lib/generator';
-import
  { activeOverride, dayKey, minutesOf } from './lib/plan';
 import
  {
@@ -25,8 +23,8 @@ import
  { defaultConstraints } from './lib/constraints';
 import
  type { ConstraintNotice } from './lib/constraints';
-import
- { FULL_BODY_A, programSetCount } from './data/flagship';
+import  { FULL_BODY_A, programSetCount } from './data/flagship';
+import { planRevisionOf, planSlots, revisePlan, skipCurrentSlot, slotAt, slotProgram } from './lib/sequence';
 import
  {
   applyCancel,
@@ -294,14 +292,32 @@ export default function App() {
   }, [override, profile]);
 
   const exclusions = profile?.exclusions ?? NO_EXCLUSIONS;
+  /** The slot the sequence is up to: the real A/B/C day, not a repeated fixture. */
+  const slot = useMemo(
+    () => slotAt(state.plan, state.planRevision, state.programCursor),
+    [state.plan, state.planRevision, state.programCursor],
+  );
+  const slotLabel = useMemo(() => {
+    const slots = planSlots(state.plan);
+    return slot && slots.length > 1 ? `Slot ${slot.index + 1} of ${slots.length}` : undefined;
+  }, [slot, state.plan]);
+  /**
+   * The slot's own program, prescribed from this user's plan and history. One
+   * value feeds Today, the review, the logger and the sheets, so no screen can
+   * describe work the next one will not ask for.
+   */
+  const program = useMemo(
+    () => (profile && slot ? slotProgram(profile, slot, state.history) : FULL_BODY_A),
+    [profile, slot, state.history],
+  );
   const adapted = useMemo(
-    () => adaptWorkout(FULL_BODY_A, constraints, exclusions),
-    [constraints, exclusions],
+    () => adaptWorkout(program, constraints, exclusions),
+    [program, constraints, exclusions],
   );
 
   const pendingAdapted = useMemo(
-    () => (pending ? adaptWorkout(FULL_BODY_A, pending.constraints, exclusions) : null),
-    [pending, exclusions],
+    () => (pending ? adaptWorkout(program, pending.constraints, exclusions) : null),
+    [pending, program, exclusions],
   );
 
   const current = state.current;
@@ -327,18 +343,21 @@ export default function App() {
   /* ---------- actions ---------- */
 
   const patchProfile = (patch: Partial<Profile>) => {
-    setState((currentState) =>
-      currentState.profile
-        ? { ...currentState, profile: { ...currentState.profile, ...patch } }
-        : currentState,
-    );
+    setState((currentState) => {
+      if (!currentState.profile) return currentState;
+      const nextProfile = { ...currentState.profile, ...patch };
+      // A different number of training days is a new plan revision: future
+      // sessions follow the new sequence, an open session keeps its own work.
+      if (patch.daysPerWeek !== undefined && patch.daysPerWeek !== currentState.profile.daysPerWeek) {
+        return revisePlan(currentState, nextProfile);
+      }
+      return { ...currentState, profile: nextProfile };
+    });
   };
 
   const completeOnboarding = (nextProfile: Profile) => {
     setState((currentState) => ({
-      ...currentState,
-      profile: nextProfile,
-      plan: buildPlan(nextProfile),
+      ...revisePlan(currentState, nextProfile),
       current: null,
       todayOverride: null,
     }));
@@ -347,10 +366,17 @@ export default function App() {
 
   /** One creation path for every start, so preview and logger can never disagree. */
   const beginSession = (workout: ReturnType<typeof adaptWorkout>) => {
+    // The link back to the slot is what makes completion advance once, and
+    // only for the plan it was started under.
+    const revision = planRevisionOf(state);
+    const cursor = state.programCursor;
     const session = createSession({
       id: uid(),
       name: workout.name,
-      dayIndex: 0,
+      dayIndex: slot?.index ?? 0,
+      slotId: slot?.id,
+      slotSeq: cursor && cursor.revision === revision ? cursor.seq : 0,
+      planRevision: revision,
       exercises: toWorkoutExercises(workout),
       now: new Date().toISOString(),
       durationMin: workout.minutes,
@@ -364,7 +390,7 @@ export default function App() {
    * so the preview, the review and the logger can never disagree.
    */
   const startSession = (next: Constraints): boolean => {
-    const workout = adaptWorkout(FULL_BODY_A, next, profile?.exclusions ?? []);
+    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
     if (workout.exercises.length === 0) {
       setNotice('No movement in this workout can be done with that setup.');
       return false;
@@ -382,12 +408,25 @@ export default function App() {
     startSession(constraints);
   };
 
+  /**
+   * Skip the slot on offer. Explicit only: nothing skips because a date passed,
+   * and a skip is recorded apart from history so it counts as no training.
+   */  const skipTodaySlot = () => {
+    if (!slot) return;
+    if (current) {
+      setNotice('Finish or discard the open session before skipping to the next slot.');
+      return;
+    }
+    setState((currentState) => skipCurrentSlot(currentState, new Date().toISOString()));
+    setNotice('Slot skipped. A skip is not a workout and earns no progression.');
+  };
+
   /** Explicit discard consent from the in-app sheet (#19) runs the replacement once. */
   const discardAndBegin = () => {
     const next = replacePrompt;
     setReplacePrompt(null);
     if (!next) return;
-    const workout = adaptWorkout(FULL_BODY_A, next, profile?.exclusions ?? []);
+    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
     if (workout.exercises.length > 0) beginSession(workout);
   };
 
@@ -436,7 +475,7 @@ export default function App() {
     };
     // An open session keeps its completed sets: the adaptation replaces only
     // the pending prescriptions, so adjusting mid-workout never discards work.
-    const workout = adaptWorkout(FULL_BODY_A, next, profile?.exclusions ?? []);
+    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
     if (current) {
       if (workout.exercises.length === 0) {
         setNotice('No movement in this workout can be done with that setup.');
@@ -467,7 +506,7 @@ export default function App() {
   const restoreOriginal = () => {
     setState((currentState) => {
       const original = adaptWorkout(
-        FULL_BODY_A,
+        program,
         currentState.profile ? defaultConstraints(currentState.profile) : DEFAULT_CONSTRAINTS,
         currentState.profile?.exclusions ?? [],
       );
@@ -781,7 +820,7 @@ export default function App() {
       />
     ) : view === 'adapt' && pendingAdapted && pending ? (
       <AdaptScreen
-        originalSets={programSetCount(FULL_BODY_A)}
+        originalSets={programSetCount(program)}
         adapted={pendingAdapted}
         constraints={pending.constraints}
         notices={pendingNotices}
@@ -804,7 +843,9 @@ export default function App() {
         {tab === 'today' && (
           <TodayScreen
             profile={profile}
-            program={FULL_BODY_A}
+            program={program}
+            slotLabel={slotLabel}
+            onSkipSlot={skipTodaySlot}
             adapted={adapted}
             equipment={constraints.equipment}
             adjusted={Boolean(override)}
@@ -824,6 +865,8 @@ export default function App() {
         )}
         {tab === 'plan' && (            <PlanScreen
             profile={profile}
+            program={program}
+            slotLabel={slotLabel}
             history={state.history}
             unit={unit}
             now={today}
@@ -903,7 +946,7 @@ export default function App() {
       {sheet.kind === 'adjust' && (
         <AdjustSheet
           constraints={pending?.constraints ?? constraints}
-          originalMinutes={FULL_BODY_A.minutes}
+          originalMinutes={program.minutes}
           onClose={() => {
             setPending(null);
             setPendingNotices([]);
@@ -1012,7 +1055,7 @@ export default function App() {
       {replacePrompt && current && (
         <DiscardSessionSheet
           currentName={current.name}
-          nextName={adaptWorkout(FULL_BODY_A, replacePrompt, profile?.exclusions ?? []).name}
+          nextName={adaptWorkout(program, replacePrompt, profile?.exclusions ?? []).name}
           onDiscard={discardAndBegin}
           onKeep={() => setReplacePrompt(null)}
           onClose={() => setReplacePrompt(null)}

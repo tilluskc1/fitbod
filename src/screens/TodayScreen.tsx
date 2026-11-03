@@ -26,6 +26,10 @@ interface Props {
   onRestore: () => void;
   onOpenSettings: () => void;
   onOpenExercise: (exerciseId: string, exerciseIndex: number) => void;
+  /** "Slot 2 of 3" when the program has more than one day. */
+  slotLabel?: string;
+  /** Explicit skip of the slot on offer. Absent means the plan has no sequence. */
+  onSkipSlot?: () => void;
 }
 
 function greeting(now: Date): string {
@@ -79,6 +83,8 @@ export default function TodayScreen({
   onRestore,
   onOpenSettings,
   onOpenExercise,
+  slotLabel,
+  onSkipSlot,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -148,6 +154,12 @@ export default function TodayScreen({
               <Icon name="timer" size={17} />
               {estimated < adapted.minutes && !current ? '≈' : ''}
               {minutes} min <span aria-hidden="true">·</span> {setup.short}
+              {slotLabel && (
+                <>
+                  {' '}
+                  <span aria-hidden="true">·</span> {slotLabel}
+                </>
+              )}
             </span>
           </span>
         </section>
@@ -179,6 +191,12 @@ export default function TodayScreen({
               <Icon name="info" size={16} />
               Why this target
             </button>
+            {onSkipSlot && !current && (
+              <button className="text-action" onClick={onSkipSlot}>
+                <Icon name="arrow_forward" size={16} />
+                Skip this session
+              </button>
+            )}
           </div>
         </section>
 

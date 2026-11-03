@@ -11,6 +11,9 @@ export const EMPTY_STATE: AppState = {
   history: [],
   current: null,
   todayOverride: null,
+  planRevision: 0,
+  programCursor: { revision: 0, seq: 0 },
+  slotSkips: [],
 };
 
 interface Envelope {
@@ -361,6 +364,14 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
       ? importedActive ?? localActive
       : localActive ?? importedActive;
 
+  // The sequence travels with the plan it belongs to. A backup of the same
+  // revision can only move the cursor forward; a different plan brings its own.
+  const cursorSeq = Math.max(
+    current.programCursor?.seq ?? 0,
+    imported.programCursor?.seq ?? 0,
+  );
+  const sameRevision = (current.planRevision ?? 0) === (imported.planRevision ?? 0);
+
   return {
     state: {
       profile: imported.profile ?? current.profile,
@@ -368,6 +379,11 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
       history,
       current: active,
       todayOverride: current.todayOverride ?? null,
+      planRevision: imported.plan.length > 0 ? imported.planRevision ?? 0 : current.planRevision ?? 0,
+      programCursor: sameRevision
+        ? { revision: imported.planRevision ?? current.planRevision ?? 0, seq: cursorSeq }
+        : imported.programCursor ?? current.programCursor ?? { revision: 0, seq: 0 },
+      slotSkips: imported.slotSkips?.length ? imported.slotSkips : current.slotSkips ?? [],
     },
     summary: {
       newWorkouts: imported.history.length - duplicateWorkouts,
