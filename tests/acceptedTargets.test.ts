@@ -96,6 +96,20 @@ test('barbell logger offers calibration without fixture dumbbell weights', async
   } finally { await server.close(); }
 });
 
+test('barbell calibration field opens with precise saved kilograms', async () => {
+  const current = session();
+  current.exercises = [{ exerciseId: 'barbell-row', name: 'Barbell Row',
+    planned: [{ weight: 0, reps: 8 }], performed: [{ weight: 42.3, reps: 8, done: false }] }];
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
+    const html = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
+      loadOptions: [], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
+      onToggleRestPause: noop, onExtendRest: noop, onSwap: noop, onSkip: noop, onReturn: noop }));
+    assert.match(html, /aria-label="Enter barbell load \(kg total\)"[^>]*value="42\.3"/);
+  } finally { await server.close(); }
+});
+
 
 test('accepted target formatting preserves unchanged ranges, hold units and explicit changed reps', () => {
   assert.equal(repsTarget('goblet-squat', 2, [{ reps: 8 }, { reps: 8 }]), '8–10 reps');

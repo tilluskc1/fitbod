@@ -5,7 +5,7 @@ import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from 
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
-import { displayValue, inputValue, toKg, unitLabel } from '../lib/units';
+import { calibrationInputValue, displayValue, toKg, unitLabel } from '../lib/units';
 import { exerciseById } from '../data/exercises';
 import type { PerformedSet, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
@@ -212,7 +212,7 @@ export default function TrainScreen({
   const loadEntry = (weight: number, update: (weight: number) => void) => canEnterWeight ? (
     <input type="number" min="0" step="any" inputMode="decimal"
       aria-label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`}
-      value={inputValue(weight, unit)}
+      defaultValue={calibrationInputValue(weight, unit)}
       onChange={(event) => {
         const value = Number(event.target.value);
         if (event.target.value === '') update(0);

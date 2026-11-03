@@ -41,3 +41,9 @@ export function inputValue(kg: number, unit: Unit): string {
   const value = displayValue(kg, unit);
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
+
+/** Preserve a calibrated load's stored precision when opening its editor. */
+export function calibrationInputValue(kg: number, unit: Unit): string {
+  if (kg <= 0) return '';
+  return String(Math.round(toDisplay(kg, unit) * 100) / 100);
+}
