@@ -28,7 +28,7 @@ test('Today shows the accepted active targets instead of a recomputed program', 
       adapted: adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' }),
       equipment: 'home', adjusted: false, history: [], current,
       now: new Date('2026-10-31T10:10:00.000Z'),
-      onStart: noop, onResume: noop, onAdjust: noop, onWhy: noop, onRestore: noop,
+      onPreview: noop, onAdjust: noop, onWhy: noop, onRestore: noop,
       onOpenSettings: noop, onOpenExercise: noop,
     }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
@@ -55,7 +55,7 @@ test('Today preserves the actual fractional load in last performance', async () 
       profile: { goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
         equipment: ['Dumbbell'], support: [], exclusions: [], loads: {}, name: 'Today review' },
       program: FULL_BODY_A, adapted, equipment: 'home', adjusted: false, history, current: null,
-      now: new Date('2026-11-01T10:10:00.000Z'), onStart: noop, onResume: noop,
+      now: new Date('2026-11-01T10:10:00.000Z'), onPreview: noop,
       onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop,
     }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');

@@ -328,3 +328,30 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
       return 'First time — no history yet.';
   }
 }
+
+/**
+ * Today's coach line: the same prescription as the target, in about a dozen
+ * words. Loads read as `describePrescription` reads them: a rack load exactly
+ * as the target line, a typed off-rack load at its stored precision.
+ */
+export function coachLine(prescription: Prescription, unit: Unit): string {
+  const { basis, last, equipment, weight, reps, available } = prescription;
+  if (!last) return 'First time on this one. Start light, log what you lift.';
+  const today = weight > 0 ? `${fmtLoad(weight, equipment, unit, available)} for ${reps}` : `${reps} reps`;
+  const owned = last.done.length ? Math.max(...last.done.map((set) => set.weight)) : 0;
+  switch (basis) {
+    case 'load-increase':
+      return `You owned ${fmtLoad(owned, equipment, unit, available)}. Today: ${today}.`;
+    case 'rep-increase':
+      return `Add a rep: ${today}.`;
+    case 'mixed-load':
+      return `One load for every set: ${today}.`;
+    case 'hold':
+      return equipment === 'Bodyweight' ? `Top of the range — own ${today}.` : `Top of your rack — own ${today}.`;
+    case 'repeat':
+      return last.done.length === 0 ? `Last time wasn't logged. Same plan: ${today}.` : `Same as last time: ${today}.`;
+    case 'first-time':
+    default:
+      return 'First time on this one. Start light, log what you lift.';
+  }
+}

@@ -122,6 +122,7 @@ type SheetState =
   | { kind: 'settings' }
   | { kind: 'exercise'; exerciseId: string; exerciseIndex: number }
   | { kind: 'day'; dayIndex: number }
+  | { kind: 'preview' }
   | { kind: 'why'; exerciseId: string; exerciseIndex: number }
   | { kind: 'finish' }
   | { kind: 'swap'; exerciseIndex: number };
@@ -881,8 +882,7 @@ export default function App() {
             history={state.history}
             current={current}
             now={today}
-            onStart={startWorkout}
-            onResume={() => setView('train')}
+            onPreview={() => setSheet({ kind: 'preview' })}
             onAdjust={() => setSheet({ kind: 'adjust' })}
             onWhy={() =>
               setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
@@ -1032,17 +1032,20 @@ export default function App() {
               planned={exercise.planned}
               history={state.history}
               unit={unit}
+              reason={targetNotes[exercise.exerciseId]}
               onClose={closeSheet}
             />
           );
         })()}
 
-      {sheet.kind === 'day' && (
+      {(sheet.kind === 'day' || sheet.kind === 'preview') && (
         <DaySheet
           name={current?.name ?? adapted.name}
           minutes={current?.durationMin ?? minutes}
           exercises={todayExercises}
           unit={unit}
+          // The tab bar's start: the one validated path (startSession).
+          onStart={sheet.kind === 'preview' && !current ? () => { closeSheet(); startWorkout(); } : undefined}
           onClose={closeSheet}
         />
       )}
