@@ -75,6 +75,7 @@ import
  { PhoneFrame, TabBar } from './components/ui/Chrome';
 import
  type { Tab } from './components/ui/Chrome';
+import { tabBarAction } from './lib/tabBarAction';
 import
  TodayScreen from './screens/TodayScreen';
 import
@@ -860,16 +861,10 @@ export default function App() {
             setTab(next);
             setView('tabs');
           }}
-          workoutAction={
-            current
-              ? /* (#20) An active session is never replaced from here: reopen it. */
-                { kind: 'resume' as const, onActivate: () => setView('train') }
-              : {
-                  kind: 'start' as const,
-                  onActivate: startWorkout,
-                  disabled: adapted.exercises.length === 0,
-                }
-          }
+          workoutAction={{
+            ...tabBarAction(current, adapted),
+            onActivate: current ? () => setView('train') : startWorkout,
+          }}
         />
       </>
     );

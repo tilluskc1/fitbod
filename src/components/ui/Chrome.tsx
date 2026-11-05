@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Icon from './Icon';
+import type { TabBarActionKind } from '../../lib/tabBarAction';
 
 export type Tab = 'today' | 'plan' | 'progress' | 'coach';
 
@@ -12,14 +13,11 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 
 export type TabBarAction = {
   /** What the action does now: begin today's workout or reopen the live one. */
-  kind: 'start' | 'resume';
+  kind: TabBarActionKind;
+  label: string;
+  name: string;
   onActivate: () => void;
   disabled?: boolean;
-};
-
-const ACTION_META: Record<TabBarAction['kind'], { label: string; name: string }> = {
-  start: { label: 'Start', name: 'Start workout' },
-  resume: { label: 'Resume', name: 'Resume workout' },
 };
 
 export function TabBar({
@@ -53,13 +51,12 @@ export function TabBar({
           className="tab tab-action"
           onClick={workoutAction.onActivate}
           disabled={workoutAction.disabled}
-          aria-disabled={workoutAction.disabled}
-          aria-label={ACTION_META[workoutAction.kind].name}
+          aria-label={workoutAction.name}
         >
           <span className="tab-action__play" aria-hidden="true">
             <Icon name="play_arrow" size={26} />
           </span>
-          <span aria-hidden="true">{ACTION_META[workoutAction.kind].label}</span>
+          <span aria-hidden="true">{workoutAction.label}</span>
         </button>
       )}
       {TABS.slice(2).map((tab) => tabButton(tab))}
