@@ -245,12 +245,13 @@ export function prescribeExercise(
   const lowestReps = Math.min(...last.done.map((set) => set.reps));
   const finished = last.done.length >= last.plannedSets;
 
-  // An unfinished exercise is not a green light for more weight.
+  // Unfinished work earns no step and loses none: a short or light set never
+  // drops the target below what was planned (#104).
   if (!finished) {
     return {
       ...base,
-      weight: workingWeight,
-      reps: clamp(lowestReps, range.min, range.max),
+      weight: Math.max(last.plannedWeight, workingWeight),
+      reps: clamp(Math.max(last.plannedReps, lowestReps), range.min, range.max),
       basis: 'repeat',
     };
   }
@@ -341,7 +342,7 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
     case 'repeat':
       return last.done.length === 0
         ? `${when} was not logged. Repeating the same prescription.`
-        : `${when} was unfinished, so the load stays at ${logged(workWeight)}. Finish every set to earn the next step.`;
+        : `${when} was unfinished, so the load stays at ${logged(weight)}. Finish every set to earn the next step.`;
     case 'hold':
       return equipment === 'Bodyweight'
         ? `Bodyweight movement at the top of the rep range (${range.max}). Add external load manually to keep progressing.`

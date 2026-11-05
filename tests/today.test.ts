@@ -62,14 +62,14 @@ test('Today preserves the actual fractional load in last performance', async () 
     }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     // (#50) Today's coach line reads today's load exactly as the target does...
-    assert.match(text, /Finish every set: 42\.3 kg for 8\./);
+    assert.match(text, /Finish every set: 42\.3 kg for 9\./);
     // 42.3 kg was logged: no coach sentence may call a different load "same" or "last time".
     const coach = (html.match(/coach-card__text">([^<]*)</) ?? [])[1] ?? '';
     assert.ok(coach, 'coach line rendered');
     for (const sentence of coach.split(/(?<=\.)\s+/)) {
       if (/same|last/i.test(sentence)) assert.doesNotMatch(sentence, /\d+(\.\d+)? kg/, sentence);
     }
-    assert.match(text, /Today’s target 8 · 8 · 8 @ 42\.3 kg each/);
+    assert.match(text, /Today’s target 9 · 9 · 9 @ 42\.3 kg each/);
     // ...and the logged fractional load stays exact one tap away, under "Why this target".
     assert.match(targetReason('dumbbell-floor-press', profile, history, 'kg') ?? '', /42\.3 kg/);
   } finally { await server.close(); }
