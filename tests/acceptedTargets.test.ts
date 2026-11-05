@@ -111,8 +111,9 @@ test('barbell calibration field opens with precise saved kilograms', async () =>
 });
 
 
-test('accepted target formatting preserves unchanged ranges, hold units and explicit changed reps', () => {
-  assert.equal(repsTarget('goblet-squat', 2, [{ reps: 8 }, { reps: 8 }]), '8–10 reps');
+test('accepted target formatting shows prescribed reps and hold units', () => {
+  assert.equal(repsTarget('goblet-squat', 2, [{ reps: 8 }, { reps: 8 }]), '8 · 8');
+  assert.equal(repsTarget('goblet-squat', 2), '8–10 reps', 'the program range without a prescription');
   assert.equal(repsTarget('goblet-squat', 2, [{ reps: 10 }, { reps: 9 }]), '10 · 9');
   assert.equal(repsTarget('plank', 2, [{ reps: 45 }, { reps: 45 }]), '45 · 45s');
   assert.equal(repsTarget('plank', 1, [{ reps: 60 }]), '60s');
@@ -123,4 +124,12 @@ test('Today preserves the accepted hold seconds instead of the static program du
   current.exercises = [{ exerciseId: 'plank', name: 'Plank', planned: [{ weight: 0, reps: 60 }],
     performed: [{ weight: 0, reps: 60, done: false }] }];
   assert.equal(exerciseMeta(currentWorkout(adapted, current).exercises[0]), '1 set · 60s hold');
+});
+
+test('Today shows the open session\'s prescribed reps, not the program range', () => {
+  const current = session();
+  current.exercises = [{ exerciseId: 'goblet-squat', name: 'Goblet Squat',
+    planned: [{ weight: 0, reps: 8 }, { weight: 0, reps: 8 }, { weight: 0, reps: 8 }],
+    performed: [0, 1, 2].map(() => ({ weight: 0, reps: 8, done: false })) }];
+  assert.doesNotMatch(exerciseMeta(currentWorkout(adapted, current).exercises[0]), /8–10/);
 });

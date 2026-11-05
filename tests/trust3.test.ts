@@ -3,6 +3,7 @@ import test from 'node:test';
 import { FULL_BODY_A, loadLabel, targetSummary } from '../src/data/flagship.ts';
 import { exerciseById } from '../src/data/exercises.ts';
 import { adaptWorkout, swapCandidateFor, toWorkoutExercises } from '../src/lib/adapt.ts';
+import { liveExercises } from '../src/lib/liveProgression.ts';
 import { createProposal, decideProposalApproval, isProposalStale } from '../src/lib/proposal.ts';
 import { createSession, swapPendingExercise } from '../src/lib/session.ts';
 import type { Profile } from '../src/types.ts';
@@ -69,25 +70,23 @@ test('approve handler refuses a stale proposal and ignores a repeat tap', () => 
   assert.equal(decideProposalApproval(proposal, base, proposal.id), 'already-applied');
 });
 
-// Box 1: after a 3-to-2 adaptation and swap-back, the segment keeps the
-// program's own load and rep target — never a first-time 0 kg x 8.
-test('swap-back after a 3-to-2 adaptation keeps the program load and target', () => {
+// Box 1: after a 3-to-2 adaptation and swap-back, the segment keeps the same
+// history-derived load and rep target the session started with.
+test('swap-back after a 3-to-2 adaptation keeps the session\'s own load and target', () => {
   const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' }, []);
   assert.equal(adapted.exercises[0].sets, 2);
   const press = exerciseById('dumbbell-floor-press');
   const pushup = exerciseById('push-up');
   assert.ok(press && pushup);
-  // No history and nothing logged: the old path prescribed 0 kg x 8 here.
+  // No history and nothing logged: calibration, the same numbers Today showed.
+  const live = liveExercises(adapted, testProfile(), [])[0].planned[0];
   const candidate = swapCandidateFor(press, testProfile(), [], null);
-  assert.deepEqual(
-    { weight: candidate.weight, reps: candidate.reps },
-    { weight: 15, reps: 9 },
-  );
+  assert.deepEqual({ weight: candidate.weight, reps: candidate.reps }, live);
   const session = createSession({
     id: 'box1',
     name: adapted.name,
     dayIndex: 0,
-    exercises: toWorkoutExercises(adapted),
+    exercises: liveExercises(adapted, testProfile(), []),
     now: '2026-10-30T10:00:00.000Z',
   });
   const away = swapPendingExercise(
@@ -104,14 +103,7 @@ test('swap-back after a 3-to-2 adaptation keeps the program load and target', ()
   );
   const restored = back.exercises.find((exercise) => exercise.exerciseId === 'dumbbell-floor-press');
   assert.equal(restored?.planned.length, 2);
-  assert.deepEqual(
-    restored?.planned.map((set) => set.weight),
-    [15, 15],
-  );
-  assert.deepEqual(
-    restored?.planned.map((set) => set.reps),
-    [9, 9],
-  );
+  assert.deepEqual(restored?.planned, [live, live]);
 });
 
 // Box 1, second half: current surfaces read the two adapted targets while a

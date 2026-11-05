@@ -40,6 +40,7 @@ The board is GitHub Project 11 ("Fitbod", owner `tilluskc1`). Its issues are the
 - Never mark `Done` from a feature branch, a passing helper test, or a screenshot that has not been reproduced at 390×844 and 360×780.
 - Work left uncommitted, unmerged or unverified keeps its issue open and says so in the comment. Reopening is cheaper than a false `Done`.
 - New scope found mid-task gets its own issue; do not quietly widen the one being worked.
+- Every `AS-*` story also obeys `docs/agents/story-contract.md` (shared product contract, guardrails and readiness rules).
 
 Status and field IDs are read with `gh project field-list 11 --owner tilluskc1 --format json`; update with `gh project item-edit`. `docs/agents/issue-tracker.md` covers the issue commands.
 

@@ -6,8 +6,9 @@ import type {
   Unit,
   WorkoutRecord,
 } from '../types.ts';
-import { displayValue, unitLabel } from './units.ts';
+import { calibrationInputValue, displayValue, unitLabel } from './units.ts';
 import { exerciseInWorkout } from './plan.ts';
+import { programExercise } from '../data/flagship.ts';
 
 /**
  * Phase 2 progression policy: double progression.
@@ -172,6 +173,7 @@ export type ProgressionBasis =
   | 'load-increase'
   | 'rep-increase'
   | 'repeat'
+  | 'mixed-load'
   | 'hold';
 
 export interface Prescription {
@@ -190,7 +192,10 @@ export function prescribeExercise(
   profile: Profile,
   history: WorkoutRecord[],
 ): Prescription {
-  const range = repRangeFor(exercise.pattern);
+  const catalog = repRangeFor(exercise.pattern);
+  // The program's own range wins, so the next target matches the recap's "3 × 8–10".
+  const programmed = programExercise(exercise.id)?.repRange;
+  const range = programmed ? { min: programmed[0], max: programmed[1] } : catalog;
   const sets = setCountFor(exercise);
   const available = availableLoads(profile, exercise.equipment);
   const increment = incrementFor(exercise.equipment, available);
@@ -204,7 +209,7 @@ export function prescribeExercise(
   };
 
   if (!last) {
-    return { ...base, weight: 0, reps: clamp(range.min + 2, range.min, range.max), basis: 'first-time' };
+    return { ...base, weight: 0, reps: clamp(catalog.min + 2, range.min, range.max), basis: 'first-time' };
   }
 
   if (last.done.length === 0) {
@@ -227,6 +232,18 @@ export function prescribeExercise(
       weight: workingWeight,
       reps: clamp(lowestReps, range.min, range.max),
       basis: 'repeat',
+    };
+  }
+
+  // Working sets at different loads are not one qualifying load: the load
+  // holds at the lowest one used until every set qualifies at one load.
+  const distinctLoads = new Set(last.done.map((set) => round(set.weight)));
+  if (distinctLoads.size > 1) {
+    return {
+      ...base,
+      weight: Math.min(...last.done.map((set) => set.weight)),
+      reps: clamp(lowestReps, range.min, range.max),
+      basis: 'mixed-load',
     };
   }
 
@@ -260,7 +277,8 @@ function fmtAmount(kg: number, unit: Unit): string {
 
 function fmtLoad(weight: number, equipment: Equipment, unit: Unit = 'kg'): string {
   if (weight <= 0) return equipment === 'Bodyweight' ? 'bodyweight' : 'no added load';
-  return `${fmtAmount(weight, unit)} ${unitLabel(unit)}`;
+  // Every load named here was logged: keep its stored precision, not the plate rounding.
+  return `${calibrationInputValue(weight, unit)} ${unitLabel(unit)}`;
 }
 
 function fmtDate(iso: string): string {
@@ -270,8 +288,8 @@ function fmtDate(iso: string): string {
 }
 
 /** One line explaining why today's numbers are what they are. Loads read in the display unit; records stay kilograms. */
-export function describePrescription(prescription: Prescription, unit: Unit = 'kg'): string {
-  const { basis, last, range, increment, equipment } = prescription;
+export function describePrescription(prescription: Prescription, unit: Unit): string {
+  const { basis, last, range, increment, equipment, weight } = prescription;
   if (!last) {
     return 'First time — no history. Start light and log what you actually lift.';
   }
@@ -286,6 +304,8 @@ export function describePrescription(prescription: Prescription, unit: Unit = 'k
       return `${when}: ${setsLabel} at ${range.max} reps, ${fmtLoad(workWeight, equipment, unit)}. One step up (+${fmtAmount(increment, unit)} ${unitLabel(unit)}); reps restart at ${range.min}.`;
     case 'rep-increase':
       return `${when}: ${fmtLoad(workWeight, equipment, unit)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
+    case 'mixed-load':
+      return `${when}: ${setsLabel} at different loads (heaviest ${fmtLoad(workWeight, equipment, unit)}). The load holds at ${fmtLoad(weight, equipment, unit)} — use one working load for every set to earn the next step.`;
     case 'repeat':
       return last.done.length === 0
         ? `${when} was not logged. Repeating the same prescription.`

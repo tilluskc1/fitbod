@@ -7,6 +7,7 @@ import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { currentWorkout, EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
 import { exercisePhoto } from '../lib/media';
+import { targetReason } from '../lib/liveProgression';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 
@@ -48,12 +49,19 @@ function initials(name: string): string {
     .join('');
 }
 
-function coachInsight(last: LastPerformance | null, first: ProgramExercise, unit: Unit): string {
+function coachInsight(
+  last: LastPerformance | null,
+  first: ProgramExercise,
+  unit: Unit,
+  reason: string | null,
+): string {
   if (!last) {
     return first.holdSeconds
       ? `First session on the ${first.name.toLowerCase()}. Hold it only as long as the set still looks strong.`
       : `First session on the ${first.name.toLowerCase()}. Start light enough that every rep looks the same.`;
   }
+  // The same reason the logger shows, so the insight cannot contradict the target.
+  if (reason) return reason;
   const reps = setText(first.exerciseId, last.reps);
   // The load is what was actually logged, never the prescribed one.
   const load =
@@ -175,7 +183,7 @@ export default function TodayScreen({
                   : current
                     ? `Session open. ${progress} of ${total} sets logged so far.`
                     : first
-                      ? coachInsight(last, first, unit)
+                      ? coachInsight(last, first, unit, targetReason(first.exerciseId, profile, history, unit))
                       : 'Pick a workout you can keep. The program follows from that.'}
               </p>
             </div>

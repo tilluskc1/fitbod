@@ -59,7 +59,8 @@ test('Today preserves the actual fractional load in last performance', async () 
       onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop,
     }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-    assert.match(text, /42\.3 kg each/);
-    assert.doesNotMatch(text, /42\.5 kg each/);
+    // The coach insight now reads the live reason (#5); it must still name the logged load.
+    assert.match(text, /42\.3 kg/);
+    assert.doesNotMatch(text, /42\.5 kg/);
   } finally { await server.close(); }
 });

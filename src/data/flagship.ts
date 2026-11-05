@@ -182,10 +182,6 @@ export function repsTarget(exerciseId: string, count: number, planned?: { reps: 
   const program = programExercise(exerciseId);
   if (planned) {
     const reps = planned.map((set) => set.reps);
-    // Keep an unchanged program range; changed accepted targets are explicit.
-    if (!program?.holdSeconds && program && !program.targetReps && reps.every((rep) => rep === program.repRange[0])) {
-      return `${program.repRange[0]}–${program.repRange[1]} reps`;
-    }
     return setUnit(exerciseId) === 'seconds' ? `${reps.join(' · ')}s` : reps.join(' · ');
   }
   if (!program) return null;

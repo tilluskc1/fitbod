@@ -25,6 +25,12 @@ import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A, programSetCount } from './data/flagship';
 import { cursorFor, planRevisionOf, planSlots, revisePlan, skipCurrentSlot, slotAt, slotProgram, updateProfile } from './lib/sequence';
+import {
+  liveAdapted,
+  liveExercises,
+  progressionLines,
+  targetReason,
+} from './lib/liveProgression';
 import
  {
   applyCancel,
@@ -73,6 +79,7 @@ import
  { PhoneFrame, TabBar } from './components/ui/Chrome';
 import
  type { Tab } from './components/ui/Chrome';
+import { tabBarAction } from './lib/tabBarAction';
 import
  TodayScreen from './screens/TodayScreen';
 import
@@ -315,6 +322,15 @@ export default function App() {
     [program, constraints, exclusions],
   );
 
+  /**
+   * Today's numbers come from the recorded history, not the program fixture.
+   * The shape of the session still comes from the adaptation.
+   */
+  const liveProgram = useMemo(
+    () => (profile ? liveAdapted(adapted, profile, state.history) : adapted),
+    [adapted, profile, state.history],
+  );
+
   const pendingAdapted = useMemo(
     () => (pending ? adaptWorkout(program, pending.constraints, exclusions) : null),
     [pending, program, exclusions],
@@ -328,9 +344,22 @@ export default function App() {
    * that is not on screen.
    */
   const todayExercises = useMemo(
-    () => current?.exercises ?? toWorkoutExercises(adapted),
-    [current, adapted],
+    () =>
+      current?.exercises ??
+      (profile ? liveExercises(liveProgram, profile, state.history) : toWorkoutExercises(adapted)),
+    [current, adapted, liveProgram, profile, state.history],
   );
+
+  /** The one-line reason behind each computed target, keyed by exercise. */
+  const targetNotes = useMemo(() => {
+    const notes: Record<string, string> = {};
+    if (!profile) return notes;
+    for (const exercise of liveProgram.exercises) {
+      const reason = targetReason(exercise.exerciseId, profile, state.history, unit);
+      if (reason) notes[exercise.exerciseId] = reason;
+    }
+    return notes;
+  }, [liveProgram, profile, state.history, unit]);
   const recap = recapId ? state.history.find((workout) => workout.id === recapId) ?? null : null;
 
   const storageNote =
@@ -368,7 +397,9 @@ export default function App() {
       slotId: slot?.id,
       slotSeq: cursor && cursor.revision === revision ? cursor.seq : 0,
       planRevision: revision,
-      exercises: toWorkoutExercises(workout),
+      exercises: profile
+        ? liveExercises(workout, profile, state.history)
+        : toWorkoutExercises(workout),
       now: new Date().toISOString(),
       durationMin: workout.minutes,
     });
@@ -477,7 +508,7 @@ export default function App() {
         ...currentState,
         todayOverride: approved,
         current: currentState.current
-          ? restorePendingWorkout(currentState.current, workout)
+          ? restorePendingWorkout(currentState.current, workout, currentState.profile, currentState.history)
           : null,
       }));
       appliedProposalRef.current = proposal.id;
@@ -505,7 +536,9 @@ export default function App() {
       return {
         ...currentState,
         todayOverride: null,
-        current: currentState.current ? restorePendingWorkout(currentState.current, original) : null,
+        current: currentState.current
+          ? restorePendingWorkout(currentState.current, original, currentState.profile, currentState.history)
+          : null,
       };
     });
     proposalRevisionRef.current += 1;
@@ -762,6 +795,7 @@ export default function App() {
         history={state.history}
         now={now}
         loadOptions={loadOptions(constraints.equipment, constraints.loads)}
+        targetNotes={targetNotes}
         unit={unit}
         onMinimize={() => {
           setView('tabs');
@@ -795,6 +829,7 @@ export default function App() {
         feedbackWrite={feedbackWrite}
         onFeedback={saveFeedback}
         onRetryFeedback={attemptSave}
+        progression={profile ? progressionLines(recap, profile, state.history, unit) : []}
         onViewHistory={() => {
           setView('tabs');
           setTab('progress');
@@ -813,7 +848,9 @@ export default function App() {
     ) : view === 'adapt' && pendingAdapted && pending ? (
       <AdaptScreen
         originalSets={programSetCount(program)}
-        adapted={pendingAdapted}
+        adapted={
+          profile ? liveAdapted(pendingAdapted, profile, state.history) : pendingAdapted
+        }
         constraints={pending.constraints}
         notices={pendingNotices}
         unit={unit}
@@ -838,7 +875,7 @@ export default function App() {
             program={program}
             slotLabel={slotLabel}
             onSkipSlot={skipTodaySlot}
-            adapted={adapted}
+            adapted={liveProgram}
             equipment={constraints.equipment}
             adjusted={Boolean(override)}
             history={state.history}
@@ -894,6 +931,10 @@ export default function App() {
           onChange={(next) => {
             setTab(next);
             setView('tabs');
+          }}
+          workoutAction={{
+            ...tabBarAction(current, adapted),
+            onActivate: current ? () => setView('train') : startWorkout,
           }}
         />
       </>
