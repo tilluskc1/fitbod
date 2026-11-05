@@ -40,3 +40,20 @@ Out of scope: server generation, AI, wearables, copying their data, matching the
 ## Open question for the human
 
 Fitbod's server side cannot be matched. Is "same slots, same muscle coverage" the target, rather than the same exercises?
+
+## Slot table: ours vs the real app (PENDING: Fitbod column not filled)
+
+Ours is generated from `generateWorkout` at 50c3a17 for Build Muscle, Beginner, 3 days, dumbbells + bench. "Compound" means the exercise lists two or more muscles; "isolation" means one. Muscle is the primary muscle. No exercise names.
+
+| Our day | Status | Our slots (muscle, kind) |
+| --- | --- | --- |
+| Push | Ready (5/5) | chest compound, shoulders compound, triceps isolation, shoulders compound, chest compound |
+| Pull | Ready (5/5) | back compound, biceps isolation, core isolation, core isolation, biceps isolation |
+| Legs | Limited (5/5) | quads compound, glutes compound, hamstrings isolation, core isolation, quads compound |
+
+| Real app | Slots (muscle, kind) |
+| --- | --- |
+| Day 1, "Upper Body Day" | pending: needs the owner's screenshots of the full Day 1 exercise list |
+| Day 2, "Lower Body Day" | pending |
+
+The plan names above come from the owner's plan-preview screenshot (Get Lean, 5 per week, Advanced, Large Gym), which is a different profile from ours, so even a finished table compares slot shapes, not exercises. The last acceptance box above stays unticked until the real-app column is filled.
