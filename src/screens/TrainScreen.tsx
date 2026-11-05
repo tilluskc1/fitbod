@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadModeOf, repsTarget, setUnit } from '../data/flagship';
+import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
 import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
@@ -86,6 +86,21 @@ export function WeightRow({ label, unitText, loads, selected, show, onPick }: {
         </button>
       ))}
     </div>
+  );
+}
+
+/** A logged loaded set saves only with a load (#103). */
+export function SaveSetRow({ needsWeight, onCancel, onSave }: {
+  needsWeight: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <>
+      {needsWeight && <p className="lg-coach lg-save-reason">{NEEDS_LOAD_REASON}</p>}
+      <button className="pill-quiet" onClick={onCancel}>Cancel</button>
+      <button className="pill-primary" disabled={needsWeight} onClick={onSave}>Save set</button>
+    </>
   );
 }
 
@@ -391,10 +406,8 @@ export default function TrainScreen({
         </div>
         <div className="review-footer__row">
           {draft ? (
-            <>
-              <button className="pill-quiet" onClick={() => closeEditor(key)}>Cancel</button>
-              <button className="pill-primary" onClick={() => saveEditing(key)}>Save set</button>
-            </>
+            <SaveSetRow needsWeight={needsLoad(exercise.exerciseId) && draft.weight <= 0}
+              onCancel={() => closeEditor(key)} onSave={() => saveEditing(key)} />
           ) : (
             <button className="pill-quiet" onClick={() => closeEditor(key)}>Done</button>
           )}
@@ -410,6 +423,9 @@ export default function TrainScreen({
     // A logged set is only ever edited through its draft.
     const open = openKey === key && (!set.done || draft !== null);
     const before = previous[setIndex];
+    const noLoad = needsLoad(exercise.exerciseId) && set.weight <= 0;
+    // While calibrating, the first-weight row already says what to do.
+    const reason = !set.done && noLoad && !calibrating && setIndex === activeSet ? `${key}:reason` : undefined;
     const row = (
       <tr key={key} className={set.done ? 'lg-row--done' : setIndex === activeSet ? 'lg-row--current' : undefined}>
         <td>{n}</td>
@@ -439,7 +455,8 @@ export default function TrainScreen({
               <Icon name="check" size={20} />
             </span>
           ) : (
-            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={calibrating}
+            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={calibrating || noLoad}
+              aria-describedby={reason}
               onClick={() => {
                 primeRestAudio();
                 if (openKey === key) setOpenKey(null);
@@ -452,9 +469,9 @@ export default function TrainScreen({
         </td>
       </tr>
     );
-    return open
-      ? [row, <tr key={`${key}:edit`} className="lg-edit"><td colSpan={5}>{editor(set, setIndex, key, draft)}</td></tr>]
-      : [row];
+    const note = reason && <tr key={reason} className="lg-note"><td colSpan={5} id={reason}>{NEEDS_LOAD_REASON}</td></tr>;
+    return [row, note, open && <tr key={`${key}:edit`} className="lg-edit"><td colSpan={5}>{editor(set, setIndex, key, draft)}</td></tr>]
+      .filter(Boolean);
   });
 
   return (
@@ -508,7 +525,7 @@ export default function TrainScreen({
                   onConfirmWeight(index, weight);
                 }}
                 onSkip={() => {
-                  focusNext.current = 'log';
+                  focusNext.current = `${rowKey(Math.max(activeSet, 0))}:weight`;
                   onSkipCalibration?.(calibrationKey);
                 }}
               />

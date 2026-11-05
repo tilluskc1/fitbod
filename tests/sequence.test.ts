@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildPlan } from '../src/lib/generator.ts';
 import { mergeImport } from '../src/lib/storage.ts';
-import { applyCorrection, applyFinish, createSession, logSet, applyCancel } from '../src/lib/session.ts';
+import { applyCorrection, applyFinish, createSession, logSet, applyCancel, updatePerformedSet } from '../src/lib/session.ts';
 import { adaptWorkout, toWorkoutExercises } from '../src/lib/adapt.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import {
@@ -64,7 +64,9 @@ function runSlot(state: AppState, options: { sets?: number } = {}): AppState {
   });
   let open = { ...state, current: session };
   const sets = options.sets ?? 1;
-  for (let i = 0; i < sets; i += 1) open = { ...open, current: logSet(open.current!, 0, i, '2026-11-01T10:05:00.000Z') };
+  const at = '2026-11-01T10:05:00.000Z';
+  // A loaded set needs a load to log (#103).
+  for (let i = 0; i < sets; i += 1) open = { ...open, current: logSet(updatePerformedSet(open.current!, 0, i, { weight: 10 }, at), 0, i, at) };
   return applyFinish(open, open.current!.id, { early: sets < adapted.totalSets, now: '2026-11-01T10:30:00.000Z' });
 }
 
