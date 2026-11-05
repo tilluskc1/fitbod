@@ -98,7 +98,7 @@ test('"Why this target" keeps the precise reason', async () => {
     const why = plain(renderToStaticMarkup(createElement(WhySheet as never, { exerciseId: 'dumbbell-floor-press',
       exerciseName: 'Floor press', planned: [{ weight: 18, reps: 8 }], history, unit: 'kg', onClose: noop,
       reason: targetReason('dumbbell-floor-press', profile, history, 'kg') })));
-    assert.match(why, /3 sets at 10 reps, 15 kg\. One step up \(\+3 kg\); reps restart at 8\./);
+    assert.match(why, /3 sets at 10 reps \(top of 8–10\), 15 kg\. One step up \(\+3 kg\); reps restart at 8\./);
   });
 });
 

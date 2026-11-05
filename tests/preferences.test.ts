@@ -146,7 +146,8 @@ test('live Today path: a Library save reorders the current slot through slotProg
     return { ids: adapted.exercises.map((item) => item.exerciseId), status };
   };
   const before = today(start);
-  assert.equal(before.ids[0], 'push-up');
+  // The day's loaded lead opens the session (#97); push-up leads the rest.
+  assert.equal(before.ids[1], 'push-up');
   assert.ok(!before.ids.includes('dumbbell-floor-press'));
 
   const more = today(updateProfile(start, withPreference(home, 'dumbbell-floor-press', 'more')));
@@ -155,7 +156,7 @@ test('live Today path: a Library save reorders the current slot through slotProg
   assert.equal(more.status, before.status);
 
   const less = today(updateProfile(start, withPreference(home, 'push-up', 'less')));
-  assert.notEqual(less.ids[0], 'push-up', '"less" moves it behind a neutral alternative');
+  assert.notEqual(less.ids[1], 'push-up', '"less" moves it behind a neutral alternative');
   assert.equal(less.ids.length, before.ids.length);
   assert.equal(less.status, before.status);
 

@@ -401,7 +401,7 @@ export function currentWorkout(adapted: AdaptedWorkout, session: WorkoutRecord):
       name: entry.name,
       sets: entry.planned.length,
       originalSets: entry.originalPlannedSets ?? entry.planned.length,
-      // Same fallback slotProgram uses: the program's range, else the catalog pattern's.
+      // Not displayed (targetReps carry the accepted reps); without a profile the lead's range is unknown here.
       repRange: source?.repRange ?? (range ? [range.min, range.max] : [reps[0] ?? 0, reps[0] ?? 0]),
       targetReps: reps,
       holdSeconds: source?.holdSeconds ? reps[0] : undefined,

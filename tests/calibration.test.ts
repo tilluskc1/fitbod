@@ -22,7 +22,8 @@ const adapted = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home', load
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const noop = () => {};
 const at = (minute: number) => `2026-11-04T10:${String(minute).padStart(2, '0')}:00.000Z`;
-const RULE = /Pick a weight you could lift about 12 times with good form/;
+// The calibration asks for the set's own target reps (the floor press starts at 8).
+const RULE = /Pick a weight you could lift about 8 times with good form/;
 
 function liveSession(history: WorkoutRecord[]) {
   return createSession({ id: `s${history.length}`, name: adapted.name, dayIndex: 0, durationMin: 35,

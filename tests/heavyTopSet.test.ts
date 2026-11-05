@@ -235,3 +235,38 @@ test('when today\'s setup drops the lead, the next compound takes its five sets'
   const live = liveAdapted(adapted, profile, []).exercises.find((exercise) => exercise.exerciseId === heir);
   assert.deepEqual(live?.targetReps, [6, 6, 6, 6, 6]);
 });
+
+test('bodyweight never takes the heavy lead; a barbell compound does when there is one', () => {
+  const dumbbells = profileOf({ equipment: ['Dumbbell'], support: ['Bench'] });
+  const push = generateWorkout(dumbbells, buildPlan(dumbbells)[0], 0).exercises;
+  assert.notEqual(push[0].exerciseId, 'push-up');
+  assert.equal(def(push[0].exerciseId).equipment, 'Dumbbell');
+  assert.equal(push[0].planned.length, 5, 'the dumbbell lead opens the session with the heavy sets');
+  const pushUp = push.find((exercise) => exercise.exerciseId === 'push-up');
+  if (pushUp) assert.equal(pushUp.planned.length, 3);
+  assert.equal(shape('push-up', profileOf(), true), '3 × 6–10', 'a lead flag cannot make bodyweight heavy');
+
+  // Barbell Bench and Overhead Press both picked: barbell first, then the Push day's first focus (Chest).
+  const barbell = profileOf({ equipment: ['Dumbbell', 'Barbell'] });
+  const day = generateWorkout(barbell, buildPlan(barbell)[0], 0).exercises;
+  assert.ok(day.some((exercise) => exercise.exerciseId === 'overhead-press'));
+  assert.equal(day[0].exerciseId, 'barbell-bench-press');
+  assert.equal(day[0].planned.length, 5);
+  // A full gym that picked no barbell bench still leads with a barbell compound.
+  const gym = generateWorkout(profileOf(), buildPlan(profileOf())[0], 0).exercises;
+  assert.equal(def(gym[0].exerciseId).equipment, 'Barbell');
+
+  const bare = profileOf({ equipment: [], support: [] });
+  const bodyweight = generateWorkout(bare, buildPlan(bare)[0], 0).exercises;
+  assert.ok(bodyweight.length > 0);
+  assert.equal(leadCompoundId(bodyweight.map((exercise) => exercise.exerciseId)), undefined);
+  assert.ok(bodyweight.every((exercise) => exercise.planned.length <= 4), 'no heavy lead on a bodyweight day');
+});
+
+test('the reason for a load step prints the reps actually logged', () => {
+  const bench = def('barbell-bench-press');
+  const record = finished('w1', bench.id, 4, 4, 20, 8);
+  const next = prescribeExercise(bench, profileOf(), [record], true);
+  assert.equal(next.basis, 'load-increase');
+  assert.match(describePrescription(next, 'kg'), /4 sets at 8 reps \(top of 4–6\), 20 kg/);
+});
