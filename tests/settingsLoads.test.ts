@@ -3,7 +3,8 @@ import test from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
-import { dumbbellLoadsPatch, loadsInputText } from '../src/lib/units.ts';
+import { readFileSync } from 'node:fs';
+import { dumbbellLoadsPatch, loadsInputText, parseLoads } from '../src/lib/units.ts';
 
 const profile = (unit: 'kg' | 'lb', Dumbbell: number[] = []) => ({
   goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3, equipment: ['Dumbbell'],
@@ -28,6 +29,33 @@ test('leaving the displayed loads untouched saves nothing, so kg never drifts', 
   const lb = profile('lb', [10, 22.5]);
   assert.equal(dumbbellLoadsPatch(loadsInputText(lb.loads.Dumbbell, 'lb'), lb), null);
   assert.equal(dumbbellLoadsPatch('', profile('kg')), null);
+});
+
+test('unit suffixes typed after loads are accepted, not dropped', () => {
+  assert.deepEqual(parseLoads('25lb, 35 lb', 'lb'), [11.34, 15.876]);
+  assert.deepEqual(parseLoads('10kg 15 KG, 20kgs', 'kg'), [10, 15, 20]);
+  assert.deepEqual(dumbbellLoadsPatch('25lb, 35 lb', profile('lb')), { loads: { Dumbbell: [11.34, 15.876] } });
+});
+
+test('non-blank text with no valid load keeps the rack; blank still clears it', () => {
+  const lb = profile('lb', [11.34, 15.876]);
+  assert.equal(dumbbellLoadsPatch('abc', lb), null);
+  assert.equal(dumbbellLoadsPatch('lb', lb), null);
+  assert.deepEqual(dumbbellLoadsPatch('  ', lb), { loads: { Dumbbell: [] } });
+});
+
+test('loads entered in kg keep their exact kg when the list is edited in lb', () => {
+  const lb = profile('lb', [10, 12.5]);
+  const shown = loadsInputText(lb.loads.Dumbbell, 'lb');
+  assert.deepEqual(dumbbellLoadsPatch(`${shown}, 40`, lb), { loads: { Dumbbell: [10, 12.5, 18.144] } });
+  assert.deepEqual(dumbbellLoadsPatch(`${shown.split(', ')[0]}`, lb), { loads: { Dumbbell: [10] } }, 'removing one keeps the other exact');
+});
+
+test('a sheet focuses Close once on mount, not again on every parent re-render', () => {
+  const source = readFileSync(new URL('../src/components/ui/Sheet.tsx', import.meta.url), 'utf8');
+  const focusEffect = source.match(/useEffect\(\(\) => \{\s*closeRef\.current\?\.focus\(\);[\s\S]*?\}, (\[[^\]]*\])\);/);
+  assert.ok(focusEffect, 'the Close-focus effect exists');
+  assert.equal(focusEffect[1], '[]', 'it runs on mount only, so a save that re-creates onClose does not jump focus');
 });
 
 test('the settings sheet shows owned loads and their label in the chosen unit', async () => {

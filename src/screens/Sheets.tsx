@@ -744,6 +744,7 @@ export function SettingsSheet({
   const saveLoads = () => {
     const patch = dumbbellLoadsPatch(loadsText, profile);
     if (patch) onChange(patch);
+    else setLoadsText(loadsInputText(profile.loads.Dumbbell, unit));
   };
 
   const toggle = <T extends string>(list: T[], item: T, key: 'equipment' | 'support') => {
