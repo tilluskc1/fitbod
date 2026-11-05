@@ -383,25 +383,6 @@ textarea:focus-visible {
 
 /* ---------- Buttons ---------- */
 
-.primary {
-  min-height: 58px;
-  width: 100%;
-  border-radius: 16px;
-  background: linear-gradient(115deg, #c6f98a, #c7f46a);
-  color: var(--lime-ink);
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-.primary:active {
-  transform: scale(0.995);
-}
-
 .secondary {
   min-height: 52px;
   width: 100%;
@@ -508,9 +489,9 @@ textarea:focus-visible {
 
 .segmented {
   display: flex;
-  gap: 2px;
-  padding: 5px;
-  border-radius: 13px;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
   background: #151c12;
   border: 1px solid #2b3425;
   margin: 18px 0;
@@ -518,16 +499,17 @@ textarea:focus-visible {
 
 .segmented button {
   flex: 1;
-  min-height: 46px;
-  border-radius: 9px;
+  min-height: 44px;
+  border-radius: 999px;
   font-size: 13.5px;
   color: #c3cabb;
   font-weight: 500;
 }
 
 .segmented button.on {
-  background: var(--lime);
-  color: #17240c;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
 }
 
 /* ---------- Plan ---------- */
@@ -911,9 +893,6 @@ textarea:focus-visible {
 
 .big-card .primary {
   margin-top: 20px;
-  min-height: 52px;
-  font-size: 15px;
-  border-radius: 12px;
 }
 
 .context-list {
@@ -1173,11 +1152,6 @@ textarea:focus-visible {
   margin-top: 20px;
 }
 
-.sheet .primary {
-  min-height: 54px;
-  font-size: 16px;
-}
-
 @keyframes rise {
   from {
     transform: translateY(18px);
@@ -1326,9 +1300,10 @@ textarea:focus-visible {
 }
 
 .chip.on {
-  background: rgba(197, 247, 119, 0.14);
-  border-color: var(--lime);
-  color: var(--lime);
+  background: var(--primary);
+  border-color: transparent;
+  color: var(--on-primary);
+  font-weight: 600;
 }
 
 .lib-row {
@@ -1400,22 +1375,25 @@ textarea:focus-visible {
 }
 
 .unit-toggle {
-  display: flex;
+  display: inline-flex;
+  padding: 4px;
+  gap: 4px;
   border: 1px solid #35412b;
-  border-radius: 10px;
-  overflow: hidden;
+  border-radius: 999px;
 }
 
 .unit-toggle button {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 16px;
+  border-radius: 999px;
   font-size: 13px;
   color: #b9c2ac;
 }
 
 .unit-toggle button.on {
-  background: var(--lime);
-  color: #16230b;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
 }
 
 .data-note {
@@ -1574,8 +1552,6 @@ textarea:focus-visible {
 
 .onboarding-actions .primary {
   flex: 1;
-  min-height: 54px;
-  font-size: 16px;
 }
 
 /* ---------- Recovery / error ---------- */
@@ -1929,6 +1905,8 @@ body {
   backdrop-filter: blur(18px);
 }
 
+/* The one primary action style (#118); .primary is the same rule. */
+.primary,
 .pill-primary {
   min-height: 52px;
   width: 100%;
@@ -1945,14 +1923,17 @@ body {
   padding: 0 18px;
 }
 
+.primary:active,
 .pill-primary:active {
   transform: scale(0.98);
 }
 
+.primary:disabled,
 .pill-primary:disabled {
   opacity: 0.45;
 }
 
+.primary .ms,
 .pill-primary .ms {
   font-size: 20px;
 }
@@ -3298,16 +3279,18 @@ body {
   background: var(--glass-fill-hover);
 }
 
-.glass-scope .option-card.selected,
-.glass-scope .day-chip.selected,
-.glass-scope .chip.on {
+.glass-scope .option-card.selected {
   background: var(--glass-lime-fill);
   border-color: var(--glass-lime-edge);
   box-shadow: 0 8px 24px rgba(197, 247, 119, 0.1), var(--glass-shine);
 }
 
+.glass-scope .day-chip.selected,
 .glass-scope .chip.on {
-  color: var(--lime);
+  background: var(--primary);
+  border-color: transparent;
+  color: var(--on-primary);
+  font-weight: 600;
 }
 
 /* Text inputs and pickers become pills. */
@@ -3334,20 +3317,9 @@ body {
   border-radius: 999px;
 }
 
-/* Back / Continue, and a sheet's Done. */
-.glass-scope .onboarding-actions .primary,
-.glass-scope .sheet-actions .primary {
-  border-radius: 999px;
-  box-shadow: 0 10px 28px rgba(197, 247, 119, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-
 .glass-scope .onboarding-actions .secondary {
   border-radius: 999px;
   color: var(--on-surface);
-}
-
-.glass-scope .onboarding-actions .primary:disabled {
-  box-shadow: none;
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -3366,9 +3338,7 @@ body {
     background: var(--surface-container);
   }
 
-  .glass-scope .option-card.selected,
-  .glass-scope .day-chip.selected,
-  .glass-scope .chip.on {
+  .glass-scope .option-card.selected {
     background: var(--surface-container-high);
   }
 }
