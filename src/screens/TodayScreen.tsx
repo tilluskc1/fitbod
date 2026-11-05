@@ -1,14 +1,17 @@
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
-import { formatActualWeight, unitOf } from '../lib/units';
+import { unitLabel, unitOf } from '../lib/units';
 import { exerciseMeta, programSetCount, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { currentWorkout, EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
 import { exercisePhoto } from '../lib/media';
-import { targetCoachLine } from '../lib/liveProgression';
+import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import Demo from '../components/ui/Demo';
+import FeasibilityNote from '../components/ui/FeasibilityNote';
+import { missingFamilies } from '../lib/feasibility';
+import type { ProfileChange } from '../lib/preferences';
 import Icon from '../components/ui/Icon';
 
 interface Props {
@@ -31,6 +34,8 @@ interface Props {
   slotLabel?: string;
   /** Explicit skip of the slot on offer. Absent means the plan has no sequence. */
   onSkipSlot?: () => void;
+  /** Previews a feasibility alternative (allow an excluded exercise) before anything is saved. */
+  onReviewChange?: (change: ProfileChange) => void;
 }
 
 function greeting(now: Date): string {
@@ -54,6 +59,7 @@ function coachInsight(
   first: ProgramExercise,
   unit: Unit,
   line: string | null,
+  format: (kg: number) => string,
 ): string {
   // Built from the same prescription as the target, so it cannot contradict it.
   if (line) return line;
@@ -66,7 +72,7 @@ function coachInsight(
   // The load is what was actually logged, never the prescribed one.
   const load =
     last.weight > 0
-      ? ` at ${formatActualWeight(last.weight, unit, { perSide: first.load === 'each' })}`
+      ? ` at ${format(last.weight)} ${unitLabel(unit)}${first.load === 'each' ? ' each' : ''}`
       : '';
   const target = first.targetReps?.[0];
   if (target !== undefined && target > Math.min(...last.reps)) {
@@ -92,6 +98,7 @@ export default function TodayScreen({
   onOpenExercise,
   slotLabel,
   onSkipSlot,
+  onReviewChange,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -105,6 +112,8 @@ export default function TodayScreen({
       ? estimatedMinutes(program, adapted.totalSets)
       : adapted.minutes;
   const minutes = current ? (current.durationMin ?? adapted.minutes) : estimated;
+  // A day with nothing to do has no duration to promise.
+  const timed = Boolean(current) || adapted.exercises.length > 0;
   const first = adapted.exercises[0];
   const heroId = first?.exerciseId ?? 'dumbbell-floor-press';
   const photo = exercisePhoto(heroId);
@@ -146,7 +155,7 @@ export default function TodayScreen({
           </span>
         </div>
 
-        <section className="hero-card" aria-label={`${program.name}, ${minutes} minutes`}>
+        <section className="hero-card" aria-label={timed ? `${program.name}, ${minutes} minutes` : program.name}>
           {photo && <img className="hero-card__photo" src={photo} alt="" />}
           <span className="hero-card__shade" aria-hidden="true" />
           <span className="hero-card__top">
@@ -158,9 +167,14 @@ export default function TodayScreen({
               {current ? current.name : program.name}
             </span>
             <span className="hero-card__meta">
-              <Icon name="timer" size={17} />
-              {estimated < adapted.minutes && !current ? '≈' : ''}
-              {minutes} min <span aria-hidden="true">·</span> {setup.short}
+              {timed && (
+                <>
+                  <Icon name="timer" size={17} />
+                  {estimated < adapted.minutes && !current ? '≈' : ''}
+                  {minutes} min <span aria-hidden="true">·</span>{' '}
+                </>
+              )}
+              {setup.short}
               {slotLabel && (
                 <>
                   {' '}
@@ -170,6 +184,11 @@ export default function TodayScreen({
             </span>
           </span>
         </section>
+
+        {/* The status describes the saved setup, not an adjusted day or an open session. */}
+        {!current && !adjusted && (
+          <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
+        )}
 
         <section className="coach-card" aria-label={adjusted ? 'Coach note' : 'Coach insight'}>
           <div className="coach-card__head">
@@ -182,7 +201,7 @@ export default function TodayScreen({
                   : current
                     ? `Session open. ${progress} of ${total} sets logged so far.`
                     : first
-                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit))
+                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit), plannedLoad(profile.loads, history, first.exerciseId, unit))
                       : 'Pick a workout you can keep. The program follows from that.'}
               </p>
             </div>
@@ -211,13 +230,19 @@ export default function TodayScreen({
           <div className="list-head">
             <h2>The workout</h2>
             <span>
-              {estimated < adapted.minutes && !current ? '≈' : ''}
-              {minutes} min · {adapted.totalSets} {adapted.totalSets === 1 ? 'set' : 'sets'}
+              {timed && `${estimated < adapted.minutes && !current ? '≈' : ''}${minutes} min · `}
+              {adapted.totalSets} {adapted.totalSets === 1 ? 'set' : 'sets'}
             </span>
           </div>
 
           <div className="workout-list">
-            {adapted.exercises.length === 0 && (
+            {adapted.exercises.length === 0 && !adjusted && program.feasibility?.status === 'infeasible' && (
+              <div className="empty-state">
+                <p>Your equipment can’t cover {missingFamilies(program.feasibility)} yet. Add gear to fill this day.</p>
+                <button className="text-action text-action--lime" onClick={onOpenSettings}>Edit equipment</button>
+              </div>
+            )}
+            {adapted.exercises.length === 0 && (adjusted || program.feasibility?.status !== 'infeasible') && (
               <p className="empty-state">
                 No movement in this program can be done with {setup.chip.toLowerCase()}. Choose
                 another setup in Adjust today.
@@ -239,7 +264,7 @@ export default function TodayScreen({
                   <span className="workout-row__text">
                     <span className="workout-row__name">{exercise.name}</span>
                     <span className="workout-row__meta">
-                      {exerciseMeta(exercise, exercise.sets, true, unit)}
+                      {exerciseMeta(exercise, exercise.sets, true, unit, plannedLoad(profile.loads, history, exercise.exerciseId, unit))}
                     </span>
                   </span>
                   <span className="workout-row__chev">
@@ -260,7 +285,7 @@ export default function TodayScreen({
                     <span className="compare-line">
                       <span className="compare-line__label">Today’s target</span>
                       <span className="compare-line__value compare-line__value--target">
-                        {targetSummary(exercise, exercise.sets, unit)}
+                        {targetSummary(exercise, exercise.sets, unit, plannedLoad(profile.loads, history, exercise.exerciseId, unit))}
                       </span>
                     </span>
                   </span>
@@ -288,7 +313,7 @@ export default function TodayScreen({
                         </span>
                       </span>
                       <span className="workout-row__meta">
-                        {source ? exerciseMeta(source, source.sets, true, unit) : `${item.sets} sets`}
+                        {source ? exerciseMeta(source, source.sets, true, unit, plannedLoad(profile.loads, history, source.exerciseId, unit)) : `${item.sets} sets`}
                       </span>
                     </span>
                     <span className="workout-row__chev" aria-hidden="true" />

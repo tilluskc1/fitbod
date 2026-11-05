@@ -40,8 +40,8 @@ import
   applyFinish,
   createSession,
   extendRest,
+  confirmWeight,
   logSet,
-  pendingExerciseIndex,
   sessionProgress,
   skipExercise,
   swapPendingExercise,
@@ -59,10 +59,8 @@ import
   serializeExport,
   uid,
 } from './lib/storage';
-import
- type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
-import
- { parseState } from './lib/validate';
+import type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
+import { parseState } from './lib/validate';
 import
  { unitOf } from './lib/units';
 import
@@ -82,6 +80,8 @@ import
 import
  type { Tab } from './components/ui/Chrome';
 import { tabBarAction } from './lib/tabBarAction';
+import type { ProfileChange } from './lib/preferences';
+import Sheet from './components/ui/Sheet';
 import
  TodayScreen from './screens/TodayScreen';
 import
@@ -107,9 +107,10 @@ import
 import
  {
   AdjustSheet,
+  ConfirmChange,
   DaySheet,
   DiscardSessionSheet,
-  ExerciseSheet,
+  ExerciseActionsSheet,
   FinishSheet,
   SettingsSheet,
   SwapSheet,
@@ -122,12 +123,13 @@ type SheetState =
   | { kind: 'none' }
   | { kind: 'adjust' }
   | { kind: 'settings' }
-  | { kind: 'exercise'; exerciseId: string; exerciseIndex: number }
+  | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
   | { kind: 'why'; exerciseId: string; exerciseIndex: number }
   | { kind: 'finish' }
-  | { kind: 'swap'; exerciseIndex: number };
+  | { kind: 'swap'; exerciseIndex: number }
+  | { kind: 'confirm'; change: ProfileChange };
 
 interface SaveUi {
   kind: 'idle' | 'saved' | 'error';
@@ -256,7 +258,10 @@ export default function App() {
       revisionRef.current = loaded.revision;
       // A newer snapshot can merge/reorder even same-ID exercise segments.
       setSheet((open) =>
-        open.kind === 'exercise' || open.kind === 'why' || open.kind === 'day' || open.kind === 'swap'
+        open.kind === 'actions' ||
+        open.kind === 'why' ||
+        open.kind === 'day' ||
+        open.kind === 'swap'
           ? { kind: 'none' }
           : open,
       );
@@ -566,17 +571,24 @@ export default function App() {
     );
   };
 
-  const logNext = () => {
+  const confirmFirstWeight = (exerciseIndex: number, weight: number) => {
+    const stamp = new Date().toISOString();
+    setState((currentState) =>
+      currentState.current
+        ? { ...currentState, current: confirmWeight(currentState.current, exerciseIndex, weight, stamp) }
+        : currentState,
+    );
+  };
+
+  const logOneSet = (exerciseIndex: number, setIndex: number, exerciseId: string) => {
     const stamp = new Date().toISOString();
     setState((currentState) => {
       const session = currentState.current;
-      if (!session) return currentState;
-      // Skipped work is not offered, so "log next" can never record a set on
-      // an exercise the user set aside.
-      const exerciseIndex = pendingExerciseIndex(session);
-      if (exerciseIndex === -1) return currentState;
-      const setIndex = session.exercises[exerciseIndex].performed.findIndex((set) => !set.done);
-      return { ...currentState, current: logSet(session, exerciseIndex, setIndex, stamp) };
+      const exercise = session?.exercises[exerciseIndex];
+      // A tap rendered against another exercise, or on work the user set aside, records nothing.
+      if (!session || exercise?.exerciseId !== exerciseId || exercise.skipped) return currentState;
+      const logged = logSet(session, exerciseIndex, setIndex, stamp);
+      return logged === session ? currentState : { ...currentState, current: logged };
     });
   };
 
@@ -791,6 +803,7 @@ export default function App() {
         history={state.history}
         now={now}
         loadOptions={loadOptions(constraints.equipment, constraints.loads)}
+        profileLoads={state.profile?.loads}
         calibrationLoads={confirmedLoads(constraints.equipment, constraints.loads)}
         skippedCalibrations={calibrationSkips}
         onSkipCalibration={(key) => setCalibrationSkips((keys) => [...keys, key])}
@@ -802,7 +815,8 @@ export default function App() {
         }}
         onFinish={requestFinish}
         onUpdateSet={updateSet}
-        onLogNext={logNext}
+        onConfirmWeight={confirmFirstWeight}
+        onLogSet={logOneSet}
         onToggleRestPause={() => {
           const stamp = new Date().toISOString();
           setState((currentState) =>
@@ -818,8 +832,14 @@ export default function App() {
               : currentState,
           )
         }
-        onSwap={(exerciseIndex) => setSheet({ kind: 'swap', exerciseIndex })}
-        onSkip={skipCurrentExercise}
+        onOpenActions={(exerciseIndex, mode) =>
+          setSheet({
+            kind: 'actions',
+            exerciseId: current?.exercises[exerciseIndex]?.exerciseId ?? '',
+            exerciseIndex,
+            mode,
+          })
+        }
         onReturn={returnToExercise}
       />
     ) : view === 'recap' && recap ? (
@@ -829,7 +849,7 @@ export default function App() {
         onFeedback={saveFeedback}
         onRetryFeedback={attemptSave}
         progression={recapLines}
-        highlight={recapHighlight(recap, state.history, recapLines, unit)}
+        highlight={recapHighlight(recap, state.history, recapLines, unit, state.profile ?? undefined)}
         onViewHistory={() => {
           setView('tabs');
           setTab('progress');
@@ -854,6 +874,8 @@ export default function App() {
         constraints={pending.constraints}
         notices={pendingNotices}
         unit={unit}
+        loads={state.profile?.loads}
+        history={state.history}
         onStart={() => acceptAdaptation(pending)}
         onEdit={() => {
           setView('tabs');
@@ -888,7 +910,8 @@ export default function App() {
             }
             onRestore={restoreOriginal}
             onOpenSettings={() => setSheet({ kind: 'settings' })}
-            onOpenExercise={(exerciseId, exerciseIndex) => setSheet({ kind: 'exercise', exerciseId, exerciseIndex })}
+            onOpenExercise={(exerciseId, exerciseIndex) => setSheet({ kind: 'actions', exerciseId, exerciseIndex })}
+            onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
           />
         )}
         {tab === 'plan' && (            <PlanScreen
@@ -901,12 +924,14 @@ export default function App() {
             onOpenSettings={() => setSheet({ kind: 'settings' })}
             onViewDay={(dayIndex) => setSheet({ kind: 'day', dayIndex })}
             onOpenLibrary={() => setView('library')}
+            onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
           />
         )}
         {tab === 'progress' && (
           <ProgressScreen
             history={state.history}
             unit={unit}
+            loads={state.profile?.loads}
             onExport={exportData}
             onCorrect={correctSet}
             onDelete={deleteWorkout}
@@ -979,6 +1004,7 @@ export default function App() {
         <AdjustSheet
           constraints={pending?.constraints ?? constraints}
           originalMinutes={program.minutes}
+          unit={unit}
           onClose={() => {
             setPending(null);
             setPendingNotices([]);
@@ -993,6 +1019,19 @@ export default function App() {
         />
       )}
 
+      {sheet.kind === 'confirm' && (
+        <Sheet title={sheet.change.title} onClose={closeSheet}>
+          <ConfirmChange
+            change={sheet.change}
+            onConfirm={(patch) => {
+              closeSheet();
+              patchProfile(patch);
+            }}
+            onCancel={closeSheet}
+          />
+        </Sheet>
+      )}
+
       {sheet.kind === 'settings' && (
         <SettingsSheet
           profile={profile}
@@ -1004,17 +1043,46 @@ export default function App() {
         />
       )}
 
-      {sheet.kind === 'exercise' &&
+      {sheet.kind === 'actions' &&
         (() => {
           const exercise = todayExercises[sheet.exerciseIndex];
-          if (!exercise || exercise.exerciseId !== sheet.exerciseId) return null;
-          const planned = exercise.planned;
+          // A shifted segment or a discarded session closes the menu rather than
+          // letting an action land on whichever exercise now sits at that index.
+          if (!exercise || exercise.exerciseId !== sheet.exerciseId || !profile) return null;
+          const pending = exercise.performed.filter((set) => !set.done).length;
+          const done = exercise.performed.filter((set) => set.done).length;
           return (
-            <ExerciseSheet
-              exerciseId={sheet.exerciseId}
-              planned={planned}
+            <ExerciseActionsSheet
+              exerciseId={exercise.exerciseId}
+              exerciseName={exercise.name}
+              exerciseIndex={sheet.exerciseIndex}
+              exerciseCount={todayExercises.length}
+              initialMode={sheet.mode}
+              planned={exercise.planned}
+              pending={pending}
+              done={done}
               history={state.history}
               unit={unit}
+              profile={profile}
+              inSession={Boolean(current)}
+              skipped={Boolean(exercise.skipped)}
+              onReplace={() => setSheet({ kind: 'swap', exerciseIndex: sheet.exerciseIndex })}
+              onSaveProfile={(patch) => {
+                // Closing first: a saved preference can reorder today's preview under the sheet.
+                closeSheet();
+                patchProfile(patch);
+                setNotice('Saved for future workouts. Logged sets are unchanged.');
+              }}
+              onRemoveToday={() => {
+                const index = sheet.exerciseIndex;
+                closeSheet();
+                skipCurrentExercise(index);
+              }}
+              onReturn={() => {
+                const index = sheet.exerciseIndex;
+                closeSheet();
+                returnToExercise(index);
+              }}
               onClose={closeSheet}
             />
           );
@@ -1031,6 +1099,7 @@ export default function App() {
               planned={exercise.planned}
               history={state.history}
               unit={unit}
+              loads={state.profile?.loads}
               reason={targetNotes[exercise.exerciseId]}
               onClose={closeSheet}
             />
@@ -1043,6 +1112,8 @@ export default function App() {
           minutes={current?.durationMin ?? minutes}
           exercises={todayExercises}
           unit={unit}
+          history={state.history}
+          loads={state.profile?.loads}
           // The tab bar's start: the one validated path (startSession).
           onStart={sheet.kind === 'preview' && !current ? () => { closeSheet(); startWorkout(); } : undefined}
           onClose={closeSheet}

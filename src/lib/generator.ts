@@ -1,4 +1,4 @@
-import { EXERCISES } from '../data/exercises.ts';
+import { EXERCISES, areIncompatible } from '../data/exercises.ts';
 import type {
   Exercise,
   MuscleGroup,
@@ -128,7 +128,7 @@ export function generateWorkout(
   const primaryMuscleCounts = new Map<MuscleGroup, number>();
 
   const canTake = (exercise: Exercise, allowDuplicatePattern: boolean): boolean => {
-    if (picked.some((item) => item.id === exercise.id)) return false;
+    if (picked.some((item) => item.id === exercise.id || areIncompatible(item.id, exercise.id))) return false;
     const patterns = patternCounts.get(exercise.pattern) ?? 0;
     if (CORE_PATTERNS.has(exercise.pattern)) {
       if (patterns >= 1) return false;
@@ -156,8 +156,37 @@ export function generateWorkout(
     const candidates = shuffled.filter(
       (exercise) => matchesRequirement(exercise, requirement) && canTake(exercise, false),
     );
-    const best = candidates.find((exercise) => exercise.muscles.length >= 2) ?? candidates[0];
+    // Multi-muscle first, then the day's earliest focus muscle (Push-Up over
+    // Diamond Push-Up on a Push day), so an incompatible twin cannot crowd out
+    // the exercise that fills the first slot.
+    const focusRank = (exercise: Exercise) => {
+      const index = day.focus.indexOf(exercise.muscles[0]);
+      return index < 0 ? day.focus.length : index;
+    };
+    const best = [...candidates].sort(
+      (a, b) =>
+        Number(b.muscles.length >= 2) - Number(a.muscles.length >= 2) ||
+        rank(a) - rank(b) || // "more" and "less" outrank focus order
+        focusRank(a) - focusRank(b),
+    )[0];
     if (best) take(best);
+  }
+
+  // 1a. "More" exercises claim a slot before the focus filler can spend it.
+  for (const exercise of shuffled) {
+    if (picked.length >= targetCount) break;
+    if (rank(exercise) === 0 && canTake(exercise, false)) take(exercise);
+  }
+
+  // 1b. Give every focus muscle its own exercise while slots remain, so the
+  // last slot is decided by the day, not by whichever caps happen to be left.
+  for (const muscle of day.focus) {
+    if (picked.length >= targetCount) break;
+    if (picked.some((exercise) => exercise.muscles[0] === muscle)) continue;
+    const candidate = shuffled.find(
+      (exercise) => exercise.muscles[0] === muscle && canTake(exercise, false),
+    );
+    if (candidate) take(candidate);
   }
 
   // 2. Fill using movement patterns not already used.

@@ -36,8 +36,8 @@ export const EQUIPMENT_OPTIONS: Record<EquipmentChoice, EquipmentOption> = {
     label: 'Home setup',
     chip: 'Home setup',
     short: 'Home',
-    // A fixture list, shown only while the rack is unconfirmed.
-    detail: 'Example rack: 10 kg, 15 kg, 18 kg',
+    // Shown only while the rack is unconfirmed; the logger then takes typed loads.
+    detail: 'Your dumbbells: not confirmed — enter weights as you lift',
     loads: HOME_DUMBBELLS,
     allowsLoads: true,
   },
@@ -173,11 +173,12 @@ export function adaptWorkout(
     }
     // A confirmed inventory decides what is usable: any owned load can be
     // re-targeted below, so only a setup with no external load rules a
-    // movement out. Unconfirmed inventory keeps the fixture check.
+    // movement out. An unconfirmed home rack is typed as lifted, so no fixture
+    // judges it; a hotel gym keeps its own rack check.
     const unusable =
       (exercise.requires === 'dumbbell' && !setup.allowsLoads) ||
       (exercise.requires === 'configured' && constraints.equipment !== 'home') ||
-      (exercise.requires !== 'configured' && exercise.weight > 0 && !knownInventory && !setup.loads.includes(exercise.weight));
+      (exercise.requires !== 'configured' && exercise.weight > 0 && !knownInventory && constraints.equipment !== 'home' && !setup.loads.includes(exercise.weight));
     if (unusable) {
       skipped.push({
         exerciseId: exercise.exerciseId,
@@ -359,16 +360,13 @@ export function swapCandidateFor(
 }
 
 /**
- * Weights the logger may offer. A confirmed inventory wins over the fixture
- * rack, so no selector can offer a dumbbell the user does not own.
+ * Weights the logger may offer. At home only the confirmed rack, never the
+ * example one: with nothing confirmed the logger takes a typed load instead.
  */
 export function loadOptions(equipment: EquipmentChoice, inventory?: number[]): number[] {
-  const setup = EQUIPMENT_OPTIONS[equipment];
-  // A setup with no external load has nothing to select from, and a rack the
-  // user confirmed at home is not the rack in a hotel gym.
-  if (!setup?.allowsLoads || equipment !== 'home') return setup?.loads ?? [];
-  const confirmed = confirmedLoads(equipment, inventory);
-  return confirmed.length > 0 ? confirmed : setup.loads;
+  // A hotel gym's rack is the gym's, not the user's home rack.
+  if (equipment === 'home') return confirmedLoads(equipment, inventory);
+  return EQUIPMENT_OPTIONS[equipment]?.loads ?? [];
 }
 
 /** Only the loads the user confirmed for this setup; never the example rack. */

@@ -369,5 +369,12 @@
       "/exercises/nordic-curl/1.jpg"
     ],
     "source": "Glute_Ham_Raise"
+  },
+  "dumbbell-overhead-triceps-extension": {
+    "frames": [
+      "/exercises/dumbbell-overhead-triceps-extension/0.jpg",
+      "/exercises/dumbbell-overhead-triceps-extension/1.jpg"
+    ],
+    "source": "Standing_Dumbbell_Triceps_Extension"
   }
 }

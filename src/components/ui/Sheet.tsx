@@ -8,7 +8,7 @@ interface Props {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
-  variant?: 'default' | 'adjust';
+  variant?: 'default' | 'adjust' | 'settings';
   headingId?: string;
 }
 
@@ -27,14 +27,28 @@ export default function Sheet({
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
+  // Mount-only and declared first: remember the control that opened the sheet, before focus moves.
+  useEffect(() => {
+    const opener = document.activeElement;
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
+  }, []);
+
+  // Parents re-create onClose on every save; reading it through a ref keeps focus from jumping back to Close.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="sheet-backdrop" onClick={onClose} role="presentation">

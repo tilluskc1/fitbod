@@ -52,7 +52,7 @@ const TRICEPS: CoverageRequirement = {
 
 const BICEPS: CoverageRequirement = {
   id: 'biceps',
-  label: 'Biceps flexion',
+  label: 'Biceps curls',
   anyOf: ['elbow_flexion'],
 };
 
@@ -120,6 +120,11 @@ export function isRelevantToDay(exercise: Exercise, day: PlanDay): boolean {
 }
 
 
+/** The movement families the day cannot cover, in plain words. */
+export function missingFamilies(feasibility: Feasibility): string {
+  return joinLabels(feasibility.coverage.filter((item) => !item.satisfied).map((item) => item.label.toLowerCase()), 'or');
+}
+
 function coverageFor(requirements: CoverageRequirement[], selected: Exercise[]): CoverageResult[] {
   return requirements.map((requirement) => {
     const exerciseIds = selected
@@ -134,10 +139,10 @@ function coverageFor(requirements: CoverageRequirement[], selected: Exercise[]):
   });
 }
 
-function joinLabels(items: string[]): string {
+export function joinLabels(items: string[], conjunction: 'and' | 'or' = 'and'): string {
   if (items.length === 0) return '';
   if (items.length === 1) return items[0];
-  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+  return `${items.slice(0, -1).join(', ')} ${conjunction} ${items[items.length - 1]}`;
 }
 
 function buildAlternatives(
@@ -240,6 +245,23 @@ export function evaluateFeasibility(
   const coverage = coverageFor(requirements, selected);
   const unsatisfied = coverage.filter((item) => !item.satisfied);
   const availableCount = selected.length;
+  // Only a muscle with no performable exercise at all is called impossible;
+  // one that merely lost the slot race is not.
+  const caps = capabilitiesFor(profile);
+  const open = day.focus.filter(
+    (muscle) =>
+      !selected.some((exercise) => exercise.muscles[0] === muscle) &&
+      !EXERCISES.some(
+        (exercise) =>
+          exercise.muscles[0] === muscle &&
+          provides(caps, exercise.needs) &&
+          !profile.exclusions.includes(exercise.id),
+      ),
+  );
+  const openNote =
+    open.length > 0
+      ? ` No ${joinLabels(open.map((muscle) => muscle.toLowerCase()))} exercise is possible with these constraints.`
+      : '';
   const alternatives = buildAlternatives(
     profile,
     day,
@@ -263,7 +285,7 @@ export function evaluateFeasibility(
   if (unsatisfied.length > 0) {
     return {
       status: 'limited',
-      reason: `Limited session: no ${joinLabels(unsatisfied.map((item) => item.label.toLowerCase()))} work is available with these constraints.`,
+      reason: `Limited session: no ${joinLabels(unsatisfied.map((item) => item.label.toLowerCase().replace(/ work$/, '')))} work is available with these constraints.${openNote}`,
       targetCount,
       selectedCount: availableCount,
       coverage,
@@ -274,7 +296,7 @@ export function evaluateFeasibility(
   if (availableCount < targetCount) {
     return {
       status: 'limited',
-      reason: `Limited session: ${availableCount} of ${targetCount} exercises are possible without repeating movement patterns.`,
+      reason: `Limited session: ${availableCount} of ${targetCount} exercises are possible without repeating movement patterns.${openNote}`,
       targetCount,
       selectedCount: availableCount,
       coverage,

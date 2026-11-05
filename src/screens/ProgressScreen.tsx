@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react';
 import { loadModeOf, setText, setUnit } from '../data/flagship';
-import { calibrationInputValue, formatActualWeight, toKg, unitLabel } from '../lib/units';
+import { calibrationInputValue, toKg, unitLabel } from '../lib/units';
+import { plannedLoad } from '../lib/liveProgression';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from '../lib/plan';
-import type { Unit, WorkoutFeedback, WorkoutRecord } from '../types';
+import type { Profile, Unit, WorkoutFeedback, WorkoutRecord } from '../types';
 import { FEEDBACK_CHOICES, feedbackLabel } from '../lib/feedback';
 import { ArrowIcon, BarIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
 
 interface Props {
   history: WorkoutRecord[];
   unit: Unit;
+  /** The profile's confirmed loads, so a rack load reads like the target. */
+  loads?: Profile['loads'];
   onExport: () => void;
   onCorrect: (
     workoutId: string,
@@ -50,6 +53,7 @@ const CHART_H = 128;
 export default function ProgressScreen({
   history,
   unit,
+  loads = {},
   onExport,
   onCorrect,
   onDelete,
@@ -118,7 +122,9 @@ export default function ProgressScreen({
   // The program owns per-hand vs total; "18 kg" alone would drop that.
   const loadMode = loadModeOf(activeExerciseId);
   const loadText = (kg: number) =>
-    `${formatActualWeight(kg, unit, { perSide: loadMode === 'each' })}${kg > 0 && loadMode === 'total' ? ' total' : ''}`;
+    kg <= 0
+      ? 'Bodyweight'
+      : `${plannedLoad(loads, history, activeExerciseId, unit)(kg)} ${unitLabel(unit)}${loadMode === 'each' ? ' each' : loadMode === 'total' ? ' total' : ''}`;
   const sessionLabel = (point: { date: string; workoutName: string }) =>
     `${dateParts(point.date).month} ${dateParts(point.date).day} · ${point.workoutName}`;
 

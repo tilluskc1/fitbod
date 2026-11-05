@@ -26,7 +26,7 @@ test('swap-back segments keep their own accepted targets in Today, details, Why,
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: Today } = await server.ssrLoadModule('/src/screens/TodayScreen.tsx');
-    const { ExerciseSheet, WhySheet, DaySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
+    const { ExerciseActionsSheet, WhySheet, DaySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const todayProps = { profile, program: FULL_BODY_A, adapted,
       equipment: 'home', adjusted: true, history: [], current, now: new Date(), onPreview: noop,
@@ -45,19 +45,25 @@ test('swap-back segments keep their own accepted targets in Today, details, Why,
     assert.deepEqual(clicked, ['dumbbell-floor-press', 1], 'pending row supplies its segment, not just exercise ID');
     assert.match(today, /1 set · 9 @ 15 kg each/);
     assert.match(today, /1 set · 10 @ 20 kg each/);
-    for (const Sheet of [ExerciseSheet, WhySheet]) {
-      const text = plain(renderToStaticMarkup(createElement(Sheet, { exerciseId: pending.exerciseId,
-        exerciseName: pending.name, planned: pending.planned, history: [], unit: 'kg', onClose: noop })));
-      assert.match(text, /Today(?:’s target)? 10 @ 20 kg each/);
-    }
+    const sheetProps = { exerciseId: pending.exerciseId, exerciseName: pending.name, planned: pending.planned,
+      history: [], unit: 'kg', onClose: noop };
+    assert.match(plain(renderToStaticMarkup(createElement(WhySheet, sheetProps))), /Today(?:’s target)? 10 @ 20 kg each/);
+    const actions = plain(renderToStaticMarkup(createElement(ExerciseActionsSheet, { ...sheetProps, exerciseIndex: 1,
+      exerciseCount: 2, pending: 1, done: 0, profile, inSession: true, skipped: false, onReplace: noop,
+      onSaveProfile: noop, onRemoveToday: noop, onReturn: noop })));
+    assert.match(actions, /Exercise 2 of 2 · 1 set · 10 @ 20 kg each/);
     const day = plain(renderToStaticMarkup(createElement(DaySheet, { name: current.name, minutes: 20,
       exercises: current.exercises, unit: 'kg', onClose: noop })));
     assert.match(day, /10 @ 20 kg each/);
-    const train = plain(renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
-      loadOptions: [15, 20], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
-      onToggleRestPause: noop, onExtendRest: noop, onSwap: noop })));
-    assert.match(train, /Today’s target: 10 @ 20 kg each/);
-    assert.match(train, /Target: 10 @ 20 kg each/);
+    const trainHtml = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
+      loadOptions: [15, 20], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop,
+      onToggleRestPause: noop, onExtendRest: noop }));
+    const train = plain(trainHtml);
+    assert.match(trainHtml, /<h2 class="aw-exercise__name"><button/, 'the exercise name stays a heading');
+    assert.match(train, /Exercise 2 of \d+ · Target 1 × 10/);
+    assert.match(train, /Set Previous kg each Reps/);
+    assert.match(trainHtml, /aria-label="Edit weight for set 1"[^>]*>20</, "the segment's own 20 kg, not the press-up's");
+    assert.match(trainHtml, /aria-label="Edit reps for set 1"[^>]*>10</);
   } finally { await server.close(); }
 });
 
@@ -84,19 +90,18 @@ test('barbell logger offers calibration without fixture dumbbell weights', async
   try {
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const html = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
-      loadOptions: [10, 15, 18], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
-      onToggleRestPause: noop, onExtendRest: noop, onSwap: noop, onSkip: noop, onReturn: noop }));
+      loadOptions: [10, 15, 18], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop,
+      onToggleRestPause: noop, onExtendRest: noop, onReturn: noop }));
     assert.match(html, /Weight \(kg total\)/);
-    assert.match(html, /Barbell/);
-    assert.match(html, /Enter barbell load/);
-    assert.doesNotMatch(html, /weight-pills/);
+    assert.match(html, /Enter barbell load \(kg total\)/);
+    assert.doesNotMatch(html, /lg-quick|weight-pills/);
     assert.doesNotMatch(html, /Dumbbell/);
-    assert.match(html, /Load not set · Barbell/);
-    assert.doesNotMatch(html, /Bodyweight · Barbell/);
+    assert.match(html, /aria-label="Edit weight for set 1"[^>]*>—</, 'load not set');
+    assert.doesNotMatch(html, />BW</, 'a barbell is not bodyweight');
   } finally { await server.close(); }
 });
 
-test('barbell calibration field opens with precise saved kilograms', async () => {
+test('a barbell set opens with precise saved kilograms', async () => {
   const current = session();
   current.exercises = [{ exerciseId: 'barbell-row', name: 'Barbell Row',
     planned: [{ weight: 0, reps: 8 }], performed: [{ weight: 42.3, reps: 8, done: false }] }];
@@ -104,9 +109,9 @@ test('barbell calibration field opens with precise saved kilograms', async () =>
   try {
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const html = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
-      loadOptions: [], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
-      onToggleRestPause: noop, onExtendRest: noop, onSwap: noop, onSkip: noop, onReturn: noop }));
-    assert.match(html, /aria-label="Enter barbell load \(kg total\)"[^>]*value="42\.3"/);
+      loadOptions: [], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop,
+      onToggleRestPause: noop, onExtendRest: noop, onReturn: noop }));
+    assert.match(html, /aria-label="Edit weight for set 1"[^>]*>42\.3</);
   } finally { await server.close(); }
 });
 

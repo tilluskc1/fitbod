@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import { loadModeOf, detailOf, repsTarget, setText, setUnit } from '../data/flagship';
-import type { LoadMode } from '../data/flagship';
+import { loadModeOf, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
 import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
-import { lastPerformance } from '../lib/plan';
-import { needsCalibration } from '../lib/liveProgression';
-import { calibrationInputValue, displayValue, toKg, unitLabel } from '../lib/units';
-import type { PerformedSet, Unit, WorkoutRecord } from '../types';
+import { exerciseInWorkout, lastPerformance } from '../lib/plan';
+import { needsCalibration, plannedLoad } from '../lib/liveProgression';
+import { availableLoads } from '../lib/progression';
+import { calibrationInputValue, loadValue, toKg, unitLabel } from '../lib/units';
+import type { PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
+import { MoreIcon } from '../components/ui/Icons';
 
 interface Props {
   session: WorkoutRecord;
@@ -20,6 +20,8 @@ interface Props {
   now: number;
   /** Confirmed dumbbell weights for the chosen setup. */
   loadOptions: number[];
+  /** The profile's confirmed loads by equipment: the rack a logged load is compared with. */
+  profileLoads?: Profile['loads'];
   /** Only the user's confirmed loads; the first-weight step never offers the example rack. */
   calibrationLoads?: number[];
   /** `sessionId:exerciseIndex:exerciseId` keys whose first-weight step was skipped. */
@@ -32,11 +34,12 @@ interface Props {
   onMinimize: () => void;
   onFinish: () => void;
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => void;
-  onLogNext: () => void;
+  onConfirmWeight: (exerciseIndex: number, weight: number) => void;
+  /** The exercise id lets the handler refuse a tap rendered against a since-changed session. */
+  onLogSet: (exerciseIndex: number, setIndex: number, exerciseId: string) => void;
   onToggleRestPause: () => void;
   onExtendRest: () => void;
-  onSwap: (exerciseIndex: number) => void;
-  onSkip: (exerciseIndex: number) => void;
+  onOpenActions: (exerciseIndex: number, mode?: 'instructions') => void;
   onReturn: (exerciseIndex: number) => void;
 }
 
@@ -57,51 +60,58 @@ function restClock(seconds: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
 }
 
-function setSummary(
-  exerciseId: string,
-  reps: number,
-  weight: number,
-  mode: LoadMode,
-  unit: Unit,
-): string {
-  const load =
-    weight > 0
-      ? ` @ ${calibrationInputValue(weight, unit)} ${unitLabel(unit)}${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}`
-      : '';
-  return `${setText(exerciseId, reps)}${load}`;
+/** "4 × 12" or "2 × 45s"; a mixed prescription lists its reps rather than claim one number. */
+function shortTarget(entry: WorkoutExercise): string {
+  const reps = entry.planned.map((set) => set.reps);
+  const same = reps.length > 0 && reps.every((value) => value === reps[0]);
+  const seconds = setUnit(entry.exerciseId) === 'seconds' ? 's' : '';
+  return same ? `${reps.length} × ${reps[0]}${seconds}` : repsTarget(entry.exerciseId, reps.length, entry.planned) ?? '';
+}
+
+/** The user's loads in one row: a tap writes that load to every set not yet logged (#66). */
+export function WeightRow({ label, unitText, loads, selected, show, onPick }: {
+  label: string;
+  unitText: string;
+  loads: number[];
+  selected: number | null;
+  show: (kg: number) => string;
+  onPick: (kg: number) => void;
+}) {
+  return (
+    <div className="lg-quick" role="group" aria-label={`${label} (${unitText})`}>
+      <span className="lg-quick__label" aria-hidden="true">{label}</span>
+      {loads.map((weight) => (
+        <button type="button" key={weight} aria-pressed={selected === weight} onClick={() => onPick(weight)}>
+          {show(weight)}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /**
  * First-load help for an uncalibrated variant. It suggests no number: the user
  * picks from their own loads, and the warm-up it describes is never recorded.
+ * A load pill confirms with its own tap; a typed load needs Confirm.
  */
-export function CalibrationStep({ selected, children, onConfirm, onSkip }: {
-  selected: number | null;
-  /** The logger's own load picker for this exercise. */
-  children: ReactNode;
-  onConfirm: (weight: number) => void;
+export function CalibrationStep({ selected = null, onConfirm, onSkip }: {
+  selected?: number | null;
+  onConfirm?: (weight: number) => void;
   onSkip: () => void;
 }) {
   return (
-    <section className="set-card" aria-labelledby="calibration-title">
-      <div className="set-card__head">
-        <span className="set-card__num">1</span>
-        <div>
-          <h3 className="set-card__title" id="calibration-title">Pick your first weight</h3>
-          <div className="set-card__sub">First time on this exercise</div>
-        </div>
-      </div>
-      <p className="data-note">Pick a weight you could lift about 12 times with good form.</p>
-      {children}
+    <div className="lg-first__step">
       <p className="data-note">
         Do 5 easy reps with it, then confirm or change. This warm-up is not logged.
       </p>
-      <div className="review-footer__row">
+      <div className="lg-first__actions">
         <button className="pill-quiet" aria-label="Skip first-weight help" onClick={onSkip}>Skip</button>
-        <button className="pill-primary" disabled={selected === null}
-          onClick={() => selected !== null && onConfirm(selected)}>Confirm</button>
+        {onConfirm && (
+          <button className="pill-primary" disabled={selected === null}
+            onClick={() => selected !== null && onConfirm(selected)}>Confirm</button>
+        )}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -110,6 +120,7 @@ export default function TrainScreen({
   history,
   now,
   loadOptions,
+  profileLoads = {},
   calibrationLoads = [],
   skippedCalibrations = [],
   onSkipCalibration,
@@ -118,23 +129,32 @@ export default function TrainScreen({
   onMinimize,
   onFinish,
   onUpdateSet,
-  onLogNext,
+  onConfirmWeight,
+  onLogSet,
   onToggleRestPause,
   onExtendRest,
-  onSwap,
-  onSkip,
+  onOpenActions,
   onReturn,
 }: Props) {
+  /** A logged set's edit; the record is untouched until Save set. */
   const [editing, setEditing] = useState<EditDraft | null>(null);
+  /** The row whose editor is open, by its exercise-segment-set key. */
+  const [openKey, setOpenKey] = useState<string | null>(null);
   /** The calibration pick lives here until Confirm; nothing reaches the record before it. */
   const [calibration, setCalibration] = useState<{ key: string; weight: number } | null>(null);
-  /** After Confirm or Skip, focus lands on the logger's weight control instead of <body>. */
-  const focusWeight = useRef(false);
-  const weightField = useRef<HTMLDivElement>(null);
+  /** After the focused control unmounts, focus moves here (an element id, or 'log' for the next open ✓) instead of <body>. */
+  const focusNext = useRef<string | null>(null);
   useEffect(() => {
-    if (!focusWeight.current || !weightField.current) return;
-    focusWeight.current = false;
-    weightField.current.querySelector<HTMLElement>('[aria-pressed="true"], button, input')?.focus();
+    const target = focusNext.current;
+    if (!target) return;
+    focusNext.current = null;
+    // A calibrating exercise has no open ✓ yet; its first-weight row comes first. After the last ✓, Finish.
+    const element = target === 'log'
+      ? document.querySelector<HTMLElement>('button.lg-check:not(:disabled)') ?? document.querySelector<HTMLElement>('.lg-first')
+        ?? document.querySelector<HTMLElement>('.finish-btn')
+      : document.getElementById(target);
+    (element?.matches('button, input') ? element
+      : element?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? element?.querySelector<HTMLElement>('button, input'))?.focus();
   });
 
   /** Edit controls write to the draft only; nothing reaches the record here. */
@@ -164,37 +184,45 @@ export default function TrainScreen({
   // Only unskipped, unfinished work is offered. When nothing is left to log,
   // the trainer shows a review state instead of quietly landing on the last
   // exercise as if it were current.
-  const activeIndex = pendingExerciseIndex(session);
-  const index = activeIndex;
-  const exercise = activeIndex === -1 ? undefined : session.exercises[activeIndex];
-  const next = activeIndex === -1 ? undefined : session.exercises[activeIndex + 1];
-  const nothingPending = activeIndex === -1;
+  const index = pendingExerciseIndex(session);
+  const exercise = index === -1 ? undefined : session.exercises[index];
+  // Up next is work still on offer: never a skipped or finished exercise.
+  const next = index === -1 ? undefined : session.exercises
+    .find((entry, entryIndex) => entryIndex > index && !entry.skipped && entry.performed.some((set) => !set.done));
   const skippedToday = session.exercises
     .map((entry, entryIndex) => ({ entry, entryIndex }))
     .filter(({ entry }) => entry.skipped);
 
+  const header = (
+    <header className="flow-header lg-header">
+      <div className="flow-header__inner">
+        <button className="flow-back" onClick={onMinimize} aria-label="Minimize workout">
+          <Icon name="arrow_back_ios_new" size={22} />
+        </button>
+        <h1 className="flow-title">{session.name}</h1>
+        <div className="flow-header__right">
+          <span className="lg-clock">{clock(elapsedMs(session, now))}</span>
+          <button className="finish-btn" onClick={onFinish}>
+            Finish
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+
+  const bar = (
+    <div className="progress-track lg-bar">
+      <div
+        className="progress-fill"
+        style={{ width: `${progress.total === 0 ? 0 : (progress.done / progress.total) * 100}%` }}
+      />
+    </div>
+  );
+
   if (!exercise) {
     return (
       <div className="screen flow-screen">
-        <header className="flow-header">
-          <div className="flow-header__inner">
-            <button className="flow-back" onClick={onMinimize} aria-label="Minimize workout">
-              <Icon name="arrow_back_ios_new" size={22} />
-            </button>
-            <h1 className="flow-title">
-              {session.name} <span>({session.durationMin ?? 35} min)</span>
-            </h1>
-            <div className="flow-header__right">
-              <span className="elapsed-chip">
-                <Icon name="timer" size={16} />
-                {clock(elapsedMs(session, now))}
-              </span>
-              <button className="finish-btn" onClick={onFinish}>
-                Finish
-              </button>
-            </div>
-          </div>
-        </header>
+        {header}
 
         <div className="flow-body" style={{ gap: 14 }}>
           <section className="card">
@@ -246,14 +274,7 @@ export default function TrainScreen({
               {progress.done} of {progress.total} sets
             </strong>
           </div>
-          <div className="progress-track">
-            <div
-              className="progress-fill"
-              style={{
-                width: `${progress.total === 0 ? 0 : (progress.done / progress.total) * 100}%`,
-              }}
-            />
-          </div>
+          {bar}
           <button className="save-bar" onClick={onFinish}>
             {progress.done === 0 ? 'Finish or discard' : 'Finish workout'}
           </button>
@@ -265,7 +286,6 @@ export default function TrainScreen({
   const activeSet = exercise.performed.findIndex((set) => !set.done);
   const mode = loadModeOf(exercise.exerciseId);
   const equipment = exerciseById(exercise.exerciseId)?.equipment ?? (mode === 'none' ? 'Bodyweight' : 'Dumbbell');
-  const detail = detailOf(exercise.exerciseId);
   const weightLabel =
     mode === 'total'
       ? `${unitLabel(unit)} total`
@@ -273,29 +293,35 @@ export default function TrainScreen({
         ? `${unitLabel(unit)} each`
         : 'bodyweight';
   /** Loads are stored in kilograms; only the readout converts. */
-  const showWeight = (kg: number) => displayValue(kg, unit);
-  const showActual = (kg: number) => calibrationInputValue(kg, unit);
+  // One rule for planned and logged loads alike (history holds earlier sessions' typed loads).
+  const showWeight = plannedLoad(profileLoads, history, exercise.exerciseId, unit);
+  // Only confirmed loads are on the rack; anything else was typed and keeps its value.
+  const rack = availableLoads({ loads: profileLoads }, equipment);
+  const showActual = (kg: number) => loadValue(kg, unit, rack);
+  // A set (pending or saved) at the load the app planned for it reads like the target; an edited one keeps its typed value.
+  const showPending = (kg: number, setIndex: number) =>
+    Math.abs(kg - (exercise.planned[setIndex]?.weight ?? -1)) < 0.001 ? showWeight(kg) : showActual(kg);
   const last = lastPerformance(history, exercise.exerciseId);
+  const previous = last ? exerciseInWorkout(last.workout, exercise.exerciseId)?.done ?? [] : [];
   const holdUnit = setUnit(exercise.exerciseId) === 'seconds';
-  const plannedTarget = exercise.planned[activeSet === -1 ? exercise.planned.length - 1 : activeSet];
-  /** "9 · 9" list of the prescribed reps; never "2 × 9". */
-  const targetReps =
-    repsTarget(exercise.exerciseId, exercise.planned.length, exercise.planned) ??
-    exercise.planned.map((set) => set.reps).join(' · ');
-  const targetWeight = exercise.planned[0]?.weight ?? 0;
   const canPickWeight = equipment === 'Dumbbell' && loadOptions.length > 0;
-  const canEnterWeight = mode !== 'none' && equipment !== 'Dumbbell';
-  const loadEntry = (weight: number, update: (weight: number) => void) => canEnterWeight ? (
+  // A dumbbell with no confirmed rack is typed, the same way a barbell load is.
+  const canEnterWeight = mode !== 'none' && !canPickWeight;
+  const loadEntry = (weight: number, update: (weight: number) => void, shown?: string) => (
     <input type="number" min="0" step="any" inputMode="decimal"
       aria-label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`}
-      defaultValue={calibrationInputValue(weight, unit)}
+      defaultValue={shown ?? calibrationInputValue(weight, unit)}
       onChange={(event) => {
         const value = Number(event.target.value);
         if (event.target.value === '') update(0);
         else if (Number.isFinite(value) && value >= 0) update(toKg(value, unit));
       }} />
-  ) : null;
+  );
 
+  // #80: everything a row renders is keyed by exercise, segment and set, so a
+  // skip or swap mounts fresh controls instead of reusing another exercise's.
+  const exerciseKey = `${exercise.exerciseId}:${index}`;
+  const rowKey = (setIndex: number) => `${exerciseKey}:${setIndex}`;
   const calibrationKey = `${session.id}:${index}:${exercise.exerciseId}`;
   const pick = calibration?.key === calibrationKey ? calibration.weight : null;
   const canPickCalibration = equipment === 'Dumbbell' && calibrationLoads.length > 0;
@@ -303,58 +329,37 @@ export default function TrainScreen({
     && !skippedCalibrations.includes(calibrationKey) && needsCalibration(exercise, history);
   const choose = (weight: number) =>
     setCalibration(weight > 0 ? { key: calibrationKey, weight } : null);
+  const quickLoads = calibrating ? (canPickCalibration ? calibrationLoads : []) : canPickWeight ? loadOptions : [];
+  const coach = calibrating
+    ? 'First time on this one. Pick a weight you could lift about 12 times with good form.'
+    : targetNotes?.[exercise.exerciseId];
 
-  const activeValues =
-    activeSet === -1
-      ? null
-      : exercise.performed[activeSet];
-
-  const logLabel = nothingPending
-    ? 'Finish workout'
-    : activeValues
-      ? `Log set ${activeSet + 1} · ${
-          activeValues.weight > 0
-            ? `${setText(exercise.exerciseId, activeValues.reps)} @ ${showActual(activeValues.weight)} ${unitLabel(unit)}`
-            : setText(exercise.exerciseId, activeValues.reps)
-        }`
-      : 'Log set';
-
-  /** Save set is the only path that writes an edited set; it keeps its original timestamp. */
-  const saveEditing = () => {
-    if (!editing) return;
-    const set = session.exercises[editing.exerciseIndex]?.performed[editing.setIndex];
-    if (!set) {
-      setEditing(null);
-      return;
-    }
-    onUpdateSet(editing.exerciseIndex, editing.setIndex, saveDraft(editing, set));
+  const openEditor = (set: PerformedSet, setIndex: number, field: 'weight' | 'reps') => {
+    const key = rowKey(setIndex);
+    setEditing(set.done ? openDraft(index, setIndex, set) : null);
+    setOpenKey(key);
+    focusNext.current = `${key}:edit-${field}`;
+  };
+  const closeEditor = (key: string) => {
     setEditing(null);
+    setOpenKey(null);
+    focusNext.current = `${key}:reps`;
+  };
+  /** Save set is the only path that writes an edited set; it keeps its original timestamp. */
+  const saveEditing = (key: string) => {
+    const set = editing && session.exercises[editing.exerciseIndex]?.performed[editing.setIndex];
+    if (editing && set) onUpdateSet(editing.exerciseIndex, editing.setIndex, saveDraft(editing, set));
+    closeEditor(key);
   };
 
-  const renderSet = (set: PerformedSet, setIndex: number) => {
-    const draft =
-      editing && editing.exerciseIndex === index && editing.setIndex === setIndex ? editing : null;
-    const editingElsewhere = Boolean(editing && editing.exerciseIndex === index);
-    const isActive = setIndex === activeSet && !set.done && !editingElsewhere;
-
-    if (draft) {
-      return (
-        <div className="set-card" key={setIndex}>
-          <div className="set-card__head">
-            <span className="set-card__num">{setIndex + 1}</span>
-            <div>
-              <div className="set-card__title">
-                Set {setIndex + 1} of {exercise.performed.length}
-              </div>
-              <div className="set-card__sub">Editing saved set</div>
-            </div>
-            <span className="set-card__target">
-              Saved: {setText(exercise.exerciseId, set.reps)}
-              {set.weight > 0 ? ` · ${showActual(set.weight)} ${unitLabel(unit)}` : ''}
-            </span>
-          </div>
-
-          <div className="aw-field">
+  const editor = (set: PerformedSet, setIndex: number, key: string, draft: EditDraft | null) => {
+    const value = draft ?? set;
+    const patch = draft ? patchDraft : (change: Partial<PerformedSet>) => onUpdateSet(index, setIndex, change);
+    return (
+      <div className="set-card lg-editor" role="group"
+        aria-label={draft ? `Edit logged set ${setIndex + 1}` : `Set ${setIndex + 1}`}>
+        {mode !== 'none' && (
+          <div className="aw-field" id={`${key}:edit-weight`}>
             <div className="aw-field__label">
               <span>Weight ({weightLabel})</span>
               <span className="aw-field__note">{equipment}</span>
@@ -362,340 +367,182 @@ export default function TrainScreen({
             {canPickWeight ? (
               <div className="weight-pills">
                 {loadOptions.map((weight) => (
-                  <button
-                    key={weight}
-                    aria-pressed={draft.weight === weight}
-                    onClick={() => patchDraft({ weight })}
-                  >
+                  <button key={weight} aria-pressed={value.weight === weight} onClick={() => patch({ weight })}>
                     {showWeight(weight)}
                   </button>
                 ))}
               </div>
-            ) : canEnterWeight ? loadEntry(draft.weight, (weight) => patchDraft({ weight })) : (
-              <p style={{ fontSize: 14, color: 'var(--on-surface-variant)' }}>Bodyweight</p>
-            )}
+            ) : loadEntry(value.weight, (weight) => patch({ weight }), draft ? undefined : showPending(set.weight, setIndex))}
           </div>
-
-          <div className="reps-field">
-            <div>
-              <div className="reps-field__label">
-                {holdUnit ? 'Seconds held' : 'Reps completed'}
-              </div>
-              <div className="reps-field__hint">Tap + or − to adjust</div>
-            </div>
-            <div className="stepper">
-              <button
-                onClick={() => patchDraft({ reps: Math.max(0, draft.reps - 1) })}
-                aria-label={holdUnit ? 'Decrease seconds' : 'Decrease reps'}
-              >
-                <Icon name="remove" size={20} />
-              </button>
-              <output aria-live="polite">{draft.reps}</output>
-              <button
-                onClick={() => patchDraft({ reps: draft.reps + 1 })}
-                aria-label={holdUnit ? 'Increase seconds' : 'Increase reps'}
-              >
-                <Icon name="add" size={20} />
-              </button>
-            </div>
-          </div>
-
-          <div className="review-footer__row">
-            <button className="pill-quiet" onClick={() => setEditing(null)}>
-              Cancel
-            </button>
-            <button className="pill-primary" onClick={saveEditing}>
-              Save set
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    if (set.done) {
-      return (
-        <div className="aw-set" key={setIndex}>
-          <span className="aw-set__check" aria-label={`Set ${setIndex + 1} completed`}>
-            <Icon name="check" size={20} />
-          </span>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span className="aw-set__label">
-              Set {setIndex + 1}: {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit)}
-            </span>
-          </span>
-          <button
-            className="aw-set__edit"
-            onClick={() =>
-              setEditing(openDraft(index, setIndex, set))
-            }
-            aria-label={`Edit set ${setIndex + 1}`}
-          >
-            <Icon name="edit" size={18} />
-          </button>
-        </div>
-      );
-    }
-
-    if (isActive && calibrating) {
-      return (
-        <CalibrationStep
-          key={setIndex}
-          selected={pick}
-          onConfirm={(weight) => {
-            focusWeight.current = true;
-            onUpdateSet(index, setIndex, { weight });
-          }}
-          onSkip={() => {
-            focusWeight.current = true;
-            onSkipCalibration?.(calibrationKey);
-          }}
-        >
-          <div className="aw-field">
-            <div className="aw-field__label">
-              <span>Weight ({weightLabel})</span>
-              <span className="aw-field__note">{equipment}</span>
-            </div>
-            {canPickCalibration ? (
-              <div className="weight-pills" role="group" aria-label={`Weight (${weightLabel})`}>
-                {calibrationLoads.map((weight) => (
-                  <button key={weight} aria-pressed={pick === weight} onClick={() => choose(weight)}>
-                    {showWeight(weight)}
-                  </button>
-                ))}
-              </div>
-            ) : loadEntry(pick ?? 0, choose)}
-          </div>
-        </CalibrationStep>
-      );
-    }
-
-    if (!isActive) {
-      return (
-        <div className="aw-set" key={setIndex}>
-          <span className="aw-set__check" aria-hidden="true" style={{ background: 'transparent', borderColor: 'var(--outline-variant)', color: 'var(--on-surface-variant)' }}>
-            {setIndex + 1}
-          </span>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span className="aw-set__label">
-              {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit)}
-            </span>
-          </span>
-        </div>
-      );
-    }
-
-    return (
-      <div className="set-card" key={setIndex}>
-        <div className="set-card__head">
-          <span className="set-card__num">{setIndex + 1}</span>
-          <div>
-            <div className="set-card__title">
-              Set {setIndex + 1} of {exercise.performed.length}
-            </div>
-            <div className="set-card__sub">Current set</div>
-          </div>
-          <span className="set-card__target">
-            Target: {setText(exercise.exerciseId, plannedTarget?.reps ?? 0)}
-            {(plannedTarget?.weight ?? 0) > 0
-              ? ` · ${showWeight(plannedTarget.weight)} ${unitLabel(unit)}`
-              : ''}
-          </span>
-        </div>
-
-        <div className="aw-field" ref={weightField}>
-          <div className="aw-field__label">
-            <span>Weight ({weightLabel})</span>
-            <span className="aw-field__note">{equipment}</span>
-          </div>
-          {canPickWeight ? (
-            <div className="weight-pills">
-              {loadOptions.map((weight) => (
-                <button
-                  key={weight}
-                  aria-pressed={set.weight === weight}
-                  onClick={() => onUpdateSet(index, setIndex, { weight })}
-                >
-                  {showWeight(weight)}
-                </button>
-              ))}
-            </div>
-          ) : canEnterWeight ? loadEntry(set.weight, (weight) => onUpdateSet(index, setIndex, { weight })) : (
-            <p style={{ fontSize: 14, color: 'var(--on-surface-variant)' }}>Bodyweight</p>
-          )}
-        </div>
-
+        )}
         <div className="reps-field">
-          <div>
-            <div className="reps-field__label">
-              {holdUnit ? 'Seconds held' : 'Reps completed'}
-            </div>
-            <div className="reps-field__hint">Tap + or − to adjust</div>
-          </div>
-          <div className="stepper">
-            <button
-              onClick={() => onUpdateSet(index, setIndex, { reps: Math.max(0, set.reps - 1) })}
-              aria-label={holdUnit ? 'Decrease seconds' : 'Decrease reps'}
-            >
+          <div className="reps-field__label">{holdUnit ? 'Seconds held' : 'Reps completed'}</div>
+          <div className="stepper" id={`${key}:edit-reps`}>
+            <button onClick={() => patch({ reps: Math.max(0, value.reps - 1) })}
+              aria-label={holdUnit ? 'Decrease seconds' : 'Decrease reps'}>
               <Icon name="remove" size={20} />
             </button>
-            <output aria-live="polite">{set.reps}</output>
-            <button
-              onClick={() => onUpdateSet(index, setIndex, { reps: set.reps + 1 })}
-              aria-label={holdUnit ? 'Increase seconds' : 'Increase reps'}
-            >
+            <output aria-live="polite">{value.reps}</output>
+            <button onClick={() => patch({ reps: value.reps + 1 })}
+              aria-label={holdUnit ? 'Increase seconds' : 'Increase reps'}>
               <Icon name="add" size={20} />
             </button>
           </div>
+        </div>
+        <div className="review-footer__row">
+          {draft ? (
+            <>
+              <button className="pill-quiet" onClick={() => closeEditor(key)}>Cancel</button>
+              <button className="pill-primary" onClick={() => saveEditing(key)}>Save set</button>
+            </>
+          ) : (
+            <button className="pill-quiet" onClick={() => closeEditor(key)}>Done</button>
+          )}
         </div>
       </div>
     );
   };
 
+  const rows = exercise.performed.flatMap((set, setIndex) => {
+    const key = rowKey(setIndex);
+    const n = setIndex + 1;
+    const draft = editing && editing.exerciseIndex === index && editing.setIndex === setIndex ? editing : null;
+    // A logged set is only ever edited through its draft.
+    const open = openKey === key && (!set.done || draft !== null);
+    const before = previous[setIndex];
+    const row = (
+      <tr key={key} className={set.done ? 'lg-row--done' : setIndex === activeSet ? 'lg-row--current' : undefined}>
+        <td>{n}</td>
+        <td className="lg-prev">
+          {!before ? '—' : before.weight > 0 ? `${showWeight(before.weight)} × ${before.reps}` : `${before.reps}${holdUnit ? 's' : ''}`}
+        </td>
+        <td>
+          {mode === 'none' ? (
+            <span className="lg-cell lg-cell--bw">BW</span>
+          ) : (
+            <button type="button" className={set.weight > 0 ? 'lg-cell' : 'lg-cell lg-cell--empty'} id={`${key}:weight`}
+              aria-label={`Edit weight for set ${n}`} aria-expanded={open} onClick={() => openEditor(set, setIndex, 'weight')}>
+              {set.weight > 0 ? showPending(set.weight, setIndex) : '—'}
+            </button>
+          )}
+        </td>
+        <td>
+          <button type="button" className="lg-cell" id={`${key}:reps`}
+            aria-label={`Edit ${holdUnit ? 'seconds' : 'reps'} for set ${n}`} aria-expanded={open}
+            onClick={() => openEditor(set, setIndex, 'reps')}>
+            {`${set.reps}${holdUnit ? 's' : ''}`}
+          </button>
+        </td>
+        <td>
+          {set.done ? (
+            <span className="lg-check" role="img" aria-label={`Set ${n} logged`}>
+              <Icon name="check" size={20} />
+            </span>
+          ) : (
+            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={calibrating}
+              onClick={() => {
+                primeRestAudio();
+                if (openKey === key) setOpenKey(null);
+                focusNext.current = 'log';
+                onLogSet(index, setIndex, exercise.exerciseId);
+              }}>
+              <Icon name="check" size={20} />
+            </button>
+          )}
+        </td>
+      </tr>
+    );
+    return open
+      ? [row, <tr key={`${key}:edit`} className="lg-edit"><td colSpan={5}>{editor(set, setIndex, key, draft)}</td></tr>]
+      : [row];
+  });
+
   return (
     <div className="screen flow-screen">
-      <header className="flow-header">
-        <div className="flow-header__inner">
-          <button className="flow-back" onClick={onMinimize} aria-label="Minimize workout">
-            <Icon name="arrow_back_ios_new" size={22} />
-          </button>
-          <h1 className="flow-title">
-            {session.name} <span>({session.durationMin ?? 35} min)</span>
-          </h1>
-          <div className="flow-header__right">
-            <span className="elapsed-chip">
-              <Icon name="timer" size={16} />
-              {clock(elapsedMs(session, now))}
-            </span>
-            <button className="finish-btn" onClick={onFinish}>
-              Finish
-            </button>
-          </div>
-        </div>
-      </header>
+      {header}
 
-      <div className="flow-body" style={{ gap: 14 }}>
-        <section className="aw-exercise" aria-label={exercise.name}>
-          <div className="aw-exercise__media">
-            <Demo exerciseId={exercise.exerciseId} name={exercise.name} className="aw-exercise__photo" eager />
-            <div className="aw-exercise__overlay">
-              <div className="aw-exercise__top">
-                <span className="aw-order">
-                  Exercise {index + 1} of {session.exercises.length}
-                </span>
-                <span className="aw-setcount">
-                  Set {Math.max(1, activeSet + 1)} of {exercise.performed.length}
-                </span>
-                {/* Only the remaining work can change exercise; nothing pending means nothing to swap. */}
-                <button
-                  className="aw-swap"
-                  onClick={() => onSwap(index)}
-                  disabled={!exercise.performed.some((set) => !set.done)}
-                >
-                  <Icon name="swap_horiz" size={16} />
-                  Swap
-                </button>
-              </div>
-              <h2 className="aw-exercise__name">{exercise.name}</h2>
-            </div>
+      <div className="flow-body lg-body">
+        <section className="lg-ex" aria-label={exercise.name}>
+          <button type="button" className="lg-thumb" onClick={() => onOpenActions(index, 'instructions')}
+            aria-label={`${exercise.name} demo and instructions`} aria-haspopup="dialog">
+            <Demo exerciseId={exercise.exerciseId} name={exercise.name} eager />
+            <span className="lg-thumb__play" aria-hidden="true"><Icon name="play_arrow" size={12} /></span>
+          </button>
+          <div className="lg-ex__text">
+            <h2 className="aw-exercise__name">
+              <button className="aw-exercise__name-btn" onClick={() => onOpenActions(index)} aria-haspopup="dialog">
+                {exercise.name}
+              </button>
+            </h2>
+            <p className="lg-ex__meta">
+              Exercise {index + 1} of {session.exercises.length} · Target <b>{shortTarget(exercise)}</b>
+            </p>
           </div>
-          <div className="aw-exercise__info">
-            <div className="aw-loadline">
-              <Icon name="fitness_center" size={18} />
-              {(plannedTarget?.weight ?? 0) > 0
-                ? `${showWeight(plannedTarget.weight)} ${weightLabel} · ${detail}`
-                : mode === 'none'
-                  ? `Bodyweight · ${detail}`
-                  : `Load not set · ${[...new Set([equipment, detail])].join(' · ')}`}
-            </div>
-            <div className="aw-history">
-              <div className="aw-history__line">
-                <Icon name="history" size={16} />
-                {last
-                  ? `Last session: ${setText(exercise.exerciseId, last.reps)}${last.weight > 0 ? ` @ ${showActual(last.weight)} ${unitLabel(unit)}${mode === 'total' ? ' total' : ' each'}` : ''}`
-                  : 'No previous session recorded'}
-              </div>
-              <div className="aw-history__line aw-history__line--target">
-                <Icon name="flag" size={16} />
-                Today’s target: {targetReps}
-                {targetWeight > 0 ? ` @ ${showWeight(targetWeight)} ${weightLabel}` : ''}
-              </div>
-              {targetNotes?.[exercise.exerciseId] && (
-                <div className="aw-history__line">
-                  <Icon name="info" size={16} />
-                  {targetNotes[exercise.exerciseId]}
-                </div>
-              )}
-            </div>
-          </div>
+          {/* The same menu the row opens: instructions, history, replace, remove for today. */}
+          <button className="lg-more" onClick={() => onOpenActions(index)}
+            aria-label={`More actions for ${exercise.name}`} aria-haspopup="dialog">
+            <MoreIcon size={18} />
+          </button>
         </section>
+
+        {coach && <p className="lg-coach">{coach}</p>}
+
+        {mode !== 'none' && (quickLoads.length > 0 || calibrating) && (
+          <div className="lg-first" key={exerciseKey} id={`${exerciseKey}:first`}>
+            {quickLoads.length > 0 && (
+              <WeightRow label={canPickCalibration ? 'Your dumbbells' : 'Dumbbells'} unitText={weightLabel}
+                loads={quickLoads} selected={exercise.performed[activeSet]?.weight ?? null} show={showWeight}
+                onPick={(weight) => onConfirmWeight(index, weight)} />
+            )}
+            {calibrating && quickLoads.length === 0 && (
+              <label className="lg-first__typed">
+                <span>Weight ({weightLabel})</span>
+                {loadEntry(pick ?? 0, choose)}
+              </label>
+            )}
+            {calibrating && (
+              <CalibrationStep
+                selected={pick}
+                onConfirm={quickLoads.length > 0 ? undefined : (weight) => {
+                  focusNext.current = 'log';
+                  onConfirmWeight(index, weight);
+                }}
+                onSkip={() => {
+                  focusNext.current = 'log';
+                  onSkipCalibration?.(calibrationKey);
+                }}
+              />
+            )}
+          </div>
+        )}
+
+        <table className="lg-table" aria-label={`Sets for ${exercise.name}`}>
+          <thead>
+            <tr>
+              <th scope="col">Set</th>
+              <th scope="col">Previous</th>
+              <th scope="col">{mode === 'none' ? 'Load' : weightLabel}</th>
+              <th scope="col">{holdUnit ? 'Secs' : 'Reps'}</th>
+              <th scope="col"><span className="sr-only">Log</span></th>
+            </tr>
+          </thead>
+          <tbody>{rows}</tbody>
+        </table>
 
         <div className="sr-only" role="status" aria-live="polite">
           {restOver ? 'Rest over' : ''}
         </div>
 
-        {rest > 0 && (
-          <div className="rest-bar" role="timer" aria-label={`Rest, ${rest} seconds remaining`}>
-            <div className="rest-bar__left">
-              <Icon name="timer" size={18} />
-              <span>Rest</span>
-              <span className="rest-bar__time">{restClock(rest)}</span>
-            </div>
-            <div className="rest-bar__actions">
-              <button
-                className="rest-bar__mute"
-                aria-pressed={muted}
-                aria-label="Mute rest cue"
-                onClick={() => {
-                  primeRestAudio();
-                  setRestMuted(session.id, !muted);
-                  setMuted(!muted);
-                }}
-              >
-                Mute
-              </button>
-              <button className="rest-bar__toggle" onClick={onToggleRestPause}>
-                <Icon name={restPaused ? 'play_arrow' : 'pause'} size={16} />
-                {restPaused ? 'Resume' : 'Pause'}
-              </button>
-              <button
-                className="rest-bar__extend"
-                onClick={onExtendRest}
-                aria-label="Add 30 seconds of rest"
-              >
-                +30s
-              </button>
-            </div>
+        {next && (
+          <div className="lg-next">
+            <span>Up next · <b>{next.name}</b></span>
+            <span className="lg-next__target">{shortTarget(next)}</span>
           </div>
         )}
 
-        <div>
-          <div className="sets-head">
-            <h2>Sets ({exercise.performed.length} total)</h2>
-            <span>
-              Target: {targetReps}
-              {targetWeight > 0 ? ` @ ${showWeight(targetWeight)} ${weightLabel}` : ''}
-            </span>
-          </div>
-
-          {exercise.performed.map((set, setIndex) => renderSet(set, setIndex))}
-
-          <button
-            className="pill-quiet"
-            style={{ marginTop: 12 }}
-            onClick={() => onSkip(index)}
-            disabled={!exercise.performed.some((set) => !set.done)}
-          >
-            Skip remaining for today
-          </button>
-          <p className="data-note" style={{ marginTop: 6 }}>
-            Skipping records nothing. The planned sets stay as they are, and you can return to them
-            before you finish.
-          </p>
-        </div>
-
         {skippedToday.length > 0 && (
           <section aria-label="Skipped today">
-            <div className="sets-head">
+            <div className="lg-skipped__head">
               <h2>Skipped today</h2>
               <span>Nothing recorded</span>
             </div>
@@ -714,58 +561,30 @@ export default function TrainScreen({
             })}
           </section>
         )}
-
-        {next && (
-          <div className="up-next">
-            <span className="up-next__icon">
-              <Icon name="fitness_center" size={22} />
-            </span>
-            <span style={{ minWidth: 0 }}>
-              <span className="up-next__label">Up next</span>
-              <span className="up-next__name" style={{ display: 'block' }}>
-                {next.name}
-              </span>
-              <span className="up-next__meta" style={{ display: 'block' }}>
-                {next.planned.length} {next.planned.length === 1 ? 'set' : 'sets'}
-                {next.planned[0]?.weight
-                  ? ` @ ${showWeight(next.planned[0].weight)} ${unitLabel(unit)}${
-                      loadModeOf(next.exerciseId) === 'total' ? ' total' : ' each'
-                    }`
-                  : ''}
-              </span>
-            </span>
-          </div>
-        )}
       </div>
 
-      <div className="flow-dock flow-dock--edge">
-        <div className="progress-line">
-          <span>Workout progress</span>
-          <strong>
-            {progress.done} of {progress.total} sets
-          </strong>
-        </div>
-        <div className="progress-track">
-          <div
-            className="progress-fill"
-            style={{ width: `${progress.total === 0 ? 0 : (progress.done / progress.total) * 100}%` }}
-          />
-        </div>
-        <button
-          className="save-bar"
-          disabled={calibrating && !editing}
-          onClick={editing
-              ? saveEditing
-              : nothingPending
-                ? onFinish
-                : () => {
-                    primeRestAudio();
-                    onLogNext();
-                  }
-          }
-        >
-          {editing ? 'Save set' : logLabel}
-        </button>
+      <div className="flow-dock lg-dock">
+        {rest > 0 && (
+          <div className="lg-rest" role="timer" aria-label={`Rest, ${rest} seconds remaining`}>
+            <span className="lg-rest__time">{restClock(rest)}</span>
+            <span className="lg-rest__label">Rest</span>
+            <button onClick={onExtendRest} aria-label="Add 30 seconds of rest">+30s</button>
+            <button onClick={onToggleRestPause}>{restPaused ? 'Resume' : 'Pause'}</button>
+            <button
+              aria-pressed={muted}
+              aria-label="Mute rest cue"
+              onClick={() => {
+                primeRestAudio();
+                setRestMuted(session.id, !muted);
+                setMuted(!muted);
+              }}
+            >
+              {muted ? 'Muted' : 'Mute'}
+            </button>
+          </div>
+        )}
+        {bar}
+        <p className="lg-cap">{progress.done} of {progress.total} sets</p>
       </div>
     </div>
   );
