@@ -4,7 +4,7 @@ import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } fr
 import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
-import { prescribeExercise } from './progression.ts';
+import { prescribeExercise, repRangeFor } from './progression.ts';
 import { liveExercises } from './liveProgression.ts';
 
 /**
@@ -377,14 +377,17 @@ export function loadOptions(equipment: EquipmentChoice, inventory?: number[]): n
 export function currentWorkout(adapted: AdaptedWorkout, session: WorkoutRecord): AdaptedWorkout {
   const exercises: AdaptedExercise[] = session.exercises.map((entry) => {
     const source = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === entry.exerciseId);
-    const dumbbell = exerciseById(entry.exerciseId)?.equipment === 'Dumbbell';
+    const catalog = exerciseById(entry.exerciseId);
+    const dumbbell = catalog?.equipment === 'Dumbbell';
     const reps = entry.planned.map((set) => set.reps);
+    const range = catalog ? repRangeFor(catalog.pattern) : null;
     return {
       exerciseId: entry.exerciseId,
       name: entry.name,
       sets: entry.planned.length,
       originalSets: entry.originalPlannedSets ?? entry.planned.length,
-      repRange: source?.repRange ?? [reps[0] ?? 0, reps[0] ?? 0],
+      // Same fallback slotProgram uses: the program's range, else the catalog pattern's.
+      repRange: source?.repRange ?? (range ? [range.min, range.max] : [reps[0] ?? 0, reps[0] ?? 0]),
       targetReps: reps,
       holdSeconds: source?.holdSeconds ? reps[0] : undefined,
       weight: entry.planned[0]?.weight ?? 0,

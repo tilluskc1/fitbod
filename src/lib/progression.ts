@@ -184,6 +184,8 @@ export interface Prescription {
   basis: ProgressionBasis;
   range: RepRange;
   increment: number;
+  /** Selectable loads for this equipment; a logged load outside it was typed by the user. */
+  available: number[];
   last: ExercisePerformance | null;
 }
 
@@ -205,6 +207,7 @@ export function prescribeExercise(
     range,
     sets,
     increment,
+    available,
     last,
   };
 
@@ -275,10 +278,14 @@ function fmtAmount(kg: number, unit: Unit): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-function fmtLoad(weight: number, equipment: Equipment, unit: Unit = 'kg'): string {
+/**
+ * A rack (or planned) load reads exactly as the target line does; only a
+ * user-typed load off the rack keeps its stored precision.
+ */
+function fmtLoad(weight: number, equipment: Equipment, unit: Unit = 'kg', available: number[] = []): string {
   if (weight <= 0) return equipment === 'Bodyweight' ? 'bodyweight' : 'no added load';
-  // Every load named here was logged: keep its stored precision, not the plate rounding.
-  return `${calibrationInputValue(weight, unit)} ${unitLabel(unit)}`;
+  const onRack = available.some((load) => Math.abs(load - weight) < 0.001);
+  return `${onRack ? fmtAmount(weight, unit) : calibrationInputValue(weight, unit)} ${unitLabel(unit)}`;
 }
 
 function fmtDate(iso: string): string {
@@ -289,7 +296,8 @@ function fmtDate(iso: string): string {
 
 /** One line explaining why today's numbers are what they are. Loads read in the display unit; records stay kilograms. */
 export function describePrescription(prescription: Prescription, unit: Unit): string {
-  const { basis, last, range, increment, equipment, weight } = prescription;
+  const { basis, last, range, increment, equipment, weight, available } = prescription;
+  const logged = (kg: number) => fmtLoad(kg, equipment, unit, available);
   if (!last) {
     return 'First time — no history. Start light and log what you actually lift.';
   }
@@ -301,15 +309,16 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
 
   switch (basis) {
     case 'load-increase':
-      return `${when}: ${setsLabel} at ${range.max} reps, ${fmtLoad(workWeight, equipment, unit)}. One step up (+${fmtAmount(increment, unit)} ${unitLabel(unit)}); reps restart at ${range.min}.`;
+      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. One step up (+${fmtAmount(increment, unit)} ${unitLabel(unit)}); reps restart at ${range.min}.`;
     case 'rep-increase':
-      return `${when}: ${fmtLoad(workWeight, equipment, unit)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
+      return `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
     case 'mixed-load':
-      return `${when}: ${setsLabel} at different loads (heaviest ${fmtLoad(workWeight, equipment, unit)}). The load holds at ${fmtLoad(weight, equipment, unit)} — use one working load for every set to earn the next step.`;
+      // `weight` is the planned load: it reads exactly as the target line does.
+      return `${when}: ${setsLabel} at different loads (heaviest ${logged(workWeight)}). The load holds at ${fmtLoad(weight, equipment, unit, [weight])} — use one working load for every set to earn the next step.`;
     case 'repeat':
       return last.done.length === 0
         ? `${when} was not logged. Repeating the same prescription.`
-        : `${when} was unfinished, so the load stays at ${fmtLoad(workWeight, equipment, unit)}. Finish every set to earn the next step.`;
+        : `${when} was unfinished, so the load stays at ${logged(workWeight)}. Finish every set to earn the next step.`;
     case 'hold':
       return equipment === 'Bodyweight'
         ? `Bodyweight movement at the top of the rep range (${range.max}). Add external load manually to keep progressing.`
