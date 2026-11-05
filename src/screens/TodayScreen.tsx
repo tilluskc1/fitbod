@@ -1,13 +1,13 @@
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
-import { loadValue, unitLabel, unitOf } from '../lib/units';
+import { unitLabel, unitOf } from '../lib/units';
 import { exerciseMeta, programSetCount, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { currentWorkout, EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
 import { exercisePhoto } from '../lib/media';
-import { plannedLoad, rackOf, targetCoachLine } from '../lib/liveProgression';
+import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 
@@ -54,7 +54,7 @@ function coachInsight(
   first: ProgramExercise,
   unit: Unit,
   line: string | null,
-  rack: number[],
+  format: (kg: number) => string,
 ): string {
   // Built from the same prescription as the target, so it cannot contradict it.
   if (line) return line;
@@ -67,7 +67,7 @@ function coachInsight(
   // The load is what was actually logged, never the prescribed one.
   const load =
     last.weight > 0
-      ? ` at ${loadValue(last.weight, unit, rack)} ${unitLabel(unit)}${first.load === 'each' ? ' each' : ''}`
+      ? ` at ${format(last.weight)} ${unitLabel(unit)}${first.load === 'each' ? ' each' : ''}`
       : '';
   const target = first.targetReps?.[0];
   if (target !== undefined && target > Math.min(...last.reps)) {
@@ -183,7 +183,7 @@ export default function TodayScreen({
                   : current
                     ? `Session open. ${progress} of ${total} sets logged so far.`
                     : first
-                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit), rackOf(profile, first.exerciseId))
+                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit), plannedLoad(profile.loads, history, first.exerciseId, unit))
                       : 'Pick a workout you can keep. The program follows from that.'}
               </p>
             </div>

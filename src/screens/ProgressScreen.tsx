@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { loadModeOf, setText, setUnit } from '../data/flagship';
-import { calibrationInputValue, loadValue, toKg, unitLabel } from '../lib/units';
-import { rackOf } from '../lib/liveProgression';
+import { calibrationInputValue, toKg, unitLabel } from '../lib/units';
+import { plannedLoad } from '../lib/liveProgression';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from '../lib/plan';
 import type { Profile, Unit, WorkoutFeedback, WorkoutRecord } from '../types';
 import { FEEDBACK_CHOICES, feedbackLabel } from '../lib/feedback';
@@ -124,7 +124,7 @@ export default function ProgressScreen({
   const loadText = (kg: number) =>
     kg <= 0
       ? 'Bodyweight'
-      : `${loadValue(kg, unit, rackOf({ loads }, activeExerciseId))} ${unitLabel(unit)}${loadMode === 'each' ? ' each' : loadMode === 'total' ? ' total' : ''}`;
+      : `${plannedLoad(loads, history, activeExerciseId, unit)(kg)} ${unitLabel(unit)}${loadMode === 'each' ? ' each' : loadMode === 'total' ? ' total' : ''}`;
   const sessionLabel = (point: { date: string; workoutName: string }) =>
     `${dateParts(point.date).month} ${dateParts(point.date).day} · ${point.workoutName}`;
 

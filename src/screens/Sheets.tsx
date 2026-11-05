@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
-import { loadValue, unitLabel } from '../lib/units';
+import { unitLabel } from '../lib/units';
 import type { Profile, Unit, WorkoutExercise } from '../types';
 import { lastPerformance } from '../lib/plan';
-import { availableLoads } from '../lib/progression';
 import { plannedLoad } from '../lib/liveProgression';
 import type { WorkoutRecord } from '../types';
 import {
@@ -202,12 +201,10 @@ export function AdjustSheet({ constraints, originalMinutes, onClose, onPreview }
 
 /* ---------------- Why this target ---------------- */
 
-/** A logged load: confirmed-rack loads read like the target, typed ones stay exact. */
-function loggedLoad(kg: number, unit: Unit, exerciseId: string, loads: Profile['loads']): string {
-  const equipment = exerciseById(exerciseId)?.equipment;
-  return kg > 0 ? `${loadValue(kg, unit, equipment ? availableLoads({ loads }, equipment) : [])} ${unitLabel(unit)}` : 'Bodyweight';
+/** A logged load, by the same rule as the target: accepted prescriptions like it, typed loads exact. */
+function loggedLoad(kg: number, unit: Unit, exerciseId: string, loads: Profile['loads'], history: WorkoutRecord[]): string {
+  return kg > 0 ? `${plannedLoad(loads, history, exerciseId, unit)(kg)} ${unitLabel(unit)}` : 'Bodyweight';
 }
-
 
 /** "9 · 9 @ 15 kg" for per-set targets, "8–10 reps @ 18 kg" for a range. */
 function targetLine(
@@ -268,7 +265,7 @@ export function WhySheet({
         </div>
         <div className="context-row">
           <span>Working load</span>
-          <span>{last ? loggedLoad(last.weight, unit, exerciseId, loads) : '—'}</span>
+          <span>{last ? loggedLoad(last.weight, unit, exerciseId, loads, history) : '—'}</span>
         </div>
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Today’s target</span>
@@ -329,7 +326,7 @@ export function ExerciseSheet({
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Last recorded</span>
           <span>
-            {last ? `${loggedLoad(last.weight, unit, exerciseId, loads)} · ${setText(exerciseId, last.reps)}` : 'No history'}
+            {last ? `${loggedLoad(last.weight, unit, exerciseId, loads, history)} · ${setText(exerciseId, last.reps)}` : 'No history'}
           </span>
         </div>
       </div>

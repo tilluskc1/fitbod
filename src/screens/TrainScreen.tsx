@@ -278,11 +278,12 @@ export default function TrainScreen({
         ? `${unitLabel(unit)} each`
         : 'bodyweight';
   /** Loads are stored in kilograms; only the readout converts. */
+  // One rule for planned and logged loads alike (history holds earlier sessions' typed loads).
   const showWeight = plannedLoad(profileLoads, history, exercise.exerciseId, unit);
   // Only confirmed loads are on the rack; anything else was typed and keeps its value.
   const rack = availableLoads({ loads: profileLoads }, equipment);
   const showActual = (kg: number) => loadValue(kg, unit, rack);
-  // A set still at the load the app planned for it reads like the target; an edited one keeps its typed value.
+  // A set (pending or saved) at the load the app planned for it reads like the target; an edited one keeps its typed value.
   const showPending = (kg: number, setIndex: number) =>
     Math.abs(kg - (exercise.planned[setIndex]?.weight ?? -1)) < 0.001 ? showWeight(kg) : showActual(kg);
   const last = lastPerformance(history, exercise.exerciseId);
@@ -360,7 +361,7 @@ export default function TrainScreen({
             </div>
             <span className="set-card__target">
               Saved: {setText(exercise.exerciseId, set.reps)}
-              {set.weight > 0 ? ` · ${showActual(set.weight)} ${unitLabel(unit)}` : ''}
+              {set.weight > 0 ? ` · ${showPending(set.weight, setIndex)} ${unitLabel(unit)}` : ''}
             </span>
           </div>
 
@@ -430,7 +431,7 @@ export default function TrainScreen({
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <span className="aw-set__label">
-              Set {setIndex + 1}: {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit, showActual(set.weight))}
+              Set {setIndex + 1}: {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit, showPending(set.weight, setIndex))}
             </span>
           </span>
           <button
@@ -621,7 +622,7 @@ export default function TrainScreen({
               <div className="aw-history__line">
                 <Icon name="history" size={16} />
                 {last
-                  ? `Last session: ${setText(exercise.exerciseId, last.reps)}${last.weight > 0 ? ` @ ${showActual(last.weight)} ${unitLabel(unit)}${mode === 'total' ? ' total' : ' each'}` : ''}`
+                  ? `Last session: ${setText(exercise.exerciseId, last.reps)}${last.weight > 0 ? ` @ ${showWeight(last.weight)} ${unitLabel(unit)}${mode === 'total' ? ' total' : ' each'}` : ''}`
                   : 'No previous session recorded'}
               </div>
               <div className="aw-history__line aw-history__line--target">

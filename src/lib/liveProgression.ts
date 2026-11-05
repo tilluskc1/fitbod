@@ -1,7 +1,7 @@
 import { exerciseById } from '../data/exercises.ts';
 import { loadModeOf, programExercise, setText } from '../data/flagship.ts';
 import type { AdaptedExercise, AdaptedWorkout } from './adapt.ts';
-import { availableLoads, coachLine, describePrescription, lastExercisePerformance, prescribeExercise } from './progression.ts';
+import { availableLoads, typedLoads, coachLine, describePrescription, lastExercisePerformance, prescribeExercise } from './progression.ts';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from './plan.ts';
 import { loadValue, unitLabel } from './units.ts';
 import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
@@ -22,22 +22,11 @@ export function rackOf(profile: Pick<Profile, 'loads'>, exerciseId: string): num
   return equipment ? availableLoads(profile, equipment) : [];
 }
 
-/** Loads the user chose themselves: a done set whose weight differs from what the app planned for it. */
-function typedLoads(history: WorkoutRecord[], exerciseId: string): number[] {
-  return history.flatMap((workout) =>
-    workout.exercises
-      .filter((exercise) => exercise.exerciseId === exerciseId)
-      .flatMap((exercise) =>
-        exercise.performed
-          .filter((set, index) => set.done && Math.abs(set.weight - (exercise.planned[index]?.weight ?? -1)) > 0.001)
-          .map((set) => set.weight),
-      ),
-  );
-}
-
 /**
- * Formats a planned/target load: rack loads like the rack, a load the user
- * typed exactly as typed (even when held), a new off-rack step at half-unit.
+ * The one load formatter for planned and logged loads alike: rack loads like
+ * the rack, a load the user typed exactly as typed (even when held), an
+ * app-prescribed off-rack load at half-unit, before and after it is logged.
+ * `history` must hold the record a logged load comes from.
  */
 export function plannedLoad(
   loads: Profile['loads'],
@@ -260,7 +249,7 @@ export function progressionLines(
     const hold = holdSeconds(exerciseId);
     const required = exerciseInWorkout(workout, exerciseId)?.requirement ?? presentedSets;
     const performed = best
-      ? `${done.length}/${required} sets · best ${setText(exerciseId, best.reps)} @ ${loadText(best.weight, exerciseId, unit, loadValue(best.weight, unit, rackOf(profile, exerciseId)))}`
+      ? `${done.length}/${required} sets · best ${setText(exerciseId, best.reps)} @ ${loadText(best.weight, exerciseId, unit, plannedLoad(profile.loads, history, exerciseId, unit)(best.weight))}`
       : null;
 
     const definition = exerciseById(exerciseId);
@@ -326,7 +315,7 @@ export function recapHighlight(
       before &&
       (today.weight > before.weight || (today.weight === before.weight && today.reps > before.reps))
     ) {
-      return `New best: ${setText(line.exerciseId, today.reps)} @ ${loadText(today.weight, line.exerciseId, unit, loadValue(today.weight, unit, profile ? rackOf(profile, line.exerciseId) : []))} on ${line.name}`;
+      return `New best: ${setText(line.exerciseId, today.reps)} @ ${loadText(today.weight, line.exerciseId, unit, plannedLoad(profile?.loads ?? {}, history, line.exerciseId, unit)(today.weight))} on ${line.name}`;
     }
   }
   if (hasWork(workout) && !prior.some(hasWork)) return 'First session on the program';

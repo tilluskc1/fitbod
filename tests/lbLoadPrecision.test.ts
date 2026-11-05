@@ -191,3 +191,68 @@ test('an app-prescribed barbell step reads the same on target, rows, Log button 
     void held;
   } finally { await server.close(); }
 });
+
+/** Overhead Press: typed 42.3 lb, then the app's 22.5 kg step logged unchanged (or typed again). */
+test('a logged load reads like its target when accepted unchanged and as typed otherwise, on every logged surface', async () => {
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { default: TrainScreen } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
+    const { default: Progress } = await server.ssrLoadModule('/src/screens/ProgressScreen.tsx');
+    const { ExerciseSheet, WhySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
+    const { progressionLines, recapHighlight } = await server.ssrLoadModule('/src/lib/liveProgression.ts');
+    const ohp = exerciseById('overhead-press')!;
+    for (const unit of ['lb', 'kg'] as const) {
+      const bar = { ...profile, unit, equipment: ['Barbell'], loads: { Barbell: [] } } as Profile;
+      const typed = unit === 'lb' ? toKg(42.3, 'lb') : 19.3;
+      const typedText = unit === 'lb' ? '42.3' : '19.3';
+      const exercise = (planned: number, weight: number, reps = 10) => ({ exerciseId: 'overhead-press', name: 'Overhead Press',
+        planned: [0, 1, 2].map(() => ({ weight: planned, reps })), performed: [0, 1, 2].map(() => ({ weight, reps, done: false })) });
+      const finish = (prior: WorkoutRecord[], sid: string, day: string, planned: number, weight: number, reps = 10) => {
+        let s = createSession({ id: sid, name: 'B', dayIndex: 0, now: `${day}T10:00:00.000Z`, exercises: [exercise(planned, weight, reps)] });
+        for (let i = 0; i < 3; i += 1) s = logSet(s, 0, i, `${day}T10:0${i + 1}:00.000Z`);
+        return applyFinish({ ...EMPTY_STATE, profile: bar, history: prior, current: s }, s.id, { early: true, now: `${day}T10:30:00.000Z` }).history;
+      };
+      const first = finish([], 'a', '2026-11-02', 18, typed);
+      const step = prescribeExercise(ohp, bar, first).weight;
+      assert.equal(step, 22.5, 'the app steps to 22.5 kg');
+      const X = inputValue(step, unit); // 49.5 lb / 22.5 kg
+      const trainProps = { now: Date.parse('2026-11-04T10:01:00.000Z'), loadOptions: [], profileLoads: bar.loads, unit,
+        onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogNext() {}, onToggleRestPause() {}, onExtendRest() {},
+        onSwap() {}, onSkip() {}, onReturn() {} };
+      const re = (value: string) => value.replace('.', '\\.');
+
+      for (const [weight, shown] of [[step, X], [typed, typedText]] as const) {
+        const tag = `${unit} ${shown}`;
+        // In session: set 1 saved at `weight`, the step still planned for the rest.
+        let live = createSession({ id: 'b', name: 'B', dayIndex: 0, now: '2026-11-04T10:00:00.000Z', exercises: [exercise(step, step)] });
+        live = logSet(updatePerformedSet(live, 0, 0, { weight }), 0, 0, '2026-11-04T10:01:00.000Z');
+        const row = plain(renderToStaticMarkup(createElement(TrainScreen, { ...trainProps, history: first, session: live })));
+        assert.match(row, new RegExp(`Set 1: 10 reps @ ${re(shown)} ${unit} total`), `${tag} saved row`);
+
+        // 8 reps: a rep step, so the recap headline is the new best rather than an earned load.
+        const history = finish(first, 'b', '2026-11-04', step, weight, 8);
+        const lines = progressionLines(history[0], bar, history, unit);
+        assert.match(lines[0].performed ?? '', new RegExp(`best 8 reps @ ${re(shown)} ${unit}`), `${tag} recap best`);
+        assert.match(lines[0].reason, new RegExp(`[:,] ${re(shown)} ${unit}`), `${tag} reason/history line`);
+        if (weight === step) {
+          assert.match(recapHighlight(history[0], history, lines, unit, bar), new RegExp(`New best: .*@ ${re(X)} ${unit}`), `${tag} New best`);
+          assert.match(lines[0].next, new RegExp(`@ ${re(X)} ${unit}`), `${tag} Next`);
+        }
+        const progress = plain(renderToStaticMarkup(createElement(Progress, { history, unit, loads: bar.loads,
+          onExport() {}, onCorrect() {}, onDelete() {}, onFeedback() {}, onGoTrain() {} })));
+        assert.match(progress, new RegExp(`${re(shown)} ${unit} total ×`), `${tag} Progress`);
+        for (const [label, Sheet, pattern] of [['exercise sheet', ExerciseSheet, 'Last recorded'], ['why sheet', WhySheet, 'Working load']] as const) {
+          const sheet = plain(renderToStaticMarkup(createElement(Sheet as never, { exerciseId: 'overhead-press', exerciseName: 'x',
+            planned: [{ weight: step, reps: 10 }], history, unit, loads: bar.loads, onClose() {} })));
+          assert.match(sheet, new RegExp(`${pattern} ${re(shown)} ${unit}`), `${tag} ${label}`);
+        }
+        // Next session: last session and target side by side.
+        const next = createSession({ id: 'c', name: 'B', dayIndex: 0, now: '2026-11-06T10:00:00.000Z', exercises: [exercise(weight, weight)] });
+        const train = plain(renderToStaticMarkup(createElement(TrainScreen, { ...trainProps, history, session: next })));
+        assert.match(train, new RegExp(`Last session: .*@ ${re(shown)} ${unit} total`), `${tag} last session`);
+        assert.match(train, new RegExp(`Today’s target: .*@ ${re(shown)} ${unit}`), `${tag} next target`);
+        if (unit === 'lb') assert.doesNotMatch(`${row} ${lines[0].performed} ${lines[0].reason} ${progress} ${train}`, /49\.6/, `${tag} no 49.6`);
+      }
+    }
+  } finally { await server.close(); }
+});
