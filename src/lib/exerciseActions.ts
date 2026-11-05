@@ -14,7 +14,8 @@ export type ExerciseActionId =
   | 'more'
   | 'less'
   | 'dont-recommend'
-  | 'remove-today';
+  | 'remove-today'
+  | 'return';
 
 export interface ExerciseAction {
   id: ExerciseActionId;
@@ -25,17 +26,31 @@ export interface ExerciseAction {
 
 const NOTHING_PENDING_DONE = 'Every set here is logged, so there is no remaining work to change.';
 const NOTHING_PENDING_EMPTY = 'This exercise has no sets to change.';
+// Today's preview has no session to edit; acting on it would be a silent no-op.
+const NO_SESSION = "Start the workout to change today's sets.";
 
-export function exerciseActions(pending: number, done: number): ExerciseAction[] {
-  const blocked = pending > 0 ? undefined : done > 0 ? NOTHING_PENDING_DONE : NOTHING_PENDING_EMPTY;
+export function exerciseActions(pending: number, done: number, inSession: boolean, skipped: boolean): ExerciseAction[] {
+  const blocked = !inSession
+    ? NO_SESSION
+    : pending > 0
+      ? undefined
+      : done > 0
+        ? NOTHING_PENDING_DONE
+        : NOTHING_PENDING_EMPTY;
+  const today: ExerciseAction[] = skipped
+    ? [{ id: 'return', label: 'Return to exercise' }]
+    : [
+        { id: 'replace', label: 'Replace for the remaining sets', blockedReason: blocked },
+        { id: 'remove-today', label: "Remove today's remaining work", blockedReason: blocked },
+      ];
   return [
     { id: 'instructions', label: 'Instructions and demo' },
     { id: 'history', label: 'History for this exercise' },
-    { id: 'replace', label: 'Replace for the remaining sets', blockedReason: blocked },
+    today[0],
     { id: 'more', label: 'Recommend more often' },
     { id: 'less', label: 'Recommend less often' },
     { id: 'dont-recommend', label: "Don't recommend again" },
-    { id: 'remove-today', label: "Remove today's remaining work", blockedReason: blocked },
+    ...today.slice(1),
   ];
 }
 

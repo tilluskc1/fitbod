@@ -108,7 +108,6 @@ import
   DaySheet,
   DiscardSessionSheet,
   ExerciseActionsSheet,
-  ExerciseSheet,
   FinishSheet,
   SettingsSheet,
   SwapSheet,
@@ -121,7 +120,6 @@ type SheetState =
   | { kind: 'none' }
   | { kind: 'adjust' }
   | { kind: 'settings' }
-  | { kind: 'exercise'; exerciseId: string; exerciseIndex: number }
   | { kind: 'actions'; exerciseId: string; exerciseIndex: number }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
@@ -256,7 +254,6 @@ export default function App() {
       revisionRef.current = loaded.revision;
       // A newer snapshot can merge/reorder even same-ID exercise segments.
       setSheet((open) =>
-        open.kind === 'exercise' ||
         open.kind === 'actions' ||
         open.kind === 'why' ||
         open.kind === 'day' ||
@@ -1015,22 +1012,6 @@ export default function App() {
         />
       )}
 
-      {sheet.kind === 'exercise' &&
-        (() => {
-          const exercise = todayExercises[sheet.exerciseIndex];
-          if (!exercise || exercise.exerciseId !== sheet.exerciseId) return null;
-          const planned = exercise.planned;
-          return (
-            <ExerciseSheet
-              exerciseId={sheet.exerciseId}
-              planned={planned}
-              history={state.history}
-              unit={unit}
-              onClose={closeSheet}
-            />
-          );
-        })()}
-
       {sheet.kind === 'actions' &&
         (() => {
           const exercise = todayExercises[sheet.exerciseIndex];
@@ -1051,6 +1032,8 @@ export default function App() {
               history={state.history}
               unit={unit}
               profile={profile}
+              inSession={Boolean(current)}
+              skipped={Boolean(exercise.skipped)}
               onReplace={() => setSheet({ kind: 'swap', exerciseIndex: sheet.exerciseIndex })}
               onSaveProfile={(patch) => {
                 // Closing first: a saved preference can reorder today's preview under the sheet.
@@ -1062,6 +1045,11 @@ export default function App() {
                 const index = sheet.exerciseIndex;
                 closeSheet();
                 skipCurrentExercise(index);
+              }}
+              onReturn={() => {
+                const index = sheet.exerciseIndex;
+                closeSheet();
+                returnToExercise(index);
               }}
               onClose={closeSheet}
             />

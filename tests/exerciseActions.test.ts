@@ -48,7 +48,7 @@ function workout(
 }
 
 test('a completed exercise offers no replacement or removal, and says why', () => {
-  const actions = exerciseActions(0, 3);
+  const actions = exerciseActions(0, 3, true, false);
   const replace = actions.find((action) => action.id === 'replace');
   const remove = actions.find((action) => action.id === 'remove-today');
   assert.ok(replace?.blockedReason, 'replace is blocked once every set is logged');
@@ -61,7 +61,7 @@ test('a completed exercise offers no replacement or removal, and says why', () =
 });
 
 test('pending work unlocks replace and removal, and every promised capability has a row', () => {
-  const actions = exerciseActions(3, 0);
+  const actions = exerciseActions(3, 0, true, false);
   assert.deepEqual(
     actions.map((action) => action.id),
     ['instructions', 'history', 'replace', 'more', 'less', 'dont-recommend', 'remove-today'],
@@ -117,6 +117,9 @@ test('the action sheet renders its named rows and a real dialog', async () => {
         history: [],
         unit: 'kg',
         profile,
+        inSession: true,
+        skipped: false,
+        onReturn: () => {},
         onReplace: () => {},
         onSaveProfile: () => {},
         onRemoveToday: () => {},
@@ -177,9 +180,12 @@ const sheetProps = (overrides: Partial<Profile>) => ({
   history: [],
   unit: 'kg',
   profile: { ...profile, ...overrides },
+  inSession: true,
+  skipped: false,
   onReplace: () => {},
   onSaveProfile: () => {},
   onRemoveToday: () => {},
+  onReturn: () => {},
   onClose: () => {},
 });
 
@@ -240,5 +246,29 @@ test('a completed exercise states its one reason once and keeps reading actions 
     const html = renderToStaticMarkup(createElement(ExerciseActionsSheet, { ...sheetProps({}), pending: 0, done: 3 }));
     assert.equal(plain(html).match(/Every set here is logged/g)?.length, 1);
     assert.equal(html.match(/disabled=""/g)?.length, 2, 'only replace and remove are blocked');
+  });
+});
+
+test('before Start, replace and remove are stated as unavailable instead of doing nothing', async () => {
+  const actions = exerciseActions(3, 0, false, false);
+  for (const id of ['replace', 'remove-today'] as const)
+    assert.equal(actions.find((action) => action.id === id)?.blockedReason, "Start the workout to change today's sets.");
+  await withSheets(({ ExerciseActionsSheet }) => {
+    const html = renderToStaticMarkup(createElement(ExerciseActionsSheet, { ...sheetProps({}), inSession: false }));
+    assert.match(plain(html), /Start the workout to change today(?:'|&#x27;)s sets/);
+    assert.equal(html.match(/disabled=""/g)?.length, 2);
+  });
+});
+
+test('a segment removed for today offers Return to exercise in place of replace and remove', async () => {
+  const actions = exerciseActions(3, 1, true, true);
+  const ids = actions.map((action) => action.id);
+  assert.ok(ids.includes('return'));
+  assert.ok(!ids.includes('replace') && !ids.includes('remove-today'));
+  assert.equal(actions.find((action) => action.id === 'return')?.label, 'Return to exercise');
+  await withSheets(({ ExerciseActionsSheet }) => {
+    const text = plain(renderToStaticMarkup(createElement(ExerciseActionsSheet, { ...sheetProps({}), skipped: true })));
+    assert.match(text, /Return to exercise/);
+    assert.doesNotMatch(text, /Replace for the remaining sets|remaining work/);
   });
 });

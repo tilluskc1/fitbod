@@ -282,54 +282,6 @@ export function WhySheet({
   );
 }
 
-/* ---------------- Exercise guide ---------------- */
-
-export function ExerciseSheet({
-  exerciseId,
-  planned,
-  history,
-  unit,
-  onClose,
-}: {
-  exerciseId: string;
-  planned: { weight: number; reps: number }[];
-  history: WorkoutRecord[];
-  unit: Unit;
-  onClose: () => void;
-}) {
-  const meta = exerciseById(exerciseId);
-  const last = lastPerformance(history, exerciseId);
-  return (
-    <Sheet title={meta?.name ?? 'Exercise'} onClose={onClose}>
-      {meta && <Demo exerciseId={exerciseId} name={meta.name} className="lib-photo" />}
-      {meta && <p className="lib-instructions" style={{ marginTop: 12 }}>{meta.instructions}</p>}
-
-      <div className="context-list" style={{ marginTop: 12 }}>
-        <div className="context-row">
-          <span>Equipment</span>
-          <span>{meta?.equipment ?? '—'}</span>
-        </div>
-        <div className="context-row">
-          <span>Today</span>
-          <span>{targetLine(planned, unit, exerciseId)}</span>
-        </div>
-        <div className="context-row" style={{ borderBottom: 0 }}>
-          <span>Last recorded</span>
-          <span>
-            {last ? `${formatActualWeight(last.weight, unit)} · ${setText(exerciseId, last.reps)}` : 'No history'}
-          </span>
-        </div>
-      </div>
-
-      <div className="sheet-actions">
-        <button className="secondary" onClick={onClose}>
-          Close
-        </button>
-      </div>
-    </Sheet>
-  );
-}
-
 /* ---------------- Exercise actions ---------------- */
 
 type ActionMode = 'menu' | 'instructions' | 'history' | 'remove';
@@ -375,9 +327,12 @@ export function ExerciseActionsSheet({
   history,
   unit,
   profile,
+  inSession,
+  skipped,
   onReplace,
   onSaveProfile,
   onRemoveToday,
+  onReturn,
   onClose,
 }: {
   exerciseId: string;
@@ -390,14 +345,19 @@ export function ExerciseActionsSheet({
   history: WorkoutRecord[];
   unit: Unit;
   profile: Profile;
+  /** False for Today's preview before Start: there is no session to change yet. */
+  inSession: boolean;
+  /** Already removed for today (#26); its return path replaces replace/remove. */
+  skipped: boolean;
   onReplace: () => void;
   onSaveProfile: (patch: Partial<Profile>) => void;
   onRemoveToday: () => void;
+  onReturn: () => void;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<ActionMode>('menu');
   const meta = exerciseById(exerciseId);
-  const actions = exerciseActions(pending, done);
+  const actions = exerciseActions(pending, done, inSession, skipped);
   const blockedReason = actions.find((action) => action.blockedReason)?.blockedReason;
   const entries = mode === 'history' ? exerciseHistory(history, exerciseId) : [];
   const back = () => setMode('menu');
@@ -425,6 +385,7 @@ export function ExerciseActionsSheet({
       setAsk(() => (current: Profile) =>
         exclusionChange(current, exercise, !current.exclusions.includes(exerciseId)));
     if (id === 'remove-today') setMode('remove');
+    if (id === 'return') onReturn();
   };
 
   return (
@@ -519,8 +480,9 @@ export function ExerciseActionsSheet({
             </p>
           )}
           <div style={{ marginTop: entries.length === 0 ? 0 : 12 }}>
-            {entries.map((entry) => (
-              <div className="context-row" key={`${entry.workoutId}-${entry.date}`}>
+            {entries.map((entry, index) => (
+              // One workout can hold the same exercise twice (swap-back), so the index keeps keys unique.
+              <div className="context-row" key={`${entry.workoutId}-${index}`}>
                 <span>
                   {new Date(entry.date).toLocaleDateString()}
                   {entry.completedEarly ? ' · finished early' : ''}

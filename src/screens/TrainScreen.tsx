@@ -608,13 +608,11 @@ export default function TrainScreen({
                   <MoreIcon size={18} />
                 </button>
               </div>
-              <button
-                className="aw-exercise__name"
-                onClick={() => onOpenActions(index)}
-                aria-haspopup="dialog"
-              >
-                {exercise.name}
-              </button>
+              <h2 className="aw-exercise__name">
+                <button className="aw-exercise__name-btn" onClick={() => onOpenActions(index)} aria-haspopup="dialog">
+                  {exercise.name}
+                </button>
+              </h2>
             </div>
           </div>
           <div className="aw-exercise__info">

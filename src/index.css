@@ -3631,17 +3631,13 @@ body {
   opacity: 0.55;
 }
 
-button.aw-exercise__name {
+button.aw-exercise__name-btn {
   background: none;
   border: 0;
   padding: 0;
   text-align: left;
   color: inherit;
   font: inherit;
-  font-size: 24px;
-  line-height: 30px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
 }
 
 .aw-more {
