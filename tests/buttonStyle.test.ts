@@ -28,3 +28,12 @@ test('a selected chip, segment or unit reads as the filled green of a primary pi
     assert.ok(rules(selector).some((body) => /border-radius: 999px/.test(body)), `${selector} is a pill`);
   }
 });
+
+test('selected chips stay readable: day-chip label, and the reduced-transparency hover cannot unfill them', () => {
+  assert.ok(rules(/^\.day-chip\.selected span$/).some((body) => /color: var\(--on-primary\)/.test(body)));
+  const reduced = css.slice(css.indexOf('@media (prefers-reduced-transparency: reduce)'));
+  const hover = reduced.indexOf('.glass-scope .chip:hover');
+  const refill = reduced.search(/\.glass-scope \.chip\.on,\s*\.glass-scope \.day-chip\.selected \{\s*background: var\(--primary\);/);
+  assert.ok(hover >= 0 && refill > hover, 'the selected fill comes after the hover reset');
+});
+

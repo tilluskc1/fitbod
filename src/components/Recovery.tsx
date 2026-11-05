@@ -88,7 +88,6 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button
                 className="primary"
-                style={{ minHeight: 46, fontSize: 14 }}
                 onClick={() => onRestore(pending.state, {
                   newWorkouts: pending.state.history.length,
                   duplicateWorkouts: 0,
@@ -102,7 +101,7 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
               >
                 Confirm restore
               </button>
-              <button className="secondary" style={{ minHeight: 46, fontSize: 14 }} onClick={() => setPending(null)}>
+              <button className="secondary" onClick={() => setPending(null)}>
                 Cancel
               </button>
             </div>
