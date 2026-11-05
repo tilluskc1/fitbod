@@ -468,3 +468,30 @@ test('the reason names the real gap to the next load: rack steps, lb display, ba
   const bb = reason('barbell-bench-press', [], 60);
   assert.match(bb.text, new RegExp(`\\(\\+${bb.p.weight - 60} kg\\)`));
 });
+
+test('one earned step moves to the next owned load on every lb and kg rack (#102)', () => {
+  const kg = (lb: number) => Math.round(lb * 0.45359237 * 1000) / 1000; // stored like toKg
+  const cases: { id: string; unit: 'kg' | 'lb'; rack: number[] }[] = [
+    { id: 'rear-delt-fly', unit: 'lb', rack: [5, 10, 15, 20, 25, 30] }, // 5-lb dumbbells
+    { id: 'rear-delt-fly', unit: 'lb', rack: [5, 7.5, 10, 12.5, 15] }, // 2.5-lb dumbbells
+    { id: 'rear-delt-fly', unit: 'kg', rack: [4, 5, 6, 7, 8] }, // 1-kg dumbbells
+    { id: 'rear-delt-fly', unit: 'kg', rack: [4, 6, 8, 10] }, // 2-kg dumbbells
+    { id: 'barbell-bench-press', unit: 'lb', rack: [45, 50, 55, 60, 65] }, // 5-lb plate pairs
+    { id: 'barbell-bench-press', unit: 'lb', rack: [95, 97.5, 100, 102.5] }, // 2.5-lb steps
+    { id: 'barbell-bench-press', unit: 'kg', rack: [20, 22.5, 25, 27.5] }, // 2.5-kg steps
+    { id: 'barbell-bench-press', unit: 'kg', rack: [40, 45, 50] }, // 5-kg steps
+  ];
+  for (const { id, unit, rack } of cases) {
+    const stored = rack.map((v) => (unit === 'lb' ? kg(v) : v));
+    const profile = makeProfile({ loads: { [meta(id).equipment]: stored } });
+    for (let i = 0; i < rack.length - 1; i += 1) {
+      const history = [record({ id: 'w1', date: '2026-01-05T10:00:00.000Z', exerciseId: id,
+        planned: sets(stored[i], 30), performed: sets(stored[i], 30) })];
+      const p = prescribeExercise(meta(id), profile, history);
+      const label = `${id} ${rack[i]} ${unit}`;
+      assert.equal(p.weight, stored[i + 1], `${label}: expected next ${rack[i + 1]} ${unit}`);
+      const gap = Math.round((rack[i + 1] - rack[i]) * 100) / 100;
+      assert.match(describePrescription(p, unit), new RegExp(`One step up \\(\\+${gap} ${unit}\\)`), label);
+    }
+  }
+});

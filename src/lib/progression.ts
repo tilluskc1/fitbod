@@ -107,16 +107,17 @@ export function incrementFor(equipment: Equipment, available: number[]): number 
 }
 
 /**
- * The next load above `weight`. With an inventory the suggestion snaps up to a
- * load the user can actually select; otherwise it rounds up to the step grid.
+ * The next load above `weight`. With an inventory it is the next owned load up;
+ * otherwise it rounds up to the step grid.
  */
 export function nextLoad(weight: number, increment: number, available: number[]): number {
   if (increment <= 0) return weight;
-  const target = weight + increment;
   if (available.length > 0) {
-    const reachable = available.find((value) => value >= target - 0.001);
+    // The next owned load, not weight + a rounded gap: 2.268 kg (5 lb) rounds to 2.27 and skipped 20 lb.
+    const reachable = available.find((value) => value > weight + 0.01);
     return reachable ?? available[available.length - 1];
   }
+  const target = weight + increment;
   return round(Math.ceil((target - 0.001) / increment) * increment);
 }
 
