@@ -1,4 +1,4 @@
-import { EXERCISES, areIncompatible } from '../data/exercises.ts';
+import { EQUIPMENT_OPTIONS, EXERCISES, SUPPORT_OPTIONS, areIncompatible } from '../data/exercises.ts';
 import type {
   Exercise,
   MuscleGroup,
@@ -56,19 +56,19 @@ export function buildPlan(profile: Profile): PlanDay[] {
   return SPLITS[days];
 }
 
-/**
- * One exercise's time: 3.5 sets on average (a 5-set lead, 3 behind it) × (35 s
- * of work + the 75 s default rest), plus a minute to set up. About 7.4 minutes.
- */
-export const SECONDS_PER_EXERCISE = Math.round(3.5 * (35 + 75) + 60);
+/** Time a set takes: 35 s of work plus the 75 s default rest. */
+const SET_SECONDS = 35 + 75;
+/** Setting up and moving to the next exercise. */
+const EXERCISE_SECONDS = 60;
 export const MIN_EXERCISES = 3;
 /** Past this, extra exercises mostly add fatigue, not results. */
 export const MAX_EXERCISES = { Beginner: 6, Intermediate: 8, Advanced: 8 } as const;
+/** Thinned to fit a short session, an exercise keeps at least this many sets; the lead keeps 3. */
+const MIN_SETS = 2;
 
-/** How many exercises fit the session length (#89). No saved length reads as the 35 the label shows. */
-export function targetCountFor(profile: Profile): number {
-  const fits = Math.floor(((profile.sessionMinutes ?? 35) * 60) / SECONDS_PER_EXERCISE);
-  return Math.min(MAX_EXERCISES[profile.experience], Math.max(MIN_EXERCISES, fits));
+/** Minutes a day of these set counts takes, by the same per-set time the fit uses. */
+export function estimatedSeconds(sets: number[]): number {
+  return sets.reduce((sum, count) => sum + count * SET_SECONDS + EXERCISE_SECONDS, 0);
 }
 
 function seededShuffle<T>(items: T[], seed: number): T[] {
@@ -89,7 +89,7 @@ export interface GeneratedSession {
 }
 
 /**
- * Coverage-first, seeded selection.
+ * Coverage-first, seeded selection, up to `target` exercises in priority order.
  *
  * The seed still does the work it always did (stable day-to-day ordering).
  * What changed is the stopping rule: an exercise is only eligible if its
@@ -98,22 +98,8 @@ export interface GeneratedSession {
  * movement pattern. When the pool cannot fill the target, the session is
  * shorter and reports itself as limited instead of silently padding with
  * unrelated movements.
- *
- * Prescriptions come from the progression policy: the load and rep target are
- * derived from the last completed session that trained each exercise, so a
- * session carries real numbers instead of a fixed 0 kg × 10.
  */
-export function generateWorkout(
-  profile: Profile,
-  day: PlanDay,
-  dayIndex: number,
-  history: WorkoutRecord[] = [],
-  targetCountOverride?: number,
-): GeneratedSession {
-  const targetCount =
-    targetCountOverride && targetCountOverride > 0
-      ? Math.min(8, Math.max(2, Math.round(targetCountOverride)))
-      : targetCountFor(profile);
+function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, target: number) {
   const requirements = requirementsForDay(day);
   const caps = capabilitiesFor(profile);
   const exclusions = new Set(profile.exclusions);
@@ -153,6 +139,7 @@ export function generateWorkout(
     return true;
   };
 
+  const covering = new Set<Exercise>();
   const take = (exercise: Exercise) => {
     picked.push(exercise);
     patternCounts.set(exercise.pattern, (patternCounts.get(exercise.pattern) ?? 0) + 1);
@@ -180,19 +167,19 @@ export function generateWorkout(
         rank(a) - rank(b) || // "more" and "less" outrank focus order
         focusRank(a) - focusRank(b),
     )[0];
-    if (best) take(best);
+    if (best) { take(best); covering.add(best); }
   }
 
   // 1a. "More" exercises claim a slot before the focus filler can spend it.
   for (const exercise of shuffled) {
-    if (picked.length >= targetCount) break;
+    if (picked.length >= target) break;
     if (rank(exercise) === 0 && canTake(exercise, false)) take(exercise);
   }
 
   // 1b. Give every focus muscle its own exercise while slots remain, so the
   // last slot is decided by the day, not by whichever caps happen to be left.
   for (const muscle of day.focus) {
-    if (picked.length >= targetCount) break;
+    if (picked.length >= target) break;
     if (picked.some((exercise) => exercise.muscles[0] === muscle)) continue;
     const candidate = shuffled.find(
       (exercise) => exercise.muscles[0] === muscle && canTake(exercise, false),
@@ -202,15 +189,41 @@ export function generateWorkout(
 
   // 2. Fill using movement patterns not already used.
   for (const exercise of compoundFirst) {
-    if (picked.length >= targetCount) break;
+    if (picked.length >= target) break;
     if (canTake(exercise, false)) take(exercise);
   }
 
   // 3. Only add a variation of a movement already used if slots remain.
   for (const exercise of compoundFirst) {
-    if (picked.length >= targetCount) break;
+    if (picked.length >= target) break;
     if (canTake(exercise, true)) take(exercise);
   }
+
+  return { picked, covering, requirements };
+}
+
+/**
+ * The day for the saved session length (#89). Exercises are taken in priority
+ * order while their real sets fit the minutes (never fewer than 3, nor fewer than
+ * the day's required movements); a day still too long at that floor thins sets,
+ * and one with every possible exercise and time left adds a set to accessories.
+ *
+ * Prescriptions come from the progression policy: the load and rep target are
+ * derived from the last completed session that trained each exercise, so a
+ * session carries real numbers instead of a fixed 0 kg × 10.
+ */
+export function generateWorkout(
+  profile: Profile,
+  day: PlanDay,
+  dayIndex: number,
+  history: WorkoutRecord[] = [],
+  targetCountOverride?: number,
+): GeneratedSession {
+  const max = MAX_EXERCISES[profile.experience];
+  const fixed = targetCountOverride && targetCountOverride > 0
+    ? Math.min(max, Math.max(MIN_EXERCISES, Math.round(targetCountOverride)))
+    : undefined;
+  const { picked, covering, requirements } = selectExercises(profile, day, dayIndex, fixed ?? max);
 
   const coveredRequirements = requirements.filter((requirement) =>
     picked.some((exercise) => matchesRequirement(exercise, requirement)),
@@ -220,6 +233,7 @@ export function generateWorkout(
   // day's required movement families can be performed, this is infeasible and
   // the caller must not start a workout.
   if (requirements.length > 0 && coveredRequirements === 0) {
+    const targetCount = fixed ?? max;
     return {
       exercises: [],
       feasibility: evaluateFeasibility(profile, day, [], targetCount),
@@ -229,9 +243,45 @@ export function generateWorkout(
 
   const lead = pickLead(picked, day.focus);
   if (lead) picked.splice(0, picked.length, lead, ...picked.filter((exercise) => exercise !== lead));
-  const exercises: WorkoutExercise[] = picked.map((exercise) => {
-    const prescription = prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined);
-    const planned = Array.from({ length: prescription.sets }, () => ({
+  const prescriptions = picked.map((exercise) =>
+    prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined));
+  const sets = prescriptions.map((prescription) => prescription.sets);
+
+  let targetCount = fixed ?? picked.length;
+  if (fixed === undefined) {
+    const budget = (profile.sessionMinutes ?? 35) * 60;
+    const floor = Math.min(picked.length, Math.max(MIN_EXERCISES,
+      ...picked.map((exercise, index) => (covering.has(exercise) ? index + 1 : 0))));
+    let kept = picked.length;
+    while (kept > floor && estimatedSeconds(sets.slice(0, kept)) > budget) kept -= 1;
+    const room = budget - estimatedSeconds(sets.slice(0, kept));
+    // A count gap is only reported when gear or exclusions caused it: the same
+    // day with everything allowed shows how many the caps can actually hold.
+    const open = { ...profile, equipment: [...EQUIPMENT_OPTIONS], support: [...SUPPORT_OPTIONS], exclusions: [], preferences: undefined };
+    const capacity = selectExercises(open, day, dayIndex, max).picked.length;
+    targetCount = kept < picked.length ? kept
+      : Math.min(capacity, kept + Math.max(0, Math.floor(room / estimatedSeconds([3]))));
+    const exhausted = kept === picked.length;
+    picked.splice(kept);
+    sets.splice(kept);
+    // Too long even at the floor: thin the last exercises first, down to 2 sets (the lead to 3).
+    for (let index = kept - 1; index >= 0 && estimatedSeconds(sets) > budget; ) {
+      const least = index === 0 && lead ? 3 : MIN_SETS;
+      if (sets[index] > least) sets[index] -= 1;
+      else index -= 1;
+    }
+    // No exercise left to add and at least one more exercise's worth of time:
+    // the 3-set work behind the lead gets a fourth set, in priority order, while it fits.
+    if (exhausted && room >= estimatedSeconds([3])) {
+      for (let index = lead ? 1 : 0; index < kept; index += 1) {
+        if (sets[index] < 4 && estimatedSeconds(sets) + SET_SECONDS <= budget) sets[index] += 1;
+      }
+    }
+  }
+
+  const exercises: WorkoutExercise[] = picked.map((exercise, index) => {
+    const prescription = prescriptions[index];
+    const planned = Array.from({ length: sets[index] }, () => ({
       weight: prescription.weight,
       reps: prescription.reps,
     }));

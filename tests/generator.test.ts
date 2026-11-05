@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EXERCISES, INCOMPATIBLE_GROUPS } from '../src/data/exercises.ts';
 import { capabilitiesFor, provides } from '../src/lib/capabilities.ts';
-import { buildPlan, generateWorkout, targetCountFor } from '../src/lib/generator.ts';
+import { buildPlan, generateWorkout } from '../src/lib/generator.ts';
 import { rankedReplacements } from '../src/lib/replacements.ts';
 import type {
   CoverageResult,
@@ -112,13 +112,15 @@ test('full equipment produces a full, coverage-complete Push session', () => {
   const profile = makeProfile({
     equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'],
     support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'],
+    sessionMinutes: 45, // long enough for every exercise the Push caps allow (#89)
   });
   const plan = buildPlan(profile);
   const push = generateWorkout(profile, plan[0], 0);
   const counts = patternCounts(push.exercises);
 
   assert.equal(push.feasibility.status, 'ok');
-  assert.equal(push.exercises.length, targetCountFor(profile));
+  assert.equal(push.exercises.length, 6, 'every exercise the Push caps allow');
+  assert.equal(push.targetCount, 6);
   assert.ok(push.feasibility.coverage.every((item) => item.satisfied));
   assert.ok((counts.get('core_stability') ?? 0) <= 1);
   assert.ok((counts.get('core_flexion') ?? 0) <= 1);
@@ -130,12 +132,14 @@ test('a common home kit still fills a full Push session', () => {
   const profile = makeProfile({
     equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable'],
     support: ['Bench', 'Rack', 'Pull-up bar'],
+    sessionMinutes: 45, // long enough for every exercise the Push caps allow (#89)
   });
   const plan = buildPlan(profile);
   const push = generateWorkout(profile, plan[0], 0);
 
   assert.equal(push.feasibility.status, 'ok');
-  assert.equal(push.exercises.length, targetCountFor(profile));
+  assert.equal(push.exercises.length, 6, 'every exercise the Push caps allow');
+  assert.equal(push.targetCount, 6);
   assert.ok(push.feasibility.coverage.every((item) => item.satisfied));
   assert.ok(push.feasibility.alternatives.length === 0);
 });
