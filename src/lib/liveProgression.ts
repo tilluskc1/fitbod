@@ -183,10 +183,13 @@ export function catalogRowMeta(
   profile: Profile,
   history: WorkoutRecord[],
   unit: Unit,
+  /** The day the row is read against (Plan passes the up-next slot), so the lead and its neighbours match Today. */
+  dayIds: string[] = [],
 ): string {
   const hold = holdSeconds(exercise.id);
-  const prescription = prescribeExercise(exercise, profile, history);
-  const sets = programExercise(exercise.id)?.sets ?? prescription.sets;
+  const lead = leadCompoundId(dayIds);
+  const prescription = prescribeExercise(exercise, profile, history, exercise.id === lead, lead !== undefined);
+  const sets = exercise.id === lead ? prescription.sets : programExercise(exercise.id)?.sets ?? prescription.sets;
   const load =
     hold === null && prescription.weight > 0 ? ` · ${loadText(prescription.weight, exercise.id, unit, plannedLoad(profile.loads, history, exercise.id, unit)(prescription.weight))}` : '';
   return `${sets} ${sets === 1 ? 'set' : 'sets'} · ${setText(exercise.id, hold ?? prescription.reps)}${load}`;

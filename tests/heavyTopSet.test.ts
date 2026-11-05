@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { exerciseById } from '../src/data/exercises.ts';
 import { buildPlan, generateWorkout } from '../src/lib/generator.ts';
-import { liveAdapted, progressionLines } from '../src/lib/liveProgression.ts';
+import { catalogRowMeta, liveAdapted, progressionLines } from '../src/lib/liveProgression.ts';
+import { exerciseMeta } from '../src/data/flagship.ts';
 import {
   describePrescription,
   isCompound,
@@ -282,4 +283,26 @@ test('a day with no loaded compound keeps four-set compounds and its total', () 
   const bare = profileOf({ equipment: [], support: [] });
   const pushUp = generateWorkout(bare, buildPlan(bare)[0], 0).exercises.find((exercise) => exercise.exerciseId === 'push-up');
   assert.equal(pushUp?.planned.length, 4);
+});
+
+test('the Plan catalog row reads the same lead and set counts as Today', () => {
+  const strong = profileOf({ goal: 'Get Stronger', equipment: ['Barbell', 'Dumbbell'] });
+  const day = slotProgram(strong, planSlots(buildPlan(strong))[0], []);
+  const ids = day.exercises.map((exercise) => exercise.exerciseId);
+  assert.equal(ids[0], 'barbell-bench-press');
+  assert.equal(catalogRowMeta(def('barbell-bench-press'), strong, [], 'kg', ids), '5 sets · 5 reps');
+  assert.equal(catalogRowMeta(def('overhead-press'), strong, [], 'kg', ids), '3 sets · 8 reps');
+
+  const bare = profileOf({ equipment: [], support: [] });
+  const bodyweight = slotProgram(bare, planSlots(buildPlan(bare))[0], []);
+  const pushUp = bodyweight.exercises.find((exercise) => exercise.exerciseId === 'push-up');
+  assert.equal(pushUp?.sets, 4);
+  assert.equal(catalogRowMeta(def('push-up'), bare, [], 'kg', bodyweight.exercises.map((exercise) => exercise.exerciseId)), '4 sets · 8 reps');
+});
+
+test('a row with the same reps on every set reads compactly; mixed reps keep the per-set form', () => {
+  const base = { exerciseId: 'barbell-bench-press', name: 'Bench', sets: 5, repRange: [4, 6] as [number, number], weight: 20, load: 'total' as const, detail: 'Barbell', requires: 'configured' as const };
+  assert.equal(exerciseMeta({ ...base, targetReps: [4, 4, 4, 4, 4] }), '5 × 4 @ 20 kg total');
+  assert.equal(exerciseMeta({ ...base, targetReps: [5, 4, 4, 4, 4] }), '5 sets · 5 · 4 · 4 · 4 · 4 @ 20 kg total');
+  assert.equal(exerciseMeta({ ...base, targetReps: [4], sets: 1 }), '1 set · 4 @ 20 kg total');
 });

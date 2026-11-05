@@ -35,8 +35,9 @@ test('Today shows the accepted active targets instead of a recomputed program', 
     }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     assert.match(text, /20 min · 6 sets/);
-    assert.match(text, /2 sets · 9 · 9 @ 15 kg each/);
-    assert.doesNotMatch(text, /11 sets|3 sets · 9 · 9 · 9/);
+    // Uniform reps read compactly ("2 × 9"), so the row fits at 360 px (#97).
+    assert.match(text, /2 × 9 @ 15 kg each/);
+    assert.doesNotMatch(text, /11 sets|3 × 9|3 sets · 9 · 9 · 9/);
   } finally {
     await server.close();
   }
