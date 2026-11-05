@@ -27,6 +27,14 @@ export default function Sheet({
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
+  // Mount-only and declared first: remember the control that opened the sheet, before focus moves.
+  useEffect(() => {
+    const opener = document.activeElement;
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
+  }, []);
+
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {

@@ -21,6 +21,8 @@ import {
   type ConstraintNotice,
   type ParsedConstraints,
 } from '../lib/constraints';
+import { exerciseActions, exerciseHistory, type ExerciseActionId } from '../lib/exerciseActions';
+import { PREF_LABEL, conflictChanges, exclusionChange, preferenceChange, type ProfileChange } from '../lib/preferences';
 import Sheet from '../components/ui/Sheet';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -281,50 +283,254 @@ export function WhySheet({
   );
 }
 
-/* ---------------- Exercise guide ---------------- */
+/* ---------------- Exercise actions ---------------- */
 
-export function ExerciseSheet({
+type ActionMode = 'menu' | 'instructions' | 'history' | 'remove';
+
+/** Preview body for a profile change; nothing is saved unless Confirm is pressed. */
+export function ConfirmChange({
+  change,
+  onConfirm,
+  onCancel,
+}: {
+  change: ProfileChange;
+  onConfirm: (patch: Partial<Profile>) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <p className="sheet-copy">{change.detail}</p>
+      <div className="sheet-actions">
+        <button className="primary" onClick={() => onConfirm(change.patch)}>
+          Confirm
+        </button>
+        <button className="secondary" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </>
+  );
+}
+
+/**
+ * The one menu a workout exercise opens. Every row leads somewhere real; a
+ * capability that cannot run says why on its own row instead of failing
+ * silently when tapped.
+ */
+export function ExerciseActionsSheet({
   exerciseId,
+  exerciseName,
+  exerciseIndex,
+  exerciseCount,
   planned,
+  pending,
+  done,
   history,
   unit,
+  profile,
+  inSession,
+  skipped,
+  onReplace,
+  onSaveProfile,
+  onRemoveToday,
+  onReturn,
   onClose,
 }: {
   exerciseId: string;
+  exerciseName: string;
+  exerciseIndex: number;
+  exerciseCount: number;
   planned: { weight: number; reps: number }[];
+  pending: number;
+  done: number;
   history: WorkoutRecord[];
   unit: Unit;
+  profile: Profile;
+  /** False for Today's preview before Start: there is no session to change yet. */
+  inSession: boolean;
+  /** Already removed for today (#26); its return path replaces replace/remove. */
+  skipped: boolean;
+  onReplace: () => void;
+  onSaveProfile: (patch: Partial<Profile>) => void;
+  onRemoveToday: () => void;
+  onReturn: () => void;
   onClose: () => void;
 }) {
+  const [mode, setMode] = useState<ActionMode>('menu');
   const meta = exerciseById(exerciseId);
-  const last = lastPerformance(history, exerciseId);
+  const actions = exerciseActions(pending, done, inSession, skipped);
+  const blockedReason = actions.find((action) => action.blockedReason)?.blockedReason;
+  const entries = mode === 'history' ? exerciseHistory(history, exerciseId) : [];
+  const back = () => setMode('menu');
+  // The change is rebuilt from the live profile, so another tab's edit is never overwritten by a stale preview.
+  const [ask, setAsk] = useState<((current: Profile) => ProfileChange | null) | null>(null);
+  const change = ask?.(profile) ?? null;
+  const exercise = { id: exerciseId, name: exerciseName };
+  const pref = profile.preferences?.[exerciseId];
+  const excluded = profile.exclusions.includes(exerciseId);
+  const conflict = conflictChanges(profile, exercise);
+  const label = (id: ExerciseActionId, text: string) =>
+    id === 'dont-recommend' && excluded ? 'Allow in workouts again' : text;
+
+  const run = (id: ExerciseActionId) => {
+    if (id === 'instructions' || id === 'history') setMode(id);
+    if (id === 'replace') {
+      onClose();
+      onReplace();
+    }
+    // Tapping the active choice offers neutral, so more and less never coexist.
+    if (id === 'more' || id === 'less')
+      setAsk(() => (current: Profile) =>
+        preferenceChange(current, exercise, current.preferences?.[exerciseId] === id ? null : id));
+    if (id === 'dont-recommend')
+      setAsk(() => (current: Profile) =>
+        exclusionChange(current, exercise, !current.exclusions.includes(exerciseId)));
+    if (id === 'remove-today') setMode('remove');
+    if (id === 'return') onReturn();
+  };
+
   return (
-    <Sheet title={meta?.name ?? 'Exercise'} onClose={onClose}>
-      {meta && <Demo exerciseId={exerciseId} name={meta.name} className="lib-photo" />}
-      {meta && <p className="lib-instructions" style={{ marginTop: 12 }}>{meta.instructions}</p>}
+    <Sheet
+      title={exerciseName}
+      subtitle={`Exercise ${exerciseIndex + 1} of ${exerciseCount} · ${planned.length} ${
+        planned.length === 1 ? 'set' : 'sets'
+      } · ${targetLine(planned, unit, exerciseId)}`}
+      onClose={onClose}
+    >
+      {change && (
+        <>
+          <p className="sheet-copy">
+            <strong>{change.title}</strong>
+          </p>
+          <ConfirmChange
+            change={change}
+            onConfirm={onSaveProfile}
+            onCancel={() => setAsk(null)}
+          />
+        </>
+      )}
 
-      <div className="context-list" style={{ marginTop: 12 }}>
-        <div className="context-row">
-          <span>Equipment</span>
-          <span>{meta?.equipment ?? '—'}</span>
+      {mode === 'menu' && !change && (
+        <div className="sheet-menu">
+          {conflict && pref && (
+            <div className="note-card" role="status">
+              Excluded and marked {PREF_LABEL[pref].toLowerCase()}. The exclusion wins until you pick one.
+              <div className="sheet-actions" style={{ marginTop: 12 }}>
+                <button className="secondary" onClick={() => setAsk(() => (current: Profile) => conflictChanges(current, exercise)?.keepExclusion ?? null)}>
+                  Keep exclusion
+                </button>
+                <button className="secondary" onClick={() => setAsk(() => (current: Profile) => conflictChanges(current, exercise)?.keepPreference ?? null)}>
+                  Keep {PREF_LABEL[pref].toLowerCase()}
+                </button>
+              </div>
+            </div>
+          )}
+          {actions.map((action) => {
+            const on = action.id === pref;
+            return (
+              <button
+                key={action.id}
+                className="context-row sheet-menu__row"
+                onClick={() => run(action.id)}
+                disabled={Boolean(action.blockedReason)}
+                aria-describedby={action.blockedReason ? 'why-blocked' : undefined}
+                aria-pressed={action.id === 'more' || action.id === 'less' ? on : undefined}
+              >
+                <span>{label(action.id, action.label)}</span>
+                {action.blockedReason ? <LockIcon size={18} /> : <Icon name={on ? 'check' : 'chevron_right'} size={18} />}
+              </button>
+            );
+          })}
+          {/* Replace and remove share one reason, so it is stated once. */}
+          {blockedReason && (
+            <p className="data-note" id="why-blocked">
+              {blockedReason}
+            </p>
+          )}
+          {excluded && !conflict && (
+            <p className="data-note" role="status">
+              {exerciseName} is excluded from future workouts.
+            </p>
+          )}
         </div>
-        <div className="context-row">
-          <span>Today</span>
-          <span>{targetLine(planned, unit, exerciseId)}</span>
-        </div>
-        <div className="context-row" style={{ borderBottom: 0 }}>
-          <span>Last recorded</span>
-          <span>
-            {last ? `${formatActualWeight(last.weight, unit)} · ${setText(exerciseId, last.reps)}` : 'No history'}
-          </span>
-        </div>
-      </div>
+      )}
 
-      <div className="sheet-actions">
-        <button className="secondary" onClick={onClose}>
-          Close
-        </button>
-      </div>
+      {mode === 'instructions' && (
+        <>
+          <Demo exerciseId={exerciseId} name={exerciseName} className="lib-photo" />
+          <p className="lib-instructions" style={{ marginTop: 12 }}>
+            {meta?.instructions ?? 'No written instructions are recorded for this movement yet.'}
+          </p>
+          <div className="sheet-actions">
+            <button className="secondary" onClick={back}>
+              Back to actions
+            </button>
+          </div>
+        </>
+      )}
+
+      {mode === 'history' && (
+        <>
+          <p className="sheet-copy">
+            Only sets you actually recorded for {exerciseName}. Other variants keep their own
+            records.
+          </p>
+          {entries.length === 0 && (
+            <p className="note-card" style={{ marginTop: 12 }}>
+              No sets recorded for {exerciseName} yet. Nothing is filled in from another exercise.
+            </p>
+          )}
+          <div style={{ marginTop: entries.length === 0 ? 0 : 12 }}>
+            {entries.map((entry, index) => (
+              // One workout can hold the same exercise twice (swap-back), so the index keeps keys unique.
+              <div className="context-row" key={`${entry.workoutId}-${index}`}>
+                <span>
+                  {new Date(entry.date).toLocaleDateString()}
+                  {entry.completedEarly ? ' · finished early' : ''}
+                </span>
+                <span>
+                  {entry.sets
+                    .map(
+                      (set) =>
+                        `${setText(exerciseId, set.reps)}${
+                          set.weight > 0
+                            ? ` @ ${formatWeight(set.weight, unit)}${
+                                loadModeOf(exerciseId) === 'each' ? ' each' : ''
+                              }`
+                            : ''
+                        }`,
+                    )
+                    .join(' · ')}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="sheet-actions">
+            <button className="secondary" onClick={back}>
+              Back to actions
+            </button>
+          </div>
+        </>
+      )}
+
+      {mode === 'remove' && (
+        <>
+          <p className="sheet-copy">
+            Remove the remaining {pending} {pending === 1 ? 'set' : 'sets'} of{' '}
+            <strong>{exerciseName}</strong> from today? Sets you already logged stay, and Return to
+            exercise brings the rest back before you finish. This does not become a permanent
+            exclusion and does not end the session.
+          </p>
+          <div className="sheet-actions">
+            <button className="primary" onClick={onRemoveToday}>
+              Remove from today's workout
+            </button>
+            <button className="secondary" onClick={back}>
+              Keep it in today's workout
+            </button>
+          </div>
+        </>
+      )}
     </Sheet>
   );
 }

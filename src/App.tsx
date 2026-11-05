@@ -60,10 +60,8 @@ import
   serializeExport,
   uid,
 } from './lib/storage';
-import
- type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
-import
- { parseState } from './lib/validate';
+import type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
+import { parseState } from './lib/validate';
 import
  { unitOf } from './lib/units';
 import
@@ -110,7 +108,7 @@ import
   AdjustSheet,
   DaySheet,
   DiscardSessionSheet,
-  ExerciseSheet,
+  ExerciseActionsSheet,
   FinishSheet,
   SettingsSheet,
   SwapSheet,
@@ -123,7 +121,7 @@ type SheetState =
   | { kind: 'none' }
   | { kind: 'adjust' }
   | { kind: 'settings' }
-  | { kind: 'exercise'; exerciseId: string; exerciseIndex: number }
+  | { kind: 'actions'; exerciseId: string; exerciseIndex: number }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
   | { kind: 'why'; exerciseId: string; exerciseIndex: number }
@@ -257,7 +255,10 @@ export default function App() {
       revisionRef.current = loaded.revision;
       // A newer snapshot can merge/reorder even same-ID exercise segments.
       setSheet((open) =>
-        open.kind === 'exercise' || open.kind === 'why' || open.kind === 'day' || open.kind === 'swap'
+        open.kind === 'actions' ||
+        open.kind === 'why' ||
+        open.kind === 'day' ||
+        open.kind === 'swap'
           ? { kind: 'none' }
           : open,
       );
@@ -830,6 +831,13 @@ export default function App() {
           )
         }
         onSwap={(exerciseIndex) => setSheet({ kind: 'swap', exerciseIndex })}
+        onOpenActions={(exerciseIndex) =>
+          setSheet({
+            kind: 'actions',
+            exerciseId: current?.exercises[exerciseIndex]?.exerciseId ?? '',
+            exerciseIndex,
+          })
+        }
         onSkip={skipCurrentExercise}
         onReturn={returnToExercise}
       />
@@ -899,7 +907,7 @@ export default function App() {
             }
             onRestore={restoreOriginal}
             onOpenSettings={() => setSheet({ kind: 'settings' })}
-            onOpenExercise={(exerciseId, exerciseIndex) => setSheet({ kind: 'exercise', exerciseId, exerciseIndex })}
+            onOpenExercise={(exerciseId, exerciseIndex) => setSheet({ kind: 'actions', exerciseId, exerciseIndex })}
           />
         )}
         {tab === 'plan' && (            <PlanScreen
@@ -1016,17 +1024,45 @@ export default function App() {
         />
       )}
 
-      {sheet.kind === 'exercise' &&
+      {sheet.kind === 'actions' &&
         (() => {
           const exercise = todayExercises[sheet.exerciseIndex];
-          if (!exercise || exercise.exerciseId !== sheet.exerciseId) return null;
-          const planned = exercise.planned;
+          // A shifted segment or a discarded session closes the menu rather than
+          // letting an action land on whichever exercise now sits at that index.
+          if (!exercise || exercise.exerciseId !== sheet.exerciseId || !profile) return null;
+          const pending = exercise.performed.filter((set) => !set.done).length;
+          const done = exercise.performed.filter((set) => set.done).length;
           return (
-            <ExerciseSheet
-              exerciseId={sheet.exerciseId}
-              planned={planned}
+            <ExerciseActionsSheet
+              exerciseId={exercise.exerciseId}
+              exerciseName={exercise.name}
+              exerciseIndex={sheet.exerciseIndex}
+              exerciseCount={todayExercises.length}
+              planned={exercise.planned}
+              pending={pending}
+              done={done}
               history={state.history}
               unit={unit}
+              profile={profile}
+              inSession={Boolean(current)}
+              skipped={Boolean(exercise.skipped)}
+              onReplace={() => setSheet({ kind: 'swap', exerciseIndex: sheet.exerciseIndex })}
+              onSaveProfile={(patch) => {
+                // Closing first: a saved preference can reorder today's preview under the sheet.
+                closeSheet();
+                patchProfile(patch);
+                setNotice('Saved for future workouts. Logged sets are unchanged.');
+              }}
+              onRemoveToday={() => {
+                const index = sheet.exerciseIndex;
+                closeSheet();
+                skipCurrentExercise(index);
+              }}
+              onReturn={() => {
+                const index = sheet.exerciseIndex;
+                closeSheet();
+                returnToExercise(index);
+              }}
               onClose={closeSheet}
             />
           );
