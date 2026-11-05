@@ -231,7 +231,7 @@ export default function Onboarding({ onComplete }: Props) {
           ) : null}
 
           <span className="setup-label">Support equipment</span>
-          <p className="muted">No bench or rack is assumed. Tick the ones you have.</p>
+          <p className="muted">Dumbbells never imply a bench, and barbells never imply a rack.</p>
           <div className="chip-wrap">
             {SUPPORT_OPTIONS.map((item) => (
               <button

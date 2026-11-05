@@ -247,7 +247,7 @@ export function WhySheet({
           </>
         )}
       </p>
-      {reason && <p className="sheet-copy">{reason}</p>}
+      {reason && <p className="sheet-copy" style={{ marginTop: 10 }}>{reason}</p>}
 
       <div className="context-list" style={{ marginTop: 16 }}>
         <div className="context-row">
