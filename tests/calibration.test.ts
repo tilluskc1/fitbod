@@ -5,7 +5,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { FULL_BODY_A } from '../src/data/flagship.ts';
 import { exerciseById } from '../src/data/exercises.ts';
-import { adaptWorkout } from '../src/lib/adapt.ts';
+import { adaptWorkout, confirmedLoads, loadOptions } from '../src/lib/adapt.ts';
+import { HOME_DUMBBELLS } from '../src/data/flagship.ts';
 import { liveExercises, needsCalibration } from '../src/lib/liveProgression.ts';
 import { prescribeExercise } from '../src/lib/progression.ts';
 import { applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
@@ -42,12 +43,13 @@ function pressHistory(): WorkoutRecord[] {
   return finish(session);
 }
 
-async function withTrain(run: (render: (session: WorkoutRecord, history: WorkoutRecord[]) => string) => void) {
+type Render = (session: WorkoutRecord, history: WorkoutRecord[], extra?: Record<string, unknown>) => string;
+async function withTrain(run: (render: Render) => void) {
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
-    run((session, history) => renderToStaticMarkup(createElement(Train, { session, history, now: Date.parse(at(1)),
-      loadOptions: RACK, unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
+    run((session, history, extra = {}) => renderToStaticMarkup(createElement(Train, { session, history, now: Date.parse(at(1)),
+      loadOptions: RACK, calibrationLoads: RACK, ...extra, unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
       onToggleRestPause: noop, onExtendRest: noop, onSwap: noop, onSkip: noop, onReturn: noop })));
   } finally { await server.close(); }
 }
@@ -67,6 +69,36 @@ test('needsCalibration: only an uncalibrated loaded variant before set 1 has a l
   assert.equal(needsCalibration(updatePerformedSet(session, 0, 0, { weight: 15 }, at(1)).exercises[0], []), false,
     'a chosen load is already calibrated');
   assert.equal(needsCalibration(logSet(session, 0, 0, at(1)).exercises[0], []), false, 'a logged set ends it');
+});
+
+test('an early finish that never reached an exercise leaves it uncalibrated', () => {
+  const first = liveSession([]);
+  const history = finish(logSet(updatePerformedSet(first, 0, 0, { weight: 15 }, at(1)), 0, 0, at(1)));
+  const next = liveSession(history);
+  const untouched = next.exercises.findIndex((entry, index) => index > 0 && entry.exerciseId !== 'plank');
+  assert.ok(untouched > 0);
+  assert.equal(needsCalibration(next.exercises[untouched], history), true, 'saved but never done');
+  assert.equal(needsCalibration(next.exercises[0], history), false, 'a done set calibrates');
+});
+
+test('the step offers only confirmed loads, never the example rack', async () => {
+  assert.deepEqual(loadOptions('home', undefined), HOME_DUMBBELLS, 'the logger keeps its fallback');
+  assert.deepEqual(confirmedLoads('home', undefined), []);
+  assert.deepEqual(confirmedLoads('home', [18, 10]), [10, 18]);
+  assert.deepEqual(confirmedLoads('hotel', [18, 10]), [], 'a home rack is not the hotel rack');
+  await withTrain((render) => {
+    assert.doesNotMatch(plain(render(liveSession([]), [], { calibrationLoads: [] })), RULE, 'unconfirmed rack');
+    assert.match(plain(render(liveSession([]), [])), RULE, 'confirmed rack');
+  });
+});
+
+test('a skipped step stays skipped for the open session, and Skip has its own name', async () => {
+  const session = liveSession([]);
+  await withTrain((render) => {
+    assert.match(render(session, []), /aria-label="Skip first-weight help"/);
+    const key = `${session.id}:0:${session.exercises[0].exerciseId}`;
+    assert.doesNotMatch(plain(render(session, [], { skippedCalibrations: [key] })), RULE);
+  });
 });
 
 test('the logger shows the calibration step with nothing pre-selected, only for an uncalibrated loaded variant', async () => {

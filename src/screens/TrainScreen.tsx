@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { loadModeOf, detailOf, repsTarget, setText, setUnit } from '../data/flagship';
 import type { LoadMode } from '../data/flagship';
@@ -19,6 +19,11 @@ interface Props {
   now: number;
   /** Confirmed dumbbell weights for the chosen setup. */
   loadOptions: number[];
+  /** Only the user's confirmed loads; the first-weight step never offers the example rack. */
+  calibrationLoads?: number[];
+  /** `sessionId:exerciseIndex:exerciseId` keys whose first-weight step was skipped. */
+  skippedCalibrations?: string[];
+  onSkipCalibration?: (key: string) => void;
   /** Display unit. Records stay in kilograms. */
   unit: Unit;
   /** One factual reason per exercise for today's computed target. */
@@ -91,7 +96,7 @@ export function CalibrationStep({ selected, children, onConfirm, onSkip }: {
         Do 5 easy reps with it, then confirm or change. This warm-up is not logged.
       </p>
       <div className="review-footer__row">
-        <button className="pill-quiet" onClick={onSkip}>Skip</button>
+        <button className="pill-quiet" aria-label="Skip first-weight help" onClick={onSkip}>Skip</button>
         <button className="pill-primary" disabled={selected === null}
           onClick={() => selected !== null && onConfirm(selected)}>Confirm</button>
       </div>
@@ -104,6 +109,9 @@ export default function TrainScreen({
   history,
   now,
   loadOptions,
+  calibrationLoads = [],
+  skippedCalibrations = [],
+  onSkipCalibration,
   unit,
   targetNotes,
   onMinimize,
@@ -117,8 +125,16 @@ export default function TrainScreen({
   onReturn,
 }: Props) {
   const [editing, setEditing] = useState<EditDraft | null>(null);
-  /** The calibration pick lives here until Confirm; Skip only hides the step. */
-  const [calibration, setCalibration] = useState<{ key: string; weight: number | null; skipped: boolean } | null>(null);
+  /** The calibration pick lives here until Confirm; nothing reaches the record before it. */
+  const [calibration, setCalibration] = useState<{ key: string; weight: number } | null>(null);
+  /** After Confirm or Skip, focus lands on the logger's weight control instead of <body>. */
+  const focusWeight = useRef(false);
+  const weightField = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focusWeight.current || !weightField.current) return;
+    focusWeight.current = false;
+    weightField.current.querySelector<HTMLElement>('[aria-pressed="true"], button, input')?.focus();
+  });
 
   /** Edit controls write to the draft only; nothing reaches the record here. */
   const patchDraft = (patch: Partial<Pick<EditDraft, 'reps' | 'weight'>>) =>
@@ -262,12 +278,13 @@ export default function TrainScreen({
       }} />
   ) : null;
 
-  const calibrationKey = `${index}:${exercise.exerciseId}`;
-  const pick = calibration?.key === calibrationKey ? calibration : null;
-  const calibrating =
-    (canPickWeight || canEnterWeight) && !pick?.skipped && needsCalibration(exercise, history);
+  const calibrationKey = `${session.id}:${index}:${exercise.exerciseId}`;
+  const pick = calibration?.key === calibrationKey ? calibration.weight : null;
+  const canPickCalibration = equipment === 'Dumbbell' && calibrationLoads.length > 0;
+  const calibrating = (canPickCalibration || canEnterWeight)
+    && !skippedCalibrations.includes(calibrationKey) && needsCalibration(exercise, history);
   const choose = (weight: number) =>
-    setCalibration({ key: calibrationKey, weight: weight > 0 ? weight : null, skipped: false });
+    setCalibration(weight > 0 ? { key: calibrationKey, weight } : null);
 
   const activeValues =
     activeSet === -1
@@ -405,24 +422,30 @@ export default function TrainScreen({
       return (
         <CalibrationStep
           key={setIndex}
-          selected={pick?.weight ?? null}
-          onConfirm={(weight) => onUpdateSet(index, setIndex, { weight })}
-          onSkip={() => setCalibration({ key: calibrationKey, weight: null, skipped: true })}
+          selected={pick}
+          onConfirm={(weight) => {
+            focusWeight.current = true;
+            onUpdateSet(index, setIndex, { weight });
+          }}
+          onSkip={() => {
+            focusWeight.current = true;
+            onSkipCalibration?.(calibrationKey);
+          }}
         >
           <div className="aw-field">
             <div className="aw-field__label">
               <span>Weight ({weightLabel})</span>
               <span className="aw-field__note">{equipment}</span>
             </div>
-            {canPickWeight ? (
+            {canPickCalibration ? (
               <div className="weight-pills" role="group" aria-label={`Weight (${weightLabel})`}>
-                {loadOptions.map((weight) => (
-                  <button key={weight} aria-pressed={pick?.weight === weight} onClick={() => choose(weight)}>
+                {calibrationLoads.map((weight) => (
+                  <button key={weight} aria-pressed={pick === weight} onClick={() => choose(weight)}>
                     {showWeight(weight)}
                   </button>
                 ))}
               </div>
-            ) : loadEntry(pick?.weight ?? 0, choose)}
+            ) : loadEntry(pick ?? 0, choose)}
           </div>
         </CalibrationStep>
       );
@@ -461,7 +484,7 @@ export default function TrainScreen({
           </span>
         </div>
 
-        <div className="aw-field">
+        <div className="aw-field" ref={weightField}>
           <div className="aw-field__label">
             <span>Weight ({weightLabel})</span>
             <span className="aw-field__note">{equipment}</span>

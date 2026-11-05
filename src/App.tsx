@@ -7,6 +7,7 @@ import
 import
  {
   adaptWorkout,
+  confirmedLoads,
   DEFAULT_CONSTRAINTS,
   loadOptions,
   restorePendingWorkout,
@@ -184,6 +185,8 @@ export default function App() {
   // Active-session replacement asks in-app (#19); the native prompt blocked
   // automated renderers and deadlocked a tab.
   const [replacePrompt, setReplacePrompt] = useState<Constraints | null>(null);
+  /** First-weight steps skipped in this tab; in memory only, never stored. */
+  const [calibrationSkips, setCalibrationSkips] = useState<string[]>([]);
 
   const appliedProposalRef = useRef<string | null>(null);
   const proposalRevisionRef = useRef(0);
@@ -795,6 +798,9 @@ export default function App() {
         history={state.history}
         now={now}
         loadOptions={loadOptions(constraints.equipment, constraints.loads)}
+        calibrationLoads={confirmedLoads(constraints.equipment, constraints.loads)}
+        skippedCalibrations={calibrationSkips}
+        onSkipCalibration={(key) => setCalibrationSkips((keys) => [...keys, key])}
         targetNotes={targetNotes}
         unit={unit}
         onMinimize={() => {

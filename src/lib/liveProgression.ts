@@ -113,13 +113,13 @@ export function liveExercises(
 }
 
 /**
- * A loaded variant with no completed history (the progression's "first-time")
- * whose first set has no load yet and nothing logged. Holds and bodyweight never ask.
+ * A loaded variant with no done set in completed history (a saved session that
+ * never reached it does not calibrate it) whose first set has no load yet and nothing logged. Holds and bodyweight never ask.
  */
 export function needsCalibration(exercise: WorkoutExercise, history: WorkoutRecord[]): boolean {
   const first = exercise.performed[0];
   return loadModeOf(exercise.exerciseId) !== 'none' && holdSeconds(exercise.exerciseId) === null
-    && lastExercisePerformance(history, exercise.exerciseId) === null
+    && !lastExercisePerformance(history, exercise.exerciseId)?.done.length
     && first !== undefined && first.weight === 0 && !exercise.performed.some((set) => set.done);
 }
 
