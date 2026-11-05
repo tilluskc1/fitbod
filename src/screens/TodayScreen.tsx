@@ -1,12 +1,13 @@
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
-import { formatWeight, unitOf } from '../lib/units';
+import { formatActualWeight, unitOf } from '../lib/units';
 import { exerciseMeta, programSetCount, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { currentWorkout, EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
 import { exercisePhoto } from '../lib/media';
+import { targetCoachLine } from '../lib/liveProgression';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 
@@ -19,13 +20,17 @@ interface Props {
   history: WorkoutRecord[];
   current: WorkoutRecord | null;
   now: Date;
-  onStart: () => void;
-  onResume: () => void;
+  /** Opens the session's exercise list; Start/Resume lives in the tab bar. */
+  onPreview: () => void;
   onAdjust: () => void;
   onWhy: () => void;
   onRestore: () => void;
   onOpenSettings: () => void;
   onOpenExercise: (exerciseId: string, exerciseIndex: number) => void;
+  /** "Slot 2 of 3" when the program has more than one day. */
+  slotLabel?: string;
+  /** Explicit skip of the slot on offer. Absent means the plan has no sequence. */
+  onSkipSlot?: () => void;
 }
 
 function greeting(now: Date): string {
@@ -44,7 +49,14 @@ function initials(name: string): string {
     .join('');
 }
 
-function coachInsight(last: LastPerformance | null, first: ProgramExercise, unit: Unit): string {
+function coachInsight(
+  last: LastPerformance | null,
+  first: ProgramExercise,
+  unit: Unit,
+  line: string | null,
+): string {
+  // Built from the same prescription as the target, so it cannot contradict it.
+  if (line) return line;
   if (!last) {
     return first.holdSeconds
       ? `First session on the ${first.name.toLowerCase()}. Hold it only as long as the set still looks strong.`
@@ -54,7 +66,7 @@ function coachInsight(last: LastPerformance | null, first: ProgramExercise, unit
   // The load is what was actually logged, never the prescribed one.
   const load =
     last.weight > 0
-      ? ` at ${formatWeight(last.weight, unit, { perSide: first.load === 'each' })}`
+      ? ` at ${formatActualWeight(last.weight, unit, { perSide: first.load === 'each' })}`
       : '';
   const target = first.targetReps?.[0];
   if (target !== undefined && target > Math.min(...last.reps)) {
@@ -72,13 +84,14 @@ export default function TodayScreen({
   history,
   current,
   now,
-  onStart,
-  onResume,
+  onPreview,
   onAdjust,
   onWhy,
   onRestore,
   onOpenSettings,
   onOpenExercise,
+  slotLabel,
+  onSkipSlot,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -121,7 +134,7 @@ export default function TodayScreen({
 
         <div className="today__week">
           <span>
-            {week} of {targetDays} sessions this week
+            Weekly goal: {week} of {targetDays} this week
           </span>
           <span
             className="today__dots"
@@ -148,6 +161,12 @@ export default function TodayScreen({
               <Icon name="timer" size={17} />
               {estimated < adapted.minutes && !current ? '≈' : ''}
               {minutes} min <span aria-hidden="true">·</span> {setup.short}
+              {slotLabel && (
+                <>
+                  {' '}
+                  <span aria-hidden="true">·</span> {slotLabel}
+                </>
+              )}
             </span>
           </span>
         </section>
@@ -163,7 +182,7 @@ export default function TodayScreen({
                   : current
                     ? `Session open. ${progress} of ${total} sets logged so far.`
                     : first
-                      ? coachInsight(last, first, unit)
+                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit))
                       : 'Pick a workout you can keep. The program follows from that.'}
               </p>
             </div>
@@ -179,6 +198,12 @@ export default function TodayScreen({
               <Icon name="info" size={16} />
               Why this target
             </button>
+            {onSkipSlot && !current && (
+              <button className="text-action" onClick={onSkipSlot}>
+                <Icon name="arrow_forward" size={16} />
+                Skip this session
+              </button>
+            )}
           </div>
         </section>
 
@@ -280,14 +305,9 @@ export default function TodayScreen({
           <Icon name="tune" size={16} />
           Short on time or gear?
         </button>
-        {current ? (
-          <button className="pill-primary" onClick={onResume}>
-            Resume workout
-            <Icon name="arrow_forward" size={20} />
-          </button>
-        ) : (
-          <button className="pill-primary" onClick={onStart} disabled={adapted.exercises.length === 0}>
-            Start workout
+        {!current && (
+          <button className="pill-primary" onClick={onPreview} disabled={adapted.exercises.length === 0}>
+            Preview workout
             <Icon name="arrow_forward" size={20} />
           </button>
         )}

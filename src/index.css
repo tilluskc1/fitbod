@@ -451,6 +451,42 @@ textarea:focus-visible {
   color: var(--lime);
 }
 
+/* (#20) Centered Start / Resume in the tab bar: a lime play bubble between
+   Plan and Progress. The label state is the same charcoal/lime palette. */
+
+.tab-action {
+  color: var(--lime);
+  font-weight: 700;
+}
+
+.tab-action:disabled {
+  color: var(--secondary);
+  cursor: not-allowed;
+}
+
+.tab-action__play {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--lime-ink);
+  margin-top: -8px;
+  box-shadow: 0 10px 22px rgba(154, 226, 75, 0.28);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tab-action:not(:disabled):active .tab-action__play {
+  transform: translateY(1px) scale(0.96);
+  box-shadow: 0 6px 14px rgba(154, 226, 75, 0.24);
+}
+
+.tab-action__play .ms {
+  font-size: 26px;
+}
+
 @media (max-width: 719px) {
   .tabbar {
     padding-bottom: calc(4px + env(safe-area-inset-bottom));
@@ -1156,6 +1192,10 @@ textarea:focus-visible {
   .sheet-backdrop {
     animation: none;
   }
+
+  .tab-action__play {
+    transition: none;
+  }
 }
 
 /* ---------- Adjust ---------- */
@@ -1264,7 +1304,7 @@ textarea:focus-visible {
 
 .chip {
   flex: none;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 14px;
   border-radius: 999px;
   border: 1px solid #33402a;
@@ -2946,6 +2986,10 @@ body {
   background: var(--surface-container-low);
   border: 1px solid rgba(50, 59, 48, 0.6);
   margin: 0 -2px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: calc(56px + env(safe-area-inset-top, 0px) + 6px);
+  z-index: 10;
 }
 
 .rest-bar__left {
@@ -2963,7 +3007,8 @@ body {
 }
 
 .rest-bar__time {
-  font-size: 16px;
+  font-size: 40px;
+  line-height: 1;
   font-weight: 700;
   color: var(--primary);
   font-variant-numeric: tabular-nums;
@@ -2995,6 +3040,17 @@ body {
 .rest-bar__extend {
   background: #2b3228;
   color: var(--on-surface);
+}
+
+.rest-bar__actions .rest-bar__mute {
+  min-width: 44px;
+  background: #2b3228;
+  color: var(--on-surface);
+}
+
+.rest-bar__actions .rest-bar__mute[aria-pressed='true'] {
+  background: var(--primary);
+  color: var(--on-primary, #1a2300);
 }
 
 .sets-head {
@@ -3309,6 +3365,10 @@ body {
 
 .save-bar:active {
   transform: scale(0.98);
+}
+
+.save-bar:disabled {
+  opacity: 0.45;
 }
 
 .finish-btn {

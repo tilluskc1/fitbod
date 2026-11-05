@@ -231,8 +231,12 @@ export default function AdaptScreen({
 
       <div className="flow-dock flow-dock--edge">
         <div className="review-footer">
-          <p className="review-footer__note">Today only. Your program is unchanged.</p>
-          <button className="pill-primary" onClick={onStart}>
+          <p className="review-footer__note" role={kept === 0 ? 'status' : undefined}>
+            {kept === 0
+              ? `No movement in this workout can be done with ${setup.chip.toLowerCase()}. Edit the setup or keep the original workout.`
+              : 'Today only. Your program is unchanged.'}
+          </p>
+          <button className="pill-primary" onClick={onStart} disabled={kept === 0}>
             {adapted.minutes === adapted.originalMinutes
               ? 'Start workout'
               : `Start ${adapted.minutes}-min workout`}

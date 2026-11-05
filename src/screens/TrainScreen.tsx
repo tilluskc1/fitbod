@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { loadModeOf, detailOf, repsTarget, setText, setUnit } from '../data/flagship';
 import type { LoadMode } from '../data/flagship';
+import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
+import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
-import { displayValue, unitLabel } from '../lib/units';
+import { needsCalibration } from '../lib/liveProgression';
+import { calibrationInputValue, displayValue, toKg, unitLabel } from '../lib/units';
 import type { PerformedSet, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -14,10 +18,17 @@ interface Props {
   session: WorkoutRecord;
   history: WorkoutRecord[];
   now: number;
-  /** Weights the chosen setup owns. Never free-typed. */
+  /** Confirmed dumbbell weights for the chosen setup. */
   loadOptions: number[];
+  /** Only the user's confirmed loads; the first-weight step never offers the example rack. */
+  calibrationLoads?: number[];
+  /** `sessionId:exerciseIndex:exerciseId` keys whose first-weight step was skipped. */
+  skippedCalibrations?: string[];
+  onSkipCalibration?: (key: string) => void;
   /** Display unit. Records stay in kilograms. */
   unit: Unit;
+  /** One factual reason per exercise for today's computed target. */
+  targetNotes?: Record<string, string>;
   onMinimize: () => void;
   onFinish: () => void;
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => void;
@@ -56,9 +67,43 @@ function setSummary(
 ): string {
   const load =
     weight > 0
-      ? ` @ ${displayValue(weight, unit)} ${unitLabel(unit)}${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}`
+      ? ` @ ${calibrationInputValue(weight, unit)} ${unitLabel(unit)}${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}`
       : '';
   return `${setText(exerciseId, reps)}${load}`;
+}
+
+/**
+ * First-load help for an uncalibrated variant. It suggests no number: the user
+ * picks from their own loads, and the warm-up it describes is never recorded.
+ */
+export function CalibrationStep({ selected, children, onConfirm, onSkip }: {
+  selected: number | null;
+  /** The logger's own load picker for this exercise. */
+  children: ReactNode;
+  onConfirm: (weight: number) => void;
+  onSkip: () => void;
+}) {
+  return (
+    <section className="set-card" aria-labelledby="calibration-title">
+      <div className="set-card__head">
+        <span className="set-card__num">1</span>
+        <div>
+          <h3 className="set-card__title" id="calibration-title">Pick your first weight</h3>
+          <div className="set-card__sub">First time on this exercise</div>
+        </div>
+      </div>
+      <p className="data-note">Pick a weight you could lift about 12 times with good form.</p>
+      {children}
+      <p className="data-note">
+        Do 5 easy reps with it, then confirm or change. This warm-up is not logged.
+      </p>
+      <div className="review-footer__row">
+        <button className="pill-quiet" aria-label="Skip first-weight help" onClick={onSkip}>Skip</button>
+        <button className="pill-primary" disabled={selected === null}
+          onClick={() => selected !== null && onConfirm(selected)}>Confirm</button>
+      </div>
+    </section>
+  );
 }
 
 export default function TrainScreen({
@@ -66,7 +111,11 @@ export default function TrainScreen({
   history,
   now,
   loadOptions,
+  calibrationLoads = [],
+  skippedCalibrations = [],
+  onSkipCalibration,
   unit,
+  targetNotes,
   onMinimize,
   onFinish,
   onUpdateSet,
@@ -79,6 +128,16 @@ export default function TrainScreen({
   onReturn,
 }: Props) {
   const [editing, setEditing] = useState<EditDraft | null>(null);
+  /** The calibration pick lives here until Confirm; nothing reaches the record before it. */
+  const [calibration, setCalibration] = useState<{ key: string; weight: number } | null>(null);
+  /** After Confirm or Skip, focus lands on the logger's weight control instead of <body>. */
+  const focusWeight = useRef(false);
+  const weightField = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focusWeight.current || !weightField.current) return;
+    focusWeight.current = false;
+    weightField.current.querySelector<HTMLElement>('[aria-pressed="true"], button, input')?.focus();
+  });
 
   /** Edit controls write to the draft only; nothing reaches the record here. */
   const patchDraft = (patch: Partial<Pick<EditDraft, 'reps' | 'weight'>>) =>
@@ -86,6 +145,23 @@ export default function TrainScreen({
   const progress = sessionProgress(session);
   const rest = restRemaining(session, now);
   const restPaused = Boolean(session.restPausedAt);
+
+  const [muted, setMuted] = useState(() => isRestMuted(session.id));
+  const [restOver, setRestOver] = useState(false);
+  const [prevRest, setPrevRest] = useState(rest);
+  const restActive = Boolean(session.restStartedAt);
+  const ended = restEnded({ prev: prevRest, remaining: rest, active: restActive, paused: restPaused, muted });
+  // Adjusting state during render keeps "Rest over" derived from the tick, not an effect.
+  if (prevRest !== rest) setPrevRest(rest);
+  if (ended && !restOver) setRestOver(true);
+  if (rest > 0 && restOver) setRestOver(false);
+  // The render above already advanced prevRest, so the tone reads its own ref.
+  const cueFrom = useRef(rest);
+  useEffect(() => {
+    const prev = cueFrom.current;
+    cueFrom.current = rest;
+    if (shouldCue({ prev, remaining: rest, active: restActive, paused: restPaused, muted })) playRestCue();
+  }, [rest, restActive, restPaused, muted]);
 
   // Only unskipped, unfinished work is offered. When nothing is left to log,
   // the trainer shows a review state instead of quietly landing on the last
@@ -190,6 +266,7 @@ export default function TrainScreen({
 
   const activeSet = exercise.performed.findIndex((set) => !set.done);
   const mode = loadModeOf(exercise.exerciseId);
+  const equipment = exerciseById(exercise.exerciseId)?.equipment ?? (mode === 'none' ? 'Bodyweight' : 'Dumbbell');
   const detail = detailOf(exercise.exerciseId);
   const weightLabel =
     mode === 'total'
@@ -199,15 +276,35 @@ export default function TrainScreen({
         : 'bodyweight';
   /** Loads are stored in kilograms; only the readout converts. */
   const showWeight = (kg: number) => displayValue(kg, unit);
+  const showActual = (kg: number) => calibrationInputValue(kg, unit);
   const last = lastPerformance(history, exercise.exerciseId);
   const holdUnit = setUnit(exercise.exerciseId) === 'seconds';
   const plannedTarget = exercise.planned[activeSet === -1 ? exercise.planned.length - 1 : activeSet];
-  /** "9 · 9" list for per-set targets, "8–10 reps" for a range, never "2 × 9". */
+  /** "9 · 9" list of the prescribed reps; never "2 × 9". */
   const targetReps =
     repsTarget(exercise.exerciseId, exercise.planned.length, exercise.planned) ??
     exercise.planned.map((set) => set.reps).join(' · ');
   const targetWeight = exercise.planned[0]?.weight ?? 0;
-  const canPickWeight = mode !== 'none' && loadOptions.length > 0;
+  const canPickWeight = equipment === 'Dumbbell' && loadOptions.length > 0;
+  const canEnterWeight = mode !== 'none' && equipment !== 'Dumbbell';
+  const loadEntry = (weight: number, update: (weight: number) => void) => canEnterWeight ? (
+    <input type="number" min="0" step="any" inputMode="decimal"
+      aria-label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`}
+      defaultValue={calibrationInputValue(weight, unit)}
+      onChange={(event) => {
+        const value = Number(event.target.value);
+        if (event.target.value === '') update(0);
+        else if (Number.isFinite(value) && value >= 0) update(toKg(value, unit));
+      }} />
+  ) : null;
+
+  const calibrationKey = `${session.id}:${index}:${exercise.exerciseId}`;
+  const pick = calibration?.key === calibrationKey ? calibration.weight : null;
+  const canPickCalibration = equipment === 'Dumbbell' && calibrationLoads.length > 0;
+  const calibrating = (canPickCalibration || canEnterWeight)
+    && !skippedCalibrations.includes(calibrationKey) && needsCalibration(exercise, history);
+  const choose = (weight: number) =>
+    setCalibration(weight > 0 ? { key: calibrationKey, weight } : null);
 
   const activeValues =
     activeSet === -1
@@ -219,7 +316,7 @@ export default function TrainScreen({
     : activeValues
       ? `Log set ${activeSet + 1} · ${
           activeValues.weight > 0
-            ? `${setText(exercise.exerciseId, activeValues.reps)} @ ${showWeight(activeValues.weight)} ${unitLabel(unit)}`
+            ? `${setText(exercise.exerciseId, activeValues.reps)} @ ${showActual(activeValues.weight)} ${unitLabel(unit)}`
             : setText(exercise.exerciseId, activeValues.reps)
         }`
       : 'Log set';
@@ -255,14 +352,14 @@ export default function TrainScreen({
             </div>
             <span className="set-card__target">
               Saved: {setText(exercise.exerciseId, set.reps)}
-              {set.weight > 0 ? ` · ${showWeight(set.weight)} ${unitLabel(unit)}` : ''}
+              {set.weight > 0 ? ` · ${showActual(set.weight)} ${unitLabel(unit)}` : ''}
             </span>
           </div>
 
           <div className="aw-field">
             <div className="aw-field__label">
               <span>Weight ({weightLabel})</span>
-              <span className="aw-field__note">{canPickWeight ? 'Dumbbell' : 'Bodyweight'}</span>
+              <span className="aw-field__note">{equipment}</span>
             </div>
             {canPickWeight ? (
               <div className="weight-pills">
@@ -276,7 +373,7 @@ export default function TrainScreen({
                   </button>
                 ))}
               </div>
-            ) : (
+            ) : canEnterWeight ? loadEntry(draft.weight, (weight) => patchDraft({ weight })) : (
               <p style={{ fontSize: 14, color: 'var(--on-surface-variant)' }}>Bodyweight</p>
             )}
           </div>
@@ -341,6 +438,39 @@ export default function TrainScreen({
       );
     }
 
+    if (isActive && calibrating) {
+      return (
+        <CalibrationStep
+          key={setIndex}
+          selected={pick}
+          onConfirm={(weight) => {
+            focusWeight.current = true;
+            onUpdateSet(index, setIndex, { weight });
+          }}
+          onSkip={() => {
+            focusWeight.current = true;
+            onSkipCalibration?.(calibrationKey);
+          }}
+        >
+          <div className="aw-field">
+            <div className="aw-field__label">
+              <span>Weight ({weightLabel})</span>
+              <span className="aw-field__note">{equipment}</span>
+            </div>
+            {canPickCalibration ? (
+              <div className="weight-pills" role="group" aria-label={`Weight (${weightLabel})`}>
+                {calibrationLoads.map((weight) => (
+                  <button key={weight} aria-pressed={pick === weight} onClick={() => choose(weight)}>
+                    {showWeight(weight)}
+                  </button>
+                ))}
+              </div>
+            ) : loadEntry(pick ?? 0, choose)}
+          </div>
+        </CalibrationStep>
+      );
+    }
+
     if (!isActive) {
       return (
         <div className="aw-set" key={setIndex}>
@@ -374,10 +504,10 @@ export default function TrainScreen({
           </span>
         </div>
 
-        <div className="aw-field">
+        <div className="aw-field" ref={weightField}>
           <div className="aw-field__label">
             <span>Weight ({weightLabel})</span>
-            <span className="aw-field__note">{canPickWeight ? 'Dumbbell' : 'Bodyweight'}</span>
+            <span className="aw-field__note">{equipment}</span>
           </div>
           {canPickWeight ? (
             <div className="weight-pills">
@@ -391,7 +521,7 @@ export default function TrainScreen({
                 </button>
               ))}
             </div>
-          ) : (
+          ) : canEnterWeight ? loadEntry(set.weight, (weight) => onUpdateSet(index, setIndex, { weight })) : (
             <p style={{ fontSize: 14, color: 'var(--on-surface-variant)' }}>Bodyweight</p>
           )}
         </div>
@@ -491,13 +621,15 @@ export default function TrainScreen({
               <Icon name="fitness_center" size={18} />
               {(plannedTarget?.weight ?? 0) > 0
                 ? `${showWeight(plannedTarget.weight)} ${weightLabel} · ${detail}`
-                : `Bodyweight · ${detail}`}
+                : mode === 'none'
+                  ? `Bodyweight · ${detail}`
+                  : `Load not set · ${[...new Set([equipment, detail])].join(' · ')}`}
             </div>
             <div className="aw-history">
               <div className="aw-history__line">
                 <Icon name="history" size={16} />
                 {last
-                  ? `Last session: ${setText(exercise.exerciseId, last.reps)}${last.weight > 0 ? ` @ ${showWeight(last.weight)} ${unitLabel(unit)}${mode === 'total' ? ' total' : ' each'}` : ''}`
+                  ? `Last session: ${setText(exercise.exerciseId, last.reps)}${last.weight > 0 ? ` @ ${showActual(last.weight)} ${unitLabel(unit)}${mode === 'total' ? ' total' : ' each'}` : ''}`
                   : 'No previous session recorded'}
               </div>
               <div className="aw-history__line aw-history__line--target">
@@ -505,9 +637,19 @@ export default function TrainScreen({
                 Today’s target: {targetReps}
                 {targetWeight > 0 ? ` @ ${showWeight(targetWeight)} ${weightLabel}` : ''}
               </div>
+              {targetNotes?.[exercise.exerciseId] && (
+                <div className="aw-history__line">
+                  <Icon name="info" size={16} />
+                  {targetNotes[exercise.exerciseId]}
+                </div>
+              )}
             </div>
           </div>
         </section>
+
+        <div className="sr-only" role="status" aria-live="polite">
+          {restOver ? 'Rest over' : ''}
+        </div>
 
         {rest > 0 && (
           <div className="rest-bar" role="timer" aria-label={`Rest, ${rest} seconds remaining`}>
@@ -517,6 +659,18 @@ export default function TrainScreen({
               <span className="rest-bar__time">{restClock(rest)}</span>
             </div>
             <div className="rest-bar__actions">
+              <button
+                className="rest-bar__mute"
+                aria-pressed={muted}
+                aria-label="Mute rest cue"
+                onClick={() => {
+                  primeRestAudio();
+                  setRestMuted(session.id, !muted);
+                  setMuted(!muted);
+                }}
+              >
+                Mute
+              </button>
               <button className="rest-bar__toggle" onClick={onToggleRestPause}>
                 <Icon name={restPaused ? 'play_arrow' : 'pause'} size={16} />
                 {restPaused ? 'Resume' : 'Pause'}
@@ -617,7 +771,16 @@ export default function TrainScreen({
         </div>
         <button
           className="save-bar"
-          onClick={editing ? saveEditing : nothingPending ? onFinish : onLogNext}
+          disabled={calibrating && !editing}
+          onClick={editing
+              ? saveEditing
+              : nothingPending
+                ? onFinish
+                : () => {
+                    primeRestAudio();
+                    onLogNext();
+                  }
+          }
         >
           {editing ? 'Save set' : logLabel}
         </button>

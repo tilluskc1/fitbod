@@ -29,7 +29,7 @@ test('swap-back segments keep their own accepted targets in Today, details, Why,
     const { ExerciseSheet, WhySheet, DaySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const todayProps = { profile, program: FULL_BODY_A, adapted,
-      equipment: 'home', adjusted: true, history: [], current, now: new Date(), onStart: noop, onResume: noop,
+      equipment: 'home', adjusted: true, history: [], current, now: new Date(), onPreview: noop,
       onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop };
     const today = plain(renderToStaticMarkup(createElement(Today, todayProps)));
     let clicked: unknown[] = [];
@@ -77,9 +77,43 @@ test('accepted weighted catalog swaps keep their saved load and equipment in Tod
   }
 });
 
+test('barbell logger offers calibration without fixture dumbbell weights', async () => {
+  const current = session();
+  current.exercises = [{ exerciseId: 'barbell-row', name: 'Barbell Row', planned: [{ weight: 0, reps: 8 }], performed: [{ weight: 0, reps: 8, done: false }] }];
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
+    const html = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
+      loadOptions: [10, 15, 18], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
+      onToggleRestPause: noop, onExtendRest: noop, onSwap: noop, onSkip: noop, onReturn: noop }));
+    assert.match(html, /Weight \(kg total\)/);
+    assert.match(html, /Barbell/);
+    assert.match(html, /Enter barbell load/);
+    assert.doesNotMatch(html, /weight-pills/);
+    assert.doesNotMatch(html, /Dumbbell/);
+    assert.match(html, /Load not set · Barbell/);
+    assert.doesNotMatch(html, /Bodyweight · Barbell/);
+  } finally { await server.close(); }
+});
 
-test('accepted target formatting preserves unchanged ranges, hold units and explicit changed reps', () => {
-  assert.equal(repsTarget('goblet-squat', 2, [{ reps: 8 }, { reps: 8 }]), '8–10 reps');
+test('barbell calibration field opens with precise saved kilograms', async () => {
+  const current = session();
+  current.exercises = [{ exerciseId: 'barbell-row', name: 'Barbell Row',
+    planned: [{ weight: 0, reps: 8 }], performed: [{ weight: 42.3, reps: 8, done: false }] }];
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
+    const html = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
+      loadOptions: [], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
+      onToggleRestPause: noop, onExtendRest: noop, onSwap: noop, onSkip: noop, onReturn: noop }));
+    assert.match(html, /aria-label="Enter barbell load \(kg total\)"[^>]*value="42\.3"/);
+  } finally { await server.close(); }
+});
+
+
+test('accepted target formatting shows prescribed reps and hold units', () => {
+  assert.equal(repsTarget('goblet-squat', 2, [{ reps: 8 }, { reps: 8 }]), '8 · 8');
+  assert.equal(repsTarget('goblet-squat', 2), '8–10 reps', 'the program range without a prescription');
   assert.equal(repsTarget('goblet-squat', 2, [{ reps: 10 }, { reps: 9 }]), '10 · 9');
   assert.equal(repsTarget('plank', 2, [{ reps: 45 }, { reps: 45 }]), '45 · 45s');
   assert.equal(repsTarget('plank', 1, [{ reps: 60 }]), '60s');
@@ -90,4 +124,12 @@ test('Today preserves the accepted hold seconds instead of the static program du
   current.exercises = [{ exerciseId: 'plank', name: 'Plank', planned: [{ weight: 0, reps: 60 }],
     performed: [{ weight: 0, reps: 60, done: false }] }];
   assert.equal(exerciseMeta(currentWorkout(adapted, current).exercises[0]), '1 set · 60s hold');
+});
+
+test('Today shows the open session\'s prescribed reps, not the program range', () => {
+  const current = session();
+  current.exercises = [{ exerciseId: 'goblet-squat', name: 'Goblet Squat',
+    planned: [{ weight: 0, reps: 8 }, { weight: 0, reps: 8 }, { weight: 0, reps: 8 }],
+    performed: [0, 1, 2].map(() => ({ weight: 0, reps: 8, done: false })) }];
+  assert.doesNotMatch(exerciseMeta(currentWorkout(adapted, current).exercises[0]), /8–10/);
 });

@@ -34,7 +34,12 @@ export function workoutsThisWeek(history: WorkoutRecord[], now: Date): number {
   const start = new Date(now);
   start.setDate(start.getDate() - start.getDay());
   start.setHours(0, 0, 0, 0);
-  return history.filter((workout) => hasWork(workout) && new Date(workout.date) >= start).length;
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  return history.filter((workout) => {
+    const date = new Date(workout.date);
+    return workout.status === 'completed' && hasWork(workout) && date >= start && date < end;
+  }).length;
 }
 
 export interface LastPerformance {

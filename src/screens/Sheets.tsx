@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
-import { formatWeight } from '../lib/units';
+import { formatActualWeight, formatWeight } from '../lib/units';
 import type { Profile, Unit, WorkoutExercise } from '../types';
 import { lastPerformance } from '../lib/plan';
 import type { WorkoutRecord } from '../types';
@@ -219,6 +219,7 @@ export function WhySheet({
   planned,
   history,
   unit,
+  reason,
   onClose,
 }: {
   exerciseId: string;
@@ -226,6 +227,8 @@ export function WhySheet({
   planned: { weight: number; reps: number }[];
   history: WorkoutRecord[];
   unit: Unit;
+  /** The precise sentence behind the target; Today shows only the coach line. */
+  reason?: string;
   onClose: () => void;
 }) {
   const last = lastPerformance(history, exerciseId);
@@ -245,6 +248,7 @@ export function WhySheet({
           </>
         )}
       </p>
+      {reason && <p className="sheet-copy" style={{ marginTop: 10 }}>{reason}</p>}
 
       <div className="context-list" style={{ marginTop: 16 }}>
         <div className="context-row">
@@ -253,7 +257,7 @@ export function WhySheet({
         </div>
         <div className="context-row">
           <span>Working load</span>
-          <span>{last ? formatWeight(last.weight, unit) : '—'}</span>
+          <span>{last ? formatActualWeight(last.weight, unit) : '—'}</span>
         </div>
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Today’s target</span>
@@ -311,7 +315,7 @@ export function ExerciseSheet({
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Last recorded</span>
           <span>
-            {last ? `${formatWeight(last.weight, unit)} · ${setText(exerciseId, last.reps)}` : 'No history'}
+            {last ? `${formatActualWeight(last.weight, unit)} · ${setText(exerciseId, last.reps)}` : 'No history'}
           </span>
         </div>
       </div>
@@ -528,12 +532,15 @@ export function DaySheet({
   minutes,
   exercises,
   unit,
+  onStart,
   onClose,
 }: {
   name: string;
   minutes: number;
   exercises: WorkoutExercise[];
   unit: Unit;
+  /** Today's Preview: start through the app's one validated start. */
+  onStart?: () => void;
   onClose: () => void;
 }) {
   return (
@@ -564,6 +571,11 @@ export function DaySheet({
         <button className="secondary" onClick={onClose}>
           Close
         </button>
+        {onStart && (
+          <button className="primary" onClick={onStart} disabled={exercises.length === 0}>
+            Start workout
+          </button>
+        )}
       </div>
     </Sheet>
   );

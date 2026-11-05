@@ -438,3 +438,31 @@ test('generated sessions carry the prescription into planned and performed sets'
     );
   }
 });
+
+test('the reason names the real gap to the next load: rack steps, lb display, barbell', () => {
+  const reason = (id: string, loads: number[], from: number, unit: 'kg' | 'lb' = 'kg') => {
+    const eq = meta(id).equipment;
+    const history = [record({ id: 'w1', date: '2026-01-05T10:00:00.000Z', exerciseId: id,
+      planned: sets(from, 12), performed: sets(from, 12) })];
+    const p = prescribeExercise(meta(id), makeProfile({ loads: { [eq]: loads } }), history);
+    return { p, text: describePrescription(p, unit) };
+  };
+  const rack = [10, 15, 18];
+  const a = reason('dumbbell-floor-press', rack, 10);
+  assert.equal(a.p.weight, 15);
+  assert.match(a.text, /\(\+5 kg\)/);
+  assert.match(reason('dumbbell-floor-press', rack, 15).text, /\(\+3 kg\)/);
+  assert.match(reason('dumbbell-floor-press', rack, 15, 'lb').text, /\(\+6\.5 lb\)/); // 18 kg targets 39.5 lb, 15 kg reads 33 lb
+  assert.match(reason('kettlebell-goblet-squat', [16, 20], 16, 'lb').text, /\(\+8\.5 lb\)/);
+  assert.match(reason('kettlebell-goblet-squat', [4, 6], 4, 'lb').text, /\(\+4 lb\)/);
+  // A typed load just under the rack top displays as the same step: no "+0".
+  const near = reason('dumbbell-floor-press', rack, 17.995);
+  assert.doesNotMatch(near.text, /\+0|\(\+/);
+  assert.match(near.text, /Next load/);
+  // Typed off-rack loads: +N is target minus the load as shown.
+  assert.match(reason('barbell-bench-press', [], 61.25).text, /61\.25 kg\. One step up \(\+3\.75 kg\)/);
+  assert.match(reason('dumbbell-floor-press', rack, 17.75).text, /\(\+0\.25 kg\)/);
+  // Barbell with no inventory: the default increment still equals the actual gap.
+  const bb = reason('barbell-bench-press', [], 60);
+  assert.match(bb.text, new RegExp(`\\(\\+${bb.p.weight - 60} kg\\)`));
+});
