@@ -6,7 +6,8 @@ import { createServer } from 'vite';
 import { FULL_BODY_A } from '../src/data/flagship.ts';
 import { exerciseById } from '../src/data/exercises.ts';
 import { adaptWorkout } from '../src/lib/adapt.ts';
-import { catalogRowMeta, liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
+import { catalogRowMeta, liveAdapted, liveExercises, targetCoachLine, targetReason } from '../src/lib/liveProgression.ts';
+import { tabBarAction } from '../src/lib/tabBarAction.ts';
 import { applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
@@ -36,18 +37,109 @@ function earnedHistory(): WorkoutRecord[] {
     { early: true, now: '2026-11-02T10:30:00.000Z' }).history;
 }
 
-test('Today coach insight states the live reason instead of contradicting the earned step', async () => {
-  const history = earnedHistory();
+async function withServer<T>(run: (load: (path: string) => Promise<Record<string, unknown>>) => Promise<T>) {
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
-  try {
-    const { default: Today } = await server.ssrLoadModule('/src/screens/TodayScreen.tsx');
-    const today = plain(renderToStaticMarkup(createElement(Today, { profile, program: FULL_BODY_A,
-      adapted: liveAdapted(adapted, profile, history), equipment: 'home', adjusted: false, history,
-      current: null, now: new Date('2026-11-04T10:00:00.000Z'), onStart: noop, onResume: noop, onAdjust: noop,
-      onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop })));
-    assert.doesNotMatch(today, /Repeat that/);
-    assert.match(today, /One step up/);
-  } finally { await server.close(); }
+  try { return await run((path) => server.ssrLoadModule(path)); } finally { await server.close(); }
+}
+
+function renderToday(Today: unknown, who: Profile, history: WorkoutRecord[], current: WorkoutRecord | null = null) {
+  return renderToStaticMarkup(createElement(Today as never, { profile: who, program: FULL_BODY_A,
+    adapted: liveAdapted(adapted, who, history), equipment: 'home', adjusted: false, history,
+    current, now: new Date('2026-11-04T10:00:00.000Z'), onPreview: noop, onAdjust: noop,
+    onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop }));
+}
+
+/** History in which the press logged these sets (weight kg × reps), out of 3 planned. */
+function pressHistory(sets: [number, number][]): WorkoutRecord[] {
+  let session = liveSession([]);
+  sets.forEach(([weight, reps], index) => {
+    session = logSet(updatePerformedSet(session, 0, index, { weight, reps }), 0, index,
+      `2026-11-02T10:0${index + 1}:00.000Z`);
+  });
+  return applyFinish({ ...EMPTY_STATE, profile, current: session }, session.id,
+    { early: true, now: '2026-11-02T10:30:00.000Z' }).history;
+}
+const unfinishedHistory = () => pressHistory([[15, 10], [15, 10]]);
+
+test('Today coach line is short and states the same numbers as the target', async () => {
+  await withServer(async (load) => {
+    const { default: Today } = await load('/src/screens/TodayScreen.tsx');
+    const cases: [string, Profile, WorkoutRecord[], string, string][] = [
+      ['earned step', profile, earnedHistory(), 'You owned 15 kg. Today: 18 kg for 8.', '8 · 8 · 8 @ 18 kg each'],
+      ['ceiling', { ...profile, loads: { Dumbbell: [10, 15] } }, earnedHistory(),
+        'Top of your rack — own 15 kg for 10.', '10 · 10 · 10 @ 15 kg each'],
+      ['unfinished', profile, unfinishedHistory(), 'Finish every set: 15 kg for 10.', '10 · 10 · 10 @ 15 kg each'],
+      ['unfinished below the range', profile, pressHistory([[15, 4], [15, 4]]), 'Finish every set: 15 kg for 8.', '8 · 8 · 8 @ 15 kg each'],
+      ['off-rack', profile, pressHistory([[15.25, 9], [15.25, 9]]), 'Finish every set: 15.5 kg for 9.', '9 · 9 · 9 @ 15.5 kg each'],
+      ['mixed loads', profile, pressHistory([[12.3, 10], [15, 10], [15, 10]]),
+        'One load for every set: 12.5 kg for 10.', '10 · 10 · 10 @ 12.5 kg each'],
+      ['lb off-rack', { ...profile, unit: 'lb' }, pressHistory([[20, 9], [20, 9]]), 'Finish every set: 44 lb for 9.', '9 · 9 · 9 @ 44 lb each'],
+      ['first session', profile, [], 'First time on this one. Start light, log what you lift.', '8 · 8 · 8'],
+      ['lb', { ...profile, unit: 'lb' }, earnedHistory(), 'You owned 33 lb. Today: 39.5 lb for 8.', '8 · 8 · 8 @ 39.5 lb each'],
+    ];
+    for (const [label, who, history, line, target] of cases) {
+      const today = plain(renderToday(Today, who, history));
+      assert.ok(today.includes(line), `${label}: coach line`);
+      assert.ok(line.split(/\s+/).length <= 12, `${label}: short`);
+      assert.ok(today.includes(`Today’s target ${target} `), `${label}: target`);
+      assert.doesNotMatch(today, /One step up|Repeat that|Same as last time/, `${label}: the precise reason lives in Why`);
+    }
+  });
+});
+
+test('a first bodyweight move is not told to start light', () => {
+  assert.equal(targetCoachLine('push-up', profile, [], 'kg'), 'First time on this one. Log the reps you do.');
+});
+
+test('"Why this target" keeps the precise reason', async () => {
+  const history = earnedHistory();
+  await withServer(async (load) => {
+    const { WhySheet } = await load('/src/screens/Sheets.tsx');
+    const why = plain(renderToStaticMarkup(createElement(WhySheet as never, { exerciseId: 'dumbbell-floor-press',
+      exerciseName: 'Floor press', planned: [{ weight: 18, reps: 8 }], history, unit: 'kg', onClose: noop,
+      reason: targetReason('dumbbell-floor-press', profile, history, 'kg') })));
+    assert.match(why, /3 sets at 10 reps, 15 kg\. One step up \(\+3 kg\); reps restart at 8\./);
+  });
+});
+
+const startControls = (html: string) =>
+  (html.match(/<button[\s\S]*?<\/button>/g) ?? []).filter((button) => /Start|Resume/.test(button));
+
+test('Today has exactly one Start/Resume: the tab action; the dock is Preview', async () => {
+  await withServer(async (load) => {
+    const { default: Today } = await load('/src/screens/TodayScreen.tsx');
+    const { TabBar } = await load('/src/components/ui/Chrome.tsx');
+    const live = liveAdapted(adapted, profile, []);
+    for (const current of [null, liveSession([])]) {
+      const html = renderToday(Today, profile, [], current) + renderToStaticMarkup(createElement(TabBar as never,
+        { active: 'today', onChange: noop, workoutAction: { ...tabBarAction(current, live), onActivate: noop } }));
+      assert.equal(startControls(html).length, 1, current ? 'resume' : 'start');
+      assert.equal(html.includes('Preview workout'), !current, 'preview only before a session opens');
+    }
+  });
+});
+
+type Node = { type?: unknown; props?: { children?: unknown; onClick?: () => void } };
+function findButton(node: unknown, text: string): Node | null {
+  if (Array.isArray(node)) return node.map((child) => findButton(child, text)).find(Boolean) ?? null;
+  const element = node as Node;
+  if (!element?.props) return null;
+  if (element.type === 'button' && JSON.stringify(element.props.children ?? '').includes(text)) return element;
+  return findButton(element.props.children, text);
+}
+
+test('Preview lists live targets and its Start calls the start it was given', async () => {
+  await withServer(async (load) => {
+    const { DaySheet } = await load('/src/screens/Sheets.tsx');
+    const exercises = liveExercises(adapted, profile, earnedHistory());
+    let started = 0;
+    const props = { name: 'Full Body A', minutes: 35, exercises, unit: 'kg', onClose: noop };
+    const sheet = (DaySheet as (p: object) => unknown)({ ...props, onStart: () => { started += 1; } });
+    assert.match(plain(renderToStaticMarkup(sheet as never)), /18 kg each/);
+    findButton(sheet, 'Start workout')?.props?.onClick?.();
+    assert.equal(started, 1);
+    assert.equal(findButton((DaySheet as (p: object) => unknown)(props), 'Start workout'), null, 'no start without one');
+  });
 });
 
 test('Plan available rows show the live prescription, not the fixture', () => {

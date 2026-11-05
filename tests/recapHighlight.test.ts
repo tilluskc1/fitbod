@@ -133,7 +133,7 @@ test('rendered recap leads with the highlight and Today shows N of daysPerWeek',
     const { default: Today } = await server.ssrLoadModule('/src/screens/TodayScreen.tsx');
     const today = plain(renderToStaticMarkup(createElement(Today, { profile, program: FULL_BODY_A, adapted,
       equipment: 'home', adjusted: false, history: run.history, current: null,
-      now: new Date('2026-11-04T12:00:00.000Z'), onStart: noop, onResume: noop, onAdjust: noop,
+      now: new Date('2026-11-04T12:00:00.000Z'), onPreview: noop, onAdjust: noop,
       onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop })));
     assert.match(today, /Weekly goal: 1 of 3 this week/);
     assert.equal(today.match(/of 3/g)?.length, 1, 'one weekly indicator');

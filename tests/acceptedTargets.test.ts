@@ -29,7 +29,7 @@ test('swap-back segments keep their own accepted targets in Today, details, Why,
     const { ExerciseSheet, WhySheet, DaySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const todayProps = { profile, program: FULL_BODY_A, adapted,
-      equipment: 'home', adjusted: true, history: [], current, now: new Date(), onStart: noop, onResume: noop,
+      equipment: 'home', adjusted: true, history: [], current, now: new Date(), onPreview: noop,
       onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop };
     const today = plain(renderToStaticMarkup(createElement(Today, todayProps)));
     let clicked: unknown[] = [];

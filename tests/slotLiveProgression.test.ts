@@ -85,7 +85,7 @@ test('the cursor walks the configured slots while each slot prescribes from live
     const noop = () => {};
     const html = renderToStaticMarkup(createElement(Today, { profile, program: slotProgram(profile, next.slot, state.history),
       adapted: next.shown, equipment: 'home', adjusted: false, history: state.history, current: null,
-      now: new Date('2026-11-08T10:00:00.000Z'), onStart: noop, onResume: noop, onAdjust: noop, onWhy: noop,
+      now: new Date('2026-11-08T10:00:00.000Z'), onPreview: noop, onAdjust: noop, onWhy: noop,
       onRestore: noop, onOpenSettings: noop, onOpenExercise: noop }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     assert.match(text, new RegExp(slots[0].name));

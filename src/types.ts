@@ -121,7 +121,11 @@ export interface Profile {
   unit?: Unit;
   /** Usual session length in minutes, used by the plan preview. */
   sessionMinutes?: number;
+  /** Per-variant "more often" / "less often". Absent key = neutral. Optional so older data still loads. */
+  preferences?: Record<string, ExercisePreference>;
 }
+
+export type ExercisePreference = 'more' | 'less';
 
 /** The prescription. Never mutated by logging. */
 export interface PlannedSet {

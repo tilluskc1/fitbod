@@ -1,7 +1,7 @@
 import { exerciseById } from '../data/exercises.ts';
 import { loadModeOf, programExercise, setText } from '../data/flagship.ts';
 import type { AdaptedExercise, AdaptedWorkout } from './adapt.ts';
-import { describePrescription, prescribeExercise } from './progression.ts';
+import { coachLine, describePrescription, lastExercisePerformance, prescribeExercise } from './progression.ts';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from './plan.ts';
 import { displayValue, unitLabel } from './units.ts';
 import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
@@ -112,6 +112,23 @@ export function liveExercises(
   });
 }
 
+/**
+ * A loaded variant with no done set in completed history (a saved session that
+ * never reached it does not calibrate it) whose first set has no load yet and nothing logged. Holds and bodyweight never ask.
+ */
+export function needsCalibration(exercise: WorkoutExercise, history: WorkoutRecord[]): boolean {
+  const first = exercise.performed[0];
+  return loadModeOf(exercise.exerciseId) !== 'none' && holdSeconds(exercise.exerciseId) === null
+    && !lastExercisePerformance(history, exercise.exerciseId)?.done.length
+    && first !== undefined && first.weight === 0 && !exercise.performed.some((set) => set.done);
+}
+
+function livePrescription(exerciseId: string, profile: Profile, history: WorkoutRecord[]) {
+  if (holdSeconds(exerciseId) !== null) return null;
+  const definition = exerciseById(exerciseId);
+  return definition ? prescribeExercise(definition, profile, history) : null;
+}
+
 /** One line of the "why this number" explanation, or null where none applies. */
 export function targetReason(
   exerciseId: string,
@@ -119,10 +136,19 @@ export function targetReason(
   history: WorkoutRecord[],
   unit: Unit,
 ): string | null {
-  if (holdSeconds(exerciseId) !== null) return null;
-  const definition = exerciseById(exerciseId);
-  if (!definition) return null;
-  return describePrescription(prescribeExercise(definition, profile, history), unit);
+  const prescription = livePrescription(exerciseId, profile, history);
+  return prescription && describePrescription(prescription, unit);
+}
+
+/** Today's short coach line from the same prescription, or null where none applies. */
+export function targetCoachLine(
+  exerciseId: string,
+  profile: Profile,
+  history: WorkoutRecord[],
+  unit: Unit,
+): string | null {
+  const prescription = livePrescription(exerciseId, profile, history);
+  return prescription && coachLine(prescription, unit);
 }
 
 /** "3 sets · 8 reps · 18 kg each" for a catalog row: Today's numbers, no load until calibrated. */

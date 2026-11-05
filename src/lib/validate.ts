@@ -1,6 +1,8 @@
+import { EXERCISES } from '../data/exercises.ts';
 import type {
   AppState,
   Equipment,
+  ExercisePreference,
   Experience,
   Goal,
   MuscleGroup,
@@ -23,6 +25,7 @@ const EXPERIENCES: Experience[] = ['Beginner', 'Intermediate', 'Advanced'];
 const EQUIPMENT: Equipment[] = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell', 'Bodyweight'];
 const SUPPORT: SupportEquipment[] = ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'];
 const FEEDBACK: WorkoutFeedback[] = ['too-much', 'about-right', 'too-little'];
+const PREFERENCES: ExercisePreference[] = ['more', 'less'];
 const MUSCLES: MuscleGroup[] = [
   'Chest',
   'Back',
@@ -150,6 +153,19 @@ function validateProfile(value: unknown, path: string): Profile {
 
   const exclusions = raw.exclusions === undefined ? [] : uniqueStrings(raw.exclusions, `${path}.exclusions`, MAX_EXCLUSIONS);
 
+  let preferences: Profile['preferences'];
+  if (raw.preferences !== undefined) {
+    const prefsRaw = record(raw.preferences, `${path}.preferences`);
+    const keys = Object.keys(prefsRaw);
+    if (keys.length > MAX_EXCLUSIONS) fail(`${path}.preferences`, `has more than ${MAX_EXCLUSIONS} entries`);
+    preferences = {};
+    for (const key of keys) {
+      // Dropped, not rejected: a variant removed from the catalog must not lock the user out.
+      if (!EXERCISES.some((exercise) => exercise.id === key)) continue;
+      preferences[key] = oneOf(prefsRaw[key], `${path}.preferences.${key}`, PREFERENCES);
+    }
+  }
+
   return {
     goal: oneOf(raw.goal, `${path}.goal`, GOALS),
     experience: oneOf(raw.experience, `${path}.experience`, EXPERIENCES),
@@ -164,6 +180,7 @@ function validateProfile(value: unknown, path: string): Profile {
       raw.sessionMinutes === undefined
         ? undefined
         : integer(raw.sessionMinutes, `${path}.sessionMinutes`, 10, 120),
+    preferences,
   };
 }
 

@@ -7,7 +7,7 @@ import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { currentWorkout, EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
 import { exercisePhoto } from '../lib/media';
-import { targetReason } from '../lib/liveProgression';
+import { targetCoachLine } from '../lib/liveProgression';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 
@@ -20,8 +20,8 @@ interface Props {
   history: WorkoutRecord[];
   current: WorkoutRecord | null;
   now: Date;
-  onStart: () => void;
-  onResume: () => void;
+  /** Opens the session's exercise list; Start/Resume lives in the tab bar. */
+  onPreview: () => void;
   onAdjust: () => void;
   onWhy: () => void;
   onRestore: () => void;
@@ -53,15 +53,15 @@ function coachInsight(
   last: LastPerformance | null,
   first: ProgramExercise,
   unit: Unit,
-  reason: string | null,
+  line: string | null,
 ): string {
+  // Built from the same prescription as the target, so it cannot contradict it.
+  if (line) return line;
   if (!last) {
     return first.holdSeconds
       ? `First session on the ${first.name.toLowerCase()}. Hold it only as long as the set still looks strong.`
       : `First session on the ${first.name.toLowerCase()}. Start light enough that every rep looks the same.`;
   }
-  // The same reason the logger shows, so the insight cannot contradict the target.
-  if (reason) return reason;
   const reps = setText(first.exerciseId, last.reps);
   // The load is what was actually logged, never the prescribed one.
   const load =
@@ -84,8 +84,7 @@ export default function TodayScreen({
   history,
   current,
   now,
-  onStart,
-  onResume,
+  onPreview,
   onAdjust,
   onWhy,
   onRestore,
@@ -183,7 +182,7 @@ export default function TodayScreen({
                   : current
                     ? `Session open. ${progress} of ${total} sets logged so far.`
                     : first
-                      ? coachInsight(last, first, unit, targetReason(first.exerciseId, profile, history, unit))
+                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit))
                       : 'Pick a workout you can keep. The program follows from that.'}
               </p>
             </div>
@@ -306,14 +305,9 @@ export default function TodayScreen({
           <Icon name="tune" size={16} />
           Short on time or gear?
         </button>
-        {current ? (
-          <button className="pill-primary" onClick={onResume}>
-            Resume workout
-            <Icon name="arrow_forward" size={20} />
-          </button>
-        ) : (
-          <button className="pill-primary" onClick={onStart} disabled={adapted.exercises.length === 0}>
-            Start workout
+        {!current && (
+          <button className="pill-primary" onClick={onPreview} disabled={adapted.exercises.length === 0}>
+            Preview workout
             <Icon name="arrow_forward" size={20} />
           </button>
         )}

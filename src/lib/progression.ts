@@ -296,7 +296,7 @@ function fmtDate(iso: string): string {
 
 /** One line explaining why today's numbers are what they are. Loads read in the display unit; records stay kilograms. */
 export function describePrescription(prescription: Prescription, unit: Unit): string {
-  const { basis, last, range, increment, equipment, weight, available } = prescription;
+  const { basis, last, range, equipment, weight, available } = prescription;
   const logged = (kg: number) => fmtLoad(kg, equipment, unit, available);
   if (!last) {
     return 'First time — no history. Start light and log what you actually lift.';
@@ -308,8 +308,14 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
   const setsLabel = `${count} set${count === 1 ? '' : 's'}`;
 
   switch (basis) {
-    case 'load-increase':
-      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. One step up (+${fmtAmount(increment, unit)} ${unitLabel(unit)}); reps restart at ${range.min}.`;
+    case 'load-increase': {
+      // Next shown load minus the current load exactly as `logged` prints it (typed loads keep precision).
+      const onRack = available.some((load) => Math.abs(load - workWeight) < 0.001);
+      const shown = onRack ? displayValue(workWeight, unit) : Number(calibrationInputValue(workWeight, unit));
+      const step = Math.round((displayValue(weight, unit) - shown) * 100) / 100;
+      const stepText = step > 0 ? `One step up (+${step} ${unitLabel(unit)})` : 'Next load';
+      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. ${stepText}; reps restart at ${range.min}.`;
+    }
     case 'rep-increase':
       return `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
     case 'mixed-load':
@@ -326,5 +332,36 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
     case 'first-time':
     default:
       return 'First time — no history yet.';
+  }
+}
+
+/**
+ * Today's coach line: the same prescription as the target, in about a dozen
+ * words. Today's load reads exactly as the target line; only last time's
+ * logged load keeps its stored precision off the rack.
+ */
+export function coachLine(prescription: Prescription, unit: Unit): string {
+  const { basis, last, equipment, weight, reps, available } = prescription;
+  const first =
+    equipment === 'Bodyweight'
+      ? 'First time on this one. Log the reps you do.'
+      : 'First time on this one. Start light, log what you lift.';
+  if (!last) return first;
+  const today = weight > 0 ? `${fmtLoad(weight, equipment, unit, [weight])} for ${reps}` : `${reps} reps`;
+  const owned = last.done.length ? Math.max(...last.done.map((set) => set.weight)) : 0;
+  switch (basis) {
+    case 'load-increase':
+      return `You owned ${fmtLoad(owned, equipment, unit, available)}. Today: ${today}.`;
+    case 'rep-increase':
+      return `Add a rep: ${today}.`;
+    case 'mixed-load':
+      return `One load for every set: ${today}.`;
+    case 'hold':
+      return equipment === 'Bodyweight' ? `Top of the range — own ${today}.` : `Top of your rack — own ${today}.`;
+    case 'repeat':
+      return last.done.length === 0 ? `Last time wasn't logged. Same plan: ${today}.` : `Finish every set: ${today}.`;
+    case 'first-time':
+    default:
+      return first;
   }
 }
