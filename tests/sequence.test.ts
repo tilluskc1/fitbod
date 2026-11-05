@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildPlan } from '../src/lib/generator.ts';
 import { mergeImport } from '../src/lib/storage.ts';
-import { applyCorrection, applyFinish, createSession, logSet, applyCancel } from '../src/lib/session.ts';
+import { applyCorrection, applyFinish, createSession, logSet, applyCancel, updatePerformedSet } from '../src/lib/session.ts';
 import { adaptWorkout, toWorkoutExercises } from '../src/lib/adapt.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import {
@@ -139,7 +139,7 @@ test('an unfinished session stays resumable and a zero-work discard keeps the cu
     planRevision: state.planRevision, exercises: toWorkoutExercises(adapted),
     now: '2026-11-01T10:00:00.000Z',
   }) };
-  const logged = { ...open, current: logSet(open.current!, 0, 0, '2026-11-01T10:02:00.000Z') };
+  const logged = { ...open, current: logSet(updatePerformedSet(open.current!, 0, 0, { weight: 10 }, '2026-11-01T10:02:00.000Z'), 0, 0, '2026-11-01T10:02:00.000Z') };
   assert.equal(logged.current?.exercises[0].performed[0].done, true);
 
   const discarded = applyCancel({ ...state, current: open.current }, 'open');
