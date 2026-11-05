@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadModeOf, needsLoad, repsTarget, setUnit } from '../data/flagship';
+import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
 import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
@@ -89,11 +89,6 @@ export function WeightRow({ label, unitText, loads, selected, show, onPick }: {
   );
 }
 
-/**
- * First-load help for an uncalibrated variant. It suggests no number: the user
- * picks from their own loads, and the warm-up it describes is never recorded.
- * A load pill confirms with its own tap; a typed load needs Confirm.
- */
 /** A logged loaded set saves only with a load (#103). */
 export function SaveSetRow({ needsWeight, onCancel, onSave }: {
   needsWeight: boolean;
@@ -102,13 +97,18 @@ export function SaveSetRow({ needsWeight, onCancel, onSave }: {
 }) {
   return (
     <>
-      {needsWeight && <p className="lg-coach lg-save-reason">Enter a weight to log this set</p>}
+      {needsWeight && <p className="lg-coach lg-save-reason">{NEEDS_LOAD_REASON}</p>}
       <button className="pill-quiet" onClick={onCancel}>Cancel</button>
       <button className="pill-primary" disabled={needsWeight} onClick={onSave}>Save set</button>
     </>
   );
 }
 
+/**
+ * First-load help for an uncalibrated variant. It suggests no number: the user
+ * picks from their own loads, and the warm-up it describes is never recorded.
+ * A load pill confirms with its own tap; a typed load needs Confirm.
+ */
 export function CalibrationStep({ selected = null, onConfirm, onSkip }: {
   selected?: number | null;
   onConfirm?: (weight: number) => void;
@@ -469,7 +469,7 @@ export default function TrainScreen({
         </td>
       </tr>
     );
-    const note = reason && <tr key={reason} className="lg-note"><td colSpan={5} id={reason}>Enter a weight to log this set</td></tr>;
+    const note = reason && <tr key={reason} className="lg-note"><td colSpan={5} id={reason}>{NEEDS_LOAD_REASON}</td></tr>;
     return [row, note, open && <tr key={`${key}:edit`} className="lg-edit"><td colSpan={5}>{editor(set, setIndex, key, draft)}</td></tr>]
       .filter(Boolean);
   });
