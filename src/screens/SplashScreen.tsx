@@ -8,6 +8,10 @@ export function SplashHero({ reduceMotion }: { reduceMotion: boolean }) {
   if (reduceMotion) return <img className="splash__photo" src={HERO_POSTER} alt="" />;
   return (
     <video
+      // iOS Safari autoplays only when the muted *attribute* is present; React sets just the property.
+      ref={(el) => {
+        if (el) el.defaultMuted = true;
+      }}
       className="splash__photo"
       src={HERO_VIDEO}
       poster={HERO_POSTER}
