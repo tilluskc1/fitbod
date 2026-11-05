@@ -148,9 +148,10 @@ export default function TrainScreen({
     const target = focusNext.current;
     if (!target) return;
     focusNext.current = null;
-    // A calibrating exercise has no open ✓ yet; its first-weight row comes first.
+    // A calibrating exercise has no open ✓ yet; its first-weight row comes first. After the last ✓, Finish.
     const element = target === 'log'
       ? document.querySelector<HTMLElement>('button.lg-check:not(:disabled)') ?? document.querySelector<HTMLElement>('.lg-first')
+        ?? document.querySelector<HTMLElement>('.finish-btn')
       : document.getElementById(target);
     (element?.matches('button, input') ? element
       : element?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? element?.querySelector<HTMLElement>('button, input'))?.focus();
@@ -185,7 +186,9 @@ export default function TrainScreen({
   // exercise as if it were current.
   const index = pendingExerciseIndex(session);
   const exercise = index === -1 ? undefined : session.exercises[index];
-  const next = index === -1 ? undefined : session.exercises[index + 1];
+  // Up next is work still on offer: never a skipped or finished exercise.
+  const next = index === -1 ? undefined : session.exercises
+    .find((entry, entryIndex) => entryIndex > index && !entry.skipped && entry.performed.some((set) => !set.done));
   const skippedToday = session.exercises
     .map((entry, entryIndex) => ({ entry, entryIndex }))
     .filter(({ entry }) => entry.skipped);
@@ -576,7 +579,7 @@ export default function TrainScreen({
                 setMuted(!muted);
               }}
             >
-              Mute
+              {muted ? 'Muted' : 'Mute'}
             </button>
           </div>
         )}

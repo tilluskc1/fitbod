@@ -94,7 +94,6 @@ test('rack loads read like the target on every surface; typed loads keep their e
         assert.match(plain(off), new RegExp(`Previous ${unit} each Reps Log 1 42\\.3 × 10 `), `${unit} typed previous (planned ${planned})`);
         assert.deepEqual(weights(off), ['42.3', '42.3', '42.3'], `${unit} typed rows (planned ${planned})`);
       }
-      void exact;
       for (const [label, text] of sheets(historyAt(typed))) assert.equal(text, exact, `${unit} typed ${label}`);
       assert.match(recap(historyAt(typed)), new RegExp(`@ ${exact} each`), `${unit} typed recap`);
     }

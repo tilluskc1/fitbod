@@ -126,3 +126,27 @@ test('#80: switching exercise through a skip or a swap never shows the previous 
     assert.doesNotMatch(bench, /overhead-press:1|42\.3/);
   });
 });
+
+test('Mute reads Muted while pressed, and Up next skips set-aside or finished work', async () => {
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
+    const { setRestMuted } = await server.ssrLoadModule('/src/lib/restCue.ts');
+    const render = (session: WorkoutRecord) => renderToStaticMarkup(createElement(Train, { session, history: [],
+      now: Date.parse(at(1)), loadOptions: RACK, unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop,
+      onConfirmWeight: noop, onLogSet: noop, onToggleRestPause: noop, onExtendRest: noop, onOpenActions: noop, onReturn: noop }));
+    const rested = logSet(pressDay(), 0, 0, at(1));
+    assert.match(render(rested), /<button aria-pressed="false" aria-label="Mute rest cue">Mute</);
+    setRestMuted(rested.id, true);
+    assert.match(render(rested), /<button aria-pressed="true" aria-label="Mute rest cue">Muted</);
+    setRestMuted(rested.id, false);
+
+    const day = createSession({ id: 'next', name: 'Push', dayIndex: 0, now: at(0), exercises: [
+      { exerciseId: 'dumbbell-floor-press', name: 'Dumbbell Floor Press', ...sets(15, 8) },
+      { exerciseId: 'goblet-squat', name: 'Goblet Squat', ...sets(18, 10, 2) },
+      { exerciseId: 'push-up', name: 'Push-Up', ...sets(0, 10, 2) },
+    ] });
+    assert.match(plain(render(skipExercise(day, 1))), /Up next · Push-Up/, 'a skipped exercise is not next');
+    assert.doesNotMatch(plain(render(skipExercise(skipExercise(day, 1), 2))), /Up next/, 'nothing pending after it');
+  } finally { await server.close(); }
+});

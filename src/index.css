@@ -3511,6 +3511,10 @@ button.aw-exercise__name-btn {
   gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;
+  /* The right-edge fade says more loads scroll in; the end padding lets the last one clear it. */
+  padding-right: 28px;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
 
 .lg-quick__label {
@@ -3809,6 +3813,11 @@ button.aw-exercise__name-btn {
 }
 
 @media (prefers-reduced-transparency: reduce) {
+  .lg-quick {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
   .lg-rest {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
