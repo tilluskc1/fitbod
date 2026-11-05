@@ -103,3 +103,56 @@ test('#103: a cleared or 0 load on a logged loaded set is held, then reverted to
   assert.equal(correctionKeystroke('', 'lb', focused, false), 0, 'a set that needs no load can be cleared');
   assert.equal(correctionBlur('', 'lb', focused, false), null);
 });
+
+test('#109: reps or seconds above the limit are never stored, live or in history, and state still loads', async () => {
+  const { MAX_REPS } = await import('../src/lib/validate.ts');
+  const typed = updatePerformedSet(session(), 0, 0, { reps: 5000 }, NOW);
+  assert.equal(typed.exercises[0].performed[0].reps, 8);
+  assert.equal(updatePerformedSet(session(), 0, 0, { reps: MAX_REPS }, NOW).exercises[0].performed[0].reps, MAX_REPS);
+  assert.equal(validateState({ ...EMPTY_STATE, profile, current: typed }).ok, true);
+  const done = completeSession(updatePerformedSet(session(), 0, 0, { done: true }, NOW), { early: true, now: NOW });
+  const corrected = applyCorrection({ ...EMPTY_STATE, profile, history: [done], current: null }, 's-1', 0, 0, { reps: 5000 }, NOW);
+  assert.equal(corrected.history[0].exercises[0].performed[0].reps, 8);
+  assert.equal(validateState(corrected).ok, true);
+});
+
+test('#109: typing 5-0-0-0 into a history reps field ends on the reps held at focus, with the reason', async () => {
+  const { typedReps, repsLimitMessage } = await import('../src/lib/units.ts');
+  const results = ['5', '50', '500', '5000'].map((text) => typedReps(text, 8));
+  assert.deepEqual(results.at(-1), { reps: 8, refused: true }, 'the refused keystroke reverts to the focus value, not 500');
+  assert.deepEqual(results[2], { reps: 500, refused: false });
+  assert.deepEqual(typedReps('', 8), { reps: 0, refused: false }, 'clearing still means 0');
+  assert.equal(repsLimitMessage(false), 'Reps go up to 1000. That entry was not saved.');
+  assert.equal(repsLimitMessage(true), 'Seconds go up to 1000. That entry was not saved.');
+});
+
+test('#109: a 5000 kg weight patched with done on an unloaded set is refused whole, not logged at 0', () => {
+  const blank = createSession({ id: 's-2', name: 'Full body A', dayIndex: 0, now: NOW, exercises: [{
+    exerciseId: 'barbell-row', name: 'Barbell Row', planned: [{ weight: 0, reps: 8 }],
+    performed: [{ weight: 0, reps: 8, done: false, completedAt: null }],
+  }] });
+  assert.equal(updatePerformedSet(blank, 0, 0, { weight: 5000, done: true }, NOW), blank);
+});
+
+test('#109: progression never plans above the load limit; it holds at the top with a truthful reason', async () => {
+  const { nextLoad, prescribeExercise, describePrescription, coachLine } = await import('../src/lib/progression.ts');
+  const { EXERCISES } = await import('../src/data/exercises.ts');
+  assert.equal(nextLoad(MAX_WEIGHT, 2.5, []), MAX_WEIGHT);
+  assert.equal(nextLoad(1999, 2.5, []), 1999, 'the next grid step (2002.5) is above the limit');
+  assert.equal(nextLoad(1995, 2.5, []), 1997.5);
+  const row = EXERCISES.find((item) => item.id === 'barbell-row');
+  assert.ok(row);
+  for (const top of [MAX_WEIGHT, 1999]) {
+    const history = [{
+      id: `h-${top}`, date: NOW, name: 'Pull', dayIndex: 0, status: 'completed' as const, completedEarly: false, endedAt: null,
+      exercises: [{ exerciseId: 'barbell-row', name: 'Barbell Row', planned: [{ weight: top, reps: 30 }],
+        performed: [{ weight: top, reps: 30, done: true, completedAt: NOW }] }],
+    }];
+    const prescription = prescribeExercise(row, profile, history);
+    assert.equal(prescription.weight, top);
+    assert.equal(prescription.basis, 'hold');
+    assert.ok(prescription.weight <= MAX_WEIGHT);
+    assert.match(describePrescription(prescription, 'kg'), /Top of the app's load limit/);
+    assert.match(coachLine(prescription, 'kg'), /Top of the app's load limit/);
+  }
+});

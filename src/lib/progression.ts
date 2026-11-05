@@ -8,7 +8,8 @@ import type {
   WorkoutExercise,
   WorkoutRecord,
 } from '../types.ts';
-import { loadValue, unitLabel } from './units.ts';
+import { loadLimitText, loadValue, unitLabel } from './units.ts';
+import { MAX_WEIGHT } from './validate.ts';
 import { exerciseInWorkout } from './plan.ts';
 import { programExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
@@ -209,7 +210,9 @@ export function nextLoad(weight: number, increment: number, available: number[])
     return reachable ?? available[available.length - 1];
   }
   const target = weight + increment;
-  return round(Math.ceil((target - 0.001) / increment) * increment);
+  const next = round(Math.ceil((target - 0.001) / increment) * increment);
+  // Never plan a load the loader rejects (#109): at the limit the load holds.
+  return next > MAX_WEIGHT ? weight : next;
 }
 
 export interface PerformanceSet {
@@ -377,7 +380,7 @@ export function prescribeExercise(
 
   const next = increment > 0 ? nextLoad(workingWeight, increment, available) : workingWeight;
   if (next <= workingWeight + 0.001) {
-    // No heavier load exists (bodyweight, or the top of the recorded rack).
+    // No heavier load exists (bodyweight, the top of the recorded rack, or the app's load limit).
     return {
       ...base,
       weight: workingWeight,
@@ -438,8 +441,12 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
         ? `${when} was not logged. Repeating the same prescription.`
         : `Repeat ${prescription.sets} × ${prescription.reps}${weight > 0 ? ` @ ${logged(weight)}` : ''}: ${when} was cut short. Finish every set to earn the next step.`;
     case 'hold':
-      return equipment === 'Bodyweight'
-        ? `Bodyweight movement at the top of the rep range (${range.max}). Add external load manually to keep progressing.`
+      if (equipment === 'Bodyweight') {
+        return `Bodyweight movement at the top of the rep range (${range.max}). Add external load manually to keep progressing.`;
+      }
+      // With no rack the only ceiling is the app's limit (#109).
+      return available.length === 0
+        ? `Top of the app's load limit — ${loadLimitText(unit)} The load holds at ${logged(weight)}.`
         : `Top of your available loads at ${range.max} reps — add heavier ${equipment.toLowerCase()} loads to progress further.`;
     case 'first-time':
     default:
@@ -471,7 +478,8 @@ export function coachLine(prescription: Prescription, unit: Unit): string {
     case 'mixed-load':
       return `One load for every set: ${today}.`;
     case 'hold':
-      return equipment === 'Bodyweight' ? `Top of the range — own ${today}.` : `Top of your rack — own ${today}.`;
+      if (equipment === 'Bodyweight') return `Top of the range — own ${today}.`;
+      return available.length === 0 ? `Top of the app's load limit — own ${today}.` : `Top of your rack — own ${today}.`;
     case 'repeat':
       return last.done.length === 0 ? `Last time wasn't logged. Same plan: ${today}.` : `Finish every set: ${today}.`;
     case 'first-time':
