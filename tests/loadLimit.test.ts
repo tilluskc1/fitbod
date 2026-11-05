@@ -3,7 +3,7 @@ import test from 'node:test';
 import { applyCorrection, completeSession, confirmWeight, createSession, updatePerformedSet } from '../src/lib/session.ts';
 import { revisePlan, updateProfile } from '../src/lib/sequence.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
-import { dumbbellLoadsPatch, loadLimitMessage, loadLimitText, toKg } from '../src/lib/units.ts';
+import { dumbbellLoadsPatch, loadLimitMessage, loadLimitText, toKg, typedLoad } from '../src/lib/units.ts';
 import { MAX_WEIGHT, validateState } from '../src/lib/validate.ts';
 import type { Profile } from '../src/types.ts';
 
@@ -60,4 +60,21 @@ test('#101: owned dumbbells above the limit are refused in Settings and never re
   const onboarded = revisePlan(EMPTY_STATE, { ...profile, loads: { Dumbbell: [5, 3000] } });
   assert.deepEqual(onboarded.profile?.loads.Dumbbell, [5]);
   assert.equal(validateState(onboarded).ok, true);
+});
+
+test('#101 review: typing 5-0-0-0 over a 95 lb set ends on the load held at focus, not on 500', () => {
+  const focused = toKg(95, 'lb');
+  let stored = focused;
+  let refused = false;
+  for (const text of ['5', '50', '500', '5000']) {
+    const next = typedLoad(text, 'lb', focused);
+    assert.ok(next);
+    stored = next.kg;
+    refused = next.refused;
+  }
+  assert.equal(stored, focused, 'the refused keystroke reverts to the focus value');
+  assert.equal(refused, true);
+  assert.deepEqual(typedLoad('', 'kg', 40), { kg: 0, refused: false }, 'clearing still means no load');
+  assert.deepEqual(typedLoad('42.5', 'kg', 40), { kg: 42.5, refused: false });
+  assert.equal(typedLoad('-', 'kg', 40), null, 'a half-typed value changes nothing');
 });

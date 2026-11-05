@@ -8,7 +8,7 @@ import type { EditDraft } from '../lib/editDraft';
 import { exerciseInWorkout, lastPerformance } from '../lib/plan';
 import { needsCalibration, plannedLoad } from '../lib/liveProgression';
 import { availableLoads } from '../lib/progression';
-import { calibrationInputValue, loadLimitMessage, loadValue, overLoadLimit, toKg, unitLabel } from '../lib/units';
+import { calibrationInputValue, loadLimitMessage, loadValue, typedLoad, unitLabel } from '../lib/units';
 import type { PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -117,7 +117,7 @@ export function CalibrationStep({ selected = null, onConfirm, onSkip }: {
 
 /**
  * A typed load. One above the loader's limit is refused with a message and the
- * field falls back to the stored load, so nothing invalid is kept (#101).
+ * field falls back to the load held at focus, so nothing invalid is kept (#101).
  */
 function LoadEntry({ weight, update, shown, unit, label }: {
   weight: number;
@@ -127,17 +127,18 @@ function LoadEntry({ weight, update, shown, unit, label }: {
   label: string;
 }) {
   const [refused, setRefused] = useState(false);
+  const focused = useRef(weight);
   return (
     <>
       <input type="number" min="0" step="any" inputMode="decimal" aria-label={label} aria-invalid={refused || undefined}
         defaultValue={shown ?? calibrationInputValue(weight, unit)}
+        onFocus={() => { focused.current = weight; }}
         onChange={(event) => {
-          const value = Number(event.target.value);
-          const over = Number.isFinite(value) && overLoadLimit([toKg(value, unit)]);
-          setRefused(over);
-          if (over) event.target.value = calibrationInputValue(weight, unit);
-          else if (event.target.value === '') update(0);
-          else if (Number.isFinite(value) && value >= 0) update(toKg(value, unit));
+          const next = typedLoad(event.target.value, unit, focused.current);
+          if (!next) return;
+          setRefused(next.refused);
+          if (next.refused) event.target.value = calibrationInputValue(next.kg, unit);
+          update(next.kg);
         }} />
       {refused && <span className="error-text" role="alert">{loadLimitMessage(unit)}</span>}
     </>

@@ -62,7 +62,7 @@ import
 import type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
 import { parseState } from './lib/validate';
 import
- { loadLimitMessage, overLoadLimit, unitOf } from './lib/units';
+ { loadLimitMessage, unitOf } from './lib/units';
 import
  { EXERCISES, exerciseById } from './data/exercises';
 import
@@ -648,12 +648,10 @@ export default function App() {
     exerciseIndex: number,
     setIndex: number,
     patch: Partial<PerformedSet>,
+    refused = false,
   ) => {
-    // The history field is controlled, so refusing here snaps it back to the stored load (#101).
-    if (overLoadLimit([patch.weight ?? 0])) {
-      setNotice(loadLimitMessage(unit));
-      return;
-    }
+    // A refused history load arrives as the focus value, so the controlled field shows it again (#101).
+    if (refused) setNotice(loadLimitMessage(unit));
     setState((currentState) =>
       applyCorrection(currentState, workoutId, exerciseIndex, setIndex, patch, new Date().toISOString()),
     );

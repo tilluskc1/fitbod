@@ -42,6 +42,19 @@ export function overLoadLimit(kgs: number[]): boolean {
   return kgs.some((kg) => kg > MAX_WEIGHT);
 }
 
+/**
+ * The next stored value of a typed load field. Above the limit it is refused and
+ * falls back to `focused`, the load held when the field was focused, so a refused
+ * last keystroke never leaves the one before it stored (#101). Null: change nothing.
+ */
+export function typedLoad(text: string, unit: Unit, focused: number): { kg: number; refused: boolean } | null {
+  if (text === '') return { kg: 0, refused: false };
+  const value = Number(text);
+  if (!Number.isFinite(value) || value < 0) return null;
+  const kg = toKg(value, unit);
+  return overLoadLimit([kg]) ? { kg: focused, refused: true } : { kg, refused: false };
+}
+
 /** The limit in the display unit, e.g. "Loads go up to 2000 kg." */
 export function loadLimitText(unit: Unit): string {
   return `Loads go up to ${Math.floor(toDisplay(MAX_WEIGHT, unit))} ${unitLabel(unit)}.`;
