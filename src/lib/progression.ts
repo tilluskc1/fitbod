@@ -113,8 +113,9 @@ export function incrementFor(equipment: Equipment, available: number[]): number 
 export function nextLoad(weight: number, increment: number, available: number[]): number {
   if (increment <= 0) return weight;
   if (available.length > 0) {
-    // The next owned load, not weight + a rounded gap: 2.268 kg (5 lb) rounds to 2.27 and skipped 20 lb.
-    const reachable = available.find((value) => value > weight + 0.01);
+    // The next owned load at least half a rack step up: weight + the rounded step (2.268 kg -> 2.27)
+    // skipped 20 lb, and a load typed in the other unit (9 kg for 9.072) is not a step.
+    const reachable = available.find((value) => value >= weight + increment / 2);
     return reachable ?? available[available.length - 1];
   }
   const target = weight + increment;

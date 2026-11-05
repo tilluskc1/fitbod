@@ -495,3 +495,23 @@ test('one earned step moves to the next owned load on every lb and kg rack (#102
     }
   }
 });
+
+test('a load typed in the other unit still earns a real dumbbell up, never a +0.1 step (#102)', () => {
+  const step = (rack: number[], typed: number, unit: 'kg' | 'lb') => {
+    const history = [record({ id: 'w1', date: '2026-01-05T10:00:00.000Z', exerciseId: 'rear-delt-fly',
+      planned: sets(rack[1], 30), performed: sets(typed, 30) })];
+    const p = prescribeExercise(meta('rear-delt-fly'), makeProfile({ loads: { Dumbbell: rack } }), history);
+    return { weight: p.weight, text: describePrescription(p, unit) };
+  };
+  const lbRack = [6.804, 9.072, 11.34, 13.608]; // 15/20/25/30 lb
+  const a = step(lbRack, 9, 'kg'); // the 20-lb chip reads "9" in kg
+  assert.equal(a.weight, 11.34);
+  const b = step([8, 10, 12.5, 15], 9.979, 'lb'); // typed 22 lb on a kg rack
+  assert.equal(b.weight, 12.5);
+  for (const { text } of [a, b]) {
+    assert.match(text, /One step up/);
+    assert.doesNotMatch(text, /\(\+0\.\d/);
+  }
+  // Off-rack typed load between owned loads: the next owned load up.
+  assert.equal(nextLoad(21, 2.5, [20, 22.5, 25]), 22.5);
+});
