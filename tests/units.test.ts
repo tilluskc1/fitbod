@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { displayValue, formatWeight, toKg } from '../src/lib/units.ts';
+import { calibrationInputValue, displayValue, formatActualWeight, formatWeight, toKg } from '../src/lib/units.ts';
 
 test('pounds are a readout; kilograms stay canonical', () => {
   assert.equal(displayValue(15, 'kg'), 15);
@@ -12,4 +12,15 @@ test('pounds are a readout; kilograms stay canonical', () => {
 test('readouts use one decimal only when the plate needs it', () => {
   assert.equal(formatWeight(22.5, 'kg'), '22.5 kg');
   assert.equal(formatWeight(0, 'kg'), 'Bodyweight');
+});
+
+test('editable loads keep calibrated precision without plate rounding', () => {
+  assert.equal(calibrationInputValue(42.3, 'kg'), '42.3');
+  assert.equal(calibrationInputValue(toKg(95.3, 'lb'), 'lb'), '95.3');
+});
+
+test('recorded kilogram loads retain all stored decimal places', () => {
+  assert.equal(formatActualWeight(42.345, 'kg'), '42.345 kg');
+  assert.equal(calibrationInputValue(42.345, 'kg'), '42.345');
+  assert.equal(formatWeight(42.345, 'kg'), '42.5 kg');
 });

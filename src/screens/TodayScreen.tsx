@@ -1,7 +1,7 @@
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
-import { formatWeight, unitOf } from '../lib/units';
+import { formatActualWeight, unitOf } from '../lib/units';
 import { exerciseMeta, programSetCount, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
@@ -27,6 +27,10 @@ interface Props {
   onRestore: () => void;
   onOpenSettings: () => void;
   onOpenExercise: (exerciseId: string, exerciseIndex: number) => void;
+  /** "Slot 2 of 3" when the program has more than one day. */
+  slotLabel?: string;
+  /** Explicit skip of the slot on offer. Absent means the plan has no sequence. */
+  onSkipSlot?: () => void;
 }
 
 function greeting(now: Date): string {
@@ -62,7 +66,7 @@ function coachInsight(
   // The load is what was actually logged, never the prescribed one.
   const load =
     last.weight > 0
-      ? ` at ${formatWeight(last.weight, unit, { perSide: first.load === 'each' })}`
+      ? ` at ${formatActualWeight(last.weight, unit, { perSide: first.load === 'each' })}`
       : '';
   const target = first.targetReps?.[0];
   if (target !== undefined && target > Math.min(...last.reps)) {
@@ -87,6 +91,8 @@ export default function TodayScreen({
   onRestore,
   onOpenSettings,
   onOpenExercise,
+  slotLabel,
+  onSkipSlot,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -156,6 +162,12 @@ export default function TodayScreen({
               <Icon name="timer" size={17} />
               {estimated < adapted.minutes && !current ? '≈' : ''}
               {minutes} min <span aria-hidden="true">·</span> {setup.short}
+              {slotLabel && (
+                <>
+                  {' '}
+                  <span aria-hidden="true">·</span> {slotLabel}
+                </>
+              )}
             </span>
           </span>
         </section>
@@ -187,6 +199,12 @@ export default function TodayScreen({
               <Icon name="info" size={16} />
               Why this target
             </button>
+            {onSkipSlot && !current && (
+              <button className="text-action" onClick={onSkipSlot}>
+                <Icon name="arrow_forward" size={16} />
+                Skip this session
+              </button>
+            )}
           </div>
         </section>
 

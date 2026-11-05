@@ -18,7 +18,7 @@ export function toDisplay(kg: number, unit: Unit): number {
 /** Convert a typed display value back into canonical kilograms. */
 export function toKg(value: number, unit: Unit): number {
   const kg = unit === 'lb' ? value * KG_PER_LB : value;
-  return Math.round(kg * 100) / 100;
+  return Math.round(kg * 1000) / 1000;
 }
 
 /** Display value snapped to a half unit so inputs read like real plates. */
@@ -35,9 +35,22 @@ export function formatWeight(kg: number, unit: Unit, options: { perSide?: boolea
   return `${text} ${unitLabel(unit)}${options.perSide ? ' each' : ''}`;
 }
 
+/** Format a recorded load without rounding it to a planned plate step. */
+export function formatActualWeight(kg: number, unit: Unit, options: { perSide?: boolean } = {}): string {
+  if (kg <= 0) return 'Bodyweight';
+  return `${calibrationInputValue(kg, unit)} ${unitLabel(unit)}${options.perSide ? ' each' : ''}`;
+}
+
 /** Numeric display value without the unit, used for editable inputs. */
 export function inputValue(kg: number, unit: Unit): string {
   if (kg <= 0) return '';
   const value = displayValue(kg, unit);
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+/** Preserve a calibrated load's stored precision when opening its editor. */
+export function calibrationInputValue(kg: number, unit: Unit): string {
+  if (kg <= 0) return '';
+  if (unit === 'kg') return String(kg);
+  return String(Math.round(toDisplay(kg, unit) * 100) / 100);
 }

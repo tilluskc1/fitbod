@@ -189,6 +189,10 @@ export interface WorkoutRecord {
   restPausedMs?: number;
   name: string;
   dayIndex: number;
+  /** Slot this session belongs to, and its place in the plan sequence. */
+  slotId?: string;
+  slotSeq?: number;
+  planRevision?: number;
   status: WorkoutStatus;
   /** True when the user finished before completing every planned set. */
   completedEarly: boolean;
@@ -229,6 +233,24 @@ export interface AppState {
   history: WorkoutRecord[];
   current: WorkoutRecord | null;
   todayOverride?: TodayOverride | null;
+  /**
+   * Which version of the plan the sequence belongs to. A plan change bumps it,
+   * so a cursor written for the old plan can never point at the new one.
+   */
+  planRevision?: number;
+  /** The slot the user is up to. Moves only on an explicit finish or skip. */
+  programCursor?: { revision: number; seq: number } | null;
+  /** Explicit skips, kept apart from history: a skip is not a workout. */
+  slotSkips?: SlotSkip[];
+}
+
+export interface SlotSkip {
+  /** `skip:<revision>:<seq>`; the same skip can never be recorded twice. */
+  id: string;
+  revision: number;
+  seq: number;
+  slotId: string;
+  at: string;
 }
 
 export type FeasibilityStatus = 'ok' | 'limited' | 'infeasible';

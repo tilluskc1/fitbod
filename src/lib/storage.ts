@@ -11,6 +11,9 @@ export const EMPTY_STATE: AppState = {
   history: [],
   current: null,
   todayOverride: null,
+  planRevision: 0,
+  programCursor: { revision: 0, seq: 0 },
+  slotSkips: [],
 };
 
 interface Envelope {
@@ -361,20 +364,39 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
       ? importedActive ?? localActive
       : localActive ?? importedActive;
 
+  // Older backups add history, but cannot replace a newer plan or erase skip
+  // events. Equal revisions retain the existing import behavior.
+  const currentRevision = current.planRevision ?? 0;
+  const importedRevision = imported.planRevision ?? 0;
+  const importPlan = imported.plan.length > 0 && (current.plan.length === 0 || importedRevision >= currentRevision);
+  const revision = importPlan ? importedRevision : currentRevision;
+  const cursorSeq = currentRevision === importedRevision
+    ? Math.max(current.programCursor?.seq ?? 0, imported.programCursor?.seq ?? 0)
+    : importPlan ? imported.programCursor?.seq ?? 0 : current.programCursor?.seq ?? 0;
+  const skipIds = new Set((current.slotSkips ?? []).map((skip) => skip.id));
+  const slotSkips = [
+    ...(current.slotSkips ?? []),
+    ...(imported.slotSkips ?? []).filter((skip) => !skipIds.has(skip.id)),
+  ];
+  const importProfile = imported.profile !== null && (current.profile === null || importedRevision >= currentRevision);
+
   return {
     state: {
-      profile: imported.profile ?? current.profile,
-      plan: imported.plan.length > 0 ? imported.plan : current.plan,
+      profile: importProfile ? imported.profile : current.profile,
+      plan: importPlan ? imported.plan : current.plan,
       history,
       current: active,
       todayOverride: current.todayOverride ?? null,
+      planRevision: revision,
+      programCursor: { revision, seq: cursorSeq },
+      slotSkips,
     },
     summary: {
       newWorkouts: imported.history.length - duplicateWorkouts,
       duplicateWorkouts,
       localOnlyWorkouts: localOnly.length,
-      profileReplaced: imported.profile !== null,
-      planReplaced: imported.plan.length > 0,
+      profileReplaced: importProfile,
+      planReplaced: importPlan,
       activeSessionKept,
       activeSessionConflict,
       feedbackPreserved,

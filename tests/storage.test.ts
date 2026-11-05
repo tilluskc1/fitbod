@@ -11,6 +11,7 @@ import {
   serializeExport,
 } from '../src/lib/storage.ts';
 import { parseState } from '../src/lib/validate.ts';
+import { buildPlan } from '../src/lib/generator.ts';
 import {
   applyFinish,
   createSession,
@@ -113,6 +114,36 @@ test('v1 data migrates in place, preserving history identity and set values', ()
   assert.equal(stored.schemaVersion, 2);
   assert.equal(stored.revision, 1);
   assert.equal(storage.data.get(LEGACY_BACKUP_KEY), FIXTURE);
+});
+
+test('restoring an older backup keeps newer skip events and the newer plan', () => {
+  const profile = {
+    goal: 'Build Muscle' as const, experience: 'Beginner' as const, daysPerWeek: 3,
+    equipment: ['Dumbbell' as const], support: [], exclusions: [], loads: { Dumbbell: [10] },
+    name: 'Sequence', unit: 'kg' as const, sessionMinutes: 35,
+  };
+  const older = {
+    ...EMPTY_STATE, profile, plan: buildPlan(profile), planRevision: 1,
+    programCursor: { revision: 1, seq: 1 },
+    slotSkips: [{ id: 'skip:1:0', revision: 1, seq: 0, slotId: 'slot-0-push', at: '2026-11-01T10:00:00.000Z' }],
+  };
+  const local = {
+    ...older, profile: { ...profile, daysPerWeek: 5 }, plan: buildPlan({ ...profile, daysPerWeek: 5 }),
+    planRevision: 2, programCursor: { revision: 2, seq: 2 },
+    slotSkips: [
+      ...older.slotSkips,
+      { id: 'skip:2:0', revision: 2, seq: 0, slotId: 'slot-0-push', at: '2026-11-02T10:00:00.000Z' },
+      { id: 'skip:2:1', revision: 2, seq: 1, slotId: 'slot-1-pull', at: '2026-11-03T10:00:00.000Z' },
+    ],
+  };
+  const parsed = parseState(serializeExport(older));
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  const merged = mergeImport(local, parsed.state).state;
+  assert.equal(merged.planRevision, 2);
+  assert.equal(merged.programCursor?.seq, 2);
+  assert.equal(merged.plan.length, 5);
+  assert.deepEqual(merged.slotSkips?.map((skip) => skip.id), ['skip:1:0', 'skip:2:0', 'skip:2:1']);
 });
 
 test('unreadable or invalid stored data is reported and never overwritten on load', () => {

@@ -1,4 +1,5 @@
 import type { AppState, PerformedSet, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import { advanceAfterFinish } from './sequence.ts';
 
 function cleanNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -20,6 +21,9 @@ export function createSession(args: {
   id: string;
   name: string;
   dayIndex: number;
+  slotId?: string;
+  slotSeq?: number;
+  planRevision?: number;
   exercises: WorkoutExercise[];
   now: string;
   durationMin?: number;
@@ -29,6 +33,11 @@ export function createSession(args: {
     date: args.now,
     name: args.name,
     dayIndex: args.dayIndex,
+    // Only written when there is a slot to link: a record with no program
+    // sequence keeps exactly the shape it always had.
+    ...(args.slotId === undefined ? {} : { slotId: args.slotId }),
+    ...(args.slotSeq === undefined ? {} : { slotSeq: args.slotSeq }),
+    ...(args.planRevision === undefined ? {} : { planRevision: args.planRevision }),
     status: 'active',
     completedEarly: false,
     endedAt: null,
@@ -357,11 +366,13 @@ export function applyFinish(
   if (!state.current || state.current.id !== sessionId) return state;
   const completed = completeSession(state.current, options);
   const alreadyStored = state.history.some((workout) => workout.id === completed.id);
-  return {
+  const next: AppState = {
     ...state,
     history: alreadyStored ? state.history : [completed, ...state.history],
     current: null,
   };
+  // Explicit completion with work advances the program sequence exactly once.
+  return advanceAfterFinish(next, completed);
 }
 
 export function applyCancel(state: AppState, sessionId: string): AppState {

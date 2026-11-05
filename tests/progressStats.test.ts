@@ -143,6 +143,15 @@ test('a total-load movement says total, not each', async () => {
   assert.match(text, /22 kg total × 10/);
 });
 
+test('Progress preserves a fractional completed load', async () => {
+  const workout = finished('fractional', '2026-01-01T10:00:00.000Z', [
+    { id: 'barbell-row', name: 'Barbell Row', sets: [{ weight: 42.3, reps: 8 }], logged: [0] },
+  ]);
+  const text = await renderProgress([workout]);
+  assert.match(text, /42\.3 kg total × 8/);
+  assert.doesNotMatch(text, /42\.5 kg/);
+});
+
 test('an exercise that was never logged draws no point at all', async () => {
   const workout = finished('w1', '2026-01-01T10:00:00.000Z', [
     {

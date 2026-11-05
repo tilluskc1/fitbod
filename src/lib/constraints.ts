@@ -191,19 +191,20 @@ export function resolveConstraints(
 
 /**
  * The default setup follows the saved equipment: dumbbell owners get their
- * home plan, everyone else gets bodyweight. Never assumes home dumbbells.
+ * home plan, other configured equipment uses the home setup, and people with
+ * no gear get bodyweight. Never assumes a dumbbell rack exists.
  */
 export function defaultConstraints(profile: Profile): Constraints {
   const saved = profile.loads.Dumbbell ?? [];
   return saved.length > 0
     ? {
         minutes: profile.sessionMinutes ?? 35,
-        equipment: profile.equipment.includes('Dumbbell') ? 'home' : 'bodyweight',
+        equipment: profile.equipment.length > 0 || profile.support.length > 0 ? 'home' : 'bodyweight',
         loads: saved,
       }
     : {
         minutes: profile.sessionMinutes ?? 35,
-        equipment: profile.equipment.includes('Dumbbell') ? 'home' : 'bodyweight',
+        equipment: profile.equipment.length > 0 || profile.support.length > 0 ? 'home' : 'bodyweight',
       };
 }
 
@@ -231,4 +232,3 @@ export function constraintSentence(current: Constraints): string {
           : 'only bodyweight';
   return `I only have ${current.minutes} minutes and ${gear}`;
 }
-

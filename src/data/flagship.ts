@@ -35,7 +35,7 @@ export interface ProgramExercise {
   /** What the load is plus any surface the movement needs. */
   detail: string;
   /** Equipment family this movement needs; drives the adaptation engine. */
-  requires: 'dumbbell' | 'bodyweight';
+  requires: 'dumbbell' | 'bodyweight' | 'configured';
 }
 
 export interface Program {

@@ -4,7 +4,7 @@ import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } fr
 import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
-import { prescribeExercise } from './progression.ts';
+import { prescribeExercise, repRangeFor } from './progression.ts';
 import { liveExercises } from './liveProgression.ts';
 
 /**
@@ -33,8 +33,8 @@ export interface EquipmentOption {
 
 export const EQUIPMENT_OPTIONS: Record<EquipmentChoice, EquipmentOption> = {
   home: {
-    label: 'Home dumbbells',
-    chip: 'Home dumbbells',
+    label: 'Home setup',
+    chip: 'Home setup',
     short: 'Home',
     // A fixture list, shown only while the rack is unconfirmed.
     detail: 'Example rack: 10 kg, 15 kg, 18 kg',
@@ -176,7 +176,8 @@ export function adaptWorkout(
     // movement out. Unconfirmed inventory keeps the fixture check.
     const unusable =
       (exercise.requires === 'dumbbell' && !setup.allowsLoads) ||
-      (exercise.weight > 0 && !knownInventory && !setup.loads.includes(exercise.weight));
+      (exercise.requires === 'configured' && constraints.equipment !== 'home') ||
+      (exercise.requires !== 'configured' && exercise.weight > 0 && !knownInventory && !setup.loads.includes(exercise.weight));
     if (unusable) {
       skipped.push({
         exerciseId: exercise.exerciseId,
@@ -189,7 +190,7 @@ export function adaptWorkout(
     // Never invent a weight: an owned load at or below the program's own is the
     // only substitution, and it is reported so the review can say so.
     let weight = exercise.weight;
-    if (knownInventory && weight > 0 && !inventory.includes(weight)) {
+    if (exercise.requires === 'dumbbell' && knownInventory && weight > 0 && !inventory.includes(weight)) {
       const below = inventory.filter((value) => value < weight).at(-1);
       const substitute = below ?? inventory[0];
       limited.push({ name: exercise.name, from: weight, to: substitute });
@@ -243,6 +244,25 @@ export function adaptWorkout(
         reason: 'time',
       });
     }
+  }
+
+  // Core accessories alone do not make a configured Push/Pull/Legs session.
+  // Leave the slot unstartable when today's setup removes all main movements.
+  const isCore = (exerciseId: string) => exerciseById(exerciseId)?.muscles[0] === 'Core';
+  if (program.id.startsWith('slot-') && kept.length > 0 &&
+      program.exercises.some((exercise) => !isCore(exercise.exerciseId)) &&
+      kept.every((exercise) => isCore(exercise.exerciseId))) {
+    return {
+      programId: program.id,
+      name: program.name,
+      minutes,
+      originalMinutes: program.minutes,
+      exercises: [],
+      skipped,
+      totalSets: 0,
+      originalSets,
+      note: `This slot has no main movement with ${setup.chip.toLowerCase()}. Use the required equipment or skip it.`,
+    };
   }
 
   const totalSets = kept.reduce((sum, exercise) => sum + exercise.sets, 0);
@@ -357,14 +377,17 @@ export function loadOptions(equipment: EquipmentChoice, inventory?: number[]): n
 export function currentWorkout(adapted: AdaptedWorkout, session: WorkoutRecord): AdaptedWorkout {
   const exercises: AdaptedExercise[] = session.exercises.map((entry) => {
     const source = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === entry.exerciseId);
-    const dumbbell = exerciseById(entry.exerciseId)?.equipment === 'Dumbbell';
+    const catalog = exerciseById(entry.exerciseId);
+    const dumbbell = catalog?.equipment === 'Dumbbell';
     const reps = entry.planned.map((set) => set.reps);
+    const range = catalog ? repRangeFor(catalog.pattern) : null;
     return {
       exerciseId: entry.exerciseId,
       name: entry.name,
       sets: entry.planned.length,
       originalSets: entry.originalPlannedSets ?? entry.planned.length,
-      repRange: source?.repRange ?? [reps[0] ?? 0, reps[0] ?? 0],
+      // Same fallback slotProgram uses: the program's range, else the catalog pattern's.
+      repRange: source?.repRange ?? (range ? [range.min, range.max] : [reps[0] ?? 0, reps[0] ?? 0]),
       targetReps: reps,
       holdSeconds: source?.holdSeconds ? reps[0] : undefined,
       weight: entry.planned[0]?.weight ?? 0,
