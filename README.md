@@ -94,7 +94,7 @@ npm test
 - **No deload or autoregulation.** A stalled lift repeats its load; nothing schedules a back-off week.
 - **`goal` does not change programming yet.** Goal and experience only influence coaching copy and
   session length.
-- **50 of 51 exercises have media.** `nordic-curl` deliberately falls back to a placeholder.
+- **All 54 exercises have media.** Missing frames still fall back to a named placeholder.
 - **Offline media is best-effort.** Only media already loaded is cached; the rest shows the text
   placeholder. The service worker registers in production builds only.
 - **One browser, one user.** No accounts, sync, router, or URL state. A clean tab adopts newer data;
