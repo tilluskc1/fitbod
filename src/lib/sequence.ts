@@ -135,6 +135,7 @@ export function slotProgram(
  */
 export function advanceAfterFinish(state: AppState, workout: WorkoutRecord): AppState {
   if (workout.slotSeq === undefined) return state;
+  if (!workout.exercises.some((exercise) => exercise.performed.some((set) => set.done))) return state;
   if (workout.planRevision !== undefined && workout.planRevision !== planRevisionOf(state)) return state;
   const cursor = cursorFor(state);
   const target = Math.min(MAX_SEQ, Math.max(0, Math.floor(workout.slotSeq)) + 1);
@@ -186,16 +187,15 @@ export function revisePlan(state: AppState, profile: Profile): AppState {
   };
 }
 
-/** Settings that change future prescriptions start a new plan revision. */
+/**
+ * Settings that change the ordered slot list start a new plan revision. Other
+ * edits (loads, minutes, goal …) shape prescriptions only, so the cursor stays.
+ */
 export function updateProfile(state: AppState, patch: Partial<Profile>): AppState {
   if (!state.profile) return state;
   const next = { ...state.profile, ...patch };
-  const planInputs = (profile: Profile) => JSON.stringify([
-    profile.goal, profile.experience, profile.daysPerWeek, profile.equipment,
-    profile.support, profile.exclusions, Object.entries(profile.loads).sort(),
-    profile.sessionMinutes,
-  ]);
-  return planInputs(state.profile) === planInputs(next)
+  const slotList = (plan: PlanDay[]) => JSON.stringify(planSlots(plan));
+  return slotList(state.plan) === slotList(buildPlan(next))
     ? { ...state, profile: next }
     : revisePlan(state, next);
 }

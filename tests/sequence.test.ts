@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildPlan } from '../src/lib/generator.ts';
-import { applyFinish, createSession, logSet, applyCancel } from '../src/lib/session.ts';
+import { mergeImport } from '../src/lib/storage.ts';
+import { applyCorrection, applyFinish, createSession, logSet, applyCancel } from '../src/lib/session.ts';
 import { adaptWorkout, toWorkoutExercises } from '../src/lib/adapt.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import {
@@ -115,22 +116,17 @@ test('a repeated Finish, a correction or a duplicate record cannot advance twice
   const finishAgain = applyFinish(once, 's-0-0', { early: false, now: '2026-11-01T11:00:00.000Z' });
   assert.equal(finishAgain, once);
 
-  // A restored duplicate of the finished workout does not move the cursor either.
-  const duplicated = { ...once, history: [once.history[0], { ...once.history[0] }] };
-  assert.equal(nextSlotIndex(duplicated), 1);
+  // A restored duplicate of the finished workout (through the real restore merge) does not move the cursor.
+  const restored = mergeImport(once, once).state;
+  assert.equal(restored.history.length, 1);
+  assert.equal(nextSlotIndex(restored), 1);
+  assert.equal(restored.programCursor?.seq, once.programCursor?.seq);
 
-  // Correcting logged work changes evidence, not the completion.
-  const corrected = {
-    ...once,
-    history: [{
-      ...once.history[0],
-      exercises: once.history[0].exercises.map((exercise) => ({
-        ...exercise,
-        performed: exercise.performed.map((set) => ({ ...set, weight: set.weight + 2 })),
-      })),
-    }],
-  };
+  // Correcting logged work (through the real correction path) changes evidence, not the completion.
+  const corrected = applyCorrection(once, once.history[0].id, 0, 0, { weight: once.history[0].exercises[0].performed[0].weight + 2 }, '2026-11-02T10:00:00.000Z');
+  assert.notDeepEqual(corrected.history[0].exercises, once.history[0].exercises);
   assert.equal(nextSlotIndex(corrected), 1);
+  assert.deepEqual(corrected.programCursor, once.programCursor);
 });
 
 test('an unfinished session stays resumable and a zero-work discard keeps the cursor', () => {
@@ -245,9 +241,34 @@ test('plan revision retains skip evidence from earlier revisions', () => {
 test('plan-affecting settings make a new revision without changing active work', () => {
   const state = fresh();
   const active = { ...state, current: runSlot(state).history[0] };
-  const revised = updateProfile(active, { equipment: ['Barbell'], support: ['Rack', 'Bench'] });
+  const revised = updateProfile(active, { daysPerWeek: 5 });
   assert.equal(revised.planRevision, 2);
   assert.equal(revised.programCursor?.seq, 0);
   assert.deepEqual(revised.current?.exercises, active.current?.exercises);
   assert.equal(updateProfile(revised, { name: 'New name' }).planRevision, 2);
+});
+
+test('settings that leave the slot list unchanged keep the revision, cursor and skips', () => {
+  const mid = skipCurrentSlot(runSlot(fresh()), '2026-11-02T09:00:00.000Z');
+  assert.equal(nextSlotIndex(mid), 2);
+  const changed = updateProfile(mid, { sessionMinutes: 60, goal: 'Lose Fat', experience: 'Intermediate', exclusions: ['Squat'] });
+  assert.equal(changed.planRevision, mid.planRevision);
+  assert.deepEqual(changed.programCursor, mid.programCursor);
+  assert.deepEqual(changed.slotSkips, mid.slotSkips);
+  assert.equal(changed.profile?.sessionMinutes, 60);
+  // A different slot list still starts a new revision.
+  assert.equal(updateProfile(mid, { daysPerWeek: 5 }).planRevision, 2);
+});
+
+test('a finish with no completed working set does not advance the cursor', () => {
+  const state = fresh();
+  const slot = currentSlot(state)!;
+  const adapted = adaptWorkout(slotProgram(profile, slot, []), { minutes: 35, equipment: 'home' }, []);
+  const session = createSession({
+    id: 'empty', name: adapted.name, dayIndex: slot.index, slotId: slot.id, slotSeq: 0,
+    planRevision: state.planRevision, exercises: toWorkoutExercises(adapted), now: '2026-11-01T10:00:00.000Z',
+  });
+  const after = applyFinish({ ...state, current: session }, 'empty', { early: true, now: '2026-11-01T10:30:00.000Z' });
+  assert.equal(nextSlotIndex(after), 0);
+  assert.equal(after.programCursor?.seq, 0);
 });
