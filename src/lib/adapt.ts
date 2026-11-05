@@ -367,9 +367,14 @@ export function loadOptions(equipment: EquipmentChoice, inventory?: number[]): n
   // A setup with no external load has nothing to select from, and a rack the
   // user confirmed at home is not the rack in a hotel gym.
   if (!setup?.allowsLoads || equipment !== 'home') return setup?.loads ?? [];
-  const confirmed = (inventory ?? []).filter((value) => Number.isFinite(value) && value > 0);
-  if (confirmed.length > 0) return [...confirmed].sort((a, b) => a - b);
-  return setup.loads;
+  const confirmed = confirmedLoads(equipment, inventory);
+  return confirmed.length > 0 ? confirmed : setup.loads;
+}
+
+/** Only the loads the user confirmed for this setup; never the example rack. */
+export function confirmedLoads(equipment: EquipmentChoice, inventory?: number[]): number[] {
+  if (!EQUIPMENT_OPTIONS[equipment]?.allowsLoads || equipment !== 'home') return [];
+  return (inventory ?? []).filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
 }
 
 
