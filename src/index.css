@@ -3627,6 +3627,9 @@ body {
     radial-gradient(120% 55% at 90% -12%, rgba(197, 247, 119, 0.13), transparent 62%),
     radial-gradient(90% 45% at -12% 108%, rgba(197, 247, 119, 0.07), transparent 60%),
     var(--surface);
+  /* The app frame clips overflow, so onboarding scrolls itself; Continue stays reachable on short screens. */
+  height: 100%;
+  overflow-y: auto;
 }
 
 .onboarding .unit-toggle,
@@ -3724,16 +3727,29 @@ body {
   color: var(--on-surface);
 }
 
+.onboarding .onboarding-actions .primary:disabled {
+  box-shadow: none;
+}
+
 @media (prefers-reduced-transparency: reduce) {
   .onboarding .unit-toggle,
   .onboarding .option-card,
   .onboarding .search,
   .onboarding .chip,
   .onboarding .day-chip,
-  .onboarding .onboarding-actions .secondary {
+  .onboarding .onboarding-actions .secondary,
+  .onboarding .option-card:hover,
+  .onboarding .chip:hover,
+  .onboarding .day-chip:hover {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     background: var(--surface-container);
+  }
+
+  .onboarding .option-card.selected,
+  .onboarding .day-chip.selected,
+  .onboarding .chip.on {
+    background: var(--surface-container-high);
   }
 }
 
