@@ -353,7 +353,7 @@ export function coachLine(prescription: Prescription, unit: Unit): string {
     case 'hold':
       return equipment === 'Bodyweight' ? `Top of the range — own ${today}.` : `Top of your rack — own ${today}.`;
     case 'repeat':
-      return last.done.length === 0 ? `Last time wasn't logged. Same plan: ${today}.` : `Same load: ${today}.`;
+      return last.done.length === 0 ? `Last time wasn't logged. Same plan: ${today}.` : `Finish every set: ${today}.`;
     case 'first-time':
     default:
       return first;
