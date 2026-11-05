@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { adaptWorkout } from '../src/lib/adapt.ts';
+import { defaultConstraints } from '../src/lib/constraints.ts';
 import { buildPlan, generateWorkout } from '../src/lib/generator.ts';
+import { currentSlot, slotProgram, updateProfile } from '../src/lib/sequence.ts';
 import { conflicts, resetPreferences, withExclusion, withPreference } from '../src/lib/preferences.ts';
 import { applyFinish, createSession, skipExercise } from '../src/lib/session.ts';
 import { EMPTY_STATE, serializeExport } from '../src/lib/storage.ts';
@@ -29,7 +32,6 @@ test('validation keeps catalog more/less preferences and rejects anything else',
   assert.ok(old.ok, 'a profile saved before preferences existed still loads');
   assert.equal(old.state.profile?.preferences, undefined);
 
-  assert.equal(validateState(stateWith({ ...base, preferences: { 'made-up-lift': 'more' } })).ok, false);
   assert.equal(validateState(stateWith({ ...base, preferences: { dip: 'often' } })).ok, false);
   assert.equal(validateState(stateWith({ ...base, preferences: ['dip'] })).ok, false);
 });
@@ -112,4 +114,41 @@ test('repeated skips never create a saved preference or exclusion', () => {
   }
   assert.equal(state.history.length, 3);
   assert.deepEqual(state.profile, base);
+});
+
+test('an unknown exercise in saved preferences is dropped, not a lockout', () => {
+  const loaded = validateState(stateWith({ ...base, preferences: { dip: 'more', 'removed-lift': 'less' } }));
+  assert.ok(loaded.ok, 'a removed catalog exercise must not stop the saved state loading');
+  assert.deepEqual(loaded.state.profile?.preferences, { dip: 'more' });
+  assert.equal(validateState(stateWith({ ...base, exclusions: [42] })).ok, false, 'exclusions validation unchanged');
+});
+
+test('live Today path: a Library save reorders the current slot through slotProgram', () => {
+  const home: Profile = { ...base, experience: 'Beginner', equipment: ['Dumbbell'], support: ['Bench'], loads: { Dumbbell: [10, 15, 18] }, sessionMinutes: 35 };
+  const start: AppState = { ...EMPTY_STATE, profile: home, plan: buildPlan(home) };
+  // The same chain App uses for Today and beginSession.
+  const today = (state: AppState) => {
+    const slot = currentSlot(state);
+    assert.ok(slot && state.profile);
+    const adapted = adaptWorkout(slotProgram(state.profile, slot, state.history), defaultConstraints(state.profile), state.profile.exclusions);
+    const status = generateWorkout(state.profile, slot, slot.index, state.history).feasibility.status;
+    return { ids: adapted.exercises.map((item) => item.exerciseId), status };
+  };
+  const before = today(start);
+  assert.equal(before.ids[0], 'push-up');
+  assert.ok(!before.ids.includes('dumbbell-floor-press'));
+
+  const more = today(updateProfile(start, withPreference(home, 'dumbbell-floor-press', 'more')));
+  assert.ok(more.ids.includes('dumbbell-floor-press'), '"more" brings an eligible variant into the session');
+  assert.equal(more.ids.length, before.ids.length);
+  assert.equal(more.status, before.status);
+
+  const less = today(updateProfile(start, withPreference(home, 'push-up', 'less')));
+  assert.notEqual(less.ids[0], 'push-up', '"less" moves it behind a neutral alternative');
+  assert.equal(less.ids.length, before.ids.length);
+  assert.equal(less.status, before.status);
+
+  const excluded = today(updateProfile(start, withExclusion(home, 'push-up', true)));
+  assert.ok(!excluded.ids.includes('push-up'), 'an exclusion removes it');
+  assert.equal(excluded.status, before.status);
 });
