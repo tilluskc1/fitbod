@@ -224,3 +224,15 @@ test('every exercise declares a pattern and complete needs', () => {
   }
   assert.equal(new Set(EXERCISES.map((exercise) => exercise.id)).size, EXERCISES.length);
 });
+
+// #67: a Push day must be filled by slots, not left short by the per-muscle caps.
+test('beginner dumbbells + bench: Push is a full Ready day with one triceps-primary and at most two shoulder-primary', () => {
+  const profile = makeProfile({ experience: 'Beginner', equipment: ['Dumbbell'], support: ['Bench'] });
+  const push = generateWorkout(profile, buildPlan(profile)[0], 0);
+  const primaries = push.exercises.map((exercise) => meta(exercise.exerciseId).muscles[0]);
+
+  assert.equal(push.exercises.length, 5, push.feasibility.reason);
+  assert.equal(push.feasibility.status, 'ready');
+  assert.equal(primaries.filter((muscle) => muscle === 'Triceps').length, 1);
+  assert.ok(primaries.filter((muscle) => muscle === 'Shoulders').length <= 2);
+});
