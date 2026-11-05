@@ -344,11 +344,14 @@ export function ExerciseActionsSheet({
   onRemoveToday,
   onReturn,
   onClose,
+  initialMode = 'menu',
 }: {
   exerciseId: string;
   exerciseName: string;
   exerciseIndex: number;
   exerciseCount: number;
+  /** The logger's thumbnail opens straight to the demo. */
+  initialMode?: 'menu' | 'instructions';
   planned: { weight: number; reps: number }[];
   pending: number;
   done: number;
@@ -365,7 +368,7 @@ export function ExerciseActionsSheet({
   onReturn: () => void;
   onClose: () => void;
 }) {
-  const [mode, setMode] = useState<ActionMode>('menu');
+  const [mode, setMode] = useState<ActionMode>(initialMode);
   const meta = exerciseById(exerciseId);
   const actions = exerciseActions(pending, done, inSession, skipped);
   const blockedReason = actions.find((action) => action.blockedReason)?.blockedReason;

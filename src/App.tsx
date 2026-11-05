@@ -42,7 +42,6 @@ import
   extendRest,
   confirmWeight,
   logSet,
-  pendingExerciseIndex,
   sessionProgress,
   skipExercise,
   swapPendingExercise,
@@ -121,7 +120,7 @@ type SheetState =
   | { kind: 'none' }
   | { kind: 'adjust' }
   | { kind: 'settings' }
-  | { kind: 'actions'; exerciseId: string; exerciseIndex: number }
+  | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
   | { kind: 'why'; exerciseId: string; exerciseIndex: number }
@@ -577,17 +576,15 @@ export default function App() {
     );
   };
 
-  const logNext = () => {
+  const logOneSet = (exerciseIndex: number, setIndex: number, exerciseId: string) => {
     const stamp = new Date().toISOString();
     setState((currentState) => {
       const session = currentState.current;
-      if (!session) return currentState;
-      // Skipped work is not offered, so "log next" can never record a set on
-      // an exercise the user set aside.
-      const exerciseIndex = pendingExerciseIndex(session);
-      if (exerciseIndex === -1) return currentState;
-      const setIndex = session.exercises[exerciseIndex].performed.findIndex((set) => !set.done);
-      return { ...currentState, current: logSet(session, exerciseIndex, setIndex, stamp) };
+      const exercise = session?.exercises[exerciseIndex];
+      // A tap rendered against another exercise, or on work the user set aside, records nothing.
+      if (!session || exercise?.exerciseId !== exerciseId || exercise.skipped) return currentState;
+      const logged = logSet(session, exerciseIndex, setIndex, stamp);
+      return logged === session ? currentState : { ...currentState, current: logged };
     });
   };
 
@@ -815,7 +812,7 @@ export default function App() {
         onFinish={requestFinish}
         onUpdateSet={updateSet}
         onConfirmWeight={confirmFirstWeight}
-        onLogNext={logNext}
+        onLogSet={logOneSet}
         onToggleRestPause={() => {
           const stamp = new Date().toISOString();
           setState((currentState) =>
@@ -831,15 +828,14 @@ export default function App() {
               : currentState,
           )
         }
-        onSwap={(exerciseIndex) => setSheet({ kind: 'swap', exerciseIndex })}
-        onOpenActions={(exerciseIndex) =>
+        onOpenActions={(exerciseIndex, mode) =>
           setSheet({
             kind: 'actions',
             exerciseId: current?.exercises[exerciseIndex]?.exerciseId ?? '',
             exerciseIndex,
+            mode,
           })
         }
-        onSkip={skipCurrentExercise}
         onReturn={returnToExercise}
       />
     ) : view === 'recap' && recap ? (
@@ -1042,6 +1038,7 @@ export default function App() {
               exerciseName={exercise.name}
               exerciseIndex={sheet.exerciseIndex}
               exerciseCount={todayExercises.length}
+              initialMode={sheet.mode}
               planned={exercise.planned}
               pending={pending}
               done={done}

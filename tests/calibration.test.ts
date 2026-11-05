@@ -49,8 +49,8 @@ async function withTrain(run: (render: Render) => void) {
   try {
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     run((session, history, extra = {}) => renderToStaticMarkup(createElement(Train, { session, history, now: Date.parse(at(1)),
-      loadOptions: RACK, calibrationLoads: RACK, ...extra, unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
-      onToggleRestPause: noop, onExtendRest: noop, onSwap: noop, onSkip: noop, onReturn: noop })));
+      loadOptions: RACK, calibrationLoads: RACK, ...extra, unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop,
+      onToggleRestPause: noop, onExtendRest: noop, onReturn: noop })));
   } finally { await server.close(); }
 }
 
@@ -108,11 +108,14 @@ test('the logger shows the calibration step with nothing pre-selected, only for 
     const text = plain(html);
     assert.match(text, RULE);
     assert.match(text, /Do 5 easy reps with it, then confirm or change/);
-    assert.match(html, />Confirm</);
     assert.match(html, />Skip</);
+    assert.doesNotMatch(html, />Confirm</, 'a load pill confirms with its own tap');
+    assert.match(html, /role="group" aria-label="Your dumbbells \(kg each\)"/);
     for (const weight of RACK) assert.match(html, new RegExp(`aria-pressed="false"[^>]*>${weight}<`));
     assert.doesNotMatch(html, /aria-pressed="true"/, 'no load pre-selected or suggested');
-    assert.match(html, /<button[^>]*class="pill-primary"[^>]*disabled=""[^>]*>Confirm</, 'confirm waits for a choice');
+    for (const n of [1, 2, 3]) {
+      assert.match(html, new RegExp(`aria-label="Log set ${n}" disabled=""`), 'logging waits for a choice or Skip');
+    }
 
     const history = pressHistory();
     assert.doesNotMatch(plain(render(liveSession(history), history)), RULE, 'a variant with history');
@@ -139,7 +142,9 @@ test('confirm pre-fills set 1 only; the ramp set is never recorded and progressi
     const html = render(confirmed, []);
     assert.doesNotMatch(plain(html), RULE);
     assert.match(html, /aria-pressed="true"[^>]*>15</);
-    assert.match(plain(html), /Log set 1 · 8 reps @ 15 kg/);
+    assert.match(html, /aria-label="Edit weight for set 1"[^>]*>15</);
+    assert.match(html, /aria-label="Edit reps for set 1"[^>]*>8</);
+    assert.match(html, /aria-label="Log set 1">/, 'one tap logs it');
   });
 
   // Changing the load later still logs actuals exactly.
@@ -159,25 +164,35 @@ test('confirm pre-fills set 1 only; the ramp set is never recorded and progressi
   assert.equal(prescribeExercise(definition, profile, []).basis, 'first-time');
 });
 
-test('calibration step: Skip and Confirm call only their own handlers', async () => {
+test('calibration step: Skip, Confirm and a load pill call only their own handlers', async () => {
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
-    const { CalibrationStep } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
+    const { CalibrationStep, WeightRow } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const calls: unknown[][] = [];
-    const tree = CalibrationStep({ selected: 15, children: null,
-      onConfirm: (...args: unknown[]) => calls.push(['confirm', ...args]),
-      onSkip: (...args: unknown[]) => calls.push(['skip', ...args]) });
-    const buttons: any[] = [];
-    const visit = (node: any) => {
-      if (!node || typeof node !== 'object') return;
-      if (node.type === 'button') buttons.push(node);
-      for (const child of [node.props?.children].flat(Infinity)) visit(child);
+    const buttonsOf = (tree: unknown) => {
+      const buttons: any[] = [];
+      const visit = (node: any) => {
+        if (!node || typeof node !== 'object') return;
+        if (node.type === 'button') buttons.push(node);
+        for (const child of [node.props?.children].flat(Infinity)) visit(child);
+      };
+      visit(tree);
+      return (text: string) => buttons.find((button) => [button.props.children].flat().join('') === text);
     };
-    visit(tree);
-    const byText = (text: string) => buttons.find((button) => [button.props.children].flat().join('') === text);
-    byText('Skip').props.onClick();
+    const step = buttonsOf(CalibrationStep({ selected: 15,
+      onConfirm: (...args: unknown[]) => calls.push(['confirm', ...args]),
+      onSkip: (...args: unknown[]) => calls.push(['skip', ...args]) }));
+    step('Skip').props.onClick();
     assert.deepEqual(calls, [['skip']], 'skip writes nothing');
-    byText('Confirm').props.onClick();
+    step('Confirm').props.onClick();
     assert.deepEqual(calls.at(-1), ['confirm', 15]);
+    assert.equal(buttonsOf(CalibrationStep({ onSkip: noop }))('Confirm'), undefined, 'pills need no Confirm');
+
+    // One tap on a load is the whole confirm: it hands that load to confirmWeight, nothing else.
+    const row = buttonsOf(WeightRow({ label: 'Your dumbbells', unitText: 'kg each', loads: RACK, selected: null,
+      show: String, onPick: (...args: unknown[]) => calls.push(['pick', ...args]) }));
+    row('15').props.onClick();
+    assert.deepEqual(calls.at(-1), ['pick', 15]);
+    assert.equal(calls.length, 3);
   } finally { await server.close(); }
 });
