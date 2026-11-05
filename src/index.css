@@ -3949,6 +3949,11 @@ button.aw-exercise__name-btn {
   opacity: 0.4;
 }
 
+.lg-save-reason {
+  grid-column: 1 / -1;
+  text-align: right;
+}
+
 .lg-table .lg-note td {
   height: auto;
   padding: 0 14px 4px;

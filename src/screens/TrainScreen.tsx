@@ -94,6 +94,21 @@ export function WeightRow({ label, unitText, loads, selected, show, onPick }: {
  * picks from their own loads, and the warm-up it describes is never recorded.
  * A load pill confirms with its own tap; a typed load needs Confirm.
  */
+/** A logged loaded set saves only with a load (#103). */
+export function SaveSetRow({ needsWeight, onCancel, onSave }: {
+  needsWeight: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <>
+      {needsWeight && <p className="lg-coach lg-save-reason">Enter a weight to log this set</p>}
+      <button className="pill-quiet" onClick={onCancel}>Cancel</button>
+      <button className="pill-primary" disabled={needsWeight} onClick={onSave}>Save set</button>
+    </>
+  );
+}
+
 export function CalibrationStep({ selected = null, onConfirm, onSkip }: {
   selected?: number | null;
   onConfirm?: (weight: number) => void;
@@ -391,10 +406,8 @@ export default function TrainScreen({
         </div>
         <div className="review-footer__row">
           {draft ? (
-            <>
-              <button className="pill-quiet" onClick={() => closeEditor(key)}>Cancel</button>
-              <button className="pill-primary" onClick={() => saveEditing(key)}>Save set</button>
-            </>
+            <SaveSetRow needsWeight={needsLoad(exercise.exerciseId) && draft.weight <= 0}
+              onCancel={() => closeEditor(key)} onSave={() => saveEditing(key)} />
           ) : (
             <button className="pill-quiet" onClick={() => closeEditor(key)}>Done</button>
           )}
@@ -512,7 +525,7 @@ export default function TrainScreen({
                   onConfirmWeight(index, weight);
                 }}
                 onSkip={() => {
-                  focusNext.current = 'log';
+                  focusNext.current = `${rowKey(Math.max(activeSet, 0))}:weight`;
                   onSkipCalibration?.(calibrationKey);
                 }}
               />

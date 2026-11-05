@@ -116,11 +116,7 @@ export function logSet(
   seconds = 75,
 ): WorkoutRecord {
   // A repeated tap must not rewrite when a logged set was done.
-  const exercise = session.exercises[exerciseIndex];
-  const set = exercise?.performed[setIndex];
-  if (set?.done) return session;
-  // A loaded set at weight 0 would read as "no load" and still drive progression.
-  if (set && set.weight <= 0 && needsLoad(exercise.exerciseId)) return session;
+  if (session.exercises[exerciseIndex]?.performed[setIndex]?.done) return session;
   let updated = updatePerformedSet(session, exerciseIndex, setIndex, { done: true }, now);
   if (updated === session) return session;
   // Carry the load just logged into the next unweighted set; never overwrites a chosen weight.
@@ -153,7 +149,13 @@ export function updatePerformedSet(
   patch: Partial<PerformedSet>,
   now: string,
 ): WorkoutRecord {
-  if (!session.exercises[exerciseIndex]?.performed[setIndex]) return session;
+  const exercise = session.exercises[exerciseIndex];
+  const current = exercise?.performed[setIndex];
+  if (!current) return session;
+  // #103: a logged loaded set at weight 0 reads as "no load" yet drives progression; log, edit and correction all land here.
+  const weight = patch.weight === undefined ? current.weight : cleanNumber(patch.weight);
+  const done = patch.done ?? current.done;
+  if (done && weight <= 0 && (patch.weight !== undefined || patch.done) && needsLoad(exercise.exerciseId)) return session;
   const next = copyRecord(session);
   const set = next.exercises[exerciseIndex].performed[setIndex];
   if (patch.weight !== undefined) set.weight = cleanNumber(patch.weight);
@@ -421,6 +423,7 @@ export function applyCorrection(
   const workout = state.history.find((item) => item.id === workoutId);
   if (!workout) return state;
   const corrected = updatePerformedSet(workout, exerciseIndex, setIndex, patch, now);
+  if (corrected === workout) return state;
   return {
     ...state,
     history: state.history.map((item) => (item.id === workoutId ? corrected : item)),
