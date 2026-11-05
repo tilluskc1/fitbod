@@ -69,6 +69,7 @@ export const EXERCISES: Exercise[] = [
   // Triceps
   { id: 'triceps-pushdown', name: 'Triceps Pushdown', muscles: ['Triceps'], equipment: 'Cable', pattern: 'elbow_extension', needs: ['cable'], instructions: 'With elbows at your sides, push the bar down until your arms are straight, then return slowly.' },
   { id: 'overhead-triceps-extension', name: 'Overhead Triceps Extension', muscles: ['Triceps'], equipment: 'Cable', pattern: 'elbow_extension', needs: ['cable'], instructions: 'Hold the rope behind your head and extend your elbows fully, keeping your upper arms still.' },
+  { id: 'dumbbell-overhead-triceps-extension', name: 'Dumbbell Overhead Triceps Extension', muscles: ['Triceps'], equipment: 'Dumbbell', pattern: 'elbow_extension', needs: ['dumbbell'], instructions: 'Hold one dumbbell overhead with both hands. Bend your elbows to lower it behind your head, keeping your upper arms still, then straighten your arms to lift it back up.' },
   { id: 'skull-crusher', name: 'Skull Crusher', muscles: ['Triceps'], equipment: 'Barbell', pattern: 'elbow_extension', needs: ['barbell', 'bench'], instructions: 'Lie on a bench and lower the bar toward your forehead by bending your elbows, then extend back up.' },
   { id: 'close-grip-bench', name: 'Close-Grip Bench Press', muscles: ['Triceps', 'Chest'], equipment: 'Barbell', pattern: 'horizontal_push', secondaryPatterns: ['elbow_extension'], needs: ['barbell', 'bench'], instructions: 'Bench press with a shoulder-width grip, keeping your elbows tucked to emphasize the triceps.' },
   { id: 'diamond-push-up', name: 'Diamond Push-Up', muscles: ['Triceps', 'Chest'], equipment: 'Bodyweight', pattern: 'horizontal_push', secondaryPatterns: ['elbow_extension'], needs: [], instructions: 'Place your hands close together under your chest and perform a push-up, keeping your elbows tight.' },
@@ -106,6 +107,21 @@ export const EXERCISES: Exercise[] = [
   { id: 'russian-twist', name: 'Russian Twist', muscles: ['Core'], equipment: 'Bodyweight', pattern: 'core_flexion', needs: [], instructions: 'Seated with your torso leaned back, rotate side to side, optionally holding a weight.' },
   { id: 'ab-wheel', name: 'Ab Wheel Rollout', muscles: ['Core'], equipment: 'Bodyweight', pattern: 'core_stability', secondaryPatterns: ['core_flexion'], needs: ['ab-wheel'], instructions: 'From your knees, roll the wheel forward while keeping your core braced, then pull back.' },
 ];
+
+/**
+ * Variations that train the same thing the same way. A day never holds two
+ * from one group; the swap list skips them for the same reason.
+ */
+export const INCOMPATIBLE_GROUPS: string[][] = [
+  ['push-up', 'diamond-push-up'],
+  ['arnold-press', 'dumbbell-shoulder-press', 'overhead-press'],
+  ['dumbbell-floor-press', 'dumbbell-bench-press'],
+  ['dumbbell-overhead-triceps-extension', 'overhead-triceps-extension'],
+];
+
+export function areIncompatible(a: string, b: string): boolean {
+  return a !== b && INCOMPATIBLE_GROUPS.some((group) => group.includes(a) && group.includes(b));
+}
 
 export function exerciseById(id: string): Exercise | undefined {
   return EXERCISES.find((e) => e.id === id);
