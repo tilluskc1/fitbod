@@ -7,9 +7,10 @@ import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { exerciseInWorkout, lastPerformance } from '../lib/plan';
 import { needsCalibration, plannedLoad } from '../lib/liveProgression';
+import { nearestLoad, suggestedFirstLoad } from '../lib/firstLoad';
 import { availableLoads } from '../lib/progression';
 import { calibrationInputValue, loadLimitMessage, loadValue, typedLoad, unitLabel } from '../lib/units';
-import type { PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
+import type { Experience, PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 import { MoreIcon } from '../components/ui/Icons';
@@ -27,6 +28,8 @@ interface Props {
   /** `sessionId:exerciseIndex:exerciseId` keys whose first-weight step was skipped. */
   skippedCalibrations?: string[];
   onSkipCalibration?: (key: string) => void;
+  /** The profile's level: the first-weight step starts from a load suggested for it (#116). Absent, it suggests nothing. */
+  experience?: Experience;
   /** Display unit. Records stay in kilograms. */
   unit: Unit;
   /** One factual reason per exercise for today's computed target. */
@@ -69,11 +72,13 @@ function shortTarget(entry: WorkoutExercise): string {
 }
 
 /** The user's loads in one row: a tap writes that load to every set not yet logged (#66). */
-export function WeightRow({ label, unitText, loads, selected, show, onPick }: {
+export function WeightRow({ label, unitText, loads, selected, suggested = null, show, onPick }: {
   label: string;
   unitText: string;
   loads: number[];
   selected: number | null;
+  /** Marked, not chosen: the tap still confirms it (#116). */
+  suggested?: number | null;
   show: (kg: number) => string;
   onPick: (kg: number) => void;
 }) {
@@ -81,7 +86,9 @@ export function WeightRow({ label, unitText, loads, selected, show, onPick }: {
     <div className="lg-quick" role="group" aria-label={`${label} (${unitText})`}>
       <span className="lg-quick__label" aria-hidden="true">{label}</span>
       {loads.map((weight) => (
-        <button type="button" key={weight} aria-pressed={selected === weight} onClick={() => onPick(weight)}>
+        <button type="button" key={weight} aria-pressed={selected === weight}
+          className={suggested === weight ? 'is-suggested' : undefined}
+          aria-label={suggested === weight ? `${show(weight)}, suggested` : undefined} onClick={() => onPick(weight)}>
           {show(weight)}
         </button>
       ))}
@@ -169,6 +176,7 @@ export default function TrainScreen({
   calibrationLoads = [],
   skippedCalibrations = [],
   onSkipCalibration,
+  experience,
   unit,
   targetNotes,
   onMinimize,
@@ -362,13 +370,17 @@ export default function TrainScreen({
   const exerciseKey = `${exercise.exerciseId}:${index}`;
   const rowKey = (setIndex: number) => `${exerciseKey}:${setIndex}`;
   const calibrationKey = `${session.id}:${index}:${exercise.exerciseId}`;
-  const pick = calibration?.key === calibrationKey ? calibration.weight : null;
+  // Untouched (undefined), the step holds the suggested load; a cleared field (0) holds none.
+  const touched = calibration?.key === calibrationKey ? calibration.weight : undefined;
   const canPickCalibration = equipment === 'Dumbbell' && calibrationLoads.length > 0;
   const calibrating = (canPickCalibration || canEnterWeight)
     && !skippedCalibrations.includes(calibrationKey) && needsCalibration(exercise, history);
-  const choose = (weight: number) =>
-    setCalibration(weight > 0 ? { key: calibrationKey, weight } : null);
+  const choose = (weight: number) => setCalibration({ key: calibrationKey, weight });
   const quickLoads = calibrating ? (canPickCalibration ? calibrationLoads : []) : canPickWeight ? loadOptions : [];
+  const definition = exerciseById(exercise.exerciseId);
+  const table = calibrating && experience && definition ? suggestedFirstLoad(definition, experience, unit) : 0;
+  const suggested = table > 0 ? (quickLoads.length > 0 ? nearestLoad(quickLoads, table) : table) : null;
+  const held = touched === undefined ? suggested : touched > 0 ? touched : null;
   const coach = calibrating
     ? `First time on this one. Pick a weight you could lift for ${exercise.planned[0]?.reps ?? 10} reps with 2–3 to spare.`
     : targetNotes?.[exercise.exerciseId];
@@ -532,18 +544,22 @@ export default function TrainScreen({
           <div className="lg-first" key={exerciseKey} id={`${exerciseKey}:first`}>
             {quickLoads.length > 0 && (
               <WeightRow label={canPickCalibration ? 'Your dumbbells' : 'Dumbbells'} unitText={weightLabel}
-                loads={quickLoads} selected={exercise.performed[activeSet]?.weight ?? null} show={showWeight}
+                loads={quickLoads} selected={exercise.performed[activeSet]?.weight ?? null}
+                suggested={calibrating ? suggested : null} show={showWeight}
                 onPick={(weight) => onConfirmWeight(index, weight)} />
             )}
             {calibrating && quickLoads.length === 0 && (
               <label className="lg-first__typed">
                 <span>Weight ({weightLabel})</span>
-                {loadEntry(pick ?? 0, choose)}
+                {loadEntry(held ?? 0, choose)}
               </label>
+            )}
+            {suggested !== null && experience && (
+              <p className="data-note">Suggested from your {experience} setup. Change it if it feels off.</p>
             )}
             {calibrating && (
               <CalibrationStep
-                selected={pick}
+                selected={held}
                 onConfirm={quickLoads.length > 0 ? undefined : (weight) => {
                   focusNext.current = 'log';
                   onConfirmWeight(index, weight);

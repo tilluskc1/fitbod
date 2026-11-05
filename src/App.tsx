@@ -812,6 +812,7 @@ export default function App() {
         loadOptions={loadOptions(constraints.equipment, constraints.loads)}
         profileLoads={state.profile?.loads}
         calibrationLoads={confirmedLoads(constraints.equipment, constraints.loads)}
+        experience={state.profile?.experience}
         skippedCalibrations={calibrationSkips}
         onSkipCalibration={(key) => setCalibrationSkips((keys) => [...keys, key])}
         targetNotes={targetNotes}
