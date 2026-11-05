@@ -50,7 +50,8 @@ test('finishing a shortened workout cannot earn progression before its original 
   const next = prescribeExercise(press, profile, history);
   assert.equal(next.basis, 'repeat');
   assert.equal(next.weight, 15);
-  assert.equal(next.reps, 10);
+  // Two sets of 10 against a 9-rep target is unfinished work: the target repeats (#104).
+  assert.equal(next.reps, 9);
   assert.equal(lastExercisePerformance(history, press.id)?.plannedSets, 3);
   const saved = history[0].exercises[0];
   assert.equal(saved.originalPlannedSets, 3);

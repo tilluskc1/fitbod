@@ -197,16 +197,18 @@ export function incrementFor(equipment: Equipment, available: number[]): number 
 }
 
 /**
- * The next load above `weight`. With an inventory the suggestion snaps up to a
- * load the user can actually select; otherwise it rounds up to the step grid.
+ * The next load above `weight`. With an inventory it is the next owned load up;
+ * otherwise it rounds up to the step grid.
  */
 export function nextLoad(weight: number, increment: number, available: number[]): number {
   if (increment <= 0) return weight;
-  const target = weight + increment;
   if (available.length > 0) {
-    const reachable = available.find((value) => value >= target - 0.001);
+    // The next owned load at least half a rack step up: weight + the rounded step (2.268 kg -> 2.27)
+    // skipped 20 lb, and a load typed in the other unit (9 kg for 9.072) is not a step.
+    const reachable = available.find((value) => value >= weight + increment / 2);
     return reachable ?? available[available.length - 1];
   }
+  const target = weight + increment;
   return round(Math.ceil((target - 0.001) / increment) * increment);
 }
 
@@ -335,12 +337,14 @@ export function prescribeExercise(
   const lowestReps = Math.min(...last.done.map((set) => set.reps));
   const finished = last.done.length >= last.plannedSets;
 
-  // An unfinished exercise is not a green light for more weight.
+  // Unfinished work repeats its target exactly: it neither earns nor loses a step (#104).
+  // A first loaded session planned no load, so what was logged becomes the baseline.
   if (!finished) {
+    const firstLoad = last.plannedWeight === 0 && workingWeight > 0;
     return {
       ...base,
-      weight: workingWeight,
-      reps: clamp(lowestReps, range.min, range.max),
+      weight: firstLoad ? workingWeight : last.plannedWeight,
+      reps: clamp(firstLoad ? lowestReps : last.plannedReps, range.min, range.max),
       basis: 'repeat',
     };
   }
@@ -432,7 +436,7 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
     case 'repeat':
       return last.done.length === 0
         ? `${when} was not logged. Repeating the same prescription.`
-        : `${when} was unfinished, so the load stays at ${logged(workWeight)}. Finish every set to earn the next step.`;
+        : `Repeat ${prescription.sets} × ${prescription.reps}${weight > 0 ? ` @ ${logged(weight)}` : ''}: ${when} was cut short. Finish every set to earn the next step.`;
     case 'hold':
       return equipment === 'Bodyweight'
         ? `Bodyweight movement at the top of the rep range (${range.max}). Add external load manually to keep progressing.`

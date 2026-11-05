@@ -6,7 +6,7 @@ import { createServer } from 'vite';
 import { FULL_BODY_A } from '../src/data/flagship.ts';
 import { adaptWorkout, toWorkoutExercises } from '../src/lib/adapt.ts';
 import { completeSession, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
-import { liveAdapted, targetReason } from '../src/lib/liveProgression.ts';
+import { liveAdapted, liveExercises, targetReason } from '../src/lib/liveProgression.ts';
 import type { Profile } from '../src/types.ts';
 
 // Render the actual screen: model-only checks missed the diverging current rows.
@@ -49,13 +49,14 @@ test('Today preserves the actual fractional load in last performance', async () 
   try {
     const { default: TodayScreen } = await server.ssrLoadModule('/src/screens/TodayScreen.tsx');
     const adapted = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' });
+    const profile: Profile = { goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
+      equipment: ['Dumbbell'], support: [], exclusions: [], loads: {}, name: 'Today review' };
+    // A first live session plans no load, so the one typed set is the baseline an early finish repeats (#104).
     const active = createSession({ id: 'actual', name: adapted.name, dayIndex: 0,
-      now: '2026-10-31T10:00:00.000Z', exercises: toWorkoutExercises(adapted) });
+      now: '2026-10-31T10:00:00.000Z', exercises: liveExercises(adapted, profile, []) });
     const logged = updatePerformedSet(active, 0, 0, { weight: 42.3, reps: 8, done: true }, '2026-10-31T10:05:00.000Z');
     const history = [completeSession(logged, { early: true, now: '2026-10-31T10:06:00.000Z' })];
     const noop = () => {};
-    const profile: Profile = { goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
-      equipment: ['Dumbbell'], support: [], exclusions: [], loads: {}, name: 'Today review' };
     const html = renderToStaticMarkup(createElement(TodayScreen, {
       profile, program: FULL_BODY_A, adapted: liveAdapted(adapted, profile, history), equipment: 'home',
       adjusted: false, history, current: null, now: new Date('2026-11-01T10:10:00.000Z'), onPreview: noop,
