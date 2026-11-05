@@ -4,6 +4,7 @@ import { detailOf, loadModeOf, programExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { buildPlan, generateWorkout } from './generator.ts';
 import { leadCompoundId, REP_RANGES, roleTarget } from './progression.ts';
+import { MAX_WEIGHT } from './validate.ts';
 
 /**
  * The program sequence.
@@ -180,7 +181,16 @@ export function skipCurrentSlot(state: AppState, now: string, offered?: ProgramC
  * revision: the sequence restarts at its first slot, old skips stay with the old
  * plan, and an open session keeps every set it already logged.
  */
-export function revisePlan(state: AppState, profile: Profile): AppState {
+/** Owned loads the loader would reject never reach state, so a reload cannot lock the app (#101). */
+function withLoadableLoads(profile: Profile): Profile {
+  const loads = Object.fromEntries(
+    Object.entries(profile.loads).map(([equipment, kgs]) => [equipment, kgs?.filter((kg) => kg <= MAX_WEIGHT)]),
+  );
+  return { ...profile, loads };
+}
+
+export function revisePlan(state: AppState, input: Profile): AppState {
+  const profile = withLoadableLoads(input);
   const revision = planRevisionOf(state) + 1;
   return {
     ...state,
@@ -198,7 +208,7 @@ export function revisePlan(state: AppState, profile: Profile): AppState {
  */
 export function updateProfile(state: AppState, patch: Partial<Profile>): AppState {
   if (!state.profile) return state;
-  const next = { ...state.profile, ...patch };
+  const next = withLoadableLoads({ ...state.profile, ...patch });
   const slotList = (plan: PlanDay[]) => JSON.stringify(planSlots(plan));
   return slotList(state.plan) === slotList(buildPlan(next))
     ? { ...state, profile: next }

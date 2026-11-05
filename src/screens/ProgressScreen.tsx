@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
-import { loadModeOf, setText, setUnit } from '../data/flagship';
-import { calibrationInputValue, toKg, unitLabel } from '../lib/units';
+import { useMemo, useRef, useState } from 'react';
+import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, setText, setUnit } from '../data/flagship';
+import { calibrationInputValue, correctionBlur, correctionKeystroke, unitLabel } from '../lib/units';
 import { plannedLoad } from '../lib/liveProgression';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from '../lib/plan';
 import type { Profile, Unit, WorkoutFeedback, WorkoutRecord } from '../types';
@@ -18,6 +18,7 @@ interface Props {
     exerciseIndex: number,
     setIndex: number,
     patch: { weight?: number; reps?: number; done?: boolean },
+    refused?: boolean,
   ) => void;
   onDelete: (workoutId: string) => void;
   onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
@@ -62,7 +63,11 @@ export default function ProgressScreen({
 }: Props) {
   const [tab, setTab] = useState<'overview' | 'history'>('overview');
   const [openId, setOpenId] = useState<string | null>(null);
+  /** The weight a history field held when focused; a refused load reverts to it (#101). */
+  const focusedLoad = useRef<number | null>(null);
   const [selectedId, setSelectedId] = useState<string>('');
+  /** The exercise whose weight correction was just refused, as `workoutId:exerciseIndex`. */
+  const [refused, setRefused] = useState('');
 
   const sessions = useMemo(
     () => [...history].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)),
@@ -330,6 +335,9 @@ export default function ProgressScreen({
                     {workout.exercises.map((exercise, exerciseIndex) => {
                       const done = exercise.performed.filter((set) => set.done).length;
                       const timed = setUnit(exercise.exerciseId) === 'seconds';
+                      const loaded = needsLoad(exercise.exerciseId);
+                      const exerciseKey = `${workout.id}:${exerciseIndex}`;
+                      const blocked = (set: { weight: number; done: boolean }) => loaded && !set.done && set.weight <= 0;
                       return (
                         <div className="history-ex" key={`${exercise.exerciseId}-${exerciseIndex}`}>
                           <div className="history-ex-head">
@@ -348,15 +356,28 @@ export default function ProgressScreen({
                               <span className={`mini-set ${set.done ? 'done' : ''}`} key={setIndex}>
                                 {!timed && (
                                   <>
+                                    {/* Saved per keystroke; a missing (#103) or over-limit (#101) load reverts to the focus value on blur. */}
                                     <input
                                       type="number"
+                                      key={unit}
                                       aria-label={`Correct weight for set ${setIndex + 1} of ${exercise.name}`}
-                                      value={calibrationInputValue(set.weight, unit)}
-                                      onChange={(event) =>
-                                        onCorrect(workout.id, exerciseIndex, setIndex, {
-                                          weight: toKg(Number(event.target.value) || 0, unit),
-                                        })
-                                      }
+                                      defaultValue={calibrationInputValue(set.weight, unit)}
+                                      onFocus={() => { focusedLoad.current = set.weight; }}
+                                      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
+                                      onChange={(event) => {
+                                        const kg = correctionKeystroke(event.target.value, unit,
+                                          focusedLoad.current ?? set.weight, loaded && set.done);
+                                        if (kg !== null) onCorrect(workout.id, exerciseIndex, setIndex, { weight: kg });
+                                      }}
+                                      onBlur={(event) => {
+                                        const focused = focusedLoad.current ?? set.weight;
+                                        focusedLoad.current = null;
+                                        const revert = correctionBlur(event.target.value, unit, focused, loaded && set.done);
+                                        setRefused(revert?.reason === 'needs-load' ? exerciseKey : '');
+                                        if (!revert) return;
+                                        event.target.value = calibrationInputValue(revert.kg, unit);
+                                        onCorrect(workout.id, exerciseIndex, setIndex, { weight: revert.kg }, revert.reason === 'limit');
+                                      }}
                                     />
                                     {unitLabel(unit)} ×
                                   </>
@@ -373,6 +394,7 @@ export default function ProgressScreen({
                                 />
                                 {timed && ' seconds'}
                                 <button
+                                  disabled={blocked(set)}
                                   onClick={() =>
                                     onCorrect(workout.id, exerciseIndex, setIndex, {
                                       done: !set.done,
@@ -390,6 +412,9 @@ export default function ProgressScreen({
                               </span>
                             ))}
                           </div>
+                          {(refused === exerciseKey || exercise.performed.some(blocked)) && (
+                            <p className="data-note" role="status">{NEEDS_LOAD_REASON}</p>
+                          )}
                         </div>
                       );
                     })}

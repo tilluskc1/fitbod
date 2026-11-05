@@ -9,7 +9,8 @@ import { adaptWorkout, confirmedLoads, loadOptions } from '../src/lib/adapt.ts';
 import { HOME_DUMBBELLS } from '../src/data/flagship.ts';
 import { liveExercises, needsCalibration } from '../src/lib/liveProgression.ts';
 import { prescribeExercise } from '../src/lib/progression.ts';
-import { applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
+import { applyCorrection, applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
+import { openDraft, applyDraft, saveDraft } from '../src/lib/editDraft.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
@@ -69,7 +70,7 @@ test('needsCalibration: only an uncalibrated loaded variant before set 1 has a l
   assert.equal(needsCalibration(liveSession(pressHistory()).exercises[0], pressHistory()), false, 'history');
   assert.equal(needsCalibration(updatePerformedSet(session, 0, 0, { weight: 15 }, at(1)).exercises[0], []), false,
     'a chosen load is already calibrated');
-  assert.equal(needsCalibration(logSet(session, 0, 0, at(1)).exercises[0], []), false, 'a logged set ends it');
+  assert.equal(needsCalibration(logSet(session, 0, 0, at(1)).exercises[0], []), true, 'a ✓ at no load logs nothing (#103)');
 });
 
 test('an early finish that never reached an exercise leaves it uncalibrated', () => {
@@ -195,5 +196,72 @@ test('calibration step: Skip, Confirm and a load pill call only their own handle
     row('15').props.onClick();
     assert.deepEqual(calls.at(-1), ['pick', 15]);
     assert.equal(calls.length, 3);
+  } finally { await server.close(); }
+});
+
+// #103: Skip only hides the help; a loaded set still needs a load before it can be logged.
+test('after Skip a loaded set cannot be logged at 0; bodyweight and timed sets still log', async () => {
+  const session = liveSession([]);
+  assert.equal(session.exercises[0].performed[0].weight, 0, 'first-time press has no load yet');
+  assert.equal(logSet(session, 0, 0, at(1)), session, 'logSet stores nothing at weight 0');
+  const loaded = logSet(updatePerformedSet(session, 0, 0, { weight: 15 }, at(1)), 0, 0, at(1));
+  assert.equal(loaded.exercises[0].performed[0].done, true, 'a load lets it log');
+
+  const plankIndex = session.exercises.findIndex((entry) => entry.exerciseId === 'plank');
+  assert.equal(logSet(session, plankIndex, 0, at(1)).exercises[plankIndex].performed[0].done, true, 'a hold logs at 0');
+  const pushUps = createSession({ id: 'bw', name: 'BW', dayIndex: 0, now: at(0), exercises: [{ exerciseId: 'push-up',
+    name: 'Push-Up', planned: [{ weight: 0, reps: 10 }], performed: [{ weight: 0, reps: 10, done: false, completedAt: null }] }] });
+  assert.equal(logSet(pushUps, 0, 0, at(1)).exercises[0].performed[0].done, true, 'bodyweight logs at 0');
+  const bench = createSession({ id: 'bb', name: 'BB', dayIndex: 0, now: at(0), exercises: [{ exerciseId: 'barbell-bench-press',
+    name: 'Barbell Bench Press', planned: [{ weight: 0, reps: 8 }], performed: [{ weight: 0, reps: 8, done: false, completedAt: null }] }] });
+  assert.equal(logSet(bench, 0, 0, at(1)), bench, 'a barbell set needs a load too');
+
+  await withTrain((render) => {
+    const skipped = [`${session.id}:0:${session.exercises[0].exerciseId}`];
+    const html = render(session, [], { skippedCalibrations: skipped });
+    assert.doesNotMatch(plain(html), RULE, 'the help is gone');
+    for (const n of [1, 2, 3]) assert.match(html, new RegExp(`aria-label="Log set ${n}"[^>]*disabled=""`), `set ${n} waits for a load`);
+    assert.match(plain(html), /Enter a weight to log this set/);
+    const ready = render(updatePerformedSet(session, 0, 0, { weight: 15 }, at(1)), [], { skippedCalibrations: skipped });
+    assert.match(ready, /aria-label="Log set 1">/, 'a load enables the ✓');
+    assert.doesNotMatch(plain(ready), /Enter a weight to log this set/);
+    const atPlank = { ...session, exercises: session.exercises.map((entry, i) => i < plankIndex ? { ...entry, skipped: true } : entry) };
+    const hold = render(atPlank, []);
+    assert.match(hold, /aria-label="Log set 1">/, 'a hold logs with no load');
+    assert.doesNotMatch(plain(hold), /Enter a weight to log this set/);
+  });
+});
+
+// #103: no edit or correction turns a loaded set into a logged set at weight 0.
+test('editing or correcting a logged loaded set cannot store weight 0', async () => {
+  const start = liveSession([]);
+  const logged = logSet(updatePerformedSet(start, 0, 0, { weight: 15 }, at(1)), 0, 0, at(1));
+  const set = logged.exercises[0].performed[0];
+  const zeroed = saveDraft(applyDraft(openDraft(0, 0, set), { weight: 0 }), set);
+  assert.equal(updatePerformedSet(logged, 0, 0, zeroed, at(2)), logged, 'Save set at 0 writes nothing');
+  assert.equal(updatePerformedSet(logged, 0, 0, saveDraft(applyDraft(openDraft(0, 0, set), { weight: 18 }), set), at(2))
+    .exercises[0].performed[0].weight, 18, 'a real load still saves');
+  assert.equal(updatePerformedSet(start, 0, 1, { weight: 0 }, at(2)).exercises[0].performed[1].weight, 0,
+    'a pending set may still be cleared');
+
+  const state = { ...EMPTY_STATE, profile, history: finish(logged) };
+  const id = state.history[0].id;
+  assert.equal(applyCorrection(state, id, 0, 0, { weight: 0 }, at(40)), state, 'history correction to 0 is refused');
+  assert.equal(state.history[0].exercises[0].performed[2].weight, 0, 'set 3 never got a load');
+  assert.equal(applyCorrection(state, id, 0, 2, { done: true }, at(40)), state, 'marking a no-load set complete is refused');
+  assert.equal(applyCorrection(state, id, 0, 0, { reps: 9 }, at(40)).history[0].exercises[0].performed[0].reps, 9,
+    'other corrections still apply');
+  const plankIndex = start.exercises.findIndex((entry) => entry.exerciseId === 'plank');
+  assert.equal(applyCorrection(state, id, plankIndex, 0, { done: true }, at(40)).history[0].exercises[plankIndex].performed[0].done,
+    true, 'a hold needs no load');
+
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { SaveSetRow } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
+    const html = (needsWeight: boolean) => renderToStaticMarkup(createElement(SaveSetRow, { needsWeight, onCancel: noop, onSave: noop }));
+    assert.match(html(true), /disabled=""[^>]*>Save set</);
+    assert.match(plain(html(true)), /Enter a weight to log this set/);
+    assert.match(html(false), /class="pill-primary">Save set</);
+    assert.doesNotMatch(plain(html(false)), /Enter a weight/);
   } finally { await server.close(); }
 });

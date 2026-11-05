@@ -63,7 +63,7 @@ import
 import type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
 import { parseState } from './lib/validate';
 import
- { unitOf } from './lib/units';
+ { loadLimitMessage, unitOf } from './lib/units';
 import
  { EXERCISES, exerciseById } from './data/exercises';
 import
@@ -650,7 +650,10 @@ export default function App() {
     exerciseIndex: number,
     setIndex: number,
     patch: Partial<PerformedSet>,
+    refused = false,
   ) => {
+    // A refused history load arrives as the focus value the field reverts to; say why (#101).
+    if (refused) setNotice(loadLimitMessage(unit));
     setState((currentState) =>
       applyCorrection(currentState, workoutId, exerciseIndex, setIndex, patch, new Date().toISOString()),
     );

@@ -177,6 +177,14 @@ export function loadModeOf(exerciseId: string): LoadMode {
   return equipment === 'Dumbbell' ? 'each' : equipment && equipment !== 'Bodyweight' ? 'total' : 'none';
 }
 
+/** Why a loaded set cannot be logged yet; one wording for logger and history (#103). */
+export const NEEDS_LOAD_REASON = 'Enter a weight to log this set';
+
+/** A loaded, counted set: it cannot be logged until it carries a load (#103). */
+export function needsLoad(exerciseId: string): boolean {
+  return loadModeOf(exerciseId) !== 'none' && setUnit(exerciseId) !== 'seconds';
+}
+
 export function detailOf(exerciseId: string): string {
   return programExercise(exerciseId)?.detail ?? exerciseById(exerciseId)?.equipment ?? 'Bodyweight';
 }

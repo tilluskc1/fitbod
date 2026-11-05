@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadModeOf, repsTarget, setUnit } from '../data/flagship';
+import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
 import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
@@ -8,7 +8,7 @@ import type { EditDraft } from '../lib/editDraft';
 import { exerciseInWorkout, lastPerformance } from '../lib/plan';
 import { needsCalibration, plannedLoad } from '../lib/liveProgression';
 import { availableLoads } from '../lib/progression';
-import { calibrationInputValue, loadValue, toKg, unitLabel } from '../lib/units';
+import { calibrationInputValue, loadLimitMessage, loadValue, typedLoad, unitLabel } from '../lib/units';
 import type { PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -89,6 +89,21 @@ export function WeightRow({ label, unitText, loads, selected, show, onPick }: {
   );
 }
 
+/** A logged loaded set saves only with a load (#103). */
+export function SaveSetRow({ needsWeight, onCancel, onSave }: {
+  needsWeight: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <>
+      {needsWeight && <p className="lg-coach lg-save-reason">{NEEDS_LOAD_REASON}</p>}
+      <button className="pill-quiet" onClick={onCancel}>Cancel</button>
+      <button className="pill-primary" disabled={needsWeight} onClick={onSave}>Save set</button>
+    </>
+  );
+}
+
 /**
  * First-load help for an uncalibrated variant. It suggests no number: the user
  * picks from their own loads, and the warm-up it describes is never recorded.
@@ -112,6 +127,36 @@ export function CalibrationStep({ selected = null, onConfirm, onSkip }: {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * A typed load. One above the loader's limit is refused with a message and the
+ * field falls back to the load held at focus, so nothing invalid is kept (#101).
+ */
+function LoadEntry({ weight, update, shown, unit, label }: {
+  weight: number;
+  update: (weight: number) => void;
+  shown?: string;
+  unit: Unit;
+  label: string;
+}) {
+  const [refused, setRefused] = useState(false);
+  const focused = useRef(weight);
+  return (
+    <>
+      <input type="number" min="0" step="any" inputMode="decimal" aria-label={label} aria-invalid={refused || undefined}
+        defaultValue={shown ?? calibrationInputValue(weight, unit)}
+        onFocus={() => { focused.current = weight; }}
+        onChange={(event) => {
+          const next = typedLoad(event.target.value, unit, focused.current);
+          if (!next) return;
+          setRefused(next.refused);
+          if (next.refused) event.target.value = calibrationInputValue(next.kg, unit);
+          update(next.kg);
+        }} />
+      {refused && <span className="error-text" role="alert">{loadLimitMessage(unit)}</span>}
+    </>
   );
 }
 
@@ -308,14 +353,8 @@ export default function TrainScreen({
   // A dumbbell with no confirmed rack is typed, the same way a barbell load is.
   const canEnterWeight = mode !== 'none' && !canPickWeight;
   const loadEntry = (weight: number, update: (weight: number) => void, shown?: string) => (
-    <input type="number" min="0" step="any" inputMode="decimal"
-      aria-label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`}
-      defaultValue={shown ?? calibrationInputValue(weight, unit)}
-      onChange={(event) => {
-        const value = Number(event.target.value);
-        if (event.target.value === '') update(0);
-        else if (Number.isFinite(value) && value >= 0) update(toKg(value, unit));
-      }} />
+    <LoadEntry weight={weight} update={update} shown={shown} unit={unit}
+      label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`} />
   );
 
   // #80: everything a row renders is keyed by exercise, segment and set, so a
@@ -391,10 +430,8 @@ export default function TrainScreen({
         </div>
         <div className="review-footer__row">
           {draft ? (
-            <>
-              <button className="pill-quiet" onClick={() => closeEditor(key)}>Cancel</button>
-              <button className="pill-primary" onClick={() => saveEditing(key)}>Save set</button>
-            </>
+            <SaveSetRow needsWeight={needsLoad(exercise.exerciseId) && draft.weight <= 0}
+              onCancel={() => closeEditor(key)} onSave={() => saveEditing(key)} />
           ) : (
             <button className="pill-quiet" onClick={() => closeEditor(key)}>Done</button>
           )}
@@ -410,6 +447,9 @@ export default function TrainScreen({
     // A logged set is only ever edited through its draft.
     const open = openKey === key && (!set.done || draft !== null);
     const before = previous[setIndex];
+    const noLoad = needsLoad(exercise.exerciseId) && set.weight <= 0;
+    // While calibrating, the first-weight row already says what to do.
+    const reason = !set.done && noLoad && !calibrating && setIndex === activeSet ? `${key}:reason` : undefined;
     const row = (
       <tr key={key} className={set.done ? 'lg-row--done' : setIndex === activeSet ? 'lg-row--current' : undefined}>
         <td>{n}</td>
@@ -439,7 +479,8 @@ export default function TrainScreen({
               <Icon name="check" size={20} />
             </span>
           ) : (
-            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={calibrating}
+            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={calibrating || noLoad}
+              aria-describedby={reason}
               onClick={() => {
                 primeRestAudio();
                 if (openKey === key) setOpenKey(null);
@@ -452,9 +493,9 @@ export default function TrainScreen({
         </td>
       </tr>
     );
-    return open
-      ? [row, <tr key={`${key}:edit`} className="lg-edit"><td colSpan={5}>{editor(set, setIndex, key, draft)}</td></tr>]
-      : [row];
+    const note = reason && <tr key={reason} className="lg-note"><td colSpan={5} id={reason}>{NEEDS_LOAD_REASON}</td></tr>;
+    return [row, note, open && <tr key={`${key}:edit`} className="lg-edit"><td colSpan={5}>{editor(set, setIndex, key, draft)}</td></tr>]
+      .filter(Boolean);
   });
 
   return (
@@ -508,7 +549,7 @@ export default function TrainScreen({
                   onConfirmWeight(index, weight);
                 }}
                 onSkip={() => {
-                  focusNext.current = 'log';
+                  focusNext.current = `${rowKey(Math.max(activeSet, 0))}:weight`;
                   onSkipCalibration?.(calibrationKey);
                 }}
               />

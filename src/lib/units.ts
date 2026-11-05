@@ -1,4 +1,5 @@
 import type { Profile, Unit } from '../types.ts';
+import { MAX_WEIGHT } from './validate.ts';
 
 export const KG_PER_LB = 0.45359237;
 
@@ -34,6 +35,57 @@ export function parseLoads(text: string, unit: Unit, stored: number[] = []): num
     .map((token) => kept.get(token) ?? (Number(token) > 0 ? toKg(Number(token), unit) : NaN))
     .filter(Number.isFinite);
   return [...new Set(values)].sort((a, b) => a - b);
+}
+
+/** True when any typed load is above what the loader accepts (#101). */
+export function overLoadLimit(kgs: number[]): boolean {
+  return kgs.some((kg) => kg > MAX_WEIGHT);
+}
+
+/**
+ * The next stored value of a typed load field. Above the limit it is refused and
+ * falls back to `focused`, the load held when the field was focused, so a refused
+ * last keystroke never leaves the one before it stored (#101). Null: change nothing.
+ */
+export function typedLoad(text: string, unit: Unit, focused: number): { kg: number; refused: boolean } | null {
+  if (text === '') return { kg: 0, refused: false };
+  const value = Number(text);
+  if (!Number.isFinite(value) || value < 0) return null;
+  const kg = toKg(value, unit);
+  return overLoadLimit([kg]) ? { kg: focused, refused: true } : { kg, refused: false };
+}
+
+/**
+ * A history weight keystroke: the load to save now. Saving per keystroke means a field
+ * removed while focused loses no edit (#110). Null holds it as a draft until blur: a
+ * half-typed value, or no load on a set that needs one (#103).
+ */
+export function correctionKeystroke(text: string, unit: Unit, focused: number, needsWeight: boolean): number | null {
+  const next = typedLoad(text, unit, focused);
+  return !next || (needsWeight && next.kg <= 0) ? null : next.kg;
+}
+
+/** A history weight blur: the focus value to put back and why, or null when the typed load stands. */
+export function correctionBlur(
+  text: string,
+  unit: Unit,
+  focused: number,
+  needsWeight: boolean,
+): { kg: number; reason: 'limit' | 'needs-load' } | null {
+  const next = typedLoad(text, unit, focused);
+  if (next?.refused) return { kg: focused, reason: 'limit' };
+  if (needsWeight && (next?.kg ?? 0) <= 0) return { kg: focused, reason: 'needs-load' };
+  return null;
+}
+
+/** The limit in the display unit, e.g. "Loads go up to 2000 kg." */
+export function loadLimitText(unit: Unit): string {
+  return `Loads go up to ${Math.floor(toDisplay(MAX_WEIGHT, unit))} ${unitLabel(unit)}.`;
+}
+
+/** Shown wherever a typed load is refused for being above the limit. */
+export function loadLimitMessage(unit: Unit): string {
+  return `${loadLimitText(unit)} That load was not saved.`;
 }
 
 /** Display value snapped to a half unit so inputs read like real plates. */
@@ -77,14 +129,15 @@ export function loadsInputText(kgs: number[] | undefined, unit: Unit): string {
 
 /**
  * Settings save for owned dumbbells. Null means save nothing: the text still shows what is stored
- * (so kg never drifts), or it is non-blank but holds no load (so a typo never wipes the rack).
+ * (so kg never drifts), it is non-blank but holds no load (so a typo never wipes the rack), or it holds
+ * a load above the limit (#101).
  */
 export function dumbbellLoadsPatch(text: string, profile: Profile): Partial<Profile> | null {
   const unit = unitOf(profile);
   const stored = profile.loads.Dumbbell ?? [];
   if (text.trim() === loadsInputText(stored, unit)) return null;
   const loads = parseLoads(text, unit, stored);
-  if (text.trim() && loads.length === 0) return null;
+  if ((text.trim() && loads.length === 0) || overLoadLimit(loads)) return null;
   return { loads: { ...profile.loads, Dumbbell: loads } };
 }
 
