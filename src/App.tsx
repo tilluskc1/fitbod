@@ -40,6 +40,7 @@ import
   applyFinish,
   createSession,
   extendRest,
+  confirmWeight,
   logSet,
   pendingExerciseIndex,
   sessionProgress,
@@ -566,6 +567,15 @@ export default function App() {
     );
   };
 
+  const confirmFirstWeight = (exerciseIndex: number, weight: number) => {
+    const stamp = new Date().toISOString();
+    setState((currentState) =>
+      currentState.current
+        ? { ...currentState, current: confirmWeight(currentState.current, exerciseIndex, weight, stamp) }
+        : currentState,
+    );
+  };
+
   const logNext = () => {
     const stamp = new Date().toISOString();
     setState((currentState) => {
@@ -802,6 +812,7 @@ export default function App() {
         }}
         onFinish={requestFinish}
         onUpdateSet={updateSet}
+        onConfirmWeight={confirmFirstWeight}
         onLogNext={logNext}
         onToggleRestPause={() => {
           const stamp = new Date().toISOString();

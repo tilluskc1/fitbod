@@ -32,6 +32,7 @@ interface Props {
   onMinimize: () => void;
   onFinish: () => void;
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => void;
+  onConfirmWeight: (exerciseIndex: number, weight: number) => void;
   onLogNext: () => void;
   onToggleRestPause: () => void;
   onExtendRest: () => void;
@@ -118,6 +119,7 @@ export default function TrainScreen({
   onMinimize,
   onFinish,
   onUpdateSet,
+  onConfirmWeight,
   onLogNext,
   onToggleRestPause,
   onExtendRest,
@@ -443,7 +445,7 @@ export default function TrainScreen({
           selected={pick}
           onConfirm={(weight) => {
             focusWeight.current = true;
-            onUpdateSet(index, setIndex, { weight });
+            onConfirmWeight(index, weight);
           }}
           onSkip={() => {
             focusWeight.current = true;

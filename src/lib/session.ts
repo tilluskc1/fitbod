@@ -114,9 +114,29 @@ export function logSet(
   now: string,
   seconds = 75,
 ): WorkoutRecord {
-  const updated = updatePerformedSet(session, exerciseIndex, setIndex, { done: true }, now);
+  let updated = updatePerformedSet(session, exerciseIndex, setIndex, { done: true }, now);
   if (updated === session) return session;
+  // Carry the load just logged into the next unweighted set; never overwrites a chosen weight.
+  const weight = updated.exercises[exerciseIndex].performed[setIndex].weight;
+  const next = updated.exercises[exerciseIndex].performed.findIndex((set, i) => i > setIndex && !set.done);
+  if (weight > 0 && next !== -1 && updated.exercises[exerciseIndex].performed[next].weight === 0) {
+    updated = updatePerformedSet(updated, exerciseIndex, next, { weight }, now);
+  }
   return startRest(updated, now, seconds);
+}
+
+/** Confirming the first weight applies it to every set of the exercise not yet logged. */
+export function confirmWeight(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  weight: number,
+  now: string,
+): WorkoutRecord {
+  let next = session;
+  session.exercises[exerciseIndex]?.performed.forEach((set, i) => {
+    if (!set.done) next = updatePerformedSet(next, exerciseIndex, i, { weight }, now);
+  });
+  return next;
 }
 
 export function updatePerformedSet(
