@@ -227,7 +227,8 @@ test('every exercise declares a pattern and complete needs', () => {
 
 // #67: a Push day must be filled by slots, not left short by the per-muscle caps.
 test('beginner dumbbells + bench: Push is a full Ready day with one triceps-primary and at most two shoulder-primary', () => {
-  const profile = makeProfile({ experience: 'Beginner', equipment: ['Dumbbell'], support: ['Bench'] });
+  // 40 min: the five-exercise Beginner day this case was written against (#89).
+  const profile = makeProfile({ experience: 'Beginner', equipment: ['Dumbbell'], support: ['Bench'], sessionMinutes: 40 });
   const push = generateWorkout(profile, buildPlan(profile)[0], 0);
   const primaries = push.exercises.map((exercise) => meta(exercise.exerciseId).muscles[0]);
 

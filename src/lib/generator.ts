@@ -56,8 +56,19 @@ export function buildPlan(profile: Profile): PlanDay[] {
   return SPLITS[days];
 }
 
+/**
+ * One exercise's time: 3.5 sets on average (a 5-set lead, 3 behind it) × (35 s
+ * of work + the 75 s default rest), plus a minute to set up. About 7.4 minutes.
+ */
+export const SECONDS_PER_EXERCISE = Math.round(3.5 * (35 + 75) + 60);
+export const MIN_EXERCISES = 3;
+/** Past this, extra exercises mostly add fatigue, not results. */
+export const MAX_EXERCISES = { Beginner: 6, Intermediate: 8, Advanced: 8 } as const;
+
+/** How many exercises fit the session length (#89). No saved length reads as the 35 the label shows. */
 export function targetCountFor(profile: Profile): number {
-  return profile.experience === 'Beginner' ? 5 : profile.experience === 'Intermediate' ? 6 : 7;
+  const fits = Math.floor(((profile.sessionMinutes ?? 35) * 60) / SECONDS_PER_EXERCISE);
+  return Math.min(MAX_EXERCISES[profile.experience], Math.max(MIN_EXERCISES, fits));
 }
 
 function seededShuffle<T>(items: T[], seed: number): T[] {

@@ -26,6 +26,8 @@ function profileOf(overrides: Partial<Profile> = {}): Profile {
     support: ['Bench', 'Rack'],
     exclusions: [],
     loads: {},
+    // 45 min holds the six exercises these lead and set-count cases were written against (#89).
+    sessionMinutes: 45,
     ...overrides,
   };
 }
