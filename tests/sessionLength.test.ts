@@ -3,6 +3,8 @@ import test from 'node:test';
 import { areIncompatible, EXERCISES } from '../src/data/exercises.ts';
 import { isRelevantToDay } from '../src/lib/feasibility.ts';
 import { buildPlan, estimatedSeconds, generateWorkout } from '../src/lib/generator.ts';
+import { catalogRowMeta } from '../src/lib/liveProgression.ts';
+import { planSlots, slotProgram } from '../src/lib/sequence.ts';
 import type { Equipment, Experience, Goal, Profile, SupportEquipment } from '../src/types.ts';
 
 const FULL_GYM: Profile = {
@@ -52,6 +54,22 @@ test('a Push day the caps fill at 6 spends extra time on sets, and is not called
   assert.deepEqual(long.sets, [5, 4, 4, 4, 4, 4], 'the 3-set work behind the lead gets a fourth set');
   assert.equal(long.feasibility.status, 'ok', 'no gap the user could close');
   assert.equal(long.targetCount, 6);
+});
+
+test("a 'more' preference reorders the fill without making a full day Limited", () => {
+  const push = shape(at(60, { daysPerWeek: 3, experience: 'Beginner', preferences: { 'close-grip-bench': 'more' } }));
+  assert.equal(push.feasibility.status, 'ok', `${push.exercises.length} of ${push.targetCount}`);
+});
+
+test("Plan's catalog row reads the sets the fitted day gives, not the bare prescription", () => {
+  const profile = at(60, { daysPerWeek: 3 });
+  const day = slotProgram(profile, planSlots(buildPlan(profile))[0], []);
+  const accessory = day.exercises[1];
+  assert.equal(accessory.sets, 4, 'the 60-minute Push gives its 3-set work a fourth set');
+  const row = catalogRowMeta(EXERCISES.find((exercise) => exercise.id === accessory.exerciseId)!, profile, [], 'kg',
+    day.exercises.map((exercise) => exercise.exerciseId),
+    Object.fromEntries(day.exercises.map((exercise) => [exercise.exerciseId, exercise.sets])));
+  assert.match(row, /^4 sets/);
 });
 
 test('a day missing gear reports the gap the gear would close', () => {

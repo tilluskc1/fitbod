@@ -257,7 +257,8 @@ export function generateWorkout(
     const room = budget - estimatedSeconds(sets.slice(0, kept));
     // A count gap is only reported when gear or exclusions caused it: the same
     // day with everything allowed shows how many the caps can actually hold.
-    const open = { ...profile, equipment: [...EQUIPMENT_OPTIONS], support: [...SUPPORT_OPTIONS], exclusions: [], preferences: undefined };
+    // Preferences stay: a 'more' pick reorders the fill, and that is the user's choice, not a gap.
+    const open = { ...profile, equipment: [...EQUIPMENT_OPTIONS], support: [...SUPPORT_OPTIONS], exclusions: [] };
     const capacity = selectExercises(open, day, dayIndex, max).picked.length;
     targetCount = kept < picked.length ? kept
       : Math.min(capacity, kept + Math.max(0, Math.floor(room / estimatedSeconds([3]))));

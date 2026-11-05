@@ -42,6 +42,7 @@ export default function PlanScreen({
   const minutes = program.minutes;
   const sessionSets = programSetCount(program);
   const dayIds = program.exercises.map((exercise) => exercise.exerciseId);
+  const daySets = Object.fromEntries(program.exercises.map((exercise) => [exercise.exerciseId, exercise.sets]));
 
   const week = useMemo(() => {
     const start = new Date(now);
@@ -167,7 +168,7 @@ export default function PlanScreen({
                   <Demo exerciseId={exercise.id} name={exercise.name} className="row-photo" />
                   <span className="row-body">
                     <strong className="row-name">{exercise.name}</strong>
-                    <span className="row-meta">{catalogRowMeta(exercise, profile, history, unit, dayIds)}</span>
+                    <span className="row-meta">{catalogRowMeta(exercise, profile, history, unit, dayIds, daySets)}</span>
                   </span>
                   <span className="chev">
                     <ChevronIcon />
