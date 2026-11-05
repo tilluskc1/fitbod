@@ -4092,3 +4092,67 @@ button.aw-exercise__name-btn {
     transition: none;
   }
 }
+
+/* ---------- Feasibility status (#76): Limited / Not enough equipment ---------- */
+.feasibility {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-edge, rgba(255, 255, 255, 0.12));
+  background: var(--glass-fill, rgba(255, 255, 255, 0.055));
+  box-shadow: var(--glass-shine, inset 0 1px 0 rgba(255, 255, 255, 0.1));
+}
+
+.feasibility__line {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 19px;
+  font-weight: 600;
+  color: var(--amber);
+}
+
+.feasibility--infeasible .feasibility__line {
+  color: var(--danger);
+}
+
+.feasibility__alts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.feasibility__alt {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-lime-edge, rgba(197, 247, 119, 0.7));
+  background: var(--glass-lime-fill, rgba(197, 247, 119, 0.12));
+  color: var(--lime);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.feasibility__alt--text {
+  display: inline-flex;
+  align-items: center;
+  border-color: var(--outline-variant);
+  background: none;
+  color: var(--on-surface-muted);
+}
+
+.plan-item .feasibility {
+  margin-top: 12px;
+}
+
+.empty-state p {
+  margin: 0 0 6px;
+}
+
+.feasibility__reason {
+  margin: -4px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--on-surface-muted);
+}
