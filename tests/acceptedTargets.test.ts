@@ -78,8 +78,9 @@ test('accepted weighted catalog swaps keep their saved load and equipment in Tod
 });
 
 
-test('accepted target formatting preserves unchanged ranges, hold units and explicit changed reps', () => {
-  assert.equal(repsTarget('goblet-squat', 2, [{ reps: 8 }, { reps: 8 }]), '8–10 reps');
+test('accepted target formatting shows prescribed reps and hold units', () => {
+  assert.equal(repsTarget('goblet-squat', 2, [{ reps: 8 }, { reps: 8 }]), '8 · 8');
+  assert.equal(repsTarget('goblet-squat', 2), '8–10 reps', 'the program range without a prescription');
   assert.equal(repsTarget('goblet-squat', 2, [{ reps: 10 }, { reps: 9 }]), '10 · 9');
   assert.equal(repsTarget('plank', 2, [{ reps: 45 }, { reps: 45 }]), '45 · 45s');
   assert.equal(repsTarget('plank', 1, [{ reps: 60 }]), '60s');

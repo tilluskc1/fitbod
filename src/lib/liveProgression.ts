@@ -4,7 +4,7 @@ import type { AdaptedExercise, AdaptedWorkout } from './adapt.ts';
 import { describePrescription, prescribeExercise } from './progression.ts';
 import { exerciseInWorkout } from './plan.ts';
 import { displayValue, unitLabel } from './units.ts';
-import type { Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
 
 /**
  * The bridge between the program and the progression rules.
@@ -123,6 +123,21 @@ export function targetReason(
   const definition = exerciseById(exerciseId);
   if (!definition) return null;
   return describePrescription(prescribeExercise(definition, profile, history), unit);
+}
+
+/** "3 sets · 8 reps · 18 kg each" for a catalog row: Today's numbers, no load until calibrated. */
+export function catalogRowMeta(
+  exercise: Exercise,
+  profile: Profile,
+  history: WorkoutRecord[],
+  unit: Unit,
+): string {
+  const hold = holdSeconds(exercise.id);
+  const prescription = prescribeExercise(exercise, profile, history);
+  const sets = programExercise(exercise.id)?.sets ?? prescription.sets;
+  const load =
+    hold === null && prescription.weight > 0 ? ` · ${loadText(prescription.weight, exercise.id, unit)}` : '';
+  return `${sets} ${sets === 1 ? 'set' : 'sets'} · ${setText(exercise.id, hold ?? prescription.reps)}${load}`;
 }
 
 export interface ProgressionLine {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { loadModeOf, detailOf, repsTarget, setText, setUnit } from '../data/flagship';
 import type { LoadMode } from '../data/flagship';
+import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
@@ -476,7 +477,9 @@ export default function TrainScreen({
               <Icon name="fitness_center" size={18} />
               {(plannedTarget?.weight ?? 0) > 0
                 ? `${showWeight(plannedTarget.weight)} ${weightLabel} · ${detail}`
-                : `Bodyweight · ${detail}`}
+                : mode === 'none'
+                  ? `Bodyweight · ${detail}`
+                  : [...new Set([exerciseById(exercise.exerciseId)?.equipment ?? 'Dumbbell', detail])].join(' · ')}
             </div>
             <div className="aw-history">
               <div className="aw-history__line">
