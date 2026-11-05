@@ -4,6 +4,7 @@ import { loadModeOf, detailOf, repsTarget, setText, setUnit } from '../data/flag
 import type { LoadMode } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
+import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
@@ -142,6 +143,23 @@ export default function TrainScreen({
   const progress = sessionProgress(session);
   const rest = restRemaining(session, now);
   const restPaused = Boolean(session.restPausedAt);
+
+  const [muted, setMuted] = useState(() => isRestMuted(session.id));
+  const [restOver, setRestOver] = useState(false);
+  const [prevRest, setPrevRest] = useState(rest);
+  const restActive = Boolean(session.restStartedAt);
+  const ended = restEnded({ prev: prevRest, remaining: rest, active: restActive, paused: restPaused, muted });
+  // Adjusting state during render keeps "Rest over" derived from the tick, not an effect.
+  if (prevRest !== rest) setPrevRest(rest);
+  if (ended && !restOver) setRestOver(true);
+  if (rest > 0 && restOver) setRestOver(false);
+  // The render above already advanced prevRest, so the tone reads its own ref.
+  const cueFrom = useRef(rest);
+  useEffect(() => {
+    const prev = cueFrom.current;
+    cueFrom.current = rest;
+    if (shouldCue({ prev, remaining: rest, active: restActive, paused: restPaused, muted })) playRestCue();
+  }, [rest, restActive, restPaused, muted]);
 
   // Only unskipped, unfinished work is offered. When nothing is left to log,
   // the trainer shows a review state instead of quietly landing on the last
@@ -611,6 +629,10 @@ export default function TrainScreen({
           </div>
         </section>
 
+        <div className="sr-only" role="status" aria-live="polite">
+          {restOver ? 'Rest over' : ''}
+        </div>
+
         {rest > 0 && (
           <div className="rest-bar" role="timer" aria-label={`Rest, ${rest} seconds remaining`}>
             <div className="rest-bar__left">
@@ -619,6 +641,18 @@ export default function TrainScreen({
               <span className="rest-bar__time">{restClock(rest)}</span>
             </div>
             <div className="rest-bar__actions">
+              <button
+                className="rest-bar__mute"
+                aria-pressed={muted}
+                aria-label="Mute rest cue"
+                onClick={() => {
+                  primeRestAudio();
+                  setRestMuted(session.id, !muted);
+                  setMuted(!muted);
+                }}
+              >
+                Mute
+              </button>
               <button className="rest-bar__toggle" onClick={onToggleRestPause}>
                 <Icon name={restPaused ? 'play_arrow' : 'pause'} size={16} />
                 {restPaused ? 'Resume' : 'Pause'}
@@ -720,7 +754,15 @@ export default function TrainScreen({
         <button
           className="save-bar"
           disabled={calibrating && !editing}
-          onClick={editing ? saveEditing : nothingPending ? onFinish : onLogNext}
+          onClick={editing
+              ? saveEditing
+              : nothingPending
+                ? onFinish
+                : () => {
+                    primeRestAudio();
+                    onLogNext();
+                  }
+          }
         >
           {editing ? 'Save set' : logLabel}
         </button>

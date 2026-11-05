@@ -225,6 +225,9 @@ export function skipExercise(session: WorkoutRecord, exerciseIndex: number): Wor
   if (!exercise.performed.some((set) => !set.done)) return session;
   const next = copyRecord(session);
   next.exercises[exerciseIndex].skipped = true;
+  // A skipped exercise ends its rest, so no end-of-rest cue follows.
+  next.restStartedAt = null;
+  next.restPausedAt = null;
   return next;
 }
 

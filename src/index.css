@@ -2986,6 +2986,10 @@ body {
   background: var(--surface-container-low);
   border: 1px solid rgba(50, 59, 48, 0.6);
   margin: 0 -2px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: calc(56px + env(safe-area-inset-top, 0px) + 6px);
+  z-index: 10;
 }
 
 .rest-bar__left {
@@ -3003,7 +3007,8 @@ body {
 }
 
 .rest-bar__time {
-  font-size: 16px;
+  font-size: 40px;
+  line-height: 1;
   font-weight: 700;
   color: var(--primary);
   font-variant-numeric: tabular-nums;
@@ -3035,6 +3040,17 @@ body {
 .rest-bar__extend {
   background: #2b3228;
   color: var(--on-surface);
+}
+
+.rest-bar__actions .rest-bar__mute {
+  min-width: 44px;
+  background: #2b3228;
+  color: var(--on-surface);
+}
+
+.rest-bar__actions .rest-bar__mute[aria-pressed='true'] {
+  background: var(--primary);
+  color: var(--on-primary, #1a2300);
 }
 
 .sets-head {
