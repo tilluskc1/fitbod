@@ -56,7 +56,7 @@ test('kettlebell-only: Push is honestly limited, Pull is infeasible', () => {
   // Push-Up and Diamond Push-Up are one group, so a kettlebell-only Push holds one of them
   // and says which focus muscles it could not fill.
   assert.deepEqual(push.exercises.map((exercise) => exercise.exerciseId), ['push-up']);
-  assert.match(push.feasibility.reason, /shoulders and triceps/);
+  assert.match(push.feasibility.reason, / No shoulders exercise is possible with these constraints\./);
   assert.ok(push.exercises.every((exercise) => meta(exercise.exerciseId).equipment === 'Bodyweight'));
 
   assert.equal(pull.feasibility.status, 'infeasible');
@@ -243,6 +243,7 @@ const PROFILES: Profile[] = [
   makeProfile({ experience: 'Intermediate', equipment: ['Dumbbell', 'Barbell', 'Cable', 'Machine'], support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars'] }),
   makeProfile({ experience: 'Advanced', equipment: ['Kettlebell'], support: [] }),
   makeProfile({ experience: 'Beginner', equipment: [], support: [] }),
+  makeProfile({ experience: 'Intermediate', equipment: ['Dumbbell', 'Cable'], support: ['Dip bars'] }),
 ];
 
 test('incompatible exercises never share a day, across splits and kits', () => {
@@ -267,20 +268,60 @@ test('incompatible groups only name real exercises', () => {
   }
 });
 
-test('a limited day names every focus muscle that has no exercise', () => {
+test('the open-slot note names exactly the focus muscles nothing can train, and only those', () => {
+  let named = 0;
   for (const profile of PROFILES) {
     for (let daysPerWeek = 2; daysPerWeek <= 6; daysPerWeek += 1) {
       const p = { ...profile, daysPerWeek };
+      const caps = capabilitiesFor(p);
       buildPlan(p).forEach((day, index) => {
         const session = generateWorkout(p, day, index);
-        if (session.feasibility.status !== 'limited') return;
-        const present = new Set(session.exercises.map((exercise) => meta(exercise.exerciseId).muscles[0]));
-        for (const muscle of day.focus.filter((item) => !present.has(item))) {
-          assert.match(session.feasibility.reason, new RegExp(muscle.toLowerCase()), `${day.name} (${p.equipment.join('+') || 'bodyweight'}) must name ${muscle}`);
+        const picked = new Set(session.exercises.map((exercise) => meta(exercise.exerciseId).muscles[0]));
+        const expected = day.focus.filter(
+          (muscle) =>
+            !picked.has(muscle) &&
+            !EXERCISES.some((item) => item.muscles[0] === muscle && provides(caps, item.needs) && !p.exclusions.includes(item.id)),
+        );
+        const note = session.feasibility.reason.match(/ No (.+) exercise is possible with these constraints\./);
+        const label = `${day.name} (${p.equipment.join('+') || 'bodyweight'}, ${daysPerWeek}d)`;
+        if (session.exercises.length === 0) return; // infeasible days have their own wording
+        if (expected.length === 0) {
+          assert.equal(note, null, `${label} must not claim a muscle is impossible`);
+        } else {
+          assert.ok(note, `${label} must name ${expected.join(', ')}`);
+          assert.deepEqual(note[1].split(/, | and /).sort(), expected.map((muscle) => muscle.toLowerCase()).sort(), label);
+          named += 1;
         }
       });
     }
   }
+  assert.ok(named > 0, 'the matrix must exercise at least one named gap');
+});
+
+test('a focus muscle that has an exercise but lost the slot race is not called impossible', () => {
+  const profile = makeProfile({ experience: 'Beginner', equipment: ['Dumbbell'], support: [], daysPerWeek: 2 });
+  const session = generateWorkout(profile, buildPlan(profile)[0], 0);
+  assert.doesNotMatch(session.feasibility.reason, /No core exercise/);
+});
+
+test('a "more" preference still wins over focus order', () => {
+  const kit = { experience: 'Beginner' as const, equipment: ['Dumbbell', 'Barbell', 'Cable', 'Machine', 'Kettlebell'] as Profile['equipment'], support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'] as Profile['support'] };
+  const cases: [number, number, string][] = [
+    [6, 5, 'hip-thrust'], // Legs B
+    [3, 0, 'diamond-push-up'], // Push
+    [4, 0, 'deadlift'], // Upper A
+  ];
+  for (const [daysPerWeek, dayIndex, id] of cases) {
+    const profile = makeProfile({ ...kit, daysPerWeek, preferences: { [id]: 'more' } });
+    const ids = generateWorkout(profile, buildPlan(profile)[dayIndex], dayIndex).exercises.map((item) => item.exerciseId);
+    assert.ok(ids.includes(id), `${id} is marked "more" but ${buildPlan(profile)[dayIndex].name} picked ${ids.join(', ')}`);
+  }
+});
+
+test('the dumbbell and cable overhead triceps extensions never share a day', () => {
+  const profile = makeProfile({ experience: 'Intermediate', equipment: ['Dumbbell', 'Cable'], support: ['Dip bars'] });
+  const ids = generateWorkout(profile, buildPlan(profile)[0], 0).exercises.map((item) => item.exerciseId);
+  assert.ok(!(ids.includes('dumbbell-overhead-triceps-extension') && ids.includes('overhead-triceps-extension')), ids.join(', '));
 });
 
 test('ranked replacements: same primary muscle, feasible, allowed, stable, best match first', () => {

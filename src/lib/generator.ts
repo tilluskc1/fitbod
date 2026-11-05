@@ -165,9 +165,17 @@ export function generateWorkout(
     };
     const best = [...candidates].sort(
       (a, b) =>
-        Number(b.muscles.length >= 2) - Number(a.muscles.length >= 2) || focusRank(a) - focusRank(b),
+        Number(b.muscles.length >= 2) - Number(a.muscles.length >= 2) ||
+        rank(a) - rank(b) || // "more" and "less" outrank focus order
+        focusRank(a) - focusRank(b),
     )[0];
     if (best) take(best);
+  }
+
+  // 1a. "More" exercises claim a slot before the focus filler can spend it.
+  for (const exercise of shuffled) {
+    if (picked.length >= targetCount) break;
+    if (rank(exercise) === 0 && canTake(exercise, false)) take(exercise);
   }
 
   // 1b. Give every focus muscle its own exercise while slots remain, so the
