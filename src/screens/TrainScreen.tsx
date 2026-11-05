@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { loadModeOf, detailOf, repsTarget, setText, setUnit } from '../data/flagship';
 import type { LoadMode } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
@@ -6,6 +7,7 @@ import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from 
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
+import { needsCalibration } from '../lib/liveProgression';
 import { calibrationInputValue, displayValue, toKg, unitLabel } from '../lib/units';
 import type { PerformedSet, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
@@ -63,6 +65,40 @@ function setSummary(
   return `${setText(exerciseId, reps)}${load}`;
 }
 
+/**
+ * First-load help for an uncalibrated variant. It suggests no number: the user
+ * picks from their own loads, and the warm-up it describes is never recorded.
+ */
+export function CalibrationStep({ selected, children, onConfirm, onSkip }: {
+  selected: number | null;
+  /** The logger's own load picker for this exercise. */
+  children: ReactNode;
+  onConfirm: (weight: number) => void;
+  onSkip: () => void;
+}) {
+  return (
+    <section className="set-card" aria-labelledby="calibration-title">
+      <div className="set-card__head">
+        <span className="set-card__num">1</span>
+        <div>
+          <h3 className="set-card__title" id="calibration-title">Pick your first weight</h3>
+          <div className="set-card__sub">First time on this exercise</div>
+        </div>
+      </div>
+      <p className="data-note">Pick a weight you could lift about 12 times with good form.</p>
+      {children}
+      <p className="data-note">
+        Do 5 easy reps with it, then confirm or change. This warm-up is not logged.
+      </p>
+      <div className="review-footer__row">
+        <button className="pill-quiet" onClick={onSkip}>Skip</button>
+        <button className="pill-primary" disabled={selected === null}
+          onClick={() => selected !== null && onConfirm(selected)}>Confirm</button>
+      </div>
+    </section>
+  );
+}
+
 export default function TrainScreen({
   session,
   history,
@@ -81,6 +117,8 @@ export default function TrainScreen({
   onReturn,
 }: Props) {
   const [editing, setEditing] = useState<EditDraft | null>(null);
+  /** The calibration pick lives here until Confirm; Skip only hides the step. */
+  const [calibration, setCalibration] = useState<{ key: string; weight: number | null; skipped: boolean } | null>(null);
 
   /** Edit controls write to the draft only; nothing reaches the record here. */
   const patchDraft = (patch: Partial<Pick<EditDraft, 'reps' | 'weight'>>) =>
@@ -224,6 +262,13 @@ export default function TrainScreen({
       }} />
   ) : null;
 
+  const calibrationKey = `${index}:${exercise.exerciseId}`;
+  const pick = calibration?.key === calibrationKey ? calibration : null;
+  const calibrating =
+    (canPickWeight || canEnterWeight) && !pick?.skipped && needsCalibration(exercise, history);
+  const choose = (weight: number) =>
+    setCalibration({ key: calibrationKey, weight: weight > 0 ? weight : null, skipped: false });
+
   const activeValues =
     activeSet === -1
       ? null
@@ -353,6 +398,33 @@ export default function TrainScreen({
             <Icon name="edit" size={18} />
           </button>
         </div>
+      );
+    }
+
+    if (isActive && calibrating) {
+      return (
+        <CalibrationStep
+          key={setIndex}
+          selected={pick?.weight ?? null}
+          onConfirm={(weight) => onUpdateSet(index, setIndex, { weight })}
+          onSkip={() => setCalibration({ key: calibrationKey, weight: null, skipped: true })}
+        >
+          <div className="aw-field">
+            <div className="aw-field__label">
+              <span>Weight ({weightLabel})</span>
+              <span className="aw-field__note">{equipment}</span>
+            </div>
+            {canPickWeight ? (
+              <div className="weight-pills" role="group" aria-label={`Weight (${weightLabel})`}>
+                {loadOptions.map((weight) => (
+                  <button key={weight} aria-pressed={pick?.weight === weight} onClick={() => choose(weight)}>
+                    {showWeight(weight)}
+                  </button>
+                ))}
+              </div>
+            ) : loadEntry(pick?.weight ?? 0, choose)}
+          </div>
+        </CalibrationStep>
       );
     }
 
@@ -624,6 +696,7 @@ export default function TrainScreen({
         </div>
         <button
           className="save-bar"
+          disabled={calibrating && !editing}
           onClick={editing ? saveEditing : nothingPending ? onFinish : onLogNext}
         >
           {editing ? 'Save set' : logLabel}
