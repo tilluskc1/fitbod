@@ -174,7 +174,8 @@ export type ProgressionBasis =
   | 'rep-increase'
   | 'repeat'
   | 'mixed-load'
-  | 'hold';
+  | 'hold'
+  | 'go-heavier';
 
 export interface Prescription {
   equipment: Equipment;
@@ -259,6 +260,11 @@ export function prescribeExercise(
     };
   }
 
+  // A fixed weight with no confirmed rack: the next one up is the lifter's to name, not a default step.
+  if (available.length === 0 && (exercise.equipment === 'Dumbbell' || exercise.equipment === 'Kettlebell')) {
+    return { ...base, weight: workingWeight, reps: range.min, basis: 'go-heavier' };
+  }
+
   const next = increment > 0 ? nextLoad(workingWeight, increment, available) : workingWeight;
   if (next <= workingWeight + 0.001) {
     // No heavier load exists (bodyweight, or the top of the recorded rack).
@@ -318,6 +324,8 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
     }
     case 'rep-increase':
       return `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
+    case 'go-heavier':
+      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. Ready to go heavier: use your next ${equipment.toLowerCase()} up; reps restart at ${range.min}.`;
     case 'mixed-load':
       // `weight` is the planned load: it reads exactly as the target line does.
       return `${when}: ${setsLabel} at different loads (heaviest ${logged(workWeight)}). The load holds at ${fmtLoad(weight, equipment, unit, [weight])} — use one working load for every set to earn the next step.`;
@@ -354,6 +362,8 @@ export function coachLine(prescription: Prescription, unit: Unit): string {
       return `You owned ${fmtLoad(owned, equipment, unit, available)}. Today: ${today}.`;
     case 'rep-increase':
       return `Add a rep: ${today}.`;
+    case 'go-heavier':
+      return `Ready to go heavier: use your next ${equipment.toLowerCase()} up.`;
     case 'mixed-load':
       return `One load for every set: ${today}.`;
     case 'hold':

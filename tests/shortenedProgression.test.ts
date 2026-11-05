@@ -59,7 +59,7 @@ test('finishing a shortened workout cannot earn progression before its original 
     [{ weight: 15, reps: 10, done: true }, { weight: 15, reps: 10, done: true }]);
 });
 
-test('completing the original target still earns a load increase after finish and reload', () => {
+test('completing the original target still earns the next load step after finish and reload', () => {
   const history = finishPressAndReload(35);
   const press = exerciseById('dumbbell-floor-press');
   assert.ok(press);
@@ -68,7 +68,8 @@ test('completing the original target still earns a load increase after finish an
   assert.equal(saved.planned.length, 3);
   assert.equal(saved.performed.filter((set) => set.done).length, 3);
   const next = prescribeExercise(press, profile, history);
-  assert.equal(next.basis, 'load-increase');
-  assert.equal(next.weight, 17.5);
+  // No confirmed rack: the step is earned, but the next dumbbell is the lifter's to pick (#57).
+  assert.equal(next.basis, 'go-heavier');
+  assert.equal(next.weight, 15);
   assert.equal(next.reps, 8, "reps restart at the bottom of the program's 8–10 range");
 });

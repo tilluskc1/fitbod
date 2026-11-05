@@ -990,6 +990,7 @@ export default function App() {
         <AdjustSheet
           constraints={pending?.constraints ?? constraints}
           originalMinutes={program.minutes}
+          unit={unit}
           onClose={() => {
             setPending(null);
             setPendingNotices([]);
