@@ -45,16 +45,20 @@ test('export and restore carry preferences with the profile', () => {
 
 test('generator: more sorts ahead, less sorts behind but stays eligible', () => {
   const baseline = generateWorkout(base, push, 0);
-  assert.ok(!ids(base).includes('barbell-bench-press'));
-  assert.equal(ids(base)[0], 'dip');
+  const baselineIds = ids(base);
+  // Derived from the baseline so a catalog change cannot silently void the premise.
+  const leftOut = ['barbell-bench-press', 'dip', 'machine-chest-press', 'close-grip-bench']
+    .find((id) => !baselineIds.includes(id));
+  assert.ok(leftOut, 'a pressing exercise outside the baseline must exist');
+  const lead = baselineIds[0];
 
-  const more = generateWorkout({ ...base, preferences: { 'barbell-bench-press': 'more' } }, push, 0);
-  assert.ok(more.exercises.some((item) => item.exerciseId === 'barbell-bench-press'));
+  const more = generateWorkout({ ...base, preferences: { [leftOut]: 'more' } }, push, 0);
+  assert.ok(more.exercises.some((item) => item.exerciseId === leftOut));
   assert.equal(more.exercises.length, baseline.exercises.length);
   assert.equal(more.feasibility.status, baseline.feasibility.status);
 
-  const less = generateWorkout({ ...base, preferences: { dip: 'less' } }, push, 0);
-  assert.notEqual(less.exercises[0].exerciseId, 'dip', 'a neutral alternative covers the requirement first');
+  const less = generateWorkout({ ...base, preferences: { [lead]: 'less' } }, push, 0);
+  assert.notEqual(less.exercises[0].exerciseId, lead, 'a neutral alternative comes first');
   assert.equal(less.exercises.length, baseline.exercises.length);
   assert.equal(less.feasibility.status, baseline.feasibility.status);
 

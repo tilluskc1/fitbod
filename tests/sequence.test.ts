@@ -94,9 +94,9 @@ test('a three-slot plan runs its own slots in order and wraps A → B → C → 
 
 test('missed days move nothing: elapsed dates neither advance nor add work', () => {
   const state = fresh();
-  const base = currentSlot(state);
-  const program = slotProgram(profile, base!, []);
   const old = runSlot(state);
+  // Compare the same slot on both sides: the one the cursor now points at.
+  const program = slotProgram(profile, currentSlot(old)!, old.history);
   // A week later, with the last session dated long ago, the same slot is next.
   const next = { ...old, history: [{ ...old.history[0], date: '2026-10-20T10:00:00.000Z' }] };
   assert.equal(currentSlot(next)?.id, currentSlot(old)?.id);
