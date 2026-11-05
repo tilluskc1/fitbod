@@ -33,6 +33,7 @@ import {
   recapHighlight,
   targetReason,
 } from './lib/liveProgression';
+import { leadCompoundId } from './lib/progression';
 import
  {
   applyCancel,
@@ -360,8 +361,9 @@ export default function App() {
   const targetNotes = useMemo(() => {
     const notes: Record<string, string> = {};
     if (!profile) return notes;
+    const lead = leadCompoundId(liveProgram.exercises.map((exercise) => exercise.exerciseId));
     for (const exercise of liveProgram.exercises) {
-      const reason = targetReason(exercise.exerciseId, profile, state.history, unit);
+      const reason = targetReason(exercise.exerciseId, profile, state.history, unit, exercise.exerciseId === lead);
       if (reason) notes[exercise.exerciseId] = reason;
     }
     return notes;

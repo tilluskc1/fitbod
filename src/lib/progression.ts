@@ -9,6 +9,7 @@ import type {
 import { loadValue, unitLabel } from './units.ts';
 import { exerciseInWorkout } from './plan.ts';
 import { programExercise } from '../data/flagship.ts';
+import { exerciseById } from '../data/exercises.ts';
 
 /**
  * Phase 2 progression policy: double progression.
@@ -44,11 +45,24 @@ const MID_RANGE_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern
   'knee_flexion',
 ]);
 
-/** Rep ranges per movement class. Deliberately small: no rules engine. */
-export const REP_RANGES: Record<'compound' | 'mid' | 'accessory', RepRange> = {
+/** Isolation on a small muscle (calves, rear delts) earns its step at 20 reps. */
+const SMALL_MUSCLE_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>([
+  'calf_raise',
+  'shoulder_horizontal_abduction',
+]);
+
+/** Rep ranges per movement class and day role. Deliberately small: no rules engine. */
+export const REP_RANGES: Record<
+  'lead' | 'strength' | 'technique' | 'compound' | 'mid' | 'accessory' | 'small',
+  RepRange
+> = {
+  lead: { min: 4, max: 6 },
+  strength: { min: 3, max: 5 },
+  technique: { min: 8, max: 10 },
   compound: { min: 6, max: 10 },
   mid: { min: 8, max: 12 },
   accessory: { min: 10, max: 15 },
+  small: { min: 12, max: 20 },
 };
 
 /**
@@ -81,9 +95,47 @@ export function repRangeFor(pattern: MovementPattern): RepRange {
   return REP_RANGES.accessory;
 }
 
-/** Four sets for multi-muscle movements, three for isolation work. */
-export function setCountFor(exercise: Exercise): number {
-  return exercise.muscles.length >= 2 ? 4 : 3;
+/** Multi-muscle work on a compound pattern. A rear-delt fly or a cable fly is isolation. */
+export function isCompound(exercise: Pick<Exercise, 'pattern' | 'muscles'>): boolean {
+  return COMPOUND_PATTERNS.has(exercise.pattern) && exercise.muscles.length >= 2;
+}
+
+/** The day's first compound in session order: the lift that carries the heavy sets. */
+export function leadCompoundId(exerciseIds: string[]): string | undefined {
+  return exerciseIds.find((id) => {
+    const exercise = exerciseById(id);
+    return exercise !== undefined && isCompound(exercise);
+  });
+}
+
+/**
+ * Sets and rep range for the exercise's role in the day. Intermediate and
+ * advanced lifters building muscle or strength open with heavy sets; a
+ * beginner's lead stays at 3 × 8–10, technique first. Behind a heavy lead the
+ * other compounds drop to three sets, so a session holds about as many sets as
+ * before and the time budget stays honest.
+ */
+export function roleTarget(
+  exercise: Exercise,
+  profile: Pick<Profile, 'goal' | 'experience'>,
+  lead = false,
+): { sets: number; range: RepRange } {
+  const compound = isCompound(exercise);
+  const heavy = profile.experience !== 'Beginner' && (profile.goal === 'Build Muscle' || profile.goal === 'Get Stronger');
+  if (compound && lead && heavy) {
+    return { sets: 5, range: profile.goal === 'Get Stronger' ? REP_RANGES.strength : REP_RANGES.lead };
+  }
+  if (compound && lead && profile.experience === 'Beginner') return { sets: 3, range: REP_RANGES.technique };
+  // The program's own range wins, so the next target matches the recap's "3 × 8–10".
+  const programmed = programExercise(exercise.id)?.repRange;
+  const range = programmed
+    ? { min: programmed[0], max: programmed[1] }
+    : compound
+      ? REP_RANGES.compound
+      : SMALL_MUSCLE_PATTERNS.has(exercise.pattern)
+        ? REP_RANGES.small
+        : REP_RANGES.accessory;
+  return { sets: compound && !heavy ? 4 : 3, range };
 }
 
 /** Loads the profile says are actually selectable for this equipment. */
@@ -205,16 +257,15 @@ export function typedLoads(history: WorkoutRecord[], exerciseId: string): number
   );
 }
 
+/** `lead`: this is the day's first compound (see `leadCompoundId`). */
 export function prescribeExercise(
   exercise: Exercise,
   profile: Profile,
   history: WorkoutRecord[],
+  lead = false,
 ): Prescription {
   const catalog = repRangeFor(exercise.pattern);
-  // The program's own range wins, so the next target matches the recap's "3 × 8–10".
-  const programmed = programExercise(exercise.id)?.repRange;
-  const range = programmed ? { min: programmed[0], max: programmed[1] } : catalog;
-  const sets = setCountFor(exercise);
+  const { sets, range } = roleTarget(exercise, profile, lead);
   const available = availableLoads(profile, exercise.equipment);
   const increment = incrementFor(exercise.equipment, available);
   const last = lastExercisePerformance(history, exercise.id);

@@ -8,6 +8,7 @@ import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { currentWorkout, EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
 import { exercisePhoto } from '../lib/media';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
+import { leadCompoundId } from '../lib/progression';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 
@@ -183,7 +184,7 @@ export default function TodayScreen({
                   : current
                     ? `Session open. ${progress} of ${total} sets logged so far.`
                     : first
-                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit), plannedLoad(profile.loads, history, first.exerciseId, unit))
+                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit, first.exerciseId === leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId))), plannedLoad(profile.loads, history, first.exerciseId, unit))
                       : 'Pick a workout you can keep. The program follows from that.'}
               </p>
             </div>

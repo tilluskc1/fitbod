@@ -14,7 +14,7 @@ import {
   matchesRequirement,
   requirementsForDay,
 } from './feasibility.ts';
-import { prescribeExercise } from './progression.ts';
+import { isCompound, prescribeExercise } from './progression.ts';
 
 const SPLITS: Record<number, PlanDay[]> = {
   2: [
@@ -216,8 +216,9 @@ export function generateWorkout(
     };
   }
 
+  const lead = picked.find(isCompound);
   const exercises: WorkoutExercise[] = picked.map((exercise) => {
-    const prescription = prescribeExercise(exercise, profile, history);
+    const prescription = prescribeExercise(exercise, profile, history, exercise === lead);
     const planned = Array.from({ length: prescription.sets }, () => ({
       weight: prescription.weight,
       reps: prescription.reps,

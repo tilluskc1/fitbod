@@ -1,7 +1,7 @@
 import { exerciseById } from '../data/exercises.ts';
 import { loadModeOf, programExercise, setText } from '../data/flagship.ts';
 import type { AdaptedExercise, AdaptedWorkout } from './adapt.ts';
-import { availableLoads, typedLoads, coachLine, describePrescription, lastExercisePerformance, prescribeExercise } from './progression.ts';
+import { availableLoads, typedLoads, coachLine, describePrescription, lastExercisePerformance, leadCompoundId, prescribeExercise } from './progression.ts';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from './plan.ts';
 import { loadValue, unitLabel } from './units.ts';
 import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
@@ -66,6 +66,7 @@ function numbersFor(
   exercise: AdaptedExercise,
   profile: Profile,
   history: WorkoutRecord[],
+  lead: boolean,
 ): Numbers {
   const hold = holdSeconds(exercise.exerciseId);
   if (hold !== null) return { weight: 0, reps: hold };
@@ -76,7 +77,7 @@ function numbersFor(
       reps: exercise.targetReps?.[0] ?? exercise.holdSeconds ?? exercise.repRange[0],
     };
   }
-  const prescription = prescribeExercise(definition, profile, history);
+  const prescription = prescribeExercise(definition, profile, history, lead);
   return { weight: prescription.weight, reps: prescription.reps };
 }
 
@@ -90,12 +91,13 @@ export function liveAdapted(
   profile: Profile,
   history: WorkoutRecord[],
 ): AdaptedWorkout {
+  const lead = leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId));
   return {
     ...adapted,
     exercises: adapted.exercises.map((exercise) => {
       const hold = holdSeconds(exercise.exerciseId);
       if (hold !== null) return { ...exercise, weight: 0, targetReps: undefined };
-      const numbers = numbersFor(exercise, profile, history);
+      const numbers = numbersFor(exercise, profile, history, exercise.exerciseId === lead);
       return {
         ...exercise,
         weight: numbers.weight,
@@ -115,8 +117,9 @@ export function liveExercises(
   profile: Profile,
   history: WorkoutRecord[],
 ): WorkoutExercise[] {
+  const lead = leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId));
   return adapted.exercises.map((exercise) => {
-    const numbers = numbersFor(exercise, profile, history);
+    const numbers = numbersFor(exercise, profile, history, exercise.exerciseId === lead);
     const planned = Array.from({ length: exercise.sets }, () => ({ ...numbers }));
     return {
       exerciseId: exercise.exerciseId,
@@ -144,20 +147,21 @@ export function needsCalibration(exercise: WorkoutExercise, history: WorkoutReco
     && first !== undefined && first.weight === 0 && !exercise.performed.some((set) => set.done);
 }
 
-function livePrescription(exerciseId: string, profile: Profile, history: WorkoutRecord[]) {
+function livePrescription(exerciseId: string, profile: Profile, history: WorkoutRecord[], lead: boolean) {
   if (holdSeconds(exerciseId) !== null) return null;
   const definition = exerciseById(exerciseId);
-  return definition ? prescribeExercise(definition, profile, history) : null;
+  return definition ? prescribeExercise(definition, profile, history, lead) : null;
 }
 
-/** One line of the "why this number" explanation, or null where none applies. */
+/** One line of the "why this number" explanation, or null where none applies. `lead`: the day's first compound. */
 export function targetReason(
   exerciseId: string,
   profile: Profile,
   history: WorkoutRecord[],
   unit: Unit,
+  lead = false,
 ): string | null {
-  const prescription = livePrescription(exerciseId, profile, history);
+  const prescription = livePrescription(exerciseId, profile, history, lead);
   return prescription && describePrescription(prescription, unit);
 }
 
@@ -167,8 +171,9 @@ export function targetCoachLine(
   profile: Profile,
   history: WorkoutRecord[],
   unit: Unit,
+  lead = false,
 ): string | null {
-  const prescription = livePrescription(exerciseId, profile, history);
+  const prescription = livePrescription(exerciseId, profile, history, lead);
   return prescription && coachLine(prescription, unit);
 }
 
@@ -233,6 +238,7 @@ export function progressionLines(
     segmentsById.get(segment.exerciseId)?.push(segment);
   }
 
+  const lead = leadCompoundId(order);
   return order.map((exerciseId) => {
     const segments = segmentsById.get(exerciseId) ?? [];
     const name = segments[0]?.name ?? exerciseId;
@@ -269,12 +275,14 @@ export function progressionLines(
       };
     }
 
-    const prescription = prescribeExercise(definition, profile, history);
+    const prescription = prescribeExercise(definition, profile, history, exerciseId === lead);
     const nextLoad = plannedLoad(profile.loads, history, exerciseId, unit);
+    const { min, max } = prescription.range;
     return {
       exerciseId,
       name,
-      original: programTarget(exerciseId, presentedSets),
+      // The slot's own requirement in the range it was prescribed in, not the flagship's fixture.
+      original: programExercise(exerciseId) ? `${required} × ${min}–${max}` : programTarget(exerciseId, presentedSets),
       adapted: `${presentedSets} ${presentedSets === 1 ? 'set' : 'sets'}`,
       performed,
       next: `${setText(exerciseId, prescription.reps)} @ ${loadText(prescription.weight, exerciseId, unit, nextLoad(prescription.weight))}`,
