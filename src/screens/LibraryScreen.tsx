@@ -98,12 +98,10 @@ export default function LibraryScreen({ profile, onSave, onBack }: Props) {
         <button className={`chip ${muscle === 'All' ? 'on' : ''}`} aria-pressed={muscle === 'All'} onClick={() => setMuscle('All')}>
           All
         </button>
-        {/* minHeight stretches the whole row to 44px targets. */}
         <button
           className={`chip ${muscle === 'Saved' ? 'on' : ''}`}
           aria-pressed={muscle === 'Saved'}
           onClick={() => setMuscle('Saved')}
-          style={{ minHeight: 44 }}
         >
           Your choices
         </button>
@@ -215,7 +213,7 @@ export default function LibraryScreen({ profile, onSave, onBack }: Props) {
                       onClick={() =>
                         setPending({
                           title: excluded ? `Allow ${exercise.name} again?` : `Don't recommend ${exercise.name} again?`,
-                          detail: `${excluded ? 'It can be programmed again.' : 'It is never programmed; the generator reports a coverage gap instead of substituting silently.'} ${FUTURE}`,
+                          detail: `${excluded ? 'It can be programmed again.' : 'It is never programmed; the generator reports a coverage gap instead of substituting silently.'} ${!excluded && pref ? `It is also marked ${PREF_LABEL[pref].toLowerCase()}; you will be asked which to keep. ` : ''}${FUTURE}`,
                           patch: withExclusion(profile, exercise.id, !excluded),
                         })
                       }

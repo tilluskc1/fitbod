@@ -160,9 +160,9 @@ function validateProfile(value: unknown, path: string): Profile {
     if (keys.length > MAX_EXCLUSIONS) fail(`${path}.preferences`, `has more than ${MAX_EXCLUSIONS} entries`);
     preferences = {};
     for (const key of keys) {
-      const value = oneOf(prefsRaw[key], `${path}.preferences.${key}`, PREFERENCES);
       // Dropped, not rejected: a variant removed from the catalog must not lock the user out.
-      if (EXERCISES.some((exercise) => exercise.id === key)) preferences[key] = value;
+      if (!EXERCISES.some((exercise) => exercise.id === key)) continue;
+      preferences[key] = oneOf(prefsRaw[key], `${path}.preferences.${key}`, PREFERENCES);
     }
   }
 

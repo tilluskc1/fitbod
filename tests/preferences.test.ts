@@ -123,6 +123,13 @@ test('an unknown exercise in saved preferences is dropped, not a lockout', () =>
   assert.equal(validateState(stateWith({ ...base, exclusions: [42] })).ok, false, 'exclusions validation unchanged');
 });
 
+test('an unknown exercise with an unknown value is still dropped, not a lockout', () => {
+  const loaded = validateState(stateWith({ ...base, preferences: { dip: 'more', 'removed-lift': 'sometimes' } }));
+  assert.ok(loaded.ok, 'a removed exercise with a value from a future version must not stop loading');
+  assert.deepEqual(loaded.state.profile?.preferences, { dip: 'more' });
+  assert.equal(validateState(stateWith({ ...base, preferences: { dip: 'sometimes' } })).ok, false, 'a bad value on a known exercise is still rejected');
+});
+
 test('live Today path: a Library save reorders the current slot through slotProgram', () => {
   const home: Profile = { ...base, experience: 'Beginner', equipment: ['Dumbbell'], support: ['Bench'], loads: { Dumbbell: [10, 15, 18] }, sessionMinutes: 35 };
   const start: AppState = { ...EMPTY_STATE, profile: home, plan: buildPlan(home) };
