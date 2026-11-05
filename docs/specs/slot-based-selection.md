@@ -43,7 +43,9 @@ Fitbod's server side cannot be matched. Is "same slots, same muscle coverage" th
 
 ## Slot table: ours vs the real app
 
-Ours is generated from `generateWorkout` at 50c3a17 for Build Muscle, Beginner, 3 days, dumbbells + bench. "Compound" means the exercise lists two or more muscles; "isolation" means one. Muscle is the primary muscle. No exercise names.
+Source for the real app: the owner's screen recording of one Fitbod Day 1 (Nov 4, 2026), read frame by frame. That account is a different profile from ours (Get Lean, Advanced, 5 per week, large gym), so this compares **slot shapes**, not exercises. No exercise names are recorded for the real app.
+
+Ours is generated from `generateWorkout` at 50c3a17 for Build Muscle, Beginner, 3 days, dumbbells + bench. "Compound" means the exercise lists two or more muscles; "isolation" means one. Muscle is the primary muscle.
 
 | Our day | Status | Our slots (muscle, kind) |
 | --- | --- | --- |
@@ -51,20 +53,28 @@ Ours is generated from `generateWorkout` at 50c3a17 for Build Muscle, Beginner, 
 | Pull | Ready (5/5) | back compound, biceps isolation, core isolation, core isolation, biceps isolation |
 | Legs | Limited (5/5) | quads compound, glutes compound, hamstrings isolation, core isolation, quads compound |
 
-| Real app | Slots in order (muscle, kind; superset) |
-| --- | --- |
-| Day 1 (7 slots) | chest compound (A), back compound (A), biceps isolation (B), rear-delt isolation (B), triceps+chest compound (C), chest compound (C), core isolation |
+Real app, Day 1 "Upper Body Day", 45 min, 7 exercises, 6 muscles, in screen order:
 
-Recorded by the owner from one signed-in Day 1 workout in the real app, as muscle and kind per slot only (no exercise names). A, B and C mark the three supersets, each a pair done back to back; the core slot stands alone. Day 2 and later days were not recorded; the acceptance needs one workout.
+| Slot | Muscle | Kind | Group |
+| --- | --- | --- | --- |
+| 1 | chest | compound | superset A |
+| 2 | back | compound | superset A |
+| 3 | biceps | isolation | superset B |
+| 4 | rear delts | isolation | superset B |
+| 5 | triceps and chest | compound | superset C |
+| 6 | chest | compound | superset C |
+| 7 | core | isolation | alone |
 
-That workout belongs to a different profile (Advanced, large gym) from ours (Beginner, dumbbells + bench), so the table compares slot shapes only, not exercises, loads or volume.
+Other observations from the same recording: the same day at 1 hour became 10 exercises over only 3 muscles (chest, biceps, core); the Lower Body day at 1 hour was 10 exercises over 4 muscles; the first compound was 5 sets of 6, accessories 3 sets of 12 to 16.
 
-### Gaps (one issue each, all needing owner triage)
+### Slots we lack (one issue each)
 
-| Real-app shape | Ours today | Issue |
-| --- | --- | --- |
-| Slots paired into supersets A/B/C | Straight sets only | #90 |
-| Workout length set by time; slot count changes with duration | Fixed slot template per day, trimmed to fit | #91 |
-| Upper/lower day types | Push/Pull/Legs only | #92 |
-| Three chest compounds on the upper day (one triceps+chest) | Two chest compounds on Push | #94 |
-| Heavier, lower-rep first compound (top set) | Same rep range for every slot | #95 |
+1. #88 Supersets (paired exercises, 3 rounds).
+2. #89 Session length drives exercise count (7 at 45 min, 10 at 1 hour).
+3. #93 Upper/lower day types for short plans.
+4. #96 A third chest or triceps compound on an upper day (our cap is 2 per primary muscle).
+5. #97 Heavy top set for the first compound (5 x 6).
+
+Shapes we already match: a rear-delt isolation slot, a core finisher, a bench-press-first day.
+
+Limits: one workout, one account, frames read at 2-second steps (Day 1 fully, Lower Body only in part).
