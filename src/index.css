@@ -40,6 +40,17 @@
   --radius-card: 17px;
   --radius-button: 13px;
   --shadow-phone: 0 40px 120px rgba(0, 0, 0, 0.55);
+
+  /* Glass tokens (#77), read by .glass-scope controls, the settings sheet and the logger (#81). */
+  --glass-fill: rgba(255, 255, 255, 0.055);
+  --glass-fill-hover: rgba(255, 255, 255, 0.08);
+  --glass-edge: rgba(255, 255, 255, 0.12);
+  --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --glass-blur: blur(18px) saturate(150%);
+  --glass-lime-fill: linear-gradient(180deg, rgba(197, 247, 119, 0.17), rgba(197, 247, 119, 0.07));
+  --glass-lime-edge: rgba(197, 247, 119, 0.7);
+  --glass-glow: radial-gradient(120% 55% at 90% -12%, rgba(197, 247, 119, 0.13), transparent 62%),
+    radial-gradient(90% 45% at -12% 108%, rgba(197, 247, 119, 0.07), transparent 60%);
 }
 
 * {
@@ -3220,36 +3231,25 @@ body {
   text-align: center;
 }
 
-/* ---------- Onboarding: glass pill controls (#77) ----------
-   Frosted, translucent controls in the charcoal/lime palette. Scoped to onboarding. */
-/* The logger's glass controls (#81) read the same tokens. */
-.onboarding,
-.flow-screen {
-  --glass-fill: rgba(255, 255, 255, 0.055);
-  --glass-fill-hover: rgba(255, 255, 255, 0.08);
-  --glass-edge: rgba(255, 255, 255, 0.12);
-  --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  --glass-blur: blur(18px) saturate(150%);
-  --glass-lime-fill: linear-gradient(180deg, rgba(197, 247, 119, 0.17), rgba(197, 247, 119, 0.07));
-  --glass-lime-edge: rgba(197, 247, 119, 0.7);
-}
-
+/* ---------- Glass pill controls (#77, shared with settings #82) ----------
+   Frosted, translucent controls in the charcoal/lime palette, for any screen marked .glass-scope.
+   Tokens live in :root. */
 .onboarding {
   background:
-    radial-gradient(120% 55% at 90% -12%, rgba(197, 247, 119, 0.13), transparent 62%),
-    radial-gradient(90% 45% at -12% 108%, rgba(197, 247, 119, 0.07), transparent 60%),
+    var(--glass-glow),
     var(--surface);
   /* The app frame clips overflow, so onboarding scrolls itself; Continue stays reachable on short screens. */
   height: 100%;
   overflow-y: auto;
 }
 
-.onboarding .unit-toggle,
-.onboarding .option-card,
-.onboarding .search,
-.onboarding .chip,
-.onboarding .day-chip,
-.onboarding .onboarding-actions .secondary {
+.glass-scope .unit-toggle,
+.glass-scope .option-card,
+.glass-scope .search,
+.glass-scope .chip,
+.glass-scope .day-chip,
+.glass-scope .settings-card,
+.glass-scope .onboarding-actions .secondary {
   border: 1px solid var(--glass-edge);
   background: var(--glass-fill);
   box-shadow: var(--glass-shine);
@@ -3259,7 +3259,7 @@ body {
 }
 
 /* Unit toggle: a pill segmented control with a lime thumb. */
-.onboarding .unit-toggle {
+.glass-scope .unit-toggle {
   display: inline-flex;
   width: auto;
   padding: 4px;
@@ -3268,7 +3268,7 @@ body {
   overflow: visible;
 }
 
-.onboarding .unit-toggle button {
+.glass-scope .unit-toggle button {
   min-height: 44px;
   min-width: 80px;
   padding: 0 22px;
@@ -3279,101 +3279,356 @@ body {
   transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.onboarding .unit-toggle button.on {
+.glass-scope .unit-toggle button.on {
   background: var(--lime);
   color: var(--lime-ink);
   box-shadow: 0 6px 18px rgba(197, 247, 119, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 /* Option cards: large soft corners. */
-.onboarding .option-card {
+.glass-scope .option-card {
   border-radius: 22px;
   padding: 17px 20px;
 }
 
-.onboarding .option-card:hover,
-.onboarding .chip:hover,
-.onboarding .day-chip:hover {
+.glass-scope .option-card:hover,
+.glass-scope .chip:hover,
+.glass-scope .day-chip:hover {
   background: var(--glass-fill-hover);
 }
 
-.onboarding .option-card.selected,
-.onboarding .day-chip.selected,
-.onboarding .chip.on {
+.glass-scope .option-card.selected,
+.glass-scope .day-chip.selected,
+.glass-scope .chip.on {
   background: var(--glass-lime-fill);
   border-color: var(--glass-lime-edge);
   box-shadow: 0 8px 24px rgba(197, 247, 119, 0.1), var(--glass-shine);
 }
 
-.onboarding .chip.on {
+.glass-scope .chip.on {
   color: var(--lime);
 }
 
 /* Text inputs and pickers become pills. */
-.onboarding .search {
+.glass-scope .search {
   border-radius: 999px;
   min-height: 52px;
   padding: 0 22px;
 }
 
-.onboarding .search:focus {
+/* The base placeholder colour drops below AA on glass. */
+.glass-scope .search::placeholder {
+  color: var(--on-surface-variant);
+}
+
+.glass-scope .search:focus {
   border-color: var(--glass-lime-edge);
 }
 
-.onboarding .chip {
+.glass-scope .chip {
   padding: 0 18px;
 }
 
-.onboarding .day-chip {
+.glass-scope .day-chip {
   border-radius: 999px;
 }
 
-/* Back / Continue. */
-.onboarding .onboarding-actions .primary {
+/* Back / Continue, and a sheet's Done. */
+.glass-scope .onboarding-actions .primary,
+.glass-scope .sheet-actions .primary {
   border-radius: 999px;
   box-shadow: 0 10px 28px rgba(197, 247, 119, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
-.onboarding .onboarding-actions .secondary {
+.glass-scope .onboarding-actions .secondary {
   border-radius: 999px;
   color: var(--on-surface);
 }
 
-.onboarding .onboarding-actions .primary:disabled {
+.glass-scope .onboarding-actions .primary:disabled {
   box-shadow: none;
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .onboarding .unit-toggle,
-  .onboarding .option-card,
-  .onboarding .search,
-  .onboarding .chip,
-  .onboarding .day-chip,
-  .onboarding .onboarding-actions .secondary,
-  .onboarding .option-card:hover,
-  .onboarding .chip:hover,
-  .onboarding .day-chip:hover {
+  .glass-scope .unit-toggle,
+  .glass-scope .option-card,
+  .glass-scope .search,
+  .glass-scope .chip,
+  .glass-scope .day-chip,
+  .glass-scope .onboarding-actions .secondary,
+  .glass-scope .settings-card,
+  .glass-scope .option-card:hover,
+  .glass-scope .chip:hover,
+  .glass-scope .day-chip:hover {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     background: var(--surface-container);
   }
 
-  .onboarding .option-card.selected,
-  .onboarding .day-chip.selected,
-  .onboarding .chip.on {
+  .glass-scope .option-card.selected,
+  .glass-scope .day-chip.selected,
+  .glass-scope .chip.on {
     background: var(--surface-container-high);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .onboarding .unit-toggle,
-  .onboarding .unit-toggle button,
-  .onboarding .option-card,
-  .onboarding .search,
-  .onboarding .chip,
-  .onboarding .day-chip,
-  .onboarding .onboarding-actions .secondary {
+  .glass-scope .unit-toggle,
+  .glass-scope .unit-toggle button,
+  .glass-scope .option-card,
+  .glass-scope .search,
+  .glass-scope .chip,
+  .glass-scope .day-chip,
+  .glass-scope .settings-card,
+  .glass-scope .onboarding-actions .secondary {
     transition: none;
+  }
+}
+
+/* ---------- Training settings: grouped glass list (#82) ---------- */
+.sheet--settings {
+  background: var(--glass-glow), rgba(19, 26, 16, 0.9);
+  border-top-color: var(--glass-edge);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.settings-group__title {
+  margin: 0 0 8px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  color: var(--on-surface-variant);
+}
+
+.settings-group__foot {
+  margin: 8px 16px 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--on-surface-variant);
+}
+
+.glass-scope .settings-card {
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+.settings-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 16px;
+  font-size: 15px;
+  color: var(--on-surface);
+}
+
+/* Inset hairline between rows, like a grouped iOS list. */
+.settings-row + .settings-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.settings-row--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.settings-row__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-row__value {
+  color: var(--lime);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-row__note {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--on-surface-variant);
+}
+
+.settings-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings .settings-row > .search {
+  flex: 0 1 62%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 18px;
+  text-align: right;
+}
+
+.settings .settings-row--stack > .search {
+  flex: none;
+  width: 100%;
+  text-align: left;
+}
+
+.settings .unit-toggle {
+  padding: 3px;
+  gap: 2px;
+}
+
+.settings .unit-toggle button {
+  min-height: 44px;
+  min-width: 60px;
+  padding: 0 16px;
+}
+
+/* Pill select: keeps the base chevron, so only the colour layer turns to glass. */
+.glass-scope .select {
+  width: auto;
+  min-height: 44px;
+  padding: 0 40px 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-edge);
+  background-color: var(--glass-fill);
+  background-position: calc(100% - 23px) 19px, calc(100% - 18px) 19px;
+  box-shadow: var(--glass-shine);
+  color: var(--on-surface);
+}
+
+.glass-scope .select:focus-visible {
+  border-color: var(--glass-lime-edge);
+}
+
+/* Pill slider: a glass track with a lime fill and an iOS-style white thumb. */
+.glass-range {
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.glass-range::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--lime) var(--fill, 50%), rgba(255, 255, 255, 0.1) var(--fill, 50%));
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+
+.glass-range::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--lime) var(--fill, 50%), rgba(255, 255, 255, 0.1) var(--fill, 50%));
+  box-shadow: inset 0 0 0 1px var(--glass-edge);
+}
+
+.glass-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  margin-top: -9px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--on-surface);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(0, 0, 0, 0.2);
+}
+
+.glass-range::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--on-surface);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(0, 0, 0, 0.2);
+}
+
+.glass-range:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
+.settings-row--action {
+  justify-content: flex-start;
+  text-align: left;
+  color: var(--lime);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.settings-row--action:hover {
+  background: var(--glass-fill-hover);
+}
+
+.settings-row--action:focus-visible,
+.settings-row--action:focus-within {
+  outline: 2px solid var(--lime);
+  outline-offset: -2px;
+}
+
+.settings-row__file {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.settings-lock {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 16px;
+}
+
+.settings-lock strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.settings-lock p {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--on-surface-muted);
+}
+
+.settings .sheet-actions {
+  margin-top: 0;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .sheet--settings {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: #131a10;
+  }
+
+  .glass-scope .select {
+    background-color: var(--surface-container);
   }
 }
 

@@ -65,7 +65,7 @@ export default function Onboarding({ onComplete }: Props) {
   };
 
   return (
-    <div className="onboarding">
+    <div className="onboarding glass-scope">
       <div className="onboarding-top">
         <div className="logo">
           YOUR STRENGTH <b>·</b> COACH
