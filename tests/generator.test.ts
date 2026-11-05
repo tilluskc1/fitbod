@@ -232,7 +232,7 @@ test('beginner dumbbells + bench: Push is a full Ready day with one triceps-prim
   const primaries = push.exercises.map((exercise) => meta(exercise.exerciseId).muscles[0]);
 
   assert.equal(push.exercises.length, 5, push.feasibility.reason);
-  assert.equal(push.feasibility.status, 'ready');
+  assert.equal(push.feasibility.status, 'ok');
   assert.equal(primaries.filter((muscle) => muscle === 'Triceps').length, 1);
   assert.ok(primaries.filter((muscle) => muscle === 'Shoulders').length <= 2);
 });
