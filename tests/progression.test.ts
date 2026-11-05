@@ -459,6 +459,9 @@ test('the reason names the real gap to the next load: rack steps, lb display, ba
   const near = reason('dumbbell-floor-press', rack, 17.995);
   assert.doesNotMatch(near.text, /\+0|\(\+/);
   assert.match(near.text, /Next load/);
+  // Typed off-rack loads: +N is target minus the load as shown.
+  assert.match(reason('barbell-bench-press', [], 61.25).text, /61\.25 kg\. One step up \(\+3\.75 kg\)/);
+  assert.match(reason('dumbbell-floor-press', rack, 17.75).text, /\(\+0\.25 kg\)/);
   // Barbell with no inventory: the default increment still equals the actual gap.
   const bb = reason('barbell-bench-press', [], 60);
   assert.match(bb.text, new RegExp(`\\(\\+${bb.p.weight - 60} kg\\)`));

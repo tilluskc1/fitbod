@@ -309,9 +309,11 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
 
   switch (basis) {
     case 'load-increase': {
-      // The difference of the two values the user sees, so it always matches the target line.
-      const step = displayValue(weight, unit) - displayValue(workWeight, unit);
-      const stepText = step > 0 ? `One step up (+${Number.isInteger(step) ? step : step.toFixed(1)} ${unitLabel(unit)})` : 'Next load';
+      // Next shown load minus the current load exactly as `logged` prints it (typed loads keep precision).
+      const onRack = available.some((load) => Math.abs(load - workWeight) < 0.001);
+      const shown = onRack ? displayValue(workWeight, unit) : Number(calibrationInputValue(workWeight, unit));
+      const step = Math.round((displayValue(weight, unit) - shown) * 100) / 100;
+      const stepText = step > 0 ? `One step up (+${step} ${unitLabel(unit)})` : 'Next load';
       return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. ${stepText}; reps restart at ${range.min}.`;
     }
     case 'rep-increase':
