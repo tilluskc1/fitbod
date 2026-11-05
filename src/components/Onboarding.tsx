@@ -226,7 +226,7 @@ export default function Onboarding({ onComplete }: Props) {
                 onChange={(event) => setLoadsText(event.target.value)}
                 placeholder="e.g. 5, 7.5"
               />
-              <p className="muted">Targets use only weights you list. Blank means none yet.</p>
+              <p className="muted">Targets use only weights you list. Blank keeps it unconfirmed.</p>
             </>
           ) : null}
 

@@ -6,6 +6,8 @@ import { createServer } from 'vite';
 import { FULL_BODY_A } from '../src/data/flagship.ts';
 import { adaptWorkout, toWorkoutExercises } from '../src/lib/adapt.ts';
 import { completeSession, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
+import { liveAdapted, targetReason } from '../src/lib/liveProgression.ts';
+import type { Profile } from '../src/types.ts';
 
 // Render the actual screen: model-only checks missed the diverging current rows.
 test('Today shows the accepted active targets instead of a recomputed program', async () => {
@@ -51,16 +53,18 @@ test('Today preserves the actual fractional load in last performance', async () 
     const logged = updatePerformedSet(active, 0, 0, { weight: 42.3, reps: 8, done: true }, '2026-10-31T10:05:00.000Z');
     const history = [completeSession(logged, { early: true, now: '2026-10-31T10:06:00.000Z' })];
     const noop = () => {};
+    const profile: Profile = { goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
+      equipment: ['Dumbbell'], support: [], exclusions: [], loads: {}, name: 'Today review' };
     const html = renderToStaticMarkup(createElement(TodayScreen, {
-      profile: { goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
-        equipment: ['Dumbbell'], support: [], exclusions: [], loads: {}, name: 'Today review' },
-      program: FULL_BODY_A, adapted, equipment: 'home', adjusted: false, history, current: null,
-      now: new Date('2026-11-01T10:10:00.000Z'), onPreview: noop,
+      profile, program: FULL_BODY_A, adapted: liveAdapted(adapted, profile, history), equipment: 'home',
+      adjusted: false, history, current: null, now: new Date('2026-11-01T10:10:00.000Z'), onPreview: noop,
       onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop,
     }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-    // The coach insight now reads the live reason (#5); it must still name the logged load.
-    assert.match(text, /42\.3 kg/);
-    assert.doesNotMatch(text, /42\.5 kg/);
+    // (#50) Today's coach line reads today's load exactly as the target does...
+    assert.match(text, /Same load: 42\.5 kg for 8\./);
+    assert.match(text, /Today’s target 8 · 8 · 8 @ 42\.5 kg each/);
+    // ...and the logged fractional load stays exact one tap away, under "Why this target".
+    assert.match(targetReason('dumbbell-floor-press', profile, history, 'kg') ?? '', /42\.3 kg/);
   } finally { await server.close(); }
 });

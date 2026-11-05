@@ -6,7 +6,7 @@ import { createServer } from 'vite';
 import { FULL_BODY_A } from '../src/data/flagship.ts';
 import { exerciseById } from '../src/data/exercises.ts';
 import { adaptWorkout } from '../src/lib/adapt.ts';
-import { catalogRowMeta, liveAdapted, liveExercises, targetReason } from '../src/lib/liveProgression.ts';
+import { catalogRowMeta, liveAdapted, liveExercises, targetCoachLine, targetReason } from '../src/lib/liveProgression.ts';
 import { tabBarAction } from '../src/lib/tabBarAction.ts';
 import { applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
@@ -49,16 +49,17 @@ function renderToday(Today: unknown, who: Profile, history: WorkoutRecord[], cur
     onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop }));
 }
 
-/** History in which the press stopped after 2 of 3 sets at 15 kg × 10. */
-function unfinishedHistory(): WorkoutRecord[] {
+/** History in which the press logged these sets (weight kg × reps), out of 3 planned. */
+function pressHistory(sets: [number, number][]): WorkoutRecord[] {
   let session = liveSession([]);
-  for (let index = 0; index < 2; index += 1) {
-    session = logSet(updatePerformedSet(session, 0, index, { weight: 15, reps: 10 }), 0, index,
+  sets.forEach(([weight, reps], index) => {
+    session = logSet(updatePerformedSet(session, 0, index, { weight, reps }), 0, index,
       `2026-11-02T10:0${index + 1}:00.000Z`);
-  }
+  });
   return applyFinish({ ...EMPTY_STATE, profile, current: session }, session.id,
     { early: true, now: '2026-11-02T10:30:00.000Z' }).history;
 }
+const unfinishedHistory = () => pressHistory([[15, 10], [15, 10]]);
 
 test('Today coach line is short and states the same numbers as the target', async () => {
   await withServer(async (load) => {
@@ -67,7 +68,12 @@ test('Today coach line is short and states the same numbers as the target', asyn
       ['earned step', profile, earnedHistory(), 'You owned 15 kg. Today: 18 kg for 8.', '8 · 8 · 8 @ 18 kg each'],
       ['ceiling', { ...profile, loads: { Dumbbell: [10, 15] } }, earnedHistory(),
         'Top of your rack — own 15 kg for 10.', '10 · 10 · 10 @ 15 kg each'],
-      ['unfinished', profile, unfinishedHistory(), 'Same as last time: 15 kg for 10.', '10 · 10 · 10 @ 15 kg each'],
+      ['unfinished', profile, unfinishedHistory(), 'Same load: 15 kg for 10.', '10 · 10 · 10 @ 15 kg each'],
+      ['unfinished below the range', profile, pressHistory([[15, 4], [15, 4]]), 'Same load: 15 kg for 8.', '8 · 8 · 8 @ 15 kg each'],
+      ['off-rack', profile, pressHistory([[15.25, 9], [15.25, 9]]), 'Same load: 15.5 kg for 9.', '9 · 9 · 9 @ 15.5 kg each'],
+      ['mixed loads', profile, pressHistory([[12.3, 10], [15, 10], [15, 10]]),
+        'One load for every set: 12.5 kg for 10.', '10 · 10 · 10 @ 12.5 kg each'],
+      ['lb off-rack', { ...profile, unit: 'lb' }, pressHistory([[20, 9], [20, 9]]), 'Same load: 44 lb for 9.', '9 · 9 · 9 @ 44 lb each'],
       ['first session', profile, [], 'First time on this one. Start light, log what you lift.', '8 · 8 · 8'],
       ['lb', { ...profile, unit: 'lb' }, earnedHistory(), 'You owned 33 lb. Today: 39.5 lb for 8.', '8 · 8 · 8 @ 39.5 lb each'],
     ];
@@ -76,9 +82,13 @@ test('Today coach line is short and states the same numbers as the target', asyn
       assert.ok(today.includes(line), `${label}: coach line`);
       assert.ok(line.split(/\s+/).length <= 12, `${label}: short`);
       assert.ok(today.includes(`Today’s target ${target} `), `${label}: target`);
-      assert.doesNotMatch(today, /One step up|Repeat that/, `${label}: the precise reason lives in Why`);
+      assert.doesNotMatch(today, /One step up|Repeat that|Same as last time/, `${label}: the precise reason lives in Why`);
     }
   });
+});
+
+test('a first bodyweight move is not told to start light', () => {
+  assert.equal(targetCoachLine('push-up', profile, [], 'kg'), 'First time on this one. Log the reps you do.');
 });
 
 test('"Why this target" keeps the precise reason', async () => {
