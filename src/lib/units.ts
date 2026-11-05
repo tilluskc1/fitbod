@@ -1,4 +1,5 @@
 import type { Profile, Unit } from '../types.ts';
+import { MAX_WEIGHT } from './validate.ts';
 
 export const KG_PER_LB = 0.45359237;
 
@@ -34,6 +35,16 @@ export function parseLoads(text: string, unit: Unit, stored: number[] = []): num
     .map((token) => kept.get(token) ?? (Number(token) > 0 ? toKg(Number(token), unit) : NaN))
     .filter(Number.isFinite);
   return [...new Set(values)].sort((a, b) => a - b);
+}
+
+/** True when any typed load is above what the loader accepts (#101). */
+export function overLoadLimit(kgs: number[]): boolean {
+  return kgs.some((kg) => kg > MAX_WEIGHT);
+}
+
+/** Shown wherever a typed load is refused for being above the limit. */
+export function loadLimitMessage(unit: Unit): string {
+  return `Loads go up to ${Math.floor(toDisplay(MAX_WEIGHT, unit))} ${unitLabel(unit)}. That load was not saved.`;
 }
 
 /** Display value snapped to a half unit so inputs read like real plates. */
@@ -77,14 +88,15 @@ export function loadsInputText(kgs: number[] | undefined, unit: Unit): string {
 
 /**
  * Settings save for owned dumbbells. Null means save nothing: the text still shows what is stored
- * (so kg never drifts), or it is non-blank but holds no load (so a typo never wipes the rack).
+ * (so kg never drifts), it is non-blank but holds no load (so a typo never wipes the rack), or it holds
+ * a load above the limit (#101).
  */
 export function dumbbellLoadsPatch(text: string, profile: Profile): Partial<Profile> | null {
   const unit = unitOf(profile);
   const stored = profile.loads.Dumbbell ?? [];
   if (text.trim() === loadsInputText(stored, unit)) return null;
   const loads = parseLoads(text, unit, stored);
-  if (text.trim() && loads.length === 0) return null;
+  if ((text.trim() && loads.length === 0) || overLoadLimit(loads)) return null;
   return { loads: { ...profile.loads, Dumbbell: loads } };
 }
 

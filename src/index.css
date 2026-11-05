@@ -1426,6 +1426,7 @@ textarea:focus-visible {
 }
 
 .error-text {
+  display: block;
   margin-top: 10px;
   color: #ffb0a6;
   font-size: 13px;
@@ -3802,10 +3803,16 @@ button.aw-exercise__name-btn {
 
 .lg-first__typed {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   font-size: 13px;
   color: var(--on-surface-variant);
+}
+
+.lg-first__typed .error-text {
+  flex-basis: 100%;
+  margin-top: 0;
 }
 
 .lg-first__typed input {

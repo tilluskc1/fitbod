@@ -44,7 +44,8 @@ const MAX_EXERCISES = 40;
 const MAX_SETS = 30;
 const MAX_EXCLUSIONS = 200;
 const MAX_LOAD_ENTRIES = 200;
-const MAX_WEIGHT = 2000;
+/** The heaviest load the loader accepts; every weight entry refuses above it (#101). */
+export const MAX_WEIGHT = 2000;
 const MAX_REPS = 1000;
 
 class Invalid extends Error {}

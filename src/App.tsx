@@ -62,7 +62,7 @@ import
 import type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
 import { parseState } from './lib/validate';
 import
- { unitOf } from './lib/units';
+ { loadLimitMessage, overLoadLimit, unitOf } from './lib/units';
 import
  { EXERCISES, exerciseById } from './data/exercises';
 import
@@ -645,6 +645,11 @@ export default function App() {
     setIndex: number,
     patch: Partial<PerformedSet>,
   ) => {
+    // The history field is controlled, so refusing here snaps it back to the stored load (#101).
+    if (overLoadLimit([patch.weight ?? 0])) {
+      setNotice(loadLimitMessage(unit));
+      return;
+    }
     setState((currentState) =>
       applyCorrection(currentState, workoutId, exerciseIndex, setIndex, patch, new Date().toISOString()),
     );
