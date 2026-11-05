@@ -46,7 +46,7 @@ test('Today coach insight states the live reason instead of contradicting the ea
       current: null, now: new Date('2026-11-04T10:00:00.000Z'), onStart: noop, onResume: noop, onAdjust: noop,
       onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop })));
     assert.doesNotMatch(today, /Repeat that/);
-    assert.match(today, /One step up/);
+    assert.match(today, /One step up \(\+3 kg\)/);
   } finally { await server.close(); }
 });
 
