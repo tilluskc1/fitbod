@@ -114,7 +114,11 @@ export function generateWorkout(
       isRelevantToDay(exercise, day),
   );
 
-  const shuffled = seededShuffle(pool, 7 + dayIndex * 13);
+  // Within the seeded order, "more" moves ahead and "less" behind (still
+  // eligible). The sort is stable, so compound-first below keeps it as a tiebreaker.
+  const rank = (exercise: Exercise) =>
+    profile.preferences?.[exercise.id] === 'more' ? 0 : profile.preferences?.[exercise.id] === 'less' ? 2 : 1;
+  const shuffled = seededShuffle(pool, 7 + dayIndex * 13).sort((a, b) => rank(a) - rank(b));
   // Keep the seeded order as the tiebreaker, but prefer compound movements
   // when filling slots so an accessory cannot consume the last slot for a
   // primary muscle and leave the session short.

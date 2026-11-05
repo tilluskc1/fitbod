@@ -651,16 +651,6 @@ export default function App() {
     );
   };
 
-  const toggleExclusion = (exerciseId: string) => {
-    if (!profile) return;
-    const has = profile.exclusions.includes(exerciseId);
-    patchProfile({
-      exclusions: has
-        ? profile.exclusions.filter((value) => value !== exerciseId)
-        : [...profile.exclusions, exerciseId],
-    });
-  };
-
   const swapExercise = (exerciseIndex: number, nextExerciseId: string) => {
     if (!profile) return;
     const target = EXERCISES.find((exercise) => exercise.id === nextExerciseId);
@@ -810,8 +800,8 @@ export default function App() {
       />
     ) : view === 'library' ? (
       <LibraryScreen
-        exclusions={profile.exclusions}
-        onToggleExclusion={toggleExclusion}
+        profile={profile}
+        onSave={patchProfile}
         onBack={() => setView('tabs')}
       />
     ) : view === 'adapt' && pendingAdapted && pending ? (
