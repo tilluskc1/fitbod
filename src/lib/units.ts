@@ -1,4 +1,4 @@
-import type { Unit } from '../types.ts';
+import type { Profile, Unit } from '../types.ts';
 
 export const KG_PER_LB = 0.45359237;
 
@@ -63,4 +63,16 @@ export function calibrationInputValue(kg: number, unit: Unit): string {
   if (kg <= 0) return '';
   if (unit === 'kg') return String(kg);
   return String(Math.round(toDisplay(kg, unit) * 100) / 100);
+}
+
+/** Owned loads as editable text in the display unit, at the logger's precision. */
+export function loadsInputText(kgs: number[] | undefined, unit: Unit): string {
+  return (kgs ?? []).map((kg) => calibrationInputValue(kg, unit)).join(', ');
+}
+
+/** Settings save for owned dumbbells; null when the text still shows what is stored, so kg never drifts. */
+export function dumbbellLoadsPatch(text: string, profile: Profile): Partial<Profile> | null {
+  const unit = unitOf(profile);
+  if (text.trim() === loadsInputText(profile.loads.Dumbbell, unit)) return null;
+  return { loads: { ...profile.loads, Dumbbell: parseLoads(text, unit) } };
 }

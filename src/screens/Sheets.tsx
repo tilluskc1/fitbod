@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
-import { formatActualWeight, formatWeight } from '../lib/units';
+import { dumbbellLoadsPatch, formatActualWeight, formatWeight, loadsInputText, unitLabel, unitOf } from '../lib/units';
 import type { Profile, Unit, WorkoutExercise } from '../types';
 import { lastPerformance } from '../lib/plan';
 import type { WorkoutRecord } from '../types';
@@ -728,17 +728,22 @@ export function SettingsSheet({
   onClose,
   storageNote,
 }: SettingsProps) {
+  const unit = unitOf(profile);
   const [name, setName] = useState(profile.name ?? '');
-  const [loadsText, setLoadsText] = useState((profile.loads.Dumbbell ?? []).join(', '));
+  const [loadsText, setLoadsText] = useState(() => loadsInputText(profile.loads.Dumbbell, unit));
+  const [textUnit, setTextUnit] = useState(unit);
   const minutes = profile.sessionMinutes ?? 35;
+
+  // The text is in textUnit; on a unit switch, re-read the stored kg instead of converting the typed text.
+  if (textUnit !== unit) {
+    setTextUnit(unit);
+    setLoadsText(loadsInputText(profile.loads.Dumbbell, unit));
+  }
 
   /** Saved inventory: future workouts only, never a frozen active session. */
   const saveLoads = () => {
-    const values = loadsText
-      .split(/[,\s]+/)
-      .map(Number)
-      .filter((value) => Number.isFinite(value) && value > 0);
-    onChange({ loads: { ...profile.loads, Dumbbell: [...new Set(values)].sort((a, b) => a - b) } });
+    const patch = dumbbellLoadsPatch(loadsText, profile);
+    if (patch) onChange(patch);
   };
 
   const toggle = <T extends string>(list: T[], item: T, key: 'equipment' | 'support') => {
@@ -746,155 +751,166 @@ export function SettingsSheet({
     onChange({ [key]: next } as Partial<Profile>);
   };
 
+  const chips = <T extends string>(options: readonly T[], list: T[], key: 'equipment' | 'support', label: string) => (
+    <div className="settings-chips" role="group" aria-label={label}>
+      {options.map((item) => (
+        <button
+          key={item}
+          className={`chip ${list.includes(item) ? 'on' : ''}`}
+          aria-pressed={list.includes(item)}
+          onClick={() => toggle(list, item, key)}
+        >
+          {item}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <Sheet title="Training settings" onClose={onClose}>
-      <label className="field-label" htmlFor="profile-name">
-        Your name
-      </label>
-      <input
-        id="profile-name"
-        className="search"
-        style={{ marginTop: 0 }}
-        value={name}
-        maxLength={40}
-        onChange={(event) => setName(event.target.value)}
-        onBlur={() => onChange({ name: name.trim() || 'Athlete' })}
-      />
+    <Sheet title="Training settings" onClose={onClose} variant="settings">
+      <div className="glass-scope settings">
+        <section className="settings-group" aria-labelledby="settings-profile">
+          <h3 className="settings-group__title" id="settings-profile">
+            Profile
+          </h3>
+          <div className="settings-card">
+            <div className="settings-row">
+              <label htmlFor="profile-name">Name</label>
+              <input
+                id="profile-name"
+                className="search"
+                value={name}
+                maxLength={40}
+                autoComplete="given-name"
+                onChange={(event) => setName(event.target.value)}
+                onBlur={() => onChange({ name: name.trim() || 'Athlete' })}
+              />
+            </div>
+            <div className="settings-row">
+              <span id="units-label">Units</span>
+              <div className="unit-toggle" role="group" aria-labelledby="units-label">
+                <button className={unit === 'kg' ? 'on' : ''} aria-pressed={unit === 'kg'} onClick={() => onChange({ unit: 'kg' })}>
+                  kg
+                </button>
+                <button className={unit === 'lb' ? 'on' : ''} aria-pressed={unit === 'lb'} onClick={() => onChange({ unit: 'lb' })}>
+                  lb
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
 
-      <div className="field">
-        <span className="field-label-inline">Units</span>
-        <div className="unit-toggle" role="group" aria-label="Weight units">
-          <button
-            className={profile.unit !== 'lb' ? 'on' : ''}
-            aria-pressed={profile.unit !== 'lb'}
-            onClick={() => onChange({ unit: 'kg' })}
-          >
-            kg
-          </button>
-          <button
-            className={profile.unit === 'lb' ? 'on' : ''}
-            aria-pressed={profile.unit === 'lb'}
-            onClick={() => onChange({ unit: 'lb' })}
-          >
-            lb
+        <section className="settings-group" aria-labelledby="settings-training">
+          <h3 className="settings-group__title" id="settings-training">
+            Training
+          </h3>
+          <div className="settings-card">
+            <div className="settings-row settings-row--stack">
+              <div className="settings-row__line">
+                <label htmlFor="session-minutes">Session length</label>
+                <output htmlFor="session-minutes" className="settings-row__value">
+                  {minutes} min
+                </output>
+              </div>
+              <input
+                id="session-minutes"
+                className="glass-range"
+                type="range"
+                min={15}
+                max={90}
+                step={5}
+                value={minutes}
+                style={{ ['--fill' as string]: `${((minutes - 15) / 75) * 100}%` }}
+                onChange={(event) => onChange({ sessionMinutes: Number(event.target.value) })}
+              />
+            </div>
+            <div className="settings-row">
+              <label htmlFor="goal-select">Goal</label>
+              <select
+                id="goal-select"
+                className="select"
+                value={profile.goal}
+                onChange={(event) => onChange({ goal: event.target.value as Profile['goal'] })}
+              >
+                {['Build Muscle', 'Lose Fat', 'Get Stronger', 'General Fitness'].map((goal) => (
+                  <option key={goal} value={goal}>
+                    {goal}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section className="settings-group" aria-labelledby="settings-equipment">
+          <h3 className="settings-group__title" id="settings-equipment">
+            Equipment
+          </h3>
+          <div className="settings-card">
+            <div className="settings-row settings-row--stack">
+              <span>Primary</span>
+              {chips(EQUIPMENT_OPTIONS, profile.equipment, 'equipment', 'Primary equipment')}
+            </div>
+            <div className="settings-row settings-row--stack">
+              <label htmlFor="profile-loads">Dumbbells you own ({unitLabel(unit)}, per hand)</label>
+              <input
+                id="profile-loads"
+                className="search"
+                inputMode="decimal"
+                value={loadsText}
+                onChange={(event) => setLoadsText(event.target.value)}
+                onBlur={saveLoads}
+                placeholder={unit === 'lb' ? 'e.g. 15, 25, 35 lb' : 'e.g. 10, 15, 20 kg'}
+                aria-describedby="profile-loads-note"
+              />
+              <p className="settings-row__note" id="profile-loads-note">
+                Used by future workouts. Leave blank to keep your rack unconfirmed.
+              </p>
+            </div>
+            <div className="settings-row settings-row--stack">
+              <span>Support</span>
+              {chips(SUPPORT_OPTIONS, profile.support, 'support', 'Support equipment')}
+            </div>
+          </div>
+        </section>
+
+        <section className="settings-group" aria-labelledby="settings-data">
+          <h3 className="settings-group__title" id="settings-data">
+            Data
+          </h3>
+          <div className="settings-card">
+            <button className="settings-row settings-row--action" onClick={onExport}>
+              Export JSON backup
+            </button>
+            <label className="settings-row settings-row--action">
+              Restore from backup
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="settings-row__file"
+                onChange={(event) => {
+                  onRestore(event.target.files?.[0]);
+                  event.target.value = '';
+                }}
+              />
+            </label>
+          </div>
+          <p className="settings-group__foot">{storageNote}</p>
+          <div className="settings-card settings-lock">
+            <LockIcon />
+            <div>
+              <strong>This browser is the only copy.</strong>
+              <p>There is no account or cloud sync. Export before clearing site data or changing devices.</p>
+            </div>
+          </div>
+        </section>
+
+        <div className="sheet-actions">
+          <button className="primary" onClick={onClose}>
+            <CheckIcon size={18} />
+            Done
           </button>
         </div>
-      </div>
-
-      <label className="field-label" htmlFor="session-minutes">
-        Usual session length
-      </label>
-      <div className="time-row">
-        <input
-          id="session-minutes"
-          type="range"
-          min={15}
-          max={90}
-          step={5}
-          value={minutes}
-          style={{ ['--fill' as string]: `${((minutes - 15) / 75) * 100}%` }}
-          onChange={(event) => onChange({ sessionMinutes: Number(event.target.value) })}
-        />
-        <div className="time-read">
-          {minutes}
-          <span>min</span>
-        </div>
-      </div>
-
-      <span className="field-label">Primary equipment</span>
-      <div className="chip-row" style={{ flexWrap: 'wrap', padding: '2px 0 6px' }}>
-        {EQUIPMENT_OPTIONS.map((item) => (
-          <button
-            key={item}
-            className={`chip ${profile.equipment.includes(item) ? 'on' : ''}`}
-            aria-pressed={profile.equipment.includes(item)}
-            onClick={() => toggle(profile.equipment, item, 'equipment')}
-          >
-            {item}
-          </button>
-        ))}
-      </div>
-
-      <label className="field-label" htmlFor="profile-loads">
-        Dumbbell loads you own (kg, per hand)
-      </label>
-      <input
-        id="profile-loads"
-        className="search"
-        style={{ marginTop: 0 }}
-        inputMode="decimal"
-        value={loadsText}
-        onChange={(event) => setLoadsText(event.target.value)}
-        onBlur={saveLoads}
-        placeholder="Unconfirmed"
-      />
-      <p className="data-note">
-        Used by future workouts. Leave blank to keep your rack unconfirmed.
-      </p>
-
-      <span className="field-label">Support equipment</span>
-      <div className="chip-row" style={{ flexWrap: 'wrap', padding: '2px 0 6px' }}>
-        {SUPPORT_OPTIONS.map((item) => (
-          <button
-            key={item}
-            className={`chip ${profile.support.includes(item) ? 'on' : ''}`}
-            aria-pressed={profile.support.includes(item)}
-            onClick={() => toggle(profile.support, item, 'support')}
-          >
-            {item}
-          </button>
-        ))}
-      </div>
-
-      <label className="field-label" htmlFor="goal-select">
-        Training goal
-      </label>
-      <select
-        id="goal-select"
-        className="select"
-        value={profile.goal}
-        onChange={(event) => onChange({ goal: event.target.value as Profile['goal'] })}
-      >
-        {['Build Muscle', 'Lose Fat', 'Get Stronger', 'General Fitness'].map((goal) => (
-          <option key={goal} value={goal}>
-            {goal}
-          </option>
-        ))}
-      </select>
-
-      <span className="field-label">Your data</span>
-      <div className="sheet-actions" style={{ marginTop: 4 }}>
-        <button className="secondary" onClick={onExport}>
-          Export JSON backup
-        </button>
-        <label className="secondary" style={{ position: 'relative', cursor: 'pointer' }}>
-          Restore from backup
-          <input
-            type="file"
-            accept="application/json,.json"
-            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-            onChange={(event) => {
-              onRestore(event.target.files?.[0]);
-              event.target.value = '';
-            }}
-          />
-        </label>
-      </div>
-      <p className="data-note">{storageNote}</p>
-
-      <div className="kept-note" style={{ marginTop: 16 }}>
-        <LockIcon />
-        <div>
-          <strong>This browser is the only copy.</strong>
-          <p>There is no account or cloud sync. Export before clearing site data or changing devices.</p>
-        </div>
-      </div>
-
-      <div className="sheet-actions">
-        <button className="primary" onClick={onClose}>
-          <CheckIcon size={18} />
-          Done
-        </button>
       </div>
     </Sheet>
   );
