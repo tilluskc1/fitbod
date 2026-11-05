@@ -10,6 +10,7 @@ import { needsCalibration, plannedLoad } from '../lib/liveProgression';
 import { nearestLoad, suggestedFirstLoad } from '../lib/firstLoad';
 import { availableLoads } from '../lib/progression';
 import { calibrationInputValue, loadLimitMessage, loadValue, typedLoad, unitLabel } from '../lib/units';
+import { MAX_REPS } from '../lib/validate';
 import type { Experience, PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -435,7 +436,7 @@ export default function TrainScreen({
               <Icon name="remove" size={20} />
             </button>
             <output aria-live="polite">{value.reps}</output>
-            <button onClick={() => patch({ reps: value.reps + 1 })}
+            <button onClick={() => patch({ reps: value.reps + 1 })} disabled={value.reps >= MAX_REPS}
               aria-label={holdUnit ? 'Increase seconds' : 'Increase reps'}>
               <Icon name="add" size={20} />
             </button>

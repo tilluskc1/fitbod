@@ -1,7 +1,7 @@
 import type { AppState, PerformedSet, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { needsLoad } from '../data/flagship.ts';
 import { advanceAfterFinish } from './sequence.ts';
-import { MAX_WEIGHT } from './validate.ts';
+import { MAX_REPS, MAX_WEIGHT } from './validate.ts';
 
 function cleanNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -154,14 +154,15 @@ export function updatePerformedSet(
   const current = exercise?.performed[setIndex];
   if (!current) return session;
   // #103: a logged loaded set at weight 0 reads as "no load" yet drives progression; log, edit and correction all land here.
-  const weight = patch.weight === undefined ? current.weight : cleanNumber(patch.weight);
+  // A load or reps the loader would reject is never stored, so a reload cannot lock the app (#101, #109);
+  // the #103 check sees the load that stays.
+  const weight = patch.weight === undefined || patch.weight > MAX_WEIGHT ? current.weight : cleanNumber(patch.weight);
   const done = patch.done ?? current.done;
   if (done && weight <= 0 && (patch.weight !== undefined || patch.done) && needsLoad(exercise.exerciseId)) return session;
   const next = copyRecord(session);
   const set = next.exercises[exerciseIndex].performed[setIndex];
-  // A load the loader would reject is never stored, so a reload cannot lock the app (#101).
-  if (patch.weight !== undefined && !(patch.weight > MAX_WEIGHT)) set.weight = cleanNumber(patch.weight);
-  if (patch.reps !== undefined) set.reps = cleanNumber(patch.reps);
+  set.weight = weight;
+  if (patch.reps !== undefined && !(patch.reps > MAX_REPS)) set.reps = cleanNumber(patch.reps);
   if (patch.done !== undefined) {
     set.done = patch.done;
     if (patch.done) set.completedAt = patch.completedAt ?? now;
