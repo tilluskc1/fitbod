@@ -29,6 +29,7 @@ import {
   liveAdapted,
   liveExercises,
   progressionLines,
+  recapHighlight,
   targetReason,
 } from './lib/liveProgression';
 import
@@ -788,6 +789,7 @@ export default function App() {
     );
   }
 
+  const recapLines = recap ? progressionLines(recap, profile, state.history, unit) : [];
   const activeScreen =
     view === 'train' && current ? (
       <TrainScreen
@@ -829,7 +831,8 @@ export default function App() {
         feedbackWrite={feedbackWrite}
         onFeedback={saveFeedback}
         onRetryFeedback={attemptSave}
-        progression={profile ? progressionLines(recap, profile, state.history, unit) : []}
+        progression={recapLines}
+        highlight={recapHighlight(recap, state.history, recapLines, unit)}
         onViewHistory={() => {
           setView('tabs');
           setTab('progress');

@@ -2,7 +2,7 @@ import { exerciseById } from '../data/exercises.ts';
 import { loadModeOf, programExercise, setText } from '../data/flagship.ts';
 import type { AdaptedExercise, AdaptedWorkout } from './adapt.ts';
 import { describePrescription, prescribeExercise } from './progression.ts';
-import { exerciseInWorkout } from './plan.ts';
+import { bestCompletedSet, exerciseInWorkout, hasWork } from './plan.ts';
 import { displayValue, unitLabel } from './units.ts';
 import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
 
@@ -153,6 +153,8 @@ export interface ProgressionLine {
   next: string;
   /** One factual sentence from the recorded evidence. */
   reason: string;
+  /** The next load, when this very workout earned a load step; otherwise null. */
+  earnedLoad: string | null;
 }
 
 function programTarget(exerciseId: string, presentedSets: number): string {
@@ -216,6 +218,7 @@ export function progressionLines(
           hold !== null
             ? 'A hold has no load to progress — the seconds are the target.'
             : 'No programmed target for this movement.',
+        earnedLoad: null,
       };
     }
 
@@ -232,6 +235,44 @@ export function progressionLines(
         unit,
       )}`,
       reason: describePrescription(prescription, unit),
+      earnedLoad:
+        prescription.basis === 'load-increase' && prescription.last?.workoutId === workout.id
+          ? loadText(prescription.weight, exerciseId, unit)
+          : null,
     };
   });
+}
+
+/**
+ * The recap's one headline, strictly from records: a load step this workout
+ * earned > a new best on the exact variant (heaviest load, then reps, against
+ * every earlier completed session of that variant) > first session > fallback.
+ */
+export function recapHighlight(
+  workout: WorkoutRecord,
+  history: WorkoutRecord[],
+  lines: ProgressionLine[],
+  unit: Unit,
+): string {
+  const earned = lines.find((line) => line.earnedLoad);
+  if (earned) return `Next time: ${earned.earnedLoad} on ${earned.name}`;
+  const start = Date.parse(workout.date);
+  const prior = history.filter(
+    (item) => item.id !== workout.id && item.status === 'completed' && Date.parse(item.date) < start,
+  );
+  for (const line of lines) {
+    const today = bestCompletedSet(exerciseInWorkout(workout, line.exerciseId)?.done ?? []);
+    const before = bestCompletedSet(
+      prior.flatMap((item) => exerciseInWorkout(item, line.exerciseId)?.done ?? []),
+    );
+    if (
+      today &&
+      before &&
+      (today.weight > before.weight || (today.weight === before.weight && today.reps > before.reps))
+    ) {
+      return `New best: ${setText(line.exerciseId, today.reps)} @ ${loadText(today.weight, line.exerciseId, unit)} on ${line.name}`;
+    }
+  }
+  if (hasWork(workout) && !prior.some(hasWork)) return 'First session on the program';
+  return 'Work recorded';
 }
