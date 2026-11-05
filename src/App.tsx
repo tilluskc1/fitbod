@@ -81,6 +81,7 @@ import
  { PhoneFrame, TabBar } from './components/ui/Chrome';
 import
  type { Tab } from './components/ui/Chrome';
+import { tabBarAction } from './lib/tabBarAction';
 import
  TodayScreen from './screens/TodayScreen';
 import
@@ -895,6 +896,10 @@ export default function App() {
           onChange={(next) => {
             setTab(next);
             setView('tabs');
+          }}
+          workoutAction={{
+            ...tabBarAction(current, adapted),
+            onActivate: current ? () => setView('train') : startWorkout,
           }}
         />
       </>
