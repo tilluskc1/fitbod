@@ -32,6 +32,9 @@ export const SUPPORT_OPTIONS: SupportEquipment[] = [
   'Ab wheel',
 ];
 
+/** Fresh onboarding assumes no support gear; a bench is never pre-ticked. */
+export const DEFAULT_SUPPORT: SupportEquipment[] = [];
+
 export const EXERCISES: Exercise[] = [
   // Chest
   { id: 'barbell-bench-press', name: 'Barbell Bench Press', muscles: ['Chest', 'Triceps', 'Shoulders'], equipment: 'Barbell', pattern: 'horizontal_push', secondaryPatterns: ['elbow_extension'], needs: ['barbell', 'bench'], instructions: 'Lie on a flat bench, grip the bar slightly wider than shoulder width, lower it to mid-chest, then press up until your arms are extended.' },
