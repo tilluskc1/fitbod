@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
-import { dumbbellLoadsPatch, formatWeight, loadsInputText, unitLabel, unitOf } from '../lib/units';
+import { dumbbellLoadsPatch, formatWeight, loadLimitMessage, loadsInputText, overLoadLimit, parseLoads, unitLabel, unitOf } from '../lib/units';
 import type { Profile, Unit, WorkoutExercise } from '../types';
 import { lastPerformance } from '../lib/plan';
 import { plannedLoad } from '../lib/liveProgression';
@@ -748,6 +748,7 @@ export function SettingsSheet({
   const [name, setName] = useState(profile.name ?? '');
   const [loadsText, setLoadsText] = useState(() => loadsInputText(profile.loads.Dumbbell, unit));
   const [textUnit, setTextUnit] = useState(unit);
+  const [loadsRefused, setLoadsRefused] = useState(false);
   const minutes = profile.sessionMinutes ?? 35;
 
   // The text is in textUnit; on a unit switch, re-read the stored kg instead of converting the typed text.
@@ -758,6 +759,10 @@ export function SettingsSheet({
 
   /** Saved inventory: future workouts only, never a frozen active session. */
   const saveLoads = () => {
+    // A load above the limit keeps the text so it can be fixed; nothing is saved (#101).
+    const tooHeavy = overLoadLimit(parseLoads(loadsText, unit, profile.loads.Dumbbell));
+    setLoadsRefused(tooHeavy);
+    if (tooHeavy) return;
     const patch = dumbbellLoadsPatch(loadsText, profile);
     if (patch) onChange(patch);
     else setLoadsText(loadsInputText(profile.loads.Dumbbell, unit));
@@ -879,10 +884,12 @@ export function SettingsSheet({
                 onBlur={saveLoads}
                 placeholder={unit === 'lb' ? 'e.g. 15, 25, 35 lb' : 'e.g. 10, 15, 20 kg'}
                 aria-describedby="profile-loads-note"
+                aria-invalid={loadsRefused || undefined}
               />
               <p className="settings-row__note" id="profile-loads-note">
                 Used by future workouts. Leave blank to keep your rack unconfirmed.
               </p>
+              {loadsRefused && <p className="error-text" role="alert">{loadLimitMessage(unit)}</p>}
             </div>
             <div className="settings-row settings-row--stack">
               <span>Support</span>

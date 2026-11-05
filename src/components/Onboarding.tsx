@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DEFAULT_SUPPORT, EQUIPMENT_OPTIONS, SUPPORT_OPTIONS } from '../data/exercises';
-import { parseLoads } from '../lib/units';
+import { loadLimitText, overLoadLimit, parseLoads } from '../lib/units';
 import type { Equipment, Experience, Goal, Profile, SupportEquipment, Unit } from '../types';
 
 interface Props {
@@ -47,6 +47,8 @@ export default function Onboarding({ onComplete }: Props) {
 
   // Typed in the chosen unit; converted once, here, so switching units never double-converts.
   const confirmedLoads = () => parseLoads(loadsText, unit);
+  // A load above the limit blocks the plan with a message instead of being stored (#101).
+  const loadsTooHeavy = equipment.includes('Dumbbell') && overLoadLimit(confirmedLoads());
 
   const finish = () => {
     const loads = confirmedLoads();
@@ -223,6 +225,7 @@ export default function Onboarding({ onComplete }: Props) {
                 placeholder={unit === 'lb' ? 'e.g. 10, 15, 20' : 'e.g. 5, 7.5'}
               />
               <p className="muted">Targets use only weights you list. Blank keeps it unconfirmed.</p>
+              {loadsTooHeavy && <p className="error-text" role="alert">{loadLimitText(unit)}</p>}
             </>
           ) : null}
 
@@ -261,7 +264,7 @@ export default function Onboarding({ onComplete }: Props) {
             Continue
           </button>
         ) : (
-          <button className="primary" onClick={finish}>
+          <button className="primary" disabled={loadsTooHeavy} onClick={finish}>
             Build my plan
           </button>
         )}

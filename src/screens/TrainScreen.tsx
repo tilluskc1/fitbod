@@ -8,7 +8,7 @@ import type { EditDraft } from '../lib/editDraft';
 import { exerciseInWorkout, lastPerformance } from '../lib/plan';
 import { needsCalibration, plannedLoad } from '../lib/liveProgression';
 import { availableLoads } from '../lib/progression';
-import { calibrationInputValue, loadValue, toKg, unitLabel } from '../lib/units';
+import { calibrationInputValue, loadLimitMessage, loadValue, typedLoad, unitLabel } from '../lib/units';
 import type { PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -127,6 +127,36 @@ export function CalibrationStep({ selected = null, onConfirm, onSkip }: {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * A typed load. One above the loader's limit is refused with a message and the
+ * field falls back to the load held at focus, so nothing invalid is kept (#101).
+ */
+function LoadEntry({ weight, update, shown, unit, label }: {
+  weight: number;
+  update: (weight: number) => void;
+  shown?: string;
+  unit: Unit;
+  label: string;
+}) {
+  const [refused, setRefused] = useState(false);
+  const focused = useRef(weight);
+  return (
+    <>
+      <input type="number" min="0" step="any" inputMode="decimal" aria-label={label} aria-invalid={refused || undefined}
+        defaultValue={shown ?? calibrationInputValue(weight, unit)}
+        onFocus={() => { focused.current = weight; }}
+        onChange={(event) => {
+          const next = typedLoad(event.target.value, unit, focused.current);
+          if (!next) return;
+          setRefused(next.refused);
+          if (next.refused) event.target.value = calibrationInputValue(next.kg, unit);
+          update(next.kg);
+        }} />
+      {refused && <span className="error-text" role="alert">{loadLimitMessage(unit)}</span>}
+    </>
   );
 }
 
@@ -323,14 +353,8 @@ export default function TrainScreen({
   // A dumbbell with no confirmed rack is typed, the same way a barbell load is.
   const canEnterWeight = mode !== 'none' && !canPickWeight;
   const loadEntry = (weight: number, update: (weight: number) => void, shown?: string) => (
-    <input type="number" min="0" step="any" inputMode="decimal"
-      aria-label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`}
-      defaultValue={shown ?? calibrationInputValue(weight, unit)}
-      onChange={(event) => {
-        const value = Number(event.target.value);
-        if (event.target.value === '') update(0);
-        else if (Number.isFinite(value) && value >= 0) update(toKg(value, unit));
-      }} />
+    <LoadEntry weight={weight} update={update} shown={shown} unit={unit}
+      label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`} />
   );
 
   // #80: everything a row renders is keyed by exercise, segment and set, so a

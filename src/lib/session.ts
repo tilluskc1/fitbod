@@ -1,6 +1,7 @@
 import type { AppState, PerformedSet, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { needsLoad } from '../data/flagship.ts';
 import { advanceAfterFinish } from './sequence.ts';
+import { MAX_WEIGHT } from './validate.ts';
 
 function cleanNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -158,7 +159,8 @@ export function updatePerformedSet(
   if (done && weight <= 0 && (patch.weight !== undefined || patch.done) && needsLoad(exercise.exerciseId)) return session;
   const next = copyRecord(session);
   const set = next.exercises[exerciseIndex].performed[setIndex];
-  if (patch.weight !== undefined) set.weight = cleanNumber(patch.weight);
+  // A load the loader would reject is never stored, so a reload cannot lock the app (#101).
+  if (patch.weight !== undefined && !(patch.weight > MAX_WEIGHT)) set.weight = cleanNumber(patch.weight);
   if (patch.reps !== undefined) set.reps = cleanNumber(patch.reps);
   if (patch.done !== undefined) {
     set.done = patch.done;
