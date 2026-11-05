@@ -2,13 +2,16 @@ import type {
   Equipment,
   Exercise,
   MovementPattern,
+  MuscleGroup,
   Profile,
   Unit,
+  WorkoutExercise,
   WorkoutRecord,
 } from '../types.ts';
 import { loadValue, unitLabel } from './units.ts';
 import { exerciseInWorkout } from './plan.ts';
 import { programExercise } from '../data/flagship.ts';
+import { exerciseById } from '../data/exercises.ts';
 
 /**
  * Phase 2 progression policy: double progression.
@@ -39,16 +42,23 @@ const COMPOUND_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>
   'hip_extension',
 ]);
 
-const MID_RANGE_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>([
-  'knee_extension',
-  'knee_flexion',
+/** Isolation on a small muscle (calves, rear delts) earns its step at 20 reps. */
+const SMALL_MUSCLE_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>([
+  'calf_raise',
+  'shoulder_horizontal_abduction',
 ]);
 
-/** Rep ranges per movement class. Deliberately small: no rules engine. */
-export const REP_RANGES: Record<'compound' | 'mid' | 'accessory', RepRange> = {
+/** Rep ranges per movement class and day role. Deliberately small: no rules engine. */
+export const REP_RANGES: Record<
+  'lead' | 'strength' | 'technique' | 'compound' | 'accessory' | 'small',
+  RepRange
+> = {
+  lead: { min: 4, max: 6 },
+  strength: { min: 3, max: 5 },
+  technique: { min: 8, max: 10 },
   compound: { min: 6, max: 10 },
-  mid: { min: 8, max: 12 },
   accessory: { min: 10, max: 15 },
+  small: { min: 12, max: 20 },
 };
 
 /**
@@ -75,15 +85,95 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function repRangeFor(pattern: MovementPattern): RepRange {
-  if (COMPOUND_PATTERNS.has(pattern)) return REP_RANGES.compound;
-  if (MID_RANGE_PATTERNS.has(pattern)) return REP_RANGES.mid;
-  return REP_RANGES.accessory;
+/** The range outside the lead: compound 6–10, isolation 10–15, small-muscle isolation 12–20. */
+export function repRangeFor(exercise: Pick<Exercise, 'pattern' | 'muscles'>): RepRange {
+  if (isCompound(exercise)) return REP_RANGES.compound;
+  return SMALL_MUSCLE_PATTERNS.has(exercise.pattern) ? REP_RANGES.small : REP_RANGES.accessory;
 }
 
-/** Four sets for multi-muscle movements, three for isolation work. */
-export function setCountFor(exercise: Exercise): number {
-  return exercise.muscles.length >= 2 ? 4 : 3;
+/** Multi-muscle work on a compound pattern. A rear-delt fly or a cable fly is isolation. */
+export function isCompound(exercise: Pick<Exercise, 'pattern' | 'muscles'>): boolean {
+  return COMPOUND_PATTERNS.has(exercise.pattern) && exercise.muscles.length >= 2;
+}
+
+/** The one lead predicate: a loaded compound. Bodyweight never takes the heavy sets (it cannot add load). */
+export function canLead(exercise: Pick<Exercise, 'pattern' | 'muscles' | 'equipment'>): boolean {
+  return isCompound(exercise) && exercise.equipment !== 'Bodyweight';
+}
+
+const canLeadId = (id: string): boolean => {
+  const exercise = exerciseById(id);
+  return exercise !== undefined && canLead(exercise);
+};
+
+/**
+ * The generator's pick for the lead among a day's exercises: a barbell lift
+ * first and a lunge or split squat last, then the day's earliest focus muscle,
+ * then session order. It then moves to the front, so everywhere else the lead
+ * is simply the first loaded compound.
+ */
+export function pickLead<T extends Exercise>(exercises: T[], focus: MuscleGroup[] = []): T | undefined {
+  const rank = (exercise: Exercise) => (exercise.equipment === 'Barbell' ? 0 : exercise.pattern === 'lunge' ? 2 : 1);
+  const focusRank = (exercise: Exercise) => {
+    const index = focus.indexOf(exercise.muscles[0]);
+    return index < 0 ? focus.length : index;
+  };
+  return exercises.filter(canLead).sort((a, b) => rank(a) - rank(b) || focusRank(a) - focusRank(b))[0];
+}
+
+/** The day's lead in session order: the first loaded compound, which carries the heavy sets. */
+export function leadCompoundId(exerciseIds: string[]): string | undefined {
+  return exerciseIds.find(canLeadId);
+}
+
+/**
+ * Every exercise holding the lead slot of a session: the first compound, plus a
+ * compound swapped in for its remaining sets. A swap split keeps only the done
+ * sets and both halves carry the slot's requirement (see `swapPendingExercise`).
+ */
+export function leadSlotIds(
+  exercises: Pick<WorkoutExercise, 'exerciseId' | 'planned' | 'performed' | 'originalPlannedSets'>[],
+): string[] {
+  const start = exercises.findIndex((exercise) => canLeadId(exercise.exerciseId));
+  if (start < 0) return [];
+  const ids = [exercises[start].exerciseId];
+  for (let index = start + 1; index < exercises.length; index += 1) {
+    const kept = exercises[index - 1];
+    const next = exercises[index];
+    const required = kept.originalPlannedSets;
+    const split = required !== undefined && kept.planned.length < required
+      && kept.performed.every((set) => set.done) && next.originalPlannedSets === required;
+    if (!split || !canLeadId(next.exerciseId)) break;
+    ids.push(next.exerciseId);
+  }
+  return ids;
+}
+
+/**
+ * Sets and rep range for the exercise's role in the day. Intermediate and
+ * advanced lifters building muscle or strength open with heavy sets; a
+ * beginner's lead stays at 3 × 8–10, technique first. Behind a heavy lead the
+ * other compounds drop to three sets, so a session holds about as many sets as
+ * before and the time budget stays honest.
+ */
+export function roleTarget(
+  exercise: Exercise,
+  profile: Pick<Profile, 'goal' | 'experience'>,
+  lead = false,
+  /** False when the day has no loaded compound to lead: other compounds keep four sets. */
+  dayHasLead = true,
+): { sets: number; range: RepRange } {
+  const compound = isCompound(exercise);
+  lead = lead && canLead(exercise);
+  const heavy = profile.experience !== 'Beginner' && (profile.goal === 'Build Muscle' || profile.goal === 'Get Stronger');
+  if (lead && heavy) {
+    return { sets: 5, range: profile.goal === 'Get Stronger' ? REP_RANGES.strength : REP_RANGES.lead };
+  }
+  if (lead && profile.experience === 'Beginner') return { sets: 3, range: REP_RANGES.technique };
+  // The program's own range wins, so the next target matches the recap's "3 × 8–10".
+  const programmed = programExercise(exercise.id)?.repRange;
+  const range = programmed ? { min: programmed[0], max: programmed[1] } : repRangeFor(exercise);
+  return { sets: compound && !(heavy && dayHasLead) ? 4 : 3, range };
 }
 
 /** Loads the profile says are actually selectable for this equipment. */
@@ -207,16 +297,16 @@ export function typedLoads(history: WorkoutRecord[], exerciseId: string): number
   );
 }
 
+/** `lead`: this is the day's first compound (see `leadCompoundId`). */
 export function prescribeExercise(
   exercise: Exercise,
   profile: Profile,
   history: WorkoutRecord[],
+  lead = false,
+  dayHasLead = true,
 ): Prescription {
-  const catalog = repRangeFor(exercise.pattern);
-  // The program's own range wins, so the next target matches the recap's "3 × 8–10".
-  const programmed = programExercise(exercise.id)?.repRange;
-  const range = programmed ? { min: programmed[0], max: programmed[1] } : catalog;
-  const sets = setCountFor(exercise);
+  const catalog = repRangeFor(exercise);
+  const { sets, range } = roleTarget(exercise, profile, lead, dayHasLead);
   const available = availableLoads(profile, exercise.equipment);
   const increment = incrementFor(exercise.equipment, available);
   const last = lastExercisePerformance(history, exercise.id);
@@ -326,6 +416,7 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
   const workWeight = last.done.length ? Math.max(...last.done.map((set) => set.weight)) : 0;
   const lowestReps = last.done.length ? Math.min(...last.done.map((set) => set.reps)) : 0;
   const setsLabel = `${count} set${count === 1 ? '' : 's'}`;
+  const topped = `${setsLabel} at ${lowestReps} reps (top of ${range.min}–${range.max})`;
 
   switch (basis) {
     case 'load-increase': {
@@ -333,12 +424,12 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
       const shown = (kg: number) => Number(loadValue(kg, unit, available, typed));
       const step = Math.round((shown(weight) - shown(workWeight)) * 100) / 100;
       const stepText = step > 0 ? `One step up (+${step} ${unitLabel(unit)})` : 'Next load';
-      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. ${stepText}; reps restart at ${range.min}.`;
+      return `${when}: ${topped}, ${logged(workWeight)}. ${stepText}; reps restart at ${range.min}.`;
     }
     case 'rep-increase':
       return `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
     case 'go-heavier':
-      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. Ready to go heavier: use your next ${equipment.toLowerCase()} up; reps restart at ${range.min}.`;
+      return `${when}: ${topped}, ${logged(workWeight)}. Ready to go heavier: use your next ${equipment.toLowerCase()} up; reps restart at ${range.min}.`;
     case 'mixed-load':
       // `weight` is the planned load: it reads exactly as the target line does.
       return `${when}: ${setsLabel} at different loads (heaviest ${logged(workWeight)}). The load holds at ${logged(weight)} — use one working load for every set to earn the next step.`;

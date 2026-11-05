@@ -4,7 +4,7 @@ import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } fr
 import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
-import { prescribeExercise, repRangeFor } from './progression.ts';
+import { leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
 import { liveExercises } from './liveProgression.ts';
 
 /**
@@ -207,6 +207,16 @@ export function adaptWorkout(
     });
   }
 
+  // Today's setup dropped the lead: the next compound takes over its sets.
+  const lead = program.exercises.find((exercise) => exercise.exerciseId === leadCompoundId(program.exercises.map((item) => item.exerciseId)));
+  const heir = exercises.find((exercise) => exercise.exerciseId === leadCompoundId(exercises.map((item) => item.exerciseId)));
+  if (lead && heir && heir.exerciseId !== lead.exerciseId) {
+    heir.sets = lead.sets;
+    heir.originalSets = lead.sets;
+    const reps = heir.targetReps?.[0];
+    if (reps !== undefined) heir.targetReps = Array.from({ length: lead.sets }, () => reps);
+  }
+
   let total = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
   const budget = setBudget(program, minutes);
 
@@ -343,6 +353,8 @@ export function swapCandidateFor(
   profile: Profile,
   history: WorkoutRecord[],
   session: WorkoutRecord | null,
+  /** The swapped exercise holds the day's lead slot (see `leadSlotIds`). */
+  lead = false,
 ): SwapCandidate {
   const open = session ? latestDoneSet(session, target.id) : null;
   if (open) {
@@ -350,7 +362,7 @@ export function swapCandidateFor(
   }
   const hold = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === target.id)?.holdSeconds;
   if (hold) return { exerciseId: target.id, name: target.name, weight: 0, reps: hold };
-  const prescription = prescribeExercise(target, profile, history);
+  const prescription = prescribeExercise(target, profile, history, lead);
   return {
     exerciseId: target.id,
     name: target.name,
@@ -383,13 +395,13 @@ export function currentWorkout(adapted: AdaptedWorkout, session: WorkoutRecord):
     const catalog = exerciseById(entry.exerciseId);
     const dumbbell = catalog?.equipment === 'Dumbbell';
     const reps = entry.planned.map((set) => set.reps);
-    const range = catalog ? repRangeFor(catalog.pattern) : null;
+    const range = catalog ? repRangeFor(catalog) : null;
     return {
       exerciseId: entry.exerciseId,
       name: entry.name,
       sets: entry.planned.length,
       originalSets: entry.originalPlannedSets ?? entry.planned.length,
-      // Same fallback slotProgram uses: the program's range, else the catalog pattern's.
+      // Not displayed (targetReps carry the accepted reps); without a profile the lead's range is unknown here.
       repRange: source?.repRange ?? (range ? [range.min, range.max] : [reps[0] ?? 0, reps[0] ?? 0]),
       targetReps: reps,
       holdSeconds: source?.holdSeconds ? reps[0] : undefined,

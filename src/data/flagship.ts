@@ -205,7 +205,7 @@ export function repsTarget(exerciseId: string, count: number, planned?: { reps: 
   return `${program.repRange[0]}–${program.repRange[1]} reps`;
 }
 
-/** "3 sets · 8–10 reps · 15 kg each" for a workout row. */
+/** "3 sets · 8–10 reps · 15 kg each", "3 × 9 @ 15 kg each" or "3 sets · 9 · 8 · 8 @ 15 kg each" for a workout row. */
 export function exerciseMeta(
   exercise: ProgramExercise,
   count = exercise.sets,
@@ -222,5 +222,10 @@ export function exerciseMeta(
   // Targets read "9 · 9 @ 15 kg each"; ranges read "8–10 reps · 18 kg total".
   const load =
     exercise.weight > 0 ? `${exercise.targetReps ? ' @ ' : ' · '}${loadLabel(exercise, unit, format)}` : '';
+  // Same reps on every set reads "5 × 4 @ 20 lb each", short enough for a 360 px row.
+  const targets = exercise.holdSeconds ? [] : exercise.targetReps?.slice(0, count) ?? [];
+  if (includeSets && count > 1 && targets.length === count && targets.every((value) => value === targets[0])) {
+    return `${count} × ${targets[0]}${load}`;
+  }
   return includeSets ? `${sets} · ${reps}${load}` : `${reps}${load}`;
 }

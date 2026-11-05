@@ -3,7 +3,7 @@ import type { Program, ProgramExercise } from '../data/flagship.ts';
 import { detailOf, loadModeOf, programExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { buildPlan, generateWorkout } from './generator.ts';
-import { repRangeFor } from './progression.ts';
+import { leadCompoundId, REP_RANGES, roleTarget } from './progression.ts';
 import { MAX_WEIGHT } from './validate.ts';
 
 /**
@@ -96,16 +96,17 @@ export function slotProgram(
   history: WorkoutRecord[],
 ): Program {
   const generated = generateWorkout(profile, { name: slot.name, focus: slot.focus }, slot.index, history);
+  const lead = leadCompoundId(generated.exercises.map((entry) => entry.exerciseId));
   const exercises: ProgramExercise[] = generated.exercises.map((entry) => {
     const catalog = exerciseById(entry.exerciseId);
     const known = programExercise(entry.exerciseId);
     const prescribed = entry.planned[0]?.reps ?? 10;
     const weight = entry.planned[0]?.weight ?? 0;
     const hold = known?.holdSeconds;
-    // Same range prescribeExercise uses: the program's own when it defines one.
+    // Same range prescribeExercise uses: the role's, or the program's own when it defines one.
     const range = hold ? { min: hold, max: hold }
-      : known ? { min: known.repRange[0], max: known.repRange[1] }
-      : repRangeFor(catalog?.pattern ?? 'horizontal_push');
+      : catalog ? roleTarget(catalog, profile, entry.exerciseId === lead).range
+      : REP_RANGES.compound;
     const reps = hold ?? prescribed;
     return {
       exerciseId: entry.exerciseId,

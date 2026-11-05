@@ -33,6 +33,7 @@ import {
   recapHighlight,
   targetReason,
 } from './lib/liveProgression';
+import { leadCompoundId, leadSlotIds } from './lib/progression';
 import
  {
   applyCancel,
@@ -364,8 +365,9 @@ export default function App() {
   const targetNotes = useMemo(() => {
     const notes: Record<string, string> = {};
     if (!profile) return notes;
+    const lead = leadCompoundId(liveProgram.exercises.map((exercise) => exercise.exerciseId));
     for (const exercise of liveProgram.exercises) {
-      const reason = targetReason(exercise.exerciseId, profile, state.history, unit);
+      const reason = targetReason(exercise.exerciseId, profile, state.history, unit, exercise.exerciseId === lead);
       if (reason) notes[exercise.exerciseId] = reason;
     }
     return notes;
@@ -710,7 +712,9 @@ export default function App() {
     // many sets it receives and keeps every completed set where it is. A
     // program movement with nothing logged keeps the program's own numbers,
     // so a swap-back cannot render as bodyweight with a first-time target.
-    const candidate = swapCandidateFor(target, profile, state.history, state.current);
+    const swapped = state.current?.exercises[exerciseIndex]?.exerciseId;
+    const lead = state.current !== null && swapped !== undefined && leadSlotIds(state.current.exercises).includes(swapped);
+    const candidate = swapCandidateFor(target, profile, state.history, state.current, lead);
     setState((currentState) =>
       currentState.current
         ? { ...currentState, current: swapPendingExercise(currentState.current, exerciseIndex, candidate) }

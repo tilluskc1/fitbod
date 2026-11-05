@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EXERCISES } from '../src/data/exercises.ts';
 import { generateWorkout } from '../src/lib/generator.ts';
+import { programExercise } from '../src/data/flagship.ts';
 import {
   availableLoads,
   describePrescription,
@@ -9,8 +10,9 @@ import {
   lastExercisePerformance,
   nextLoad,
   prescribeExercise,
+  leadCompoundId,
   repRangeFor,
-  setCountFor,
+  roleTarget,
 } from '../src/lib/progression.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
@@ -115,15 +117,24 @@ test('a first prescription invents no load and starts inside the rep range', () 
 
   assert.equal(prescription.weight, 0);
   assert.equal(prescription.reps, 8);
-  assert.equal(prescription.sets, 4);
+  // Not the day's lead: behind an intermediate's heavy lead a compound takes three sets (#97).
+  assert.equal(prescription.sets, 3);
   assert.equal(prescription.basis, 'first-time');
   assert.equal(prescription.last, null);
 });
 
 test('rep ranges follow the movement class instead of one global number', () => {
-  assert.deepEqual(repRangeFor(meta('back-squat').pattern), { min: 6, max: 10 });
-  assert.deepEqual(repRangeFor(meta('leg-extension').pattern), { min: 8, max: 12 });
-  assert.deepEqual(repRangeFor(meta('lateral-raise').pattern), { min: 10, max: 15 });
+  assert.deepEqual(repRangeFor(meta('back-squat')), { min: 6, max: 10 });
+  // Isolation is 10–15 whatever the muscle size (#97); small muscles 12–20.
+  assert.deepEqual(repRangeFor(meta('leg-extension')), { min: 10, max: 15 });
+  assert.deepEqual(repRangeFor(meta('lateral-raise')), { min: 10, max: 15 });
+  assert.deepEqual(repRangeFor(meta('cable-fly')), { min: 10, max: 15 });
+  assert.deepEqual(repRangeFor(meta('standing-calf-raise')), { min: 12, max: 20 });
+  assert.deepEqual(repRangeFor(meta('rear-delt-fly')), { min: 12, max: 20 });
+  // One source: outside the lead the role's range is the movement's own.
+  for (const exercise of EXERCISES.filter((item) => !programExercise(item.id))) {
+    assert.deepEqual(roleTarget(exercise, makeProfile()).range, repRangeFor(exercise), exercise.id);
+  }
 });
 
 test('every set at the top of the range adds one step and resets reps', () => {
@@ -423,8 +434,10 @@ test('bodyweight movements hold at the top of the range instead of inventing loa
   assert.equal(prescription.basis, 'hold');
   assert.equal(prescription.weight, 0);
   assert.equal(prescription.reps, 10);
-  assert.equal(setCountFor(meta('push-up')), 4);
-  assert.equal(setCountFor(meta('lateral-raise')), 3);
+  // Behind an intermediate's heavy lead, other compounds take three sets (#97).
+  assert.equal(roleTarget(meta('push-up'), makeProfile()).sets, 3);
+  assert.equal(roleTarget(meta('push-up'), makeProfile({ goal: 'General Fitness' })).sets, 4);
+  assert.equal(roleTarget(meta('lateral-raise'), makeProfile()).sets, 3);
 });
 
 test('generated sessions carry the prescription into planned and performed sets', () => {
@@ -454,10 +467,11 @@ test('generated sessions carry the prescription into planned and performed sets'
     history,
   );
   assert.ok(generated.exercises.length > 0);
+  const lead = leadCompoundId(generated.exercises.map((exercise) => exercise.exerciseId));
 
   for (const exercise of generated.exercises) {
     const definition = meta(exercise.exerciseId);
-    const prescription = prescribeExercise(definition, profile, history);
+    const prescription = prescribeExercise(definition, profile, history, exercise.exerciseId === lead);
     assert.deepEqual(exercise.planned[0], {
       weight: prescription.weight,
       reps: prescription.reps,
@@ -474,13 +488,14 @@ test('generated sessions carry the prescription into planned and performed sets'
   const loaded = generated.exercises.filter((exercise) => exercise.planned[0].weight > 0);
   assert.ok(loaded.length >= 2, 'logged dumbbell work should produce prescribed loads');
   for (const exercise of loaded) {
-    // Compound work at the top of a 6–10 range earned a load step, which with no
-    // confirmed rack keeps the load and asks for the next dumbbell up (#57);
-    // accessory work at 10 reps in a 10–15 range earned a rep instead.
-    const range = repRangeFor(meta(exercise.exerciseId).pattern);
+    // Compound work at the top of its range (6–10, or the lead's 4–6) earned a
+    // load step, which with no confirmed rack keeps the load and asks for the
+    // next dumbbell up (#57); reps restart at the bottom. Isolation work at 10
+    // reps earned a rep instead, never below its range (12 for a rear delt).
+    const { range } = roleTarget(meta(exercise.exerciseId), profile, exercise.exerciseId === lead);
     assert.deepEqual(
       exercise.planned[0],
-      range.max === 10 ? { weight: 20, reps: 6 } : { weight: 20, reps: 11 },
+      range.max <= 10 ? { weight: 20, reps: range.min } : { weight: 20, reps: Math.max(11, range.min) },
     );
   }
 });
