@@ -6,7 +6,7 @@ import type {
   Unit,
   WorkoutRecord,
 } from '../types.ts';
-import { calibrationInputValue, displayValue, unitLabel } from './units.ts';
+import { loadValue, unitLabel } from './units.ts';
 import { exerciseInWorkout } from './plan.ts';
 import { programExercise } from '../data/flagship.ts';
 
@@ -87,7 +87,7 @@ export function setCountFor(exercise: Exercise): number {
 }
 
 /** Loads the profile says are actually selectable for this equipment. */
-export function availableLoads(profile: Profile, equipment: Equipment): number[] {
+export function availableLoads(profile: Pick<Profile, 'loads'>, equipment: Equipment): number[] {
   const list = profile.loads[equipment] ?? [];
   return list.filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
 }
@@ -187,7 +187,22 @@ export interface Prescription {
   increment: number;
   /** Selectable loads for this equipment; a logged load outside it was typed by the user. */
   available: number[];
+  /** Loads the user typed for this exercise (see `typedLoads`): they read exactly as typed. */
+  typed: number[];
   last: ExercisePerformance | null;
+}
+
+/** Loads the user chose themselves: a done set whose weight differs from what the app planned for it. */
+export function typedLoads(history: WorkoutRecord[], exerciseId: string): number[] {
+  return history.flatMap((workout) =>
+    workout.exercises
+      .filter((exercise) => exercise.exerciseId === exerciseId)
+      .flatMap((exercise) =>
+        exercise.performed
+          .filter((set, index) => set.done && Math.abs(set.weight - (exercise.planned[index]?.weight ?? -1)) > 0.001)
+          .map((set) => set.weight),
+      ),
+  );
 }
 
 export function prescribeExercise(
@@ -209,6 +224,7 @@ export function prescribeExercise(
     sets,
     increment,
     available,
+    typed: typedLoads(history, exercise.id),
     last,
   };
 
@@ -279,19 +295,13 @@ export function prescribeExercise(
   return { ...base, weight: next, reps: range.min, basis: 'load-increase' };
 }
 
-function fmtAmount(kg: number, unit: Unit): string {
-  const value = displayValue(kg, unit);
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
 /**
- * A rack (or planned) load reads exactly as the target line does; only a
- * user-typed load off the rack keeps its stored precision.
+ * Every load, planned or logged, reads by one rule: rack and app-prescribed
+ * loads like the target line, a load the user typed exactly as typed.
  */
-function fmtLoad(weight: number, equipment: Equipment, unit: Unit = 'kg', available: number[] = []): string {
+function fmtLoad(weight: number, equipment: Equipment, unit: Unit, available: number[], typed: number[]): string {
   if (weight <= 0) return equipment === 'Bodyweight' ? 'bodyweight' : 'no added load';
-  const onRack = available.some((load) => Math.abs(load - weight) < 0.001);
-  return `${onRack ? fmtAmount(weight, unit) : calibrationInputValue(weight, unit)} ${unitLabel(unit)}`;
+  return `${loadValue(weight, unit, available, typed)} ${unitLabel(unit)}`;
 }
 
 function fmtDate(iso: string): string {
@@ -302,8 +312,8 @@ function fmtDate(iso: string): string {
 
 /** One line explaining why today's numbers are what they are. Loads read in the display unit; records stay kilograms. */
 export function describePrescription(prescription: Prescription, unit: Unit): string {
-  const { basis, last, range, equipment, weight, available } = prescription;
-  const logged = (kg: number) => fmtLoad(kg, equipment, unit, available);
+  const { basis, last, range, equipment, weight, available, typed } = prescription;
+  const logged = (kg: number) => fmtLoad(kg, equipment, unit, available, typed);
   if (!last) {
     return 'First time — no history. Start light and log what you actually lift.';
   }
@@ -315,10 +325,9 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
 
   switch (basis) {
     case 'load-increase': {
-      // Next shown load minus the current load exactly as `logged` prints it (typed loads keep precision).
-      const onRack = available.some((load) => Math.abs(load - workWeight) < 0.001);
-      const shown = onRack ? displayValue(workWeight, unit) : Number(calibrationInputValue(workWeight, unit));
-      const step = Math.round((displayValue(weight, unit) - shown) * 100) / 100;
+      // Next shown load minus the current load, both exactly as `logged` prints them.
+      const shown = (kg: number) => Number(loadValue(kg, unit, available, typed));
+      const step = Math.round((shown(weight) - shown(workWeight)) * 100) / 100;
       const stepText = step > 0 ? `One step up (+${step} ${unitLabel(unit)})` : 'Next load';
       return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. ${stepText}; reps restart at ${range.min}.`;
     }
@@ -328,7 +337,7 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
       return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. Ready to go heavier: use your next ${equipment.toLowerCase()} up; reps restart at ${range.min}.`;
     case 'mixed-load':
       // `weight` is the planned load: it reads exactly as the target line does.
-      return `${when}: ${setsLabel} at different loads (heaviest ${logged(workWeight)}). The load holds at ${fmtLoad(weight, equipment, unit, [weight])} — use one working load for every set to earn the next step.`;
+      return `${when}: ${setsLabel} at different loads (heaviest ${logged(workWeight)}). The load holds at ${logged(weight)} — use one working load for every set to earn the next step.`;
     case 'repeat':
       return last.done.length === 0
         ? `${when} was not logged. Repeating the same prescription.`
@@ -349,17 +358,17 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
  * logged load keeps its stored precision off the rack.
  */
 export function coachLine(prescription: Prescription, unit: Unit): string {
-  const { basis, last, equipment, weight, reps, available } = prescription;
+  const { basis, last, equipment, weight, reps, available, typed } = prescription;
   const first =
     equipment === 'Bodyweight'
       ? 'First time on this one. Log the reps you do.'
       : 'First time on this one. Start light, log what you lift.';
   if (!last) return first;
-  const today = weight > 0 ? `${fmtLoad(weight, equipment, unit, [weight])} for ${reps}` : `${reps} reps`;
+  const today = weight > 0 ? `${fmtLoad(weight, equipment, unit, available, typed)} for ${reps}` : `${reps} reps`;
   const owned = last.done.length ? Math.max(...last.done.map((set) => set.weight)) : 0;
   switch (basis) {
     case 'load-increase':
-      return `You owned ${fmtLoad(owned, equipment, unit, available)}. Today: ${today}.`;
+      return `You owned ${fmtLoad(owned, equipment, unit, available, typed)}. Today: ${today}.`;
     case 'rep-increase':
       return `Add a rep: ${today}.`;
     case 'go-heavier':

@@ -802,6 +802,7 @@ export default function App() {
         history={state.history}
         now={now}
         loadOptions={loadOptions(constraints.equipment, constraints.loads)}
+        profileLoads={state.profile?.loads}
         calibrationLoads={confirmedLoads(constraints.equipment, constraints.loads)}
         skippedCalibrations={calibrationSkips}
         onSkipCalibration={(key) => setCalibrationSkips((keys) => [...keys, key])}
@@ -848,7 +849,7 @@ export default function App() {
         onFeedback={saveFeedback}
         onRetryFeedback={attemptSave}
         progression={recapLines}
-        highlight={recapHighlight(recap, state.history, recapLines, unit)}
+        highlight={recapHighlight(recap, state.history, recapLines, unit, state.profile ?? undefined)}
         onViewHistory={() => {
           setView('tabs');
           setTab('progress');
@@ -873,6 +874,8 @@ export default function App() {
         constraints={pending.constraints}
         notices={pendingNotices}
         unit={unit}
+        loads={state.profile?.loads}
+        history={state.history}
         onStart={() => acceptAdaptation(pending)}
         onEdit={() => {
           setView('tabs');
@@ -926,6 +929,7 @@ export default function App() {
           <ProgressScreen
             history={state.history}
             unit={unit}
+            loads={state.profile?.loads}
             onExport={exportData}
             onCorrect={correctSet}
             onDelete={deleteWorkout}
@@ -1079,6 +1083,7 @@ export default function App() {
               planned={exercise.planned}
               history={state.history}
               unit={unit}
+              loads={state.profile?.loads}
               reason={targetNotes[exercise.exerciseId]}
               onClose={closeSheet}
             />
@@ -1091,6 +1096,8 @@ export default function App() {
           minutes={current?.durationMin ?? minutes}
           exercises={todayExercises}
           unit={unit}
+          history={state.history}
+          loads={state.profile?.loads}
           // The tab bar's start: the one validated path (startSession).
           onStart={sheet.kind === 'preview' && !current ? () => { closeSheet(); startWorkout(); } : undefined}
           onClose={closeSheet}

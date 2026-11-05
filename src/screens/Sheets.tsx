@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
-import { formatActualWeight, formatWeight } from '../lib/units';
+import { formatWeight, unitLabel } from '../lib/units';
 import type { Profile, Unit, WorkoutExercise } from '../types';
 import { lastPerformance } from '../lib/plan';
+import { plannedLoad } from '../lib/liveProgression';
 import type { WorkoutRecord } from '../types';
 import {
   EQUIPMENT_OPTIONS as SETUPS,
@@ -203,16 +204,22 @@ export function AdjustSheet({ constraints, originalMinutes, unit, onClose, onPre
 
 /* ---------------- Why this target ---------------- */
 
+/** A logged load, by the same rule as the target: accepted prescriptions like it, typed loads exact. */
+function loggedLoad(kg: number, unit: Unit, exerciseId: string, loads: Profile['loads'], history: WorkoutRecord[]): string {
+  return kg > 0 ? `${plannedLoad(loads, history, exerciseId, unit)(kg)} ${unitLabel(unit)}` : 'Bodyweight';
+}
+
 /** "9 · 9 @ 15 kg" for per-set targets, "8–10 reps @ 18 kg" for a range. */
 function targetLine(
   planned: { weight: number; reps: number }[],
   unit: Unit,
   exerciseId: string,
+  format: (kg: number) => string,
 ): string {
   if (planned.length === 0) return '—';
   const reps = repsTarget(exerciseId, planned.length, planned) ?? planned.map((set) => set.reps).join(' · ');
   const mode = loadModeOf(exerciseId);
-  return planned[0].weight > 0 ? `${reps} @ ${formatWeight(planned[0].weight, unit)}${mode === 'each' ? ' each' : mode === 'total' ? ' total' : ''}` : reps;
+  return planned[0].weight > 0 ? `${reps} @ ${format(planned[0].weight)} ${unitLabel(unit)}${mode === 'each' ? ' each' : mode === 'total' ? ' total' : ''}` : reps;
 }
 
 export function WhySheet({
@@ -221,6 +228,7 @@ export function WhySheet({
   planned,
   history,
   unit,
+  loads = {},
   reason,
   onClose,
 }: {
@@ -229,6 +237,7 @@ export function WhySheet({
   planned: { weight: number; reps: number }[];
   history: WorkoutRecord[];
   unit: Unit;
+  loads?: Profile['loads'];
   /** The precise sentence behind the target; Today shows only the coach line. */
   reason?: string;
   onClose: () => void;
@@ -259,11 +268,11 @@ export function WhySheet({
         </div>
         <div className="context-row">
           <span>Working load</span>
-          <span>{last ? formatActualWeight(last.weight, unit) : '—'}</span>
+          <span>{last ? loggedLoad(last.weight, unit, exerciseId, loads, history) : '—'}</span>
         </div>
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Today’s target</span>
-          <span>{targetLine(planned, unit, exerciseId)}</span>
+          <span>{targetLine(planned, unit, exerciseId, plannedLoad(loads, history, exerciseId, unit))}</span>
         </div>
       </div>
 
@@ -394,7 +403,7 @@ export function ExerciseActionsSheet({
       title={exerciseName}
       subtitle={`Exercise ${exerciseIndex + 1} of ${exerciseCount} · ${planned.length} ${
         planned.length === 1 ? 'set' : 'sets'
-      } · ${targetLine(planned, unit, exerciseId)}`}
+      } · ${targetLine(planned, unit, exerciseId, plannedLoad(profile.loads, history, exerciseId, unit))}`}
       onClose={onClose}
     >
       {change && (
@@ -494,7 +503,7 @@ export function ExerciseActionsSheet({
                       (set) =>
                         `${setText(exerciseId, set.reps)}${
                           set.weight > 0
-                            ? ` @ ${formatWeight(set.weight, unit)}${
+                            ? ` @ ${plannedLoad(profile.loads, history, exerciseId, unit)(set.weight)} ${unitLabel(unit)}${
                                 loadModeOf(exerciseId) === 'each' ? ' each' : ''
                               }`
                             : ''
@@ -542,6 +551,8 @@ export function DaySheet({
   minutes,
   exercises,
   unit,
+  history = [],
+  loads = {},
   onStart,
   onClose,
 }: {
@@ -549,6 +560,8 @@ export function DaySheet({
   minutes: number;
   exercises: WorkoutExercise[];
   unit: Unit;
+  history?: WorkoutRecord[];
+  loads?: Profile['loads'];
   /** Today's Preview: start through the app's one validated start. */
   onStart?: () => void;
   onClose: () => void;
@@ -566,7 +579,7 @@ export function DaySheet({
           <div className="context-row" key={`${exercise.exerciseId}-${index}`}>
             <span>{exercise.name}</span>
             <span>
-              {exercise.planned.length} sets · {targetLine(exercise.planned, unit, exercise.exerciseId)}
+              {exercise.planned.length} sets · {targetLine(exercise.planned, unit, exercise.exerciseId, plannedLoad(loads, history, exercise.exerciseId, unit))}
             </span>
           </div>
         ))}
