@@ -66,11 +66,11 @@ function setSummary(
   weight: number,
   mode: LoadMode,
   unit: Unit,
-  rack: number[] = [],
+  shown: string,
 ): string {
   const load =
     weight > 0
-      ? ` @ ${loadValue(weight, unit, rack)} ${unitLabel(unit)}${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}`
+      ? ` @ ${shown} ${unitLabel(unit)}${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}`
       : '';
   return `${setText(exerciseId, reps)}${load}`;
 }
@@ -282,6 +282,9 @@ export default function TrainScreen({
   // Only confirmed loads are on the rack; anything else was typed and keeps its value.
   const rack = availableLoads({ loads: profileLoads }, equipment);
   const showActual = (kg: number) => loadValue(kg, unit, rack);
+  // A set still at the load the app planned for it reads like the target; an edited one keeps its typed value.
+  const showPending = (kg: number, setIndex: number) =>
+    Math.abs(kg - (exercise.planned[setIndex]?.weight ?? -1)) < 0.001 ? showWeight(kg) : showActual(kg);
   const last = lastPerformance(history, exercise.exerciseId);
   const holdUnit = setUnit(exercise.exerciseId) === 'seconds';
   const plannedTarget = exercise.planned[activeSet === -1 ? exercise.planned.length - 1 : activeSet];
@@ -292,10 +295,10 @@ export default function TrainScreen({
   const targetWeight = exercise.planned[0]?.weight ?? 0;
   const canPickWeight = equipment === 'Dumbbell' && loadOptions.length > 0;
   const canEnterWeight = mode !== 'none' && equipment !== 'Dumbbell';
-  const loadEntry = (weight: number, update: (weight: number) => void) => canEnterWeight ? (
+  const loadEntry = (weight: number, update: (weight: number) => void, shown?: string) => canEnterWeight ? (
     <input type="number" min="0" step="any" inputMode="decimal"
       aria-label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`}
-      defaultValue={calibrationInputValue(weight, unit)}
+      defaultValue={shown ?? calibrationInputValue(weight, unit)}
       onChange={(event) => {
         const value = Number(event.target.value);
         if (event.target.value === '') update(0);
@@ -321,7 +324,7 @@ export default function TrainScreen({
     : activeValues
       ? `Log set ${activeSet + 1} · ${
           activeValues.weight > 0
-            ? `${setText(exercise.exerciseId, activeValues.reps)} @ ${showActual(activeValues.weight)} ${unitLabel(unit)}`
+            ? `${setText(exercise.exerciseId, activeValues.reps)} @ ${showPending(activeValues.weight, activeSet)} ${unitLabel(unit)}`
             : setText(exercise.exerciseId, activeValues.reps)
         }`
       : 'Log set';
@@ -427,7 +430,7 @@ export default function TrainScreen({
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <span className="aw-set__label">
-              Set {setIndex + 1}: {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit, rack)}
+              Set {setIndex + 1}: {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit, showActual(set.weight))}
             </span>
           </span>
           <button
@@ -484,7 +487,7 @@ export default function TrainScreen({
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <span className="aw-set__label">
-              {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit, rack)}
+              {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit, showPending(set.weight, setIndex))}
             </span>
           </span>
         </div>
@@ -526,7 +529,7 @@ export default function TrainScreen({
                 </button>
               ))}
             </div>
-          ) : canEnterWeight ? loadEntry(set.weight, (weight) => onUpdateSet(index, setIndex, { weight })) : (
+          ) : canEnterWeight ? loadEntry(set.weight, (weight) => onUpdateSet(index, setIndex, { weight }), showPending(set.weight, setIndex)) : (
             <p style={{ fontSize: 14, color: 'var(--on-surface-variant)' }}>Bodyweight</p>
           )}
         </div>

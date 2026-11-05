@@ -2,7 +2,8 @@ import type { AdaptedWorkout } from '../lib/adapt';
 import { EQUIPMENT_OPTIONS } from '../lib/adapt';
 import type { Constraints } from '../lib/adapt';
 import { noticeText, type ConstraintNotice } from '../lib/constraints';
-import type { Unit } from '../types.ts';
+import type { Profile, Unit, WorkoutRecord } from '../types.ts';
+import { plannedLoad } from '../lib/liveProgression';
 import { targetSummary } from '../data/flagship';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -13,6 +14,9 @@ interface Props {
   constraints: Constraints;
   notices: ConstraintNotice[];
   unit?: Unit;
+  /** With the logged history these keep a held typed load reading as typed. */
+  loads?: Profile['loads'];
+  history?: WorkoutRecord[];
   onStart: () => void;
   onKeep: () => void;
   onEdit: () => void;
@@ -57,6 +61,8 @@ export default function AdaptScreen({
   constraints,
   notices,
   unit = 'kg',
+  loads = {},
+  history = [],
   onStart,
   onKeep,
   onEdit,
@@ -192,7 +198,7 @@ export default function AdaptScreen({
                   />
                   <div>
                     <div className="review-row__name">{exercise.name}</div>
-                    <div className="review-row__load">{targetSummary(exercise, exercise.sets, unit)}</div>
+                    <div className="review-row__load">{targetSummary(exercise, exercise.sets, unit, plannedLoad(loads, history, exercise.exerciseId, unit))}</div>
                   </div>
                 </div>
               </div>

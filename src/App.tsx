@@ -855,6 +855,8 @@ export default function App() {
         constraints={pending.constraints}
         notices={pendingNotices}
         unit={unit}
+        loads={state.profile?.loads}
+        history={state.history}
         onStart={() => acceptAdaptation(pending)}
         onEdit={() => {
           setView('tabs');

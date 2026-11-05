@@ -8,7 +8,9 @@ import { adaptWorkout } from '../src/lib/adapt.ts';
 import { catalogRowMeta, liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
 import { applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
-import { toKg } from '../src/lib/units.ts';
+import { prescribeExercise } from '../src/lib/progression.ts';
+import { exerciseById } from '../src/data/exercises.ts';
+import { inputValue, toKg } from '../src/lib/units.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
 const RACK = [10, 15, 18];
@@ -29,7 +31,7 @@ function sessionAt(weight: number, planned: number) {
 }
 
 function historyAt(weight: number): WorkoutRecord[] {
-  let session = sessionAt(weight, weight);
+  let session = sessionAt(weight, 18); // the app planned 18 kg; the weight differs only when typed
   for (let i = 0; i < 3; i += 1) {
     session = logSet(updatePerformedSet(session, 0, i, { weight, reps: 10 }), 0, i, `2026-11-02T10:0${i + 1}:00.000Z`);
   }
@@ -138,5 +140,54 @@ test('a held typed load reads as typed on target, header, chip, Today row and re
       adapted: liveAdapted(adapted, profile, historyAt(15)), equipment: 'home', adjusted: false, history: historyAt(15), current: null,
       now: new Date('2026-11-04T10:00:00.000Z'), onPreview() {}, onAdjust() {}, onWhy() {}, onRestore() {},
       onOpenSettings() {}, onOpenExercise() {} }))), /You owned 33 lb\. Today: 39\.5 lb/);
+  } finally { await server.close(); }
+});
+
+/** Barbell: a typed 42.3 lb steps to a new off-rack load that must read one way everywhere. */
+test('an app-prescribed barbell step reads the same on target, rows, Log button and input, and stays so once accepted', async () => {
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { default: TrainScreen } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
+    const { default: Adapt } = await server.ssrLoadModule('/src/screens/AdaptScreen.tsx');
+    const { plannedLoad } = await server.ssrLoadModule('/src/lib/liveProgression.ts');
+    const bar = { ...profile, unit: 'lb' as const, equipment: ['Barbell'], loads: { Barbell: [] } } as Profile;
+    const row = exerciseById('barbell-row')!;
+    const typed = toKg(42.3, 'lb');
+    const record = (weight: number, planned: number, count = 3): WorkoutRecord[] => {
+      let s = createSession({ id: `b${weight}`, name: 'B', dayIndex: 0, now: '2026-11-02T10:00:00.000Z', exercises: [{ exerciseId: 'barbell-row',
+        name: 'Barbell Row', planned: [0, 1, 2].map(() => ({ weight: planned, reps: 10 })), performed: [0, 1, 2].map(() => ({ weight, reps: 10, done: false })) }] });
+      for (let i = 0; i < count; i += 1) s = logSet(s, 0, i, `2026-11-02T10:0${i + 1}:00.000Z`);
+      return applyFinish({ ...EMPTY_STATE, profile: bar, current: s }, s.id, { early: true, now: '2026-11-02T10:30:00.000Z' }).history;
+    };
+    const history = record(typed, 40);
+    const step = prescribeExercise(row, bar, history).weight;
+    assert.notEqual(step, typed, 'a load step');
+    const X = inputValue(step, 'lb');
+    assert.doesNotMatch(X, /\.\d\d/);
+    const held = liveExercises(adapted, bar, history)[0]; // unused shape check
+    const session = createSession({ id: 'n', name: 'B', dayIndex: 0, now: '2026-11-04T10:00:00.000Z', exercises: [{ exerciseId: 'barbell-row',
+      name: 'Barbell Row', planned: [0, 1, 2].map(() => ({ weight: step, reps: 10 })), performed: [0, 1, 2].map(() => ({ weight: step, reps: 10, done: false })) }] });
+    const html = renderToStaticMarkup(createElement(TrainScreen, { now: Date.parse('2026-11-04T10:01:00.000Z'), loadOptions: [], profileLoads: bar.loads,
+      unit: 'lb', history, session, onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogNext() {}, onToggleRestPause() {}, onExtendRest() {},
+      onSwap() {}, onSkip() {}, onReturn() {} }));
+    const text = plain(html);
+    assert.match(text, new RegExp(`fitness_center ${X} lb total`), 'target header');
+    assert.match(text, new RegExp(`10 reps @ ${X} lb total`), 'pending rows');
+    assert.match(text, new RegExp(`Log set 1 · .*@ ${X} lb`), 'Log button');
+    assert.match(html, new RegExp(`value="${X}"`), 'input');
+    assert.doesNotMatch(text, /\d\.\d\d lb/);
+    // Accept the step unchanged, log and finish: the next session still reads X, not the exact conversion.
+    const accepted = record(step, step);
+    assert.equal(plannedLoad(bar.loads, accepted, 'barbell-row', 'lb')(step), X, 'accepted step stays half-unit');
+    // A deliberately typed off-rack value stays exact (planned differs from performed).
+    assert.equal(plannedLoad(bar.loads, record(typed, 40), 'barbell-row', 'lb')(typed), '42.3');
+    // AdaptScreen: a held typed load reads as typed.
+    const adaptedTyped = liveAdapted(adapted, { ...profile, unit: 'lb' }, historyAt(toKg(42.3, 'lb')));
+    const review = plain(renderToStaticMarkup(createElement(Adapt, { originalSets: 11, adapted: adaptedTyped,
+      constraints: { minutes: 35, equipment: 'home' }, notices: [], unit: 'lb', loads: profile.loads,
+      history: historyAt(toKg(42.3, 'lb')), onStart() {}, onKeep() {}, onEdit() {} })));
+    assert.match(review, /42\.3 lb each/, 'Adapt review');
+    assert.doesNotMatch(review, /42\.5/);
+    void held;
   } finally { await server.close(); }
 });

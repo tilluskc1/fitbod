@@ -22,9 +22,17 @@ export function rackOf(profile: Pick<Profile, 'loads'>, exerciseId: string): num
   return equipment ? availableLoads(profile, equipment) : [];
 }
 
-/** Every load the user has logged for this movement. */
+/** Loads the user chose themselves: a done set whose weight differs from what the app planned for it. */
 function typedLoads(history: WorkoutRecord[], exerciseId: string): number[] {
-  return history.flatMap((workout) => exerciseInWorkout(workout, exerciseId)?.done.map((set) => set.weight) ?? []);
+  return history.flatMap((workout) =>
+    workout.exercises
+      .filter((exercise) => exercise.exerciseId === exerciseId)
+      .flatMap((exercise) =>
+        exercise.performed
+          .filter((set, index) => set.done && Math.abs(set.weight - (exercise.planned[index]?.weight ?? -1)) > 0.001)
+          .map((set) => set.weight),
+      ),
+  );
 }
 
 /**
