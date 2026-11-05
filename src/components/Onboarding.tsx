@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS } from '../data/exercises';
+import { DEFAULT_SUPPORT, EQUIPMENT_OPTIONS, SUPPORT_OPTIONS } from '../data/exercises';
 import { parseLoads } from '../lib/units';
 import type { Equipment, Experience, Goal, Profile, SupportEquipment, Unit } from '../types';
 
@@ -30,7 +30,7 @@ export default function Onboarding({ onComplete }: Props) {
   // No preselection: the first plan must not assume a length the user never chose.
   const [sessionMinutes, setSessionMinutes] = useState<number | null>(null);
   const [equipment, setEquipment] = useState<Equipment[]>(['Dumbbell']);
-  const [support, setSupport] = useState<SupportEquipment[]>(['Bench']);
+  const [support, setSupport] = useState<SupportEquipment[]>(DEFAULT_SUPPORT);
   const [loadsText, setLoadsText] = useState('');
 
   const toggleEquipment = (item: Equipment) => {
