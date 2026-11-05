@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EXERCISES } from '../src/data/exercises.ts';
 import { generateWorkout } from '../src/lib/generator.ts';
+import { programExercise } from '../src/data/flagship.ts';
 import {
   availableLoads,
   describePrescription,
@@ -123,9 +124,17 @@ test('a first prescription invents no load and starts inside the rep range', () 
 });
 
 test('rep ranges follow the movement class instead of one global number', () => {
-  assert.deepEqual(repRangeFor(meta('back-squat').pattern), { min: 6, max: 10 });
-  assert.deepEqual(repRangeFor(meta('leg-extension').pattern), { min: 8, max: 12 });
-  assert.deepEqual(repRangeFor(meta('lateral-raise').pattern), { min: 10, max: 15 });
+  assert.deepEqual(repRangeFor(meta('back-squat')), { min: 6, max: 10 });
+  // Isolation is 10–15 whatever the muscle size (#97); small muscles 12–20.
+  assert.deepEqual(repRangeFor(meta('leg-extension')), { min: 10, max: 15 });
+  assert.deepEqual(repRangeFor(meta('lateral-raise')), { min: 10, max: 15 });
+  assert.deepEqual(repRangeFor(meta('cable-fly')), { min: 10, max: 15 });
+  assert.deepEqual(repRangeFor(meta('standing-calf-raise')), { min: 12, max: 20 });
+  assert.deepEqual(repRangeFor(meta('rear-delt-fly')), { min: 12, max: 20 });
+  // One source: outside the lead the role's range is the movement's own.
+  for (const exercise of EXERCISES.filter((item) => !programExercise(item.id))) {
+    assert.deepEqual(roleTarget(exercise, makeProfile()).range, repRangeFor(exercise), exercise.id);
+  }
 });
 
 test('every set at the top of the range adds one step and resets reps', () => {

@@ -7,11 +7,13 @@ import {
   describePrescription,
   isCompound,
   leadCompoundId,
+  leadSlotIds,
   prescribeExercise,
   roleTarget,
 } from '../src/lib/progression.ts';
 import { planSlots, slotProgram } from '../src/lib/sequence.ts';
-import { adaptWorkout, DEFAULT_CONSTRAINTS } from '../src/lib/adapt.ts';
+import { adaptWorkout, DEFAULT_CONSTRAINTS, swapCandidateFor } from '../src/lib/adapt.ts';
+import { swapPendingExercise } from '../src/lib/session.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
 function profileOf(overrides: Partial<Profile> = {}): Profile {
@@ -182,4 +184,54 @@ test('the recap reads the lead range for the day it was the lead', () => {
   const [line] = progressionLines(workout, profile, [workout], 'kg');
   assert.match(line.next, /^4 reps @ 62\.5 kg/);
   assert.match(line.reason, /reps restart at 4/);
+});
+
+test('a first session starts from the role range: 6 for the lead, 12 for isolation, 14 for small muscles', () => {
+  const profile = profileOf();
+  assert.equal(prescribeExercise(def('barbell-bench-press'), profile, [], true).reps, 6);
+  assert.equal(prescribeExercise(def('barbell-bench-press'), profile, []).reps, 8);
+  assert.equal(prescribeExercise(def('leg-extension'), profile, []).reps, 12);
+  assert.equal(prescribeExercise(def('standing-calf-raise'), profile, []).reps, 14);
+});
+
+test('a swap for the lead takes over the lead range, in place or after logged sets', () => {
+  const profile = profileOf();
+  const target = def('dumbbell-bench-press');
+  assert.equal(swapCandidateFor(target, profile, [], null, true).reps, 6);
+  assert.equal(swapCandidateFor(target, profile, [], null).reps, 8);
+
+  // Two bench sets logged, then the remaining three swapped to dumbbells.
+  const session = finished('w1', 'barbell-bench-press', 5, 2, 60, 6);
+  session.exercises.push({ ...finished('x', 'overhead-press', 3, 0, 40, 8).exercises[0] });
+  const split = swapPendingExercise(session, 0, { exerciseId: target.id, name: target.name, weight: 26, reps: 6 });
+  assert.deepEqual(split.exercises.map((exercise) => exercise.exerciseId), ['barbell-bench-press', target.id, 'overhead-press']);
+  assert.deepEqual(leadSlotIds(split.exercises), ['barbell-bench-press', target.id]);
+
+  // Its sets logged at 7 reps: the recap holds it inside the lead's 4–6, not 6–10.
+  const done = {
+    ...split,
+    exercises: split.exercises.map((exercise) =>
+      exercise.exerciseId === target.id
+        ? { ...exercise, performed: exercise.performed.map((set) => ({ ...set, reps: 7, done: true, completedAt: split.date })) }
+        : exercise,
+    ),
+  };
+  const line = progressionLines(done, profile, [done], 'kg').find((item) => item.exerciseId === target.id);
+  assert.match(line?.next ?? '', /^6 reps @ 26 kg/);
+});
+
+test('when today\'s setup drops the lead, the next compound takes its five sets', () => {
+  const profile = profileOf();
+  const program = slotProgram(profile, planSlots(buildPlan(profile))[0], []);
+  const ids = program.exercises.map((exercise) => exercise.exerciseId);
+  const lead = leadCompoundId(ids);
+  assert.ok(lead);
+  const heir = leadCompoundId(ids.filter((id) => id !== lead));
+  assert.ok(heir);
+  const adapted = adaptWorkout(program, DEFAULT_CONSTRAINTS, [lead]);
+  const promoted = adapted.exercises.find((exercise) => exercise.exerciseId === heir);
+  assert.equal(promoted?.sets, 5);
+  assert.equal(promoted?.originalSets, 5);
+  const live = liveAdapted(adapted, profile, []).exercises.find((exercise) => exercise.exerciseId === heir);
+  assert.deepEqual(live?.targetReps, [6, 6, 6, 6, 6]);
 });

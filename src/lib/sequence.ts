@@ -3,7 +3,7 @@ import type { Program, ProgramExercise } from '../data/flagship.ts';
 import { detailOf, loadModeOf, programExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { buildPlan, generateWorkout } from './generator.ts';
-import { leadCompoundId, repRangeFor, roleTarget } from './progression.ts';
+import { leadCompoundId, REP_RANGES, roleTarget } from './progression.ts';
 
 /**
  * The program sequence.
@@ -105,7 +105,7 @@ export function slotProgram(
     // Same range prescribeExercise uses: the role's, or the program's own when it defines one.
     const range = hold ? { min: hold, max: hold }
       : catalog ? roleTarget(catalog, profile, entry.exerciseId === lead).range
-      : repRangeFor('horizontal_push');
+      : REP_RANGES.compound;
     const reps = hold ?? prescribed;
     return {
       exerciseId: entry.exerciseId,

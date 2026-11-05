@@ -1,7 +1,7 @@
 import { exerciseById } from '../data/exercises.ts';
 import { loadModeOf, programExercise, setText } from '../data/flagship.ts';
 import type { AdaptedExercise, AdaptedWorkout } from './adapt.ts';
-import { availableLoads, typedLoads, coachLine, describePrescription, lastExercisePerformance, leadCompoundId, prescribeExercise } from './progression.ts';
+import { availableLoads, typedLoads, coachLine, describePrescription, lastExercisePerformance, leadCompoundId, leadSlotIds, prescribeExercise } from './progression.ts';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from './plan.ts';
 import { loadValue, unitLabel } from './units.ts';
 import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
@@ -238,7 +238,7 @@ export function progressionLines(
     segmentsById.get(segment.exerciseId)?.push(segment);
   }
 
-  const lead = leadCompoundId(order);
+  const lead = leadSlotIds(workout.exercises);
   return order.map((exerciseId) => {
     const segments = segmentsById.get(exerciseId) ?? [];
     const name = segments[0]?.name ?? exerciseId;
@@ -275,7 +275,7 @@ export function progressionLines(
       };
     }
 
-    const prescription = prescribeExercise(definition, profile, history, exerciseId === lead);
+    const prescription = prescribeExercise(definition, profile, history, lead.includes(exerciseId));
     const nextLoad = plannedLoad(profile.loads, history, exerciseId, unit);
     const { min, max } = prescription.range;
     return {

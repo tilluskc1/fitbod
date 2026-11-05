@@ -4,6 +4,7 @@ import type {
   MovementPattern,
   Profile,
   Unit,
+  WorkoutExercise,
   WorkoutRecord,
 } from '../types.ts';
 import { loadValue, unitLabel } from './units.ts';
@@ -40,11 +41,6 @@ const COMPOUND_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>
   'hip_extension',
 ]);
 
-const MID_RANGE_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>([
-  'knee_extension',
-  'knee_flexion',
-]);
-
 /** Isolation on a small muscle (calves, rear delts) earns its step at 20 reps. */
 const SMALL_MUSCLE_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>([
   'calf_raise',
@@ -53,14 +49,13 @@ const SMALL_MUSCLE_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPatt
 
 /** Rep ranges per movement class and day role. Deliberately small: no rules engine. */
 export const REP_RANGES: Record<
-  'lead' | 'strength' | 'technique' | 'compound' | 'mid' | 'accessory' | 'small',
+  'lead' | 'strength' | 'technique' | 'compound' | 'accessory' | 'small',
   RepRange
 > = {
   lead: { min: 4, max: 6 },
   strength: { min: 3, max: 5 },
   technique: { min: 8, max: 10 },
   compound: { min: 6, max: 10 },
-  mid: { min: 8, max: 12 },
   accessory: { min: 10, max: 15 },
   small: { min: 12, max: 20 },
 };
@@ -89,10 +84,10 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function repRangeFor(pattern: MovementPattern): RepRange {
-  if (COMPOUND_PATTERNS.has(pattern)) return REP_RANGES.compound;
-  if (MID_RANGE_PATTERNS.has(pattern)) return REP_RANGES.mid;
-  return REP_RANGES.accessory;
+/** The range outside the lead: compound 6–10, isolation 10–15, small-muscle isolation 12–20. */
+export function repRangeFor(exercise: Pick<Exercise, 'pattern' | 'muscles'>): RepRange {
+  if (isCompound(exercise)) return REP_RANGES.compound;
+  return SMALL_MUSCLE_PATTERNS.has(exercise.pattern) ? REP_RANGES.small : REP_RANGES.accessory;
 }
 
 /** Multi-muscle work on a compound pattern. A rear-delt fly or a cable fly is isolation. */
@@ -100,12 +95,37 @@ export function isCompound(exercise: Pick<Exercise, 'pattern' | 'muscles'>): boo
   return COMPOUND_PATTERNS.has(exercise.pattern) && exercise.muscles.length >= 2;
 }
 
+const isCompoundId = (id: string): boolean => {
+  const exercise = exerciseById(id);
+  return exercise !== undefined && isCompound(exercise);
+};
+
 /** The day's first compound in session order: the lift that carries the heavy sets. */
 export function leadCompoundId(exerciseIds: string[]): string | undefined {
-  return exerciseIds.find((id) => {
-    const exercise = exerciseById(id);
-    return exercise !== undefined && isCompound(exercise);
-  });
+  return exerciseIds.find(isCompoundId);
+}
+
+/**
+ * Every exercise holding the lead slot of a session: the first compound, plus a
+ * compound swapped in for its remaining sets. A swap split keeps only the done
+ * sets and both halves carry the slot's requirement (see `swapPendingExercise`).
+ */
+export function leadSlotIds(
+  exercises: Pick<WorkoutExercise, 'exerciseId' | 'planned' | 'performed' | 'originalPlannedSets'>[],
+): string[] {
+  const start = exercises.findIndex((exercise) => isCompoundId(exercise.exerciseId));
+  if (start < 0) return [];
+  const ids = [exercises[start].exerciseId];
+  for (let index = start + 1; index < exercises.length; index += 1) {
+    const kept = exercises[index - 1];
+    const next = exercises[index];
+    const required = kept.originalPlannedSets;
+    const split = required !== undefined && kept.planned.length < required
+      && kept.performed.every((set) => set.done) && next.originalPlannedSets === required;
+    if (!split || !isCompoundId(next.exerciseId)) break;
+    ids.push(next.exerciseId);
+  }
+  return ids;
 }
 
 /**
@@ -128,13 +148,7 @@ export function roleTarget(
   if (compound && lead && profile.experience === 'Beginner') return { sets: 3, range: REP_RANGES.technique };
   // The program's own range wins, so the next target matches the recap's "3 × 8–10".
   const programmed = programExercise(exercise.id)?.repRange;
-  const range = programmed
-    ? { min: programmed[0], max: programmed[1] }
-    : compound
-      ? REP_RANGES.compound
-      : SMALL_MUSCLE_PATTERNS.has(exercise.pattern)
-        ? REP_RANGES.small
-        : REP_RANGES.accessory;
+  const range = programmed ? { min: programmed[0], max: programmed[1] } : repRangeFor(exercise);
   return { sets: compound && !heavy ? 4 : 3, range };
 }
 
@@ -264,7 +278,7 @@ export function prescribeExercise(
   history: WorkoutRecord[],
   lead = false,
 ): Prescription {
-  const catalog = repRangeFor(exercise.pattern);
+  const catalog = repRangeFor(exercise);
   const { sets, range } = roleTarget(exercise, profile, lead);
   const available = availableLoads(profile, exercise.equipment);
   const increment = incrementFor(exercise.equipment, available);
