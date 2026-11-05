@@ -114,6 +114,8 @@ export function logSet(
   now: string,
   seconds = 75,
 ): WorkoutRecord {
+  // A repeated tap must not rewrite when a logged set was done.
+  if (session.exercises[exerciseIndex]?.performed[setIndex]?.done) return session;
   let updated = updatePerformedSet(session, exerciseIndex, setIndex, { done: true }, now);
   if (updated === session) return session;
   // Carry the load just logged into the next unweighted set; never overwrites a chosen weight.

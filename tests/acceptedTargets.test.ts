@@ -56,12 +56,14 @@ test('swap-back segments keep their own accepted targets in Today, details, Why,
       exercises: current.exercises, unit: 'kg', onClose: noop })));
     assert.match(day, /10 @ 20 kg each/);
     const trainHtml = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
-      loadOptions: [15, 20], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
-      onToggleRestPause: noop, onExtendRest: noop, onSwap: noop }));
+      loadOptions: [15, 20], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop,
+      onToggleRestPause: noop, onExtendRest: noop }));
     const train = plain(trainHtml);
     assert.match(trainHtml, /<h2 class="aw-exercise__name"><button/, 'the exercise name stays a heading');
-    assert.match(train, /Today’s target: 10 @ 20 kg each/);
-    assert.match(train, /Target: 10 @ 20 kg each/);
+    assert.match(train, /Exercise 2 of \d+ · Target 1 × 10/);
+    assert.match(train, /Set Previous kg each Reps/);
+    assert.match(trainHtml, /aria-label="Edit weight for set 1"[^>]*>20</, "the segment's own 20 kg, not the press-up's");
+    assert.match(trainHtml, /aria-label="Edit reps for set 1"[^>]*>10</);
   } finally { await server.close(); }
 });
 
@@ -88,19 +90,18 @@ test('barbell logger offers calibration without fixture dumbbell weights', async
   try {
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const html = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
-      loadOptions: [10, 15, 18], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
-      onToggleRestPause: noop, onExtendRest: noop, onSwap: noop, onSkip: noop, onReturn: noop }));
+      loadOptions: [10, 15, 18], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop,
+      onToggleRestPause: noop, onExtendRest: noop, onReturn: noop }));
     assert.match(html, /Weight \(kg total\)/);
-    assert.match(html, /Barbell/);
-    assert.match(html, /Enter barbell load/);
-    assert.doesNotMatch(html, /weight-pills/);
+    assert.match(html, /Enter barbell load \(kg total\)/);
+    assert.doesNotMatch(html, /lg-quick|weight-pills/);
     assert.doesNotMatch(html, /Dumbbell/);
-    assert.match(html, /Load not set · Barbell/);
-    assert.doesNotMatch(html, /Bodyweight · Barbell/);
+    assert.match(html, /aria-label="Edit weight for set 1"[^>]*>—</, 'load not set');
+    assert.doesNotMatch(html, />BW</, 'a barbell is not bodyweight');
   } finally { await server.close(); }
 });
 
-test('barbell calibration field opens with precise saved kilograms', async () => {
+test('a barbell set opens with precise saved kilograms', async () => {
   const current = session();
   current.exercises = [{ exerciseId: 'barbell-row', name: 'Barbell Row',
     planned: [{ weight: 0, reps: 8 }], performed: [{ weight: 42.3, reps: 8, done: false }] }];
@@ -108,9 +109,9 @@ test('barbell calibration field opens with precise saved kilograms', async () =>
   try {
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const html = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
-      loadOptions: [], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogNext: noop,
-      onToggleRestPause: noop, onExtendRest: noop, onSwap: noop, onSkip: noop, onReturn: noop }));
-    assert.match(html, /aria-label="Enter barbell load \(kg total\)"[^>]*value="42\.3"/);
+      loadOptions: [], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop,
+      onToggleRestPause: noop, onExtendRest: noop, onReturn: noop }));
+    assert.match(html, /aria-label="Edit weight for set 1"[^>]*>42\.3</);
   } finally { await server.close(); }
 });
 

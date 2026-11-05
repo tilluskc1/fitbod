@@ -87,3 +87,15 @@ export function dumbbellLoadsPatch(text: string, profile: Profile): Partial<Prof
   if (text.trim() && loads.length === 0) return null;
   return { loads: { ...profile.loads, Dumbbell: loads } };
 }
+
+/**
+ * One rule for every load readout. On the confirmed rack: half-unit like the
+ * target. Otherwise a typed load keeps its exact value; `typed` lists loads the
+ * user logged, so a planned load that is not among them (a new app-prescribed
+ * step) reads at half-unit. Omit `typed` for a logged load: always exact.
+ */
+export function loadValue(kg: number, unit: Unit, rack: number[], typed?: number[]): string {
+  if (rack.some((load) => Math.abs(load - kg) < 0.001)) return inputValue(kg, unit);
+  if (typed && !typed.some((load) => Math.abs(load - kg) < 0.001)) return inputValue(kg, unit);
+  return calibrationInputValue(kg, unit);
+}

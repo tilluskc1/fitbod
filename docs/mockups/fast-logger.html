@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup — fast set logger</title>
+<style>
+  :root { --bg:#0d120c; --card:#171d16; --line:#2b3427; --text:#f2f5ed; --muted:#9aa392; --lime:#c5f777; --ink:#192800; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#050705; font-family: -apple-system, "SF Pro Text", Inter, system-ui, sans-serif; color:var(--text); display:flex; justify-content:center; }
+  .phone { width:390px; min-height:844px; background:
+      radial-gradient(120% 40% at 90% -10%, rgba(197,247,119,.10), transparent 60%), var(--bg);
+    position:relative; padding:14px 16px 150px; }
+  header { display:flex; align-items:center; gap:10px; height:44px; }
+  .back { width:36px; height:36px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); color:var(--text); }
+  header h1 { font-size:18px; margin:0; flex:1; }
+  .clock { font-variant-numeric:tabular-nums; font-size:14px; color:var(--muted); }
+  .finish { color:var(--lime); font-weight:600; background:none; border:0; font-size:15px; }
+  .ex { display:flex; gap:12px; align-items:center; margin:14px 0 6px; }
+  .thumb { width:64px; height:64px; border-radius:16px; background:#2a3324 url('../../public/exercises/rear-delt-fly/0.jpg') center/cover; position:relative; flex:none; }
+  .thumb::after { content:"▶"; position:absolute; right:4px; bottom:3px; font-size:10px; background:rgba(0,0,0,.55); border-radius:999px; padding:2px 5px; }
+  .ex h2 { margin:0; font-size:22px; letter-spacing:-.02em; }
+  .ex .meta { font-size:13px; color:var(--muted); margin-top:3px; }
+  .ex .meta b { color:var(--lime); font-weight:600; }
+  .menu { margin-left:auto; width:36px; height:36px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); color:var(--text); }
+  .coach { font-size:13px; color:var(--muted); margin:8px 0 14px; }
+  .quick { display:flex; gap:8px; align-items:center; margin-bottom:12px; overflow-x:auto; }
+  .quick span { font-size:12px; color:var(--muted); flex:none; }
+  .pill { flex:none; min-height:36px; padding:0 14px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.055); color:var(--text); font-size:14px; }
+  .pill.on { background:var(--lime); color:var(--ink); border-color:transparent; font-weight:600; }
+  table { width:100%; border-collapse:separate; border-spacing:0 6px; }
+  th { font-size:11px; letter-spacing:.08em; color:var(--muted); font-weight:500; text-align:center; padding:0 0 2px; }
+  th:first-child, td:first-child { text-align:left; width:40px; }
+  td { background:rgba(255,255,255,.04); height:52px; text-align:center; font-variant-numeric:tabular-nums; }
+  td:first-child { border-radius:14px 0 0 14px; padding-left:12px; color:var(--muted); }
+  td:last-child { border-radius:0 14px 14px 0; width:56px; }
+  td.prev { color:var(--muted); font-size:13px; }
+  .cell { display:inline-flex; align-items:center; justify-content:center; min-width:64px; height:38px; border-radius:999px; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1); font-size:17px; font-weight:600; }
+  .cell.empty { color:var(--muted); font-weight:500; font-size:14px; }
+  .check { width:40px; height:40px; border-radius:999px; border:1.5px solid rgba(255,255,255,.22); background:none; color:var(--muted); font-size:18px; }
+  tr.done td { background:rgba(197,247,119,.10); }
+  tr.done .cell { background:none; border-color:transparent; }
+  tr.done .check { background:var(--lime); border-color:transparent; color:var(--ink); }
+  tr.current td { background:rgba(255,255,255,.07); }
+  .add { width:100%; min-height:44px; border-radius:999px; border:1px dashed rgba(255,255,255,.18); background:none; color:var(--muted); margin-top:4px; }
+  .next { margin-top:18px; font-size:13px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-radius:16px; background:rgba(255,255,255,.04); }
+  .next b { color:var(--text); font-weight:600; }
+  .dock { position:absolute; left:12px; right:12px; bottom:16px; display:flex; flex-direction:column; gap:10px; }
+  .rest { display:flex; align-items:center; gap:10px; padding:8px 8px 8px 16px; border-radius:999px; background:rgba(28,34,26,.82); backdrop-filter:blur(18px); border:1px solid rgba(255,255,255,.12); }
+  .rest .t { font-size:22px; font-weight:700; color:var(--lime); font-variant-numeric:tabular-nums; }
+  .rest .l { font-size:13px; color:var(--muted); flex:1; }
+  .rest button { min-height:36px; padding:0 12px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.06); color:var(--text); font-size:13px; }
+  .bar { height:4px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; }
+  .bar i { display:block; width:21%; height:100%; background:var(--lime); }
+  .cap { font-size:11px; color:var(--muted); text-align:center; }
+  .note { position:fixed; top:12px; left:12px; max-width:300px; font-size:12px; color:#9aa392; line-height:1.45; }
+  .note b { color:#c5f777; }
+</style>
+</head>
+<body>
+<div class="note"><b>Mockup only</b> — fast set logger in our charcoal/lime style.<br/>One tap per set: weight and reps are pre-filled; tap ✓ to log. Rest becomes a slim pill.</div>
+<div class="phone">
+  <header>
+    <button class="back" aria-label="Minimize">‹</button>
+    <h1>Push</h1>
+    <span class="clock">00:31</span>
+    <button class="finish">Finish</button>
+  </header>
+
+  <div class="ex">
+    <div class="thumb" role="img" aria-label="Rear Delt Fly demo"></div>
+    <div>
+      <h2>Rear Delt Fly</h2>
+      <div class="meta">Exercise 2 of 5 · Target <b>4 × 12</b></div>
+    </div>
+    <button class="menu" aria-label="More actions">⋯</button>
+  </div>
+  <div class="coach">First time on this one. Pick a weight you could lift ~12 times.</div>
+
+  <div class="quick" aria-label="Your dumbbells">
+    <span>Your dumbbells</span>
+    <button class="pill">10</button><button class="pill on">15</button><button class="pill">20</button><button class="pill">25</button><button class="pill">30</button>
+  </div>
+
+  <table>
+    <thead><tr><th>SET</th><th>PREVIOUS</th><th>LB</th><th>REPS</th><th></th></tr></thead>
+    <tbody>
+      <tr class="done"><td>1</td><td class="prev">—</td><td><span class="cell">15</span></td><td><span class="cell">12</span></td><td><button class="check" aria-label="Set 1 logged">✓</button></td></tr>
+      <tr class="current"><td>2</td><td class="prev">—</td><td><span class="cell">15</span></td><td><span class="cell">12</span></td><td><button class="check" aria-label="Log set 2">✓</button></td></tr>
+      <tr><td>3</td><td class="prev">—</td><td><span class="cell">15</span></td><td><span class="cell">12</span></td><td><button class="check" aria-label="Log set 3">✓</button></td></tr>
+      <tr><td>4</td><td class="prev">—</td><td><span class="cell">15</span></td><td><span class="cell">12</span></td><td><button class="check" aria-label="Log set 4">✓</button></td></tr>
+    </tbody>
+  </table>
+  <button class="add">+ Add set</button>
+
+  <div class="next"><span>Up next · <b>Dumbbell Overhead Triceps Extension</b></span><span>3 × 12 ›</span></div>
+
+  <div class="dock">
+    <div class="rest" role="timer" aria-label="Rest, 49 seconds remaining">
+      <span class="t">0:49</span><span class="l">Rest</span>
+      <button>+30s</button><button>Pause</button><button aria-label="Mute rest cue">🔔</button>
+    </div>
+    <div class="bar"><i></i></div>
+    <div class="cap">4 of 19 sets</div>
+  </div>
+</div>
+</body>
+</html>
