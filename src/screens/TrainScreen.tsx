@@ -284,7 +284,8 @@ export default function TrainScreen({
     exercise.planned.map((set) => set.reps).join(' · ');
   const targetWeight = exercise.planned[0]?.weight ?? 0;
   const canPickWeight = equipment === 'Dumbbell' && loadOptions.length > 0;
-  const canEnterWeight = mode !== 'none' && equipment !== 'Dumbbell';
+  // A dumbbell with no confirmed rack is typed, the same way a barbell load is.
+  const canEnterWeight = mode !== 'none' && !canPickWeight;
   const loadEntry = (weight: number, update: (weight: number) => void) => canEnterWeight ? (
     <input type="number" min="0" step="any" inputMode="decimal"
       aria-label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`}

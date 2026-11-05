@@ -359,16 +359,13 @@ export function swapCandidateFor(
 }
 
 /**
- * Weights the logger may offer. A confirmed inventory wins over the fixture
- * rack, so no selector can offer a dumbbell the user does not own.
+ * Weights the logger may offer. At home only the confirmed rack, never the
+ * example one: with nothing confirmed the logger takes a typed load instead.
  */
 export function loadOptions(equipment: EquipmentChoice, inventory?: number[]): number[] {
-  const setup = EQUIPMENT_OPTIONS[equipment];
-  // A setup with no external load has nothing to select from, and a rack the
-  // user confirmed at home is not the rack in a hotel gym.
-  if (!setup?.allowsLoads || equipment !== 'home') return setup?.loads ?? [];
-  const confirmed = confirmedLoads(equipment, inventory);
-  return confirmed.length > 0 ? confirmed : setup.loads;
+  // A hotel gym's rack is the gym's, not the user's home rack.
+  if (equipment === 'home') return confirmedLoads(equipment, inventory);
+  return EQUIPMENT_OPTIONS[equipment]?.loads ?? [];
 }
 
 /** Only the loads the user confirmed for this setup; never the example rack. */

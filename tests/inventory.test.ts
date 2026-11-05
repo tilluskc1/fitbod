@@ -5,7 +5,10 @@ import { FULL_BODY_A } from '../src/data/flagship.ts';
 import { adaptWorkout, loadOptions, toWorkoutExercises } from '../src/lib/adapt.ts';
 import { defaultConstraints, keywordParser, noticeText, resolveConstraints } from '../src/lib/constraints.ts';
 import { nextLoad, prescribeExercise } from '../src/lib/progression.ts';
-import { createSession } from '../src/lib/session.ts';
+import { liveExercises } from '../src/lib/liveProgression.ts';
+import { applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
+import { EMPTY_STATE } from '../src/lib/storage.ts';
+import { toKg } from '../src/lib/units.ts';
 import type { Profile } from '../src/types.ts';
 
 const sparseRack: Profile = {
@@ -94,10 +97,28 @@ test('a confirmed rack reaches Start: no target offers a load the user does not 
   );
 });
 
-test('an unknown rack keeps the fixture rack instead of inventing one', () => {
+test('an unknown rack offers no example dumbbells, only typed entry', () => {
   const constraints = defaultConstraints(unconfirmed);
   assert.equal(constraints.loads, undefined);
-  assert.deepEqual(loadOptions(constraints.equipment, constraints.loads), loadOptions(constraints.equipment));
+  assert.deepEqual(loadOptions(constraints.equipment, constraints.loads), []);
+  assert.deepEqual(loadOptions('home', []), []);
+});
+
+test('an unknown rack never gets a target it did not log', () => {
+  const adapted = adaptWorkout(FULL_BODY_A, defaultConstraints(unconfirmed), []);
+  const exercises = liveExercises(adapted, unconfirmed, []);
+  assert.deepEqual([...new Set(exercises.flatMap((entry) => entry.planned.map((set) => set.weight)))], [0]);
+  // The user types 30 lb for every press set; the next target is that load, not a rack value.
+  const typed = toKg(30, 'lb');
+  let session = createSession({ id: 'typed', name: adapted.name, dayIndex: 0, now: '2026-11-04T10:00:00.000Z', exercises });
+  session.exercises[0].performed.forEach((_, index) => {
+    session = logSet(updatePerformedSet(session, 0, index, { weight: typed, reps: 8 }, '2026-11-04T10:01:00.000Z'), 0, index, '2026-11-04T10:01:00.000Z');
+  });
+  const { history } = applyFinish({ ...EMPTY_STATE, profile: unconfirmed, current: session }, session.id,
+    { early: true, now: '2026-11-04T10:30:00.000Z' });
+  const press = exerciseById(session.exercises[0].exerciseId);
+  assert.ok(press);
+  assert.equal(prescribeExercise(press, unconfirmed, history).weight, typed);
 });
 
 test('progression stops at the top of the confirmed rack', () => {
