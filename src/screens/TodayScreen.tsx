@@ -10,6 +10,8 @@ import { exercisePhoto } from '../lib/media';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import Demo from '../components/ui/Demo';
 import FeasibilityNote from '../components/ui/FeasibilityNote';
+import { missingFamilies } from '../lib/feasibility';
+import type { ProfileChange } from '../lib/preferences';
 import Icon from '../components/ui/Icon';
 
 interface Props {
@@ -32,8 +34,8 @@ interface Props {
   slotLabel?: string;
   /** Explicit skip of the slot on offer. Absent means the plan has no sequence. */
   onSkipSlot?: () => void;
-  /** Removes one exercise from the saved exclusions (a feasibility alternative). */
-  onAllowExercise?: (exerciseId: string) => void;
+  /** Previews a feasibility alternative (allow an excluded exercise) before anything is saved. */
+  onReviewChange?: (change: ProfileChange) => void;
 }
 
 function greeting(now: Date): string {
@@ -96,7 +98,7 @@ export default function TodayScreen({
   onOpenExercise,
   slotLabel,
   onSkipSlot,
-  onAllowExercise,
+  onReviewChange,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -178,7 +180,7 @@ export default function TodayScreen({
 
         {/* The status describes the saved setup, not an adjusted day or an open session. */}
         {!current && !adjusted && (
-          <FeasibilityNote feasibility={program.feasibility} onOpenSettings={onOpenSettings} onAllowExercise={onAllowExercise} />
+          <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
         )}
 
         <section className="coach-card" aria-label={adjusted ? 'Coach note' : 'Coach insight'}>
@@ -227,7 +229,13 @@ export default function TodayScreen({
           </div>
 
           <div className="workout-list">
-            {adapted.exercises.length === 0 && (
+            {adapted.exercises.length === 0 && !adjusted && program.feasibility?.status === 'infeasible' && (
+              <div className="empty-state">
+                <p>No {missingFamilies(program.feasibility)} fits your equipment yet. Add gear and this day fills in.</p>
+                <button className="text-action text-action--lime" onClick={onOpenSettings}>Edit equipment</button>
+              </div>
+            )}
+            {adapted.exercises.length === 0 && (adjusted || program.feasibility?.status !== 'infeasible') && (
               <p className="empty-state">
                 No movement in this program can be done with {setup.chip.toLowerCase()}. Choose
                 another setup in Adjust today.

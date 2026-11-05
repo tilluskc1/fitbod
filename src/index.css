@@ -3883,3 +3883,7 @@ button.aw-exercise__name-btn {
 .plan-item .feasibility {
   margin-top: 12px;
 }
+
+.empty-state p {
+  margin: 0 0 6px;
+}

@@ -58,9 +58,9 @@ function screens(Today: unknown, Plan: unknown, who: Profile, name: string) {
   const now = new Date('2026-11-04T10:00:00.000Z');
   const today = renderToStaticMarkup(createElement(Today as never, { profile: who, program, adapted,
     equipment: 'home', adjusted: false, history: [], current: null, now, onPreview: noop, onAdjust: noop,
-    onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onAllowExercise: noop }));
+    onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop }));
   const plan = renderToStaticMarkup(createElement(Plan as never, { profile: who, program, history: [],
-    unit: 'kg', now, onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop, onAllowExercise: noop }));
+    unit: 'kg', now, onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop, onReviewChange: noop }));
   return { today, plan, adapted };
 }
 
@@ -93,22 +93,52 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
   });
 });
 
-test('each alternative does what it says', async () => {
+type El = { type: unknown; props: { children?: unknown; onClick?: () => void; [key: string]: unknown } };
+const elements = (value: unknown): El[] =>
+  Array.isArray(value) ? value.flatMap(elements)
+    : value && typeof value === 'object' && 'props' in value
+      ? [value as El, ...elements((value as El).props.children)]
+      : [];
+
+test('each alternative does what it says; Allow only previews, Confirm saves, Cancel changes nothing', async () => {
   await withServer(async (load) => {
     const { default: FeasibilityNote } = await load('/src/components/ui/FeasibilityNote.tsx');
-    const feasibility = programFor(noCurls, 'Pull').feasibility;
-    const opened: string[] = [];
-    const node = (FeasibilityNote as (p: object) => { props: { children: unknown } })({ feasibility,
-      onOpenSettings: () => opened.push('settings'), onAllowExercise: (id: string) => opened.push(id) });
-    const find = (value: unknown): { props: { children: string; onClick: () => void } }[] =>
-      Array.isArray(value) ? value.flatMap(find)
-        : value && typeof value === 'object' && 'props' in value
-          ? [...((value as { type: unknown }).type === 'button' ? [value as never] : []), ...find((value as { props: { children?: unknown } }).props.children)]
-          : [];
-    for (const button of find(node)) button.props.onClick();
-    const allowIds = feasibility!.alternatives.filter((a) => a.kind === 'allow-exercise').map((a) => a.exerciseId);
-    const settings = feasibility!.alternatives.filter((a) => a.kind === 'capability').length;
-    assert.deepEqual(opened.filter((item) => item !== 'settings'), allowIds);
-    assert.equal(opened.filter((item) => item === 'settings').length, settings);
+    const { ConfirmChange } = await load('/src/screens/Sheets.tsx');
+    const feasibility = programFor(noCurls, 'Pull').feasibility!;
+    let settings = 0;
+    const reviews: { title: string; detail: string; patch: { exclusions?: string[] } }[] = [];
+    const node = (FeasibilityNote as (p: object) => unknown)({ feasibility, profile: noCurls,
+      onOpenSettings: () => { settings += 1; }, onReviewChange: (change: never) => reviews.push(change) });
+    for (const button of elements(node).filter((el) => el.type === 'button')) button.props.onClick?.();
+    const allow = feasibility.alternatives.filter((a) => a.kind === 'allow-exercise');
+    assert.equal(settings, feasibility.alternatives.length - allow.length, 'Add X opens equipment settings');
+    assert.equal(reviews.length, allow.length, 'Allow X opens a preview, it saves nothing');
+    const [first] = reviews;
+    assert.match(first.title, /^Allow .+ again\?$/);
+    assert.match(first.detail, /future workouts/);
+    assert.deepEqual(first.patch.exclusions, noCurls.exclusions.filter((id) => id !== allow[0].exerciseId));
+
+    const saved: unknown[] = [];
+    let cancelled = 0;
+    const confirm = (ConfirmChange as (p: object) => unknown)({ change: first,
+      onConfirm: (patch: unknown) => saved.push(patch), onCancel: () => { cancelled += 1; } });
+    const [ok, cancel] = elements(confirm).filter((el) => el.type === 'button');
+    cancel.props.onClick?.();
+    assert.deepEqual(saved, [], 'Cancel changes nothing');
+    assert.equal(cancelled, 1);
+    ok.props.onClick?.();
+    assert.deepEqual(saved, [first.patch], 'Confirm removes only that exclusion');
+  });
+});
+
+test('an empty Not enough day points to equipment, not Adjust today', async () => {
+  await withServer(async (load) => {
+    const { default: Today } = await load('/src/screens/TodayScreen.tsx');
+    const { default: Plan } = await load('/src/screens/PlanScreen.tsx');
+    const { today } = screens(Today, Plan, bodyweight, 'Pull');
+    const empty = today.match(/<div class="empty-state"[\s\S]*?<\/div>/)?.[0] ?? '';
+    assert.doesNotMatch(empty, /Adjust today/);
+    assert.match(plain(empty), /pulling, biceps flexion/);
+    assert.match(empty, /<button[^>]*>Edit equipment<\/button>/);
   });
 });

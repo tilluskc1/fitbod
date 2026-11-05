@@ -120,6 +120,11 @@ export function isRelevantToDay(exercise: Exercise, day: PlanDay): boolean {
 }
 
 
+/** The movement families the day cannot cover, in plain words. */
+export function missingFamilies(feasibility: Feasibility): string {
+  return feasibility.coverage.filter((item) => !item.satisfied).map((item) => item.label.toLowerCase()).join(', ');
+}
+
 function coverageFor(requirements: CoverageRequirement[], selected: Exercise[]): CoverageResult[] {
   return requirements.map((requirement) => {
     const exerciseIds = selected
