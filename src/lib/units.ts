@@ -21,6 +21,16 @@ export function toKg(value: number, unit: Unit): number {
   return Math.round(kg * 1000) / 1000;
 }
 
+/** Owned loads typed as "10, 15 18" in the display unit, as sorted unique canonical kg. */
+export function parseLoads(text: string, unit: Unit): number[] {
+  const values = text
+    .split(/[,\s]+/)
+    .map(Number)
+    .filter((value) => Number.isFinite(value) && value > 0)
+    .map((value) => toKg(value, unit));
+  return [...new Set(values)].sort((a, b) => a - b);
+}
+
 /** Display value snapped to a half unit so inputs read like real plates. */
 export function displayValue(kg: number, unit: Unit): number {
   const value = toDisplay(kg, unit);
