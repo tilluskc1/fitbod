@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { EXERCISES, MUSCLE_GROUPS } from '../data/exercises';
 import type { ExercisePreference, MuscleGroup, Profile } from '../types';
-import { conflicts, resetPreferences, withExclusion, withPreference } from '../lib/preferences';
+import { PREF_LABEL, conflictChanges, conflicts, exclusionChange, preferenceChange, resetChange, type ProfileChange } from '../lib/preferences';
+import { ConfirmChange } from './Sheets';
 import Photo from '../components/ui/Photo';
 import Sheet from '../components/ui/Sheet';
 import Demo from '../components/ui/Demo';
@@ -13,15 +14,7 @@ interface Props {
   onBack: () => void;
 }
 
-interface PendingChange {
-  title: string;
-  detail: string;
-  patch: Partial<Profile>;
-}
-
 const NONE: Record<string, ExercisePreference> = {};
-const PREF_LABEL: Record<ExercisePreference, string> = { more: 'More often', less: 'Less often' };
-const FUTURE = 'Applies to future workouts only. Logged workouts stay exactly as they are.';
 
 export default function LibraryScreen({ profile, onSave, onBack }: Props) {
   const { exclusions } = profile;
@@ -31,7 +24,7 @@ export default function LibraryScreen({ profile, onSave, onBack }: Props) {
   const [muscle, setMuscle] = useState<MuscleGroup | 'All' | 'Saved'>('All');
   const [openId, setOpenId] = useState<string | null>(null);
   // Every change is previewed here first; cancelling discards it untouched.
-  const [pending, setPending] = useState<PendingChange | null>(null);
+  const [pending, setPending] = useState<ProfileChange | null>(null);
   const conflicted = conflicts(profile);
 
   const filtered = useMemo(() => {
@@ -70,13 +63,7 @@ export default function LibraryScreen({ profile, onSave, onBack }: Props) {
         <button
           className="secondary"
           style={{ marginTop: 10 }}
-          onClick={() =>
-            setPending({
-              title: 'Reset preferences?',
-              detail: `Clears ${prefCount} more/less often ${prefCount === 1 ? 'choice' : 'choices'}. Exclusions and workout records are not touched. ${FUTURE}`,
-              patch: resetPreferences(),
-            })
-          }
+          onClick={() => setPending(resetChange(profile))}
         >
           Reset preferences
         </button>
@@ -124,19 +111,8 @@ export default function LibraryScreen({ profile, onSave, onBack }: Props) {
           const excluded = exclusions.includes(exercise.id);
           const pref = preferences[exercise.id];
           const open = openId === exercise.id;
-          const ask = (value: ExercisePreference | null) =>
-            setPending({
-              title: value ? `${PREF_LABEL[value]}: ${exercise.name}?` : `Neutral: ${exercise.name}?`,
-              detail:
-                (value === 'more'
-                  ? 'Picked ahead of similar exercises when a workout is generated. '
-                  : value === 'less'
-                    ? 'Picked after similar exercises, but still used when nothing else fits. '
-                    : 'Back to the default order. ') +
-                (excluded && value ? 'It stays excluded until you choose which to keep. ' : '') +
-                FUTURE,
-              patch: withPreference(profile, exercise.id, value),
-            });
+          const ask = (value: ExercisePreference | null) => setPending(preferenceChange(profile, exercise, value));
+          const conflict = conflictChanges(profile, exercise);
           return (
             <div key={exercise.id}>
               <button
@@ -164,31 +140,19 @@ export default function LibraryScreen({ profile, onSave, onBack }: Props) {
                 <div className="lib-detail">
                   <Demo exerciseId={exercise.id} name={exercise.name} className="lib-photo" />
                   <p className="lib-instructions">{exercise.instructions}</p>
-                  {excluded && pref && (
+                  {conflict && pref && (
                     <div className="note-card" role="status" style={{ marginTop: 14 }}>
                       Excluded and marked {PREF_LABEL[pref].toLowerCase()}. The exclusion wins until you pick one.
                       <div className="sheet-actions" style={{ marginTop: 12 }}>
                         <button
                           className="secondary"
-                          onClick={() =>
-                            setPending({
-                              title: `Keep ${exercise.name} excluded?`,
-                              detail: `Removes the ${PREF_LABEL[pref].toLowerCase()} preference. ${FUTURE}`,
-                              patch: withPreference(profile, exercise.id, null),
-                            })
-                          }
+                          onClick={() => setPending(conflict.keepExclusion)}
                         >
                           Keep exclusion
                         </button>
                         <button
                           className="secondary"
-                          onClick={() =>
-                            setPending({
-                              title: `Keep ${exercise.name} ${PREF_LABEL[pref].toLowerCase()}?`,
-                              detail: `Allows it in workouts again. ${FUTURE}`,
-                              patch: withExclusion(profile, exercise.id, false),
-                            })
-                          }
+                          onClick={() => setPending(conflict.keepPreference)}
                         >
                           Keep {PREF_LABEL[pref].toLowerCase()}
                         </button>
@@ -210,13 +174,7 @@ export default function LibraryScreen({ profile, onSave, onBack }: Props) {
                   <div>
                     <button
                       className={excluded ? 'primary' : 'secondary'}
-                      onClick={() =>
-                        setPending({
-                          title: excluded ? `Allow ${exercise.name} again?` : `Don't recommend ${exercise.name} again?`,
-                          detail: `${excluded ? 'It can be programmed again.' : 'It is never programmed; the generator reports a coverage gap instead of substituting silently.'} ${!excluded && pref ? `It is also marked ${PREF_LABEL[pref].toLowerCase()}; you will be asked which to keep. ` : ''}${FUTURE}`,
-                          patch: withExclusion(profile, exercise.id, !excluded),
-                        })
-                      }
+                      onClick={() => setPending(exclusionChange(profile, exercise, !excluded))}
                     >
                       {excluded ? 'Allow in workouts' : "Don't recommend again"}
                     </button>
@@ -235,21 +193,14 @@ export default function LibraryScreen({ profile, onSave, onBack }: Props) {
 
       {pending && (
         <Sheet title={pending.title} onClose={() => setPending(null)}>
-          <p className="sheet-copy">{pending.detail}</p>
-          <div className="sheet-actions">
-            <button
-              className="primary"
-              onClick={() => {
-                onSave(pending.patch);
-                setPending(null);
-              }}
-            >
-              Confirm
-            </button>
-            <button className="secondary" onClick={() => setPending(null)}>
-              Cancel
-            </button>
-          </div>
+          <ConfirmChange
+            change={pending}
+            onConfirm={(patch) => {
+              onSave(patch);
+              setPending(null);
+            }}
+            onCancel={() => setPending(null)}
+          />
         </Sheet>
       )}
     </div>

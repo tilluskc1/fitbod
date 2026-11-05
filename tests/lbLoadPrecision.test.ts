@@ -14,6 +14,12 @@ import { inputValue, toKg } from '../src/lib/units.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
 const RACK = [10, 15, 18];
+// The exercise action sheet opens on its history view, where recorded loads are listed.
+const historyView = { name: 'action-sheet-history', enforce: 'pre' as const, transform(code: string, file: string) {
+  if (file.endsWith('/src/screens/Sheets.tsx')) return code.replace("useState<ActionMode>('menu')", "useState<ActionMode>('history')");
+} };
+const actionProps = (profile: Profile) => ({ exerciseIndex: 0, exerciseCount: 1, pending: 0, done: 0, profile, inSession: false,
+  skipped: false, onReplace() {}, onSaveProfile() {}, onRemoveToday() {}, onReturn() {} });
 const profile: Profile = {
   name: 'K', goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
   equipment: ['Dumbbell'], support: [], exclusions: [], loads: { Dumbbell: RACK }, unit: 'lb',
@@ -40,10 +46,10 @@ function historyAt(weight: number): WorkoutRecord[] {
 }
 
 test('rack loads read like the target on every surface; typed loads keep their exact value (lb and kg)', async () => {
-  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  const server = await createServer({ plugins: [historyView], server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: TrainScreen } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
-    const { ExerciseSheet, WhySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
+    const { ExerciseActionsSheet, WhySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
     const { progressionLines } = await server.ssrLoadModule('/src/lib/liveProgression.ts');
     for (const unit of ['lb', 'kg'] as const) {
       const who = { ...profile, unit };
@@ -53,11 +59,11 @@ test('rack loads read like the target on every surface; typed loads keep their e
       const train = (history: WorkoutRecord[], weight: number, planned: number) =>
         plain(renderToStaticMarkup(createElement(TrainScreen, { ...props, history, session: sessionAt(weight, planned) })));
       const sheets = (history: WorkoutRecord[]) => [
-        ['exercise sheet', ExerciseSheet, /Last recorded (.+?) lb|Last recorded (.+?) kg/],
+        ['exercise history', ExerciseActionsSheet, /own records\. .*?@ ([\d.]+) lb|own records\. .*?@ ([\d.]+) kg/],
         ['why sheet', WhySheet, /Working load (.+?) lb|Working load (.+?) kg/],
       ].map(([label, Sheet, re]) => {
         const html = plain(renderToStaticMarkup(createElement(Sheet as never, { exerciseId: id, exerciseName: 'x',
-          planned: [{ weight: 18, reps: 10 }], history, unit, loads: who.loads, onClose() {} })));
+          planned: [{ weight: 18, reps: 10 }], history, unit, loads: who.loads, ...actionProps(who), onClose() {} })));
         const m = html.match(re as RegExp);
         return [label, m ? `${m[1] ?? m[2]} ${unit}` : html] as const;
       });
@@ -91,11 +97,11 @@ test('rack loads read like the target on every surface; typed loads keep their e
 
 /** A held typed load: next target equals what was logged. */
 test('a held typed load reads as typed on target, header, chip, Today row and recap; new off-rack steps read half-unit', async () => {
-  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  const server = await createServer({ plugins: [historyView], server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: TrainScreen } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const { default: Today } = await server.ssrLoadModule('/src/screens/TodayScreen.tsx');
-    const { ExerciseSheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
+    const { ExerciseActionsSheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
     const { progressionLines } = await server.ssrLoadModule('/src/lib/liveProgression.ts');
     for (const unit of ['lb', 'kg'] as const) {
       const who = { ...profile, unit };
@@ -119,9 +125,9 @@ test('a held typed load reads as typed on target, header, chip, Today row and re
       assert.match(today, new RegExp(`@ ${exact.replace('.', '\\.')} each`), `${unit} Today row`);
       assert.match(today, new RegExp(`own ${exact.replace('.', '\\.')} for`), `${unit} Today coach`);
       assert.doesNotMatch(today, /42\.5/, `${unit} Today shows no 42.5`);
-      const sheet = plain(renderToStaticMarkup(createElement(ExerciseSheet, { exerciseId: id, planned: held.planned, history,
-        unit, loads: who.loads, onClose() {} })));
-      assert.match(sheet, new RegExp(`Today .*@ ${exact.replace('.', '\\.')} each`), `${unit} sheet Today`);
+      const sheet = plain(renderToStaticMarkup(createElement(ExerciseActionsSheet, { exerciseId: id, exerciseName: 'x', planned: held.planned,
+        history, unit, ...actionProps(who), onClose() {} })));
+      assert.match(sheet, new RegExp(`Exercise 1 of 1 · 3 sets · .*@ ${exact.replace('.', '\\.')} each`), `${unit} sheet target`);
       const line = progressionLines(history[0], who, history, unit)[0];
       assert.match(line.next, new RegExp(`@ ${exact.replace('.', '\\.')} each`), `${unit} recap Next`);
     }
@@ -145,7 +151,7 @@ test('a held typed load reads as typed on target, header, chip, Today row and re
 
 /** Barbell: a typed 42.3 lb steps to a new off-rack load that must read one way everywhere. */
 test('an app-prescribed barbell step reads the same on target, rows, Log button and input, and stays so once accepted', async () => {
-  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  const server = await createServer({ plugins: [historyView], server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: TrainScreen } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const { default: Adapt } = await server.ssrLoadModule('/src/screens/AdaptScreen.tsx');
@@ -194,11 +200,11 @@ test('an app-prescribed barbell step reads the same on target, rows, Log button 
 
 /** Overhead Press: typed 42.3 lb, then the app's 22.5 kg step logged unchanged (or typed again). */
 test('a logged load reads like its target when accepted unchanged and as typed otherwise, on every logged surface', async () => {
-  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  const server = await createServer({ plugins: [historyView], server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: TrainScreen } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const { default: Progress } = await server.ssrLoadModule('/src/screens/ProgressScreen.tsx');
-    const { ExerciseSheet, WhySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
+    const { ExerciseActionsSheet, WhySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
     const { progressionLines, recapHighlight } = await server.ssrLoadModule('/src/lib/liveProgression.ts');
     const ohp = exerciseById('overhead-press')!;
     for (const unit of ['lb', 'kg'] as const) {
@@ -241,9 +247,9 @@ test('a logged load reads like its target when accepted unchanged and as typed o
         const progress = plain(renderToStaticMarkup(createElement(Progress, { history, unit, loads: bar.loads,
           onExport() {}, onCorrect() {}, onDelete() {}, onFeedback() {}, onGoTrain() {} })));
         assert.match(progress, new RegExp(`${re(shown)} ${unit} total ×`), `${tag} Progress`);
-        for (const [label, Sheet, pattern] of [['exercise sheet', ExerciseSheet, 'Last recorded'], ['why sheet', WhySheet, 'Working load']] as const) {
+        for (const [label, Sheet, pattern] of [['exercise history', ExerciseActionsSheet, 'own records\\. .*?@'], ['why sheet', WhySheet, 'Working load']] as const) {
           const sheet = plain(renderToStaticMarkup(createElement(Sheet as never, { exerciseId: 'overhead-press', exerciseName: 'x',
-            planned: [{ weight: step, reps: 10 }], history, unit, loads: bar.loads, onClose() {} })));
+            planned: [{ weight: step, reps: 10 }], history, unit, loads: bar.loads, ...actionProps(bar), onClose() {} })));
           assert.match(sheet, new RegExp(`${pattern} ${re(shown)} ${unit}`), `${tag} ${label}`);
         }
         // Next session: last session and target side by side.

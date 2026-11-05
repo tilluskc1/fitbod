@@ -3612,3 +3612,192 @@ body {
   color: var(--on-surface-variant);
   text-align: center;
 }
+
+/* ---------- Onboarding: glass pill controls (#77) ----------
+   Frosted, translucent controls in the charcoal/lime palette. Scoped to onboarding. */
+.onboarding {
+  --glass-fill: rgba(255, 255, 255, 0.055);
+  --glass-fill-hover: rgba(255, 255, 255, 0.08);
+  --glass-edge: rgba(255, 255, 255, 0.12);
+  --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --glass-blur: blur(18px) saturate(150%);
+  --glass-lime-fill: linear-gradient(180deg, rgba(197, 247, 119, 0.17), rgba(197, 247, 119, 0.07));
+  --glass-lime-edge: rgba(197, 247, 119, 0.7);
+  background:
+    radial-gradient(120% 55% at 90% -12%, rgba(197, 247, 119, 0.13), transparent 62%),
+    radial-gradient(90% 45% at -12% 108%, rgba(197, 247, 119, 0.07), transparent 60%),
+    var(--surface);
+  /* The app frame clips overflow, so onboarding scrolls itself; Continue stays reachable on short screens. */
+  height: 100%;
+  overflow-y: auto;
+}
+
+.onboarding .unit-toggle,
+.onboarding .option-card,
+.onboarding .search,
+.onboarding .chip,
+.onboarding .day-chip,
+.onboarding .onboarding-actions .secondary {
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-shine);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+}
+
+/* Unit toggle: a pill segmented control with a lime thumb. */
+.onboarding .unit-toggle {
+  display: inline-flex;
+  width: auto;
+  padding: 4px;
+  gap: 4px;
+  border-radius: 999px;
+  overflow: visible;
+}
+
+.onboarding .unit-toggle button {
+  min-height: 44px;
+  min-width: 80px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--on-surface-muted);
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.onboarding .unit-toggle button.on {
+  background: var(--lime);
+  color: var(--lime-ink);
+  box-shadow: 0 6px 18px rgba(197, 247, 119, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* Option cards: large soft corners. */
+.onboarding .option-card {
+  border-radius: 22px;
+  padding: 17px 20px;
+}
+
+.onboarding .option-card:hover,
+.onboarding .chip:hover,
+.onboarding .day-chip:hover {
+  background: var(--glass-fill-hover);
+}
+
+.onboarding .option-card.selected,
+.onboarding .day-chip.selected,
+.onboarding .chip.on {
+  background: var(--glass-lime-fill);
+  border-color: var(--glass-lime-edge);
+  box-shadow: 0 8px 24px rgba(197, 247, 119, 0.1), var(--glass-shine);
+}
+
+.onboarding .chip.on {
+  color: var(--lime);
+}
+
+/* Text inputs and pickers become pills. */
+.onboarding .search {
+  border-radius: 999px;
+  min-height: 52px;
+  padding: 0 22px;
+}
+
+.onboarding .search:focus {
+  border-color: var(--glass-lime-edge);
+}
+
+.onboarding .chip {
+  padding: 0 18px;
+}
+
+.onboarding .day-chip {
+  border-radius: 999px;
+}
+
+/* Back / Continue. */
+.onboarding .onboarding-actions .primary {
+  border-radius: 999px;
+  box-shadow: 0 10px 28px rgba(197, 247, 119, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.onboarding .onboarding-actions .secondary {
+  border-radius: 999px;
+  color: var(--on-surface);
+}
+
+.onboarding .onboarding-actions .primary:disabled {
+  box-shadow: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .onboarding .unit-toggle,
+  .onboarding .option-card,
+  .onboarding .search,
+  .onboarding .chip,
+  .onboarding .day-chip,
+  .onboarding .onboarding-actions .secondary,
+  .onboarding .option-card:hover,
+  .onboarding .chip:hover,
+  .onboarding .day-chip:hover {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--surface-container);
+  }
+
+  .onboarding .option-card.selected,
+  .onboarding .day-chip.selected,
+  .onboarding .chip.on {
+    background: var(--surface-container-high);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding .unit-toggle,
+  .onboarding .unit-toggle button,
+  .onboarding .option-card,
+  .onboarding .search,
+  .onboarding .chip,
+  .onboarding .day-chip,
+  .onboarding .onboarding-actions .secondary {
+    transition: none;
+  }
+}
+
+/* Exercise actions sheet: every row is a real destination or says why not. */
+.sheet-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sheet-menu__row {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  align-items: center;
+}
+
+.sheet-menu__row:disabled {
+  opacity: 0.55;
+}
+
+button.aw-exercise__name-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.aw-more {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--on-surface-variant);
+  margin-right: -10px;
+}

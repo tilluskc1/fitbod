@@ -99,3 +99,17 @@ test('DiscardSessionSheet renders the named consent copy with both decisions', a
     await server.close();
   }
 });
+
+test('the Adjust sheet names the home rack honestly, in the display unit', async () => {
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { AdjustSheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
+    const render = (loads: number[] | undefined) => plain(renderToStaticMarkup(createElement(AdjustSheet, {
+      constraints: { minutes: 35, equipment: 'home', loads }, originalMinutes: 35, unit: 'lb',
+      onClose: () => undefined, onPreview: () => undefined })));
+    const blank = render(undefined);
+    assert.match(blank, /not confirmed/);
+    assert.doesNotMatch(blank, /10 kg, 15 kg, 18 kg/);
+    assert.match(render([10, 15, 18]), /Yours: 22 lb, 33 lb, 39\.5 lb/);
+  } finally { await server.close(); }
+});

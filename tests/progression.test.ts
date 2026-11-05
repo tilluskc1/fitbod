@@ -429,12 +429,13 @@ test('generated sessions carry the prescription into planned and performed sets'
   const loaded = generated.exercises.filter((exercise) => exercise.planned[0].weight > 0);
   assert.ok(loaded.length >= 2, 'logged dumbbell work should produce prescribed loads');
   for (const exercise of loaded) {
-    // Compound work at the top of a 6–10 range earned a load step; accessory
-    // work at 10 reps in a 10–15 range earned a rep instead.
+    // Compound work at the top of a 6–10 range earned a load step, which with no
+    // confirmed rack keeps the load and asks for the next dumbbell up (#57);
+    // accessory work at 10 reps in a 10–15 range earned a rep instead.
     const range = repRangeFor(meta(exercise.exerciseId).pattern);
     assert.deepEqual(
       exercise.planned[0],
-      range.max === 10 ? { weight: 22.5, reps: 6 } : { weight: 20, reps: 11 },
+      range.max === 10 ? { weight: 20, reps: 6 } : { weight: 20, reps: 11 },
     );
   }
 });

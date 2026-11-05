@@ -82,7 +82,8 @@ test('an early finish that never reached an exercise leaves it uncalibrated', ()
 });
 
 test('the step offers only confirmed loads, never the example rack', async () => {
-  assert.deepEqual(loadOptions('home', undefined), HOME_DUMBBELLS, 'the logger keeps its fallback');
+  assert.deepEqual(loadOptions('home', undefined), [], 'the logger offers no example rack either');
+  assert.ok(HOME_DUMBBELLS.length > 0);
   assert.deepEqual(confirmedLoads('home', undefined), []);
   assert.deepEqual(confirmedLoads('home', [18, 10]), [10, 18]);
   assert.deepEqual(confirmedLoads('hotel', [18, 10]), [], 'a home rack is not the hotel rack');
