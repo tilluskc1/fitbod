@@ -3351,6 +3351,10 @@ body {
   transform: scale(0.98);
 }
 
+.save-bar:disabled {
+  opacity: 0.45;
+}
+
 .finish-btn {
   min-height: 44px;
   padding: 0 10px;
