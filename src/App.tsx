@@ -59,10 +59,8 @@ import
   serializeExport,
   uid,
 } from './lib/storage';
-import
- type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';import { parseState } from './lib/validate';
-import
- { exclusionPatch } from './lib/exerciseActions';
+import type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
+import { parseState } from './lib/validate';
 import
  { unitOf } from './lib/units';
 import
@@ -1038,7 +1036,7 @@ export default function App() {
           const exercise = todayExercises[sheet.exerciseIndex];
           // A shifted segment or a discarded session closes the menu rather than
           // letting an action land on whichever exercise now sits at that index.
-          if (!exercise || exercise.exerciseId !== sheet.exerciseId) return null;
+          if (!exercise || exercise.exerciseId !== sheet.exerciseId || !profile) return null;
           const pending = exercise.performed.filter((set) => !set.done).length;
           const done = exercise.performed.filter((set) => set.done).length;
           return (
@@ -1052,17 +1050,13 @@ export default function App() {
               done={done}
               history={state.history}
               unit={unit}
-              excluded={profile ? profile.exclusions.includes(exercise.exerciseId) : false}
+              profile={profile}
               onReplace={() => setSheet({ kind: 'swap', exerciseIndex: sheet.exerciseIndex })}
-              onToggleExclusion={(next) => {
-                if (!profile) return;
-                patchProfile(exclusionPatch(profile, exercise.exerciseId, next));
+              onSaveProfile={(patch) => {
+                // Closing first: a saved preference can reorder today's preview under the sheet.
                 closeSheet();
-                setNotice(
-                  next
-                    ? `${exercise.name} will not be recommended again. Logged sessions are unchanged.`
-                    : `${exercise.name} can be recommended again.`,
-                );
+                patchProfile(patch);
+                setNotice('Saved for future workouts. Logged sets are unchanged.');
               }}
               onRemoveToday={() => {
                 const index = sheet.exerciseIndex;

@@ -13,6 +13,7 @@ import { calibrationInputValue, displayValue, toKg, unitLabel } from '../lib/uni
 import type { PerformedSet, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
+import { MoreIcon } from '../components/ui/Icons';
 
 interface Props {
   session: WorkoutRecord;
@@ -604,7 +605,7 @@ export default function TrainScreen({
                   aria-label={`More actions for ${exercise.name}`}
                   aria-haspopup="dialog"
                 >
-                  <Icon name="more_vert" size={18} />
+                  <MoreIcon size={18} />
                 </button>
               </div>
               <button

@@ -1,4 +1,4 @@
-import type { Profile, WorkoutRecord } from '../types';
+import type { WorkoutRecord } from '../types';
 
 /**
  * What the exercise action sheet can offer, and why a control cannot run.
@@ -11,7 +11,8 @@ export type ExerciseActionId =
   | 'instructions'
   | 'history'
   | 'replace'
-  | 'prefer'
+  | 'more'
+  | 'less'
   | 'dont-recommend'
   | 'remove-today';
 
@@ -24,9 +25,6 @@ export interface ExerciseAction {
 
 const NOTHING_PENDING_DONE = 'Every set here is logged, so there is no remaining work to change.';
 const NOTHING_PENDING_EMPTY = 'This exercise has no sets to change.';
-/** Confirmed preferences (#8) have no store yet, so this cannot be promised. */
-const NO_PREFERENCE_STORE =
-  'Confirmed preferences are not stored yet, so this cannot be remembered or undone.';
 
 export function exerciseActions(pending: number, done: number): ExerciseAction[] {
   const blocked = pending > 0 ? undefined : done > 0 ? NOTHING_PENDING_DONE : NOTHING_PENDING_EMPTY;
@@ -34,16 +32,9 @@ export function exerciseActions(pending: number, done: number): ExerciseAction[]
     { id: 'instructions', label: 'Instructions and demo' },
     { id: 'history', label: 'History for this exercise' },
     { id: 'replace', label: 'Replace for the remaining sets', blockedReason: blocked },
-    {
-      id: 'prefer',
-      label: 'Prefer this exercise more often',
-      blockedReason: NO_PREFERENCE_STORE,
-    },
-    {
-      id: 'dont-recommend',
-      label: 'Remove from recommendations',
-      blockedReason: undefined,
-    },
+    { id: 'more', label: 'Recommend more often' },
+    { id: 'less', label: 'Recommend less often' },
+    { id: 'dont-recommend', label: "Don't recommend again" },
     { id: 'remove-today', label: "Remove today's remaining work", blockedReason: blocked },
   ];
 }
@@ -80,23 +71,4 @@ export function exerciseHistory(
     }
   }
   return entries;
-}
-
-/**
- * The single patch that records "remove from recommendations". It writes the
- * same `profile.exclusions` list the rest of the app already honours, so a
- * preference cannot defeat an exclusion by living in a second store.
- */
-export function exclusionPatch(
-  profile: Profile,
-  exerciseId: string,
-  excluded: boolean,
-): Partial<Profile> {
-  const has = profile.exclusions.includes(exerciseId);
-  if (has === excluded) return {};
-  return {
-    exclusions: excluded
-      ? [...profile.exclusions, exerciseId]
-      : profile.exclusions.filter((value) => value !== exerciseId),
-  };
 }

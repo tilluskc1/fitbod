@@ -21,7 +21,8 @@ import {
   type ConstraintNotice,
   type ParsedConstraints,
 } from '../lib/constraints';
-import { exerciseActions, exerciseHistory } from '../lib/exerciseActions';
+import { exerciseActions, exerciseHistory, type ExerciseActionId } from '../lib/exerciseActions';
+import { PREF_LABEL, conflictChanges, exclusionChange, preferenceChange, type ProfileChange } from '../lib/preferences';
 import Sheet from '../components/ui/Sheet';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -331,7 +332,32 @@ export function ExerciseSheet({
 
 /* ---------------- Exercise actions ---------------- */
 
-type ActionMode = 'menu' | 'instructions' | 'history' | 'exclude' | 'remove';
+type ActionMode = 'menu' | 'instructions' | 'history' | 'remove';
+
+/** Preview body for a profile change; nothing is saved unless Confirm is pressed. */
+export function ConfirmChange({
+  change,
+  onConfirm,
+  onCancel,
+}: {
+  change: ProfileChange;
+  onConfirm: (patch: Partial<Profile>) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <p className="sheet-copy">{change.detail}</p>
+      <div className="sheet-actions">
+        <button className="primary" onClick={() => onConfirm(change.patch)}>
+          Confirm
+        </button>
+        <button className="secondary" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </>
+  );
+}
 
 /**
  * The one menu a workout exercise opens. Every row leads somewhere real; a
@@ -348,9 +374,9 @@ export function ExerciseActionsSheet({
   done,
   history,
   unit,
-  excluded,
+  profile,
   onReplace,
-  onToggleExclusion,
+  onSaveProfile,
   onRemoveToday,
   onClose,
 }: {
@@ -363,25 +389,41 @@ export function ExerciseActionsSheet({
   done: number;
   history: WorkoutRecord[];
   unit: Unit;
-  excluded: boolean;
+  profile: Profile;
   onReplace: () => void;
-  onToggleExclusion: (next: boolean) => void;
+  onSaveProfile: (patch: Partial<Profile>) => void;
   onRemoveToday: () => void;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<ActionMode>('menu');
   const meta = exerciseById(exerciseId);
   const actions = exerciseActions(pending, done);
+  const blockedReason = actions.find((action) => action.blockedReason)?.blockedReason;
   const entries = mode === 'history' ? exerciseHistory(history, exerciseId) : [];
   const back = () => setMode('menu');
+  // The change is rebuilt from the live profile, so another tab's edit is never overwritten by a stale preview.
+  const [ask, setAsk] = useState<((current: Profile) => ProfileChange | null) | null>(null);
+  const change = ask?.(profile) ?? null;
+  const exercise = { id: exerciseId, name: exerciseName };
+  const pref = profile.preferences?.[exerciseId];
+  const excluded = profile.exclusions.includes(exerciseId);
+  const conflict = conflictChanges(profile, exercise);
+  const label = (id: ExerciseActionId, text: string) =>
+    id === 'dont-recommend' && excluded ? 'Allow in workouts again' : text;
 
-  const run = (id: string) => {
+  const run = (id: ExerciseActionId) => {
     if (id === 'instructions' || id === 'history') setMode(id);
     if (id === 'replace') {
       onClose();
       onReplace();
     }
-    if (id === 'dont-recommend') setMode('exclude');
+    // Tapping the active choice offers neutral, so more and less never coexist.
+    if (id === 'more' || id === 'less')
+      setAsk(() => (current: Profile) =>
+        preferenceChange(current, exercise, current.preferences?.[exerciseId] === id ? null : id));
+    if (id === 'dont-recommend')
+      setAsk(() => (current: Profile) =>
+        exclusionChange(current, exercise, !current.exclusions.includes(exerciseId)));
     if (id === 'remove-today') setMode('remove');
   };
 
@@ -393,31 +435,59 @@ export function ExerciseActionsSheet({
       } · ${targetLine(planned, unit, exerciseId)}`}
       onClose={onClose}
     >
-      {mode === 'menu' && (
+      {change && (
+        <>
+          <p className="sheet-copy">
+            <strong>{change.title}</strong>
+          </p>
+          <ConfirmChange
+            change={change}
+            onConfirm={onSaveProfile}
+            onCancel={() => setAsk(null)}
+          />
+        </>
+      )}
+
+      {mode === 'menu' && !change && (
         <div className="sheet-menu">
-          {actions.map((action) => (
-            <button
-              key={action.id}
-              className="context-row sheet-menu__row"
-              onClick={() => run(action.id)}
-              disabled={Boolean(action.blockedReason)}
-              aria-describedby={action.blockedReason ? `why-${action.id}` : undefined}
-            >
-              <span>{action.label}</span>
-              <Icon name={action.blockedReason ? 'block' : 'chevron_right'} size={18} />
-            </button>
-          ))}
-          {actions
-            .filter((action) => action.blockedReason)
-            .map((action) => (
-              <p className="data-note" key={`why-${action.id}`} id={`why-${action.id}`}>
-                {action.blockedReason}
-              </p>
-            ))}
-          {excluded && (
+          {conflict && pref && (
+            <div className="note-card" role="status">
+              Excluded and marked {PREF_LABEL[pref].toLowerCase()}. The exclusion wins until you pick one.
+              <div className="sheet-actions" style={{ marginTop: 12 }}>
+                <button className="secondary" onClick={() => setAsk(() => (current: Profile) => conflictChanges(current, exercise)?.keepExclusion ?? null)}>
+                  Keep exclusion
+                </button>
+                <button className="secondary" onClick={() => setAsk(() => (current: Profile) => conflictChanges(current, exercise)?.keepPreference ?? null)}>
+                  Keep {PREF_LABEL[pref].toLowerCase()}
+                </button>
+              </div>
+            </div>
+          )}
+          {actions.map((action) => {
+            const on = action.id === pref;
+            return (
+              <button
+                key={action.id}
+                className="context-row sheet-menu__row"
+                onClick={() => run(action.id)}
+                disabled={Boolean(action.blockedReason)}
+                aria-describedby={action.blockedReason ? 'why-blocked' : undefined}
+                aria-pressed={action.id === 'more' || action.id === 'less' ? on : undefined}
+              >
+                <span>{label(action.id, action.label)}</span>
+                {action.blockedReason ? <LockIcon size={18} /> : <Icon name={on ? 'check' : 'chevron_right'} size={18} />}
+              </button>
+            );
+          })}
+          {/* Replace and remove share one reason, so it is stated once. */}
+          {blockedReason && (
+            <p className="data-note" id="why-blocked">
+              {blockedReason}
+            </p>
+          )}
+          {excluded && !conflict && (
             <p className="data-note" role="status">
-              {exerciseName} is already removed from recommendations. Turn it back on in Training
-              settings.
+              {exerciseName} is excluded from future workouts.
             </p>
           )}
         </div>
@@ -475,29 +545,6 @@ export function ExerciseActionsSheet({
           <div className="sheet-actions">
             <button className="secondary" onClick={back}>
               Back to actions
-            </button>
-          </div>
-        </>
-      )}
-
-      {mode === 'exclude' && (
-        <>
-          <p className="sheet-copy">
-            Stop recommending <strong>{exerciseName}</strong>? It leaves future plans so a different
-            movement trains that pattern. Sessions you already logged stay exactly as they are, and
-            you can turn this back on in Training settings.
-          </p>
-          <div className="sheet-actions">
-            <button
-              className="primary"
-              onClick={() => {
-                onToggleExclusion(true);
-              }}
-            >
-              Remove {exerciseName} from recommendations
-            </button>
-            <button className="secondary" onClick={back}>
-              Keep recommending it
             </button>
           </div>
         </>
