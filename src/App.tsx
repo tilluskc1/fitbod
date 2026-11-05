@@ -1015,6 +1015,7 @@ export default function App() {
               planned={planned}
               history={state.history}
               unit={unit}
+              rack={loadOptions(constraints.equipment, constraints.loads)}
               onClose={closeSheet}
             />
           );

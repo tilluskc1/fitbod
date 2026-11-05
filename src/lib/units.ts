@@ -64,3 +64,8 @@ export function calibrationInputValue(kg: number, unit: Unit): string {
   if (unit === 'kg') return String(kg);
   return String(Math.round(toDisplay(kg, unit) * 100) / 100);
 }
+
+/** A rack load reads like the target (half-unit); a typed off-rack load keeps its exact value. */
+export function loadValue(kg: number, unit: Unit, rack: number[]): string {
+  return rack.some((load) => Math.abs(load - kg) < 0.001) ? inputValue(kg, unit) : calibrationInputValue(kg, unit);
+}

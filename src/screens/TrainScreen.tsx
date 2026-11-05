@@ -9,7 +9,7 @@ import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
 import { needsCalibration } from '../lib/liveProgression';
-import { calibrationInputValue, displayValue, toKg, unitLabel } from '../lib/units';
+import { calibrationInputValue, displayValue, loadValue, toKg, unitLabel } from '../lib/units';
 import type { PerformedSet, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -63,10 +63,11 @@ function setSummary(
   weight: number,
   mode: LoadMode,
   unit: Unit,
+  rack: number[] = [],
 ): string {
   const load =
     weight > 0
-      ? ` @ ${calibrationInputValue(weight, unit)} ${unitLabel(unit)}${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}`
+      ? ` @ ${loadValue(weight, unit, rack)} ${unitLabel(unit)}${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}`
       : '';
   return `${setText(exerciseId, reps)}${load}`;
 }
@@ -274,7 +275,9 @@ export default function TrainScreen({
         : 'bodyweight';
   /** Loads are stored in kilograms; only the readout converts. */
   const showWeight = (kg: number) => displayValue(kg, unit);
-  const showActual = (kg: number) => calibrationInputValue(kg, unit);
+  // Planned loads and the rack are on-rack; anything else was typed.
+  const rack = [...loadOptions, ...exercise.planned.map((set) => set.weight)];
+  const showActual = (kg: number) => loadValue(kg, unit, rack);
   const last = lastPerformance(history, exercise.exerciseId);
   const holdUnit = setUnit(exercise.exerciseId) === 'seconds';
   const plannedTarget = exercise.planned[activeSet === -1 ? exercise.planned.length - 1 : activeSet];
@@ -420,7 +423,7 @@ export default function TrainScreen({
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <span className="aw-set__label">
-              Set {setIndex + 1}: {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit)}
+              Set {setIndex + 1}: {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit, rack)}
             </span>
           </span>
           <button
@@ -477,7 +480,7 @@ export default function TrainScreen({
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <span className="aw-set__label">
-              {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit)}
+              {setSummary(exercise.exerciseId, set.reps, set.weight, mode, unit, rack)}
             </span>
           </span>
         </div>

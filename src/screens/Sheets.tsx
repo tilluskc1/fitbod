@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
-import { formatActualWeight, formatWeight } from '../lib/units';
+import { formatActualWeight, formatWeight, loadValue, unitLabel } from '../lib/units';
 import type { Profile, Unit, WorkoutExercise } from '../types';
 import { lastPerformance } from '../lib/plan';
 import type { WorkoutRecord } from '../types';
@@ -287,12 +287,15 @@ export function ExerciseSheet({
   planned,
   history,
   unit,
+  rack = [],
   onClose,
 }: {
   exerciseId: string;
   planned: { weight: number; reps: number }[];
   history: WorkoutRecord[];
   unit: Unit;
+  /** Confirmed loads; a last load on this rack reads like the target. */
+  rack?: number[];
   onClose: () => void;
 }) {
   const meta = exerciseById(exerciseId);
@@ -314,7 +317,7 @@ export function ExerciseSheet({
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Last recorded</span>
           <span>
-            {last ? `${formatActualWeight(last.weight, unit)} · ${setText(exerciseId, last.reps)}` : 'No history'}
+            {last ? `${last.weight > 0 ? `${loadValue(last.weight, unit, [...rack, ...planned.map((set) => set.weight)])} ${unitLabel(unit)}` : 'Bodyweight'} · ${setText(exerciseId, last.reps)}` : 'No history'}
           </span>
         </div>
       </div>
