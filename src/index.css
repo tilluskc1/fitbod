@@ -3887,3 +3887,10 @@ button.aw-exercise__name-btn {
 .empty-state p {
   margin: 0 0 6px;
 }
+
+.feasibility__reason {
+  margin: -4px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--on-surface-muted);
+}

@@ -79,7 +79,7 @@ export default function PlanScreen({
         </button>
       </header>
       <p className="page-sub">
-        {program.exercises.length} exercises · {sessionSets} sets · {minutes} minutes ·{' '}
+        {program.exercises.length} exercises · {sessionSets} sets · {program.exercises.length > 0 && `${minutes} minutes · `}
         {profile.equipment.length === 0 ? 'Bodyweight' : profile.equipment.length >= 3 ? 'Full gym' : 'Home'}
       </p>
 
@@ -118,7 +118,7 @@ export default function PlanScreen({
                 </span>
                 <strong className="plan-name">{program.name}</strong>
                 <span className="plan-meta">
-                  {minutes} min · {program.exercises.length} exercises · {sessionSets} sets
+                  {program.exercises.length > 0 && `${minutes} min · `}{program.exercises.length} exercises · {sessionSets} sets
                 </span>
                 <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
                 <span className="plan-foot">

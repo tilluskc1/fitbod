@@ -15,6 +15,9 @@ interface Props {
 export default function FeasibilityNote({ feasibility, profile, onOpenSettings, onReviewChange }: Props) {
   if (!feasibility || feasibility.status === 'ok') return null;
   const { status, selectedCount, targetCount, alternatives } = feasibility;
+  // The line already names the status; the reason adds why, visibly (phones show no tooltips).
+  const reason = feasibility.reason.replace(/^Limited session: (\w)/, (_, first: string) => first.toUpperCase());
+  const MAX_CHIPS = 3;
   const missing = missingFamilies(feasibility);
   const line = [
     status === 'infeasible' ? 'Not enough equipment' : 'Limited session',
@@ -22,11 +25,12 @@ export default function FeasibilityNote({ feasibility, profile, onOpenSettings, 
     missing ? `no ${missing}` : '',
   ].filter(Boolean).join(' · ');
   return (
-    <div className={`feasibility feasibility--${status}`} role="note" title={feasibility.reason}>
+    <div className={`feasibility feasibility--${status}`} role="note">
       <p className="feasibility__line">{line}</p>
+      {reason && <p className="feasibility__reason">{reason}</p>}
       {alternatives.length > 0 && (
         <div className="feasibility__alts">
-          {alternatives.map((alt) => {
+          {alternatives.slice(0, MAX_CHIPS).map((alt) => {
             const exercise = alt.exerciseId ? exerciseById(alt.exerciseId) : undefined;
             const onClick = alt.kind === 'capability' ? onOpenSettings
               : exercise && onReviewChange ? () => onReviewChange(exclusionChange(profile, exercise, false)) : null;
@@ -36,6 +40,9 @@ export default function FeasibilityNote({ feasibility, profile, onOpenSettings, 
               <span key={alt.label} className="feasibility__alt feasibility__alt--text" title={alt.detail}>{alt.label}</span>
             );
           })}
+          {alternatives.length > MAX_CHIPS && (
+            <button className="text-action text-action--lime" onClick={onOpenSettings}>More in Equipment</button>
+          )}
         </div>
       )}
     </div>

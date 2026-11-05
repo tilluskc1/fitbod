@@ -112,6 +112,8 @@ export default function TodayScreen({
       ? estimatedMinutes(program, adapted.totalSets)
       : adapted.minutes;
   const minutes = current ? (current.durationMin ?? adapted.minutes) : estimated;
+  // A day with nothing to do has no duration to promise.
+  const timed = Boolean(current) || adapted.exercises.length > 0;
   const first = adapted.exercises[0];
   const heroId = first?.exerciseId ?? 'dumbbell-floor-press';
   const photo = exercisePhoto(heroId);
@@ -153,7 +155,7 @@ export default function TodayScreen({
           </span>
         </div>
 
-        <section className="hero-card" aria-label={`${program.name}, ${minutes} minutes`}>
+        <section className="hero-card" aria-label={timed ? `${program.name}, ${minutes} minutes` : program.name}>
           {photo && <img className="hero-card__photo" src={photo} alt="" />}
           <span className="hero-card__shade" aria-hidden="true" />
           <span className="hero-card__top">
@@ -165,9 +167,14 @@ export default function TodayScreen({
               {current ? current.name : program.name}
             </span>
             <span className="hero-card__meta">
-              <Icon name="timer" size={17} />
-              {estimated < adapted.minutes && !current ? '≈' : ''}
-              {minutes} min <span aria-hidden="true">·</span> {setup.short}
+              {timed && (
+                <>
+                  <Icon name="timer" size={17} />
+                  {estimated < adapted.minutes && !current ? '≈' : ''}
+                  {minutes} min <span aria-hidden="true">·</span>{' '}
+                </>
+              )}
+              {setup.short}
               {slotLabel && (
                 <>
                   {' '}
@@ -223,15 +230,15 @@ export default function TodayScreen({
           <div className="list-head">
             <h2>The workout</h2>
             <span>
-              {estimated < adapted.minutes && !current ? '≈' : ''}
-              {minutes} min · {adapted.totalSets} {adapted.totalSets === 1 ? 'set' : 'sets'}
+              {timed && `${estimated < adapted.minutes && !current ? '≈' : ''}${minutes} min · `}
+              {adapted.totalSets} {adapted.totalSets === 1 ? 'set' : 'sets'}
             </span>
           </div>
 
           <div className="workout-list">
             {adapted.exercises.length === 0 && !adjusted && program.feasibility?.status === 'infeasible' && (
               <div className="empty-state">
-                <p>No {missingFamilies(program.feasibility)} fits your equipment yet. Add gear and this day fills in.</p>
+                <p>Your equipment can’t cover {missingFamilies(program.feasibility)} yet. Add gear to fill this day.</p>
                 <button className="text-action text-action--lime" onClick={onOpenSettings}>Edit equipment</button>
               </div>
             )}

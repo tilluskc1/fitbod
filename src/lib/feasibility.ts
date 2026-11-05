@@ -52,7 +52,7 @@ const TRICEPS: CoverageRequirement = {
 
 const BICEPS: CoverageRequirement = {
   id: 'biceps',
-  label: 'Biceps flexion',
+  label: 'Biceps curls',
   anyOf: ['elbow_flexion'],
 };
 
@@ -122,7 +122,7 @@ export function isRelevantToDay(exercise: Exercise, day: PlanDay): boolean {
 
 /** The movement families the day cannot cover, in plain words. */
 export function missingFamilies(feasibility: Feasibility): string {
-  return feasibility.coverage.filter((item) => !item.satisfied).map((item) => item.label.toLowerCase()).join(', ');
+  return joinLabels(feasibility.coverage.filter((item) => !item.satisfied).map((item) => item.label.toLowerCase()), 'or');
 }
 
 function coverageFor(requirements: CoverageRequirement[], selected: Exercise[]): CoverageResult[] {
@@ -139,10 +139,10 @@ function coverageFor(requirements: CoverageRequirement[], selected: Exercise[]):
   });
 }
 
-function joinLabels(items: string[]): string {
+export function joinLabels(items: string[], conjunction: 'and' | 'or' = 'and'): string {
   if (items.length === 0) return '';
   if (items.length === 1) return items[0];
-  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+  return `${items.slice(0, -1).join(', ')} ${conjunction} ${items[items.length - 1]}`;
 }
 
 function buildAlternatives(
