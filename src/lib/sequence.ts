@@ -127,6 +127,7 @@ export function slotProgram(
     name: slot.name,
     minutes: profile.sessionMinutes ?? 35,
     exercises,
+    feasibility: generated.feasibility,
   };
 }
 

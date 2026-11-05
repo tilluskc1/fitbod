@@ -80,6 +80,8 @@ import
 import
  type { Tab } from './components/ui/Chrome';
 import { tabBarAction } from './lib/tabBarAction';
+import type { ProfileChange } from './lib/preferences';
+import Sheet from './components/ui/Sheet';
 import
  TodayScreen from './screens/TodayScreen';
 import
@@ -105,6 +107,7 @@ import
 import
  {
   AdjustSheet,
+  ConfirmChange,
   DaySheet,
   DiscardSessionSheet,
   ExerciseActionsSheet,
@@ -125,7 +128,8 @@ type SheetState =
   | { kind: 'preview' }
   | { kind: 'why'; exerciseId: string; exerciseIndex: number }
   | { kind: 'finish' }
-  | { kind: 'swap'; exerciseIndex: number };
+  | { kind: 'swap'; exerciseIndex: number }
+  | { kind: 'confirm'; change: ProfileChange };
 
 interface SaveUi {
   kind: 'idle' | 'saved' | 'error';
@@ -907,6 +911,7 @@ export default function App() {
             onRestore={restoreOriginal}
             onOpenSettings={() => setSheet({ kind: 'settings' })}
             onOpenExercise={(exerciseId, exerciseIndex) => setSheet({ kind: 'actions', exerciseId, exerciseIndex })}
+            onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
           />
         )}
         {tab === 'plan' && (            <PlanScreen
@@ -919,6 +924,7 @@ export default function App() {
             onOpenSettings={() => setSheet({ kind: 'settings' })}
             onViewDay={(dayIndex) => setSheet({ kind: 'day', dayIndex })}
             onOpenLibrary={() => setView('library')}
+            onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
           />
         )}
         {tab === 'progress' && (
@@ -1011,6 +1017,19 @@ export default function App() {
             setView('adapt');
           }}
         />
+      )}
+
+      {sheet.kind === 'confirm' && (
+        <Sheet title={sheet.change.title} onClose={closeSheet}>
+          <ConfirmChange
+            change={sheet.change}
+            onConfirm={(patch) => {
+              closeSheet();
+              patchProfile(patch);
+            }}
+            onCancel={closeSheet}
+          />
+        </Sheet>
       )}
 
       {sheet.kind === 'settings' && (

@@ -9,7 +9,7 @@
 
 import { exerciseById } from './exercises.ts';
 import { displayValue, unitLabel } from '../lib/units.ts';
-import type { Unit } from '../types.ts';
+import type { Feasibility, Unit } from '../types.ts';
 
 export type LoadMode = 'each' | 'total' | 'none';
 
@@ -43,6 +43,8 @@ export interface Program {
   name: string;
   minutes: number;
   exercises: ProgramExercise[];
+  /** The generated slot's honest status: Ready, Limited or Not enough equipment. */
+  feasibility?: Feasibility;
 }
 
 export const FULL_BODY_A: Program = {
