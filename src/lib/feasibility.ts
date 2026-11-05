@@ -240,6 +240,23 @@ export function evaluateFeasibility(
   const coverage = coverageFor(requirements, selected);
   const unsatisfied = coverage.filter((item) => !item.satisfied);
   const availableCount = selected.length;
+  // Only a muscle with no performable exercise at all is called impossible;
+  // one that merely lost the slot race is not.
+  const caps = capabilitiesFor(profile);
+  const open = day.focus.filter(
+    (muscle) =>
+      !selected.some((exercise) => exercise.muscles[0] === muscle) &&
+      !EXERCISES.some(
+        (exercise) =>
+          exercise.muscles[0] === muscle &&
+          provides(caps, exercise.needs) &&
+          !profile.exclusions.includes(exercise.id),
+      ),
+  );
+  const openNote =
+    open.length > 0
+      ? ` No ${joinLabels(open.map((muscle) => muscle.toLowerCase()))} exercise is possible with these constraints.`
+      : '';
   const alternatives = buildAlternatives(
     profile,
     day,
@@ -263,7 +280,7 @@ export function evaluateFeasibility(
   if (unsatisfied.length > 0) {
     return {
       status: 'limited',
-      reason: `Limited session: no ${joinLabels(unsatisfied.map((item) => item.label.toLowerCase()))} work is available with these constraints.`,
+      reason: `Limited session: no ${joinLabels(unsatisfied.map((item) => item.label.toLowerCase().replace(/ work$/, '')))} work is available with these constraints.${openNote}`,
       targetCount,
       selectedCount: availableCount,
       coverage,
@@ -274,7 +291,7 @@ export function evaluateFeasibility(
   if (availableCount < targetCount) {
     return {
       status: 'limited',
-      reason: `Limited session: ${availableCount} of ${targetCount} exercises are possible without repeating movement patterns.`,
+      reason: `Limited session: ${availableCount} of ${targetCount} exercises are possible without repeating movement patterns.${openNote}`,
       targetCount,
       selectedCount: availableCount,
       coverage,
