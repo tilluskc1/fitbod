@@ -6,7 +6,7 @@ import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from 
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
-import { displayValue, unitLabel } from '../lib/units';
+import { calibrationInputValue, displayValue, toKg, unitLabel } from '../lib/units';
 import type { PerformedSet, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -15,7 +15,7 @@ interface Props {
   session: WorkoutRecord;
   history: WorkoutRecord[];
   now: number;
-  /** Weights the chosen setup owns. Never free-typed. */
+  /** Confirmed dumbbell weights for the chosen setup. */
   loadOptions: number[];
   /** Display unit. Records stay in kilograms. */
   unit: Unit;
@@ -58,7 +58,7 @@ function setSummary(
 ): string {
   const load =
     weight > 0
-      ? ` @ ${displayValue(weight, unit)} ${unitLabel(unit)}${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}`
+      ? ` @ ${calibrationInputValue(weight, unit)} ${unitLabel(unit)}${mode === 'total' ? ' total' : mode === 'each' ? ' each' : ''}`
       : '';
   return `${setText(exerciseId, reps)}${load}`;
 }
@@ -192,6 +192,7 @@ export default function TrainScreen({
 
   const activeSet = exercise.performed.findIndex((set) => !set.done);
   const mode = loadModeOf(exercise.exerciseId);
+  const equipment = exerciseById(exercise.exerciseId)?.equipment ?? (mode === 'none' ? 'Bodyweight' : 'Dumbbell');
   const detail = detailOf(exercise.exerciseId);
   const weightLabel =
     mode === 'total'
@@ -201,6 +202,7 @@ export default function TrainScreen({
         : 'bodyweight';
   /** Loads are stored in kilograms; only the readout converts. */
   const showWeight = (kg: number) => displayValue(kg, unit);
+  const showActual = (kg: number) => calibrationInputValue(kg, unit);
   const last = lastPerformance(history, exercise.exerciseId);
   const holdUnit = setUnit(exercise.exerciseId) === 'seconds';
   const plannedTarget = exercise.planned[activeSet === -1 ? exercise.planned.length - 1 : activeSet];
@@ -209,7 +211,18 @@ export default function TrainScreen({
     repsTarget(exercise.exerciseId, exercise.planned.length, exercise.planned) ??
     exercise.planned.map((set) => set.reps).join(' · ');
   const targetWeight = exercise.planned[0]?.weight ?? 0;
-  const canPickWeight = mode !== 'none' && loadOptions.length > 0;
+  const canPickWeight = equipment === 'Dumbbell' && loadOptions.length > 0;
+  const canEnterWeight = mode !== 'none' && equipment !== 'Dumbbell';
+  const loadEntry = (weight: number, update: (weight: number) => void) => canEnterWeight ? (
+    <input type="number" min="0" step="any" inputMode="decimal"
+      aria-label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`}
+      defaultValue={calibrationInputValue(weight, unit)}
+      onChange={(event) => {
+        const value = Number(event.target.value);
+        if (event.target.value === '') update(0);
+        else if (Number.isFinite(value) && value >= 0) update(toKg(value, unit));
+      }} />
+  ) : null;
 
   const activeValues =
     activeSet === -1
@@ -221,7 +234,7 @@ export default function TrainScreen({
     : activeValues
       ? `Log set ${activeSet + 1} · ${
           activeValues.weight > 0
-            ? `${setText(exercise.exerciseId, activeValues.reps)} @ ${showWeight(activeValues.weight)} ${unitLabel(unit)}`
+            ? `${setText(exercise.exerciseId, activeValues.reps)} @ ${showActual(activeValues.weight)} ${unitLabel(unit)}`
             : setText(exercise.exerciseId, activeValues.reps)
         }`
       : 'Log set';
@@ -257,14 +270,14 @@ export default function TrainScreen({
             </div>
             <span className="set-card__target">
               Saved: {setText(exercise.exerciseId, set.reps)}
-              {set.weight > 0 ? ` · ${showWeight(set.weight)} ${unitLabel(unit)}` : ''}
+              {set.weight > 0 ? ` · ${showActual(set.weight)} ${unitLabel(unit)}` : ''}
             </span>
           </div>
 
           <div className="aw-field">
             <div className="aw-field__label">
               <span>Weight ({weightLabel})</span>
-              <span className="aw-field__note">{canPickWeight ? 'Dumbbell' : 'Bodyweight'}</span>
+              <span className="aw-field__note">{equipment}</span>
             </div>
             {canPickWeight ? (
               <div className="weight-pills">
@@ -278,7 +291,7 @@ export default function TrainScreen({
                   </button>
                 ))}
               </div>
-            ) : (
+            ) : canEnterWeight ? loadEntry(draft.weight, (weight) => patchDraft({ weight })) : (
               <p style={{ fontSize: 14, color: 'var(--on-surface-variant)' }}>Bodyweight</p>
             )}
           </div>
@@ -379,7 +392,7 @@ export default function TrainScreen({
         <div className="aw-field">
           <div className="aw-field__label">
             <span>Weight ({weightLabel})</span>
-            <span className="aw-field__note">{canPickWeight ? 'Dumbbell' : 'Bodyweight'}</span>
+            <span className="aw-field__note">{equipment}</span>
           </div>
           {canPickWeight ? (
             <div className="weight-pills">
@@ -393,7 +406,7 @@ export default function TrainScreen({
                 </button>
               ))}
             </div>
-          ) : (
+          ) : canEnterWeight ? loadEntry(set.weight, (weight) => onUpdateSet(index, setIndex, { weight })) : (
             <p style={{ fontSize: 14, color: 'var(--on-surface-variant)' }}>Bodyweight</p>
           )}
         </div>
@@ -479,13 +492,13 @@ export default function TrainScreen({
                 ? `${showWeight(plannedTarget.weight)} ${weightLabel} · ${detail}`
                 : mode === 'none'
                   ? `Bodyweight · ${detail}`
-                  : [...new Set([exerciseById(exercise.exerciseId)?.equipment ?? 'Dumbbell', detail])].join(' · ')}
+                  : `Load not set · ${[...new Set([equipment, detail])].join(' · ')}`}
             </div>
             <div className="aw-history">
               <div className="aw-history__line">
                 <Icon name="history" size={16} />
                 {last
-                  ? `Last session: ${setText(exercise.exerciseId, last.reps)}${last.weight > 0 ? ` @ ${showWeight(last.weight)} ${unitLabel(unit)}${mode === 'total' ? ' total' : ' each'}` : ''}`
+                  ? `Last session: ${setText(exercise.exerciseId, last.reps)}${last.weight > 0 ? ` @ ${showActual(last.weight)} ${unitLabel(unit)}${mode === 'total' ? ' total' : ' each'}` : ''}`
                   : 'No previous session recorded'}
               </div>
               <div className="aw-history__line aw-history__line--target">

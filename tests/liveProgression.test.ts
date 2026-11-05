@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FULL_BODY_A } from '../src/data/flagship.ts';
-import { adaptWorkout, restorePendingWorkout, swapCandidateFor } from '../src/lib/adapt.ts';
+import { FULL_BODY_A, targetSummary } from '../src/data/flagship.ts';
+import { adaptWorkout, currentWorkout, restorePendingWorkout, swapCandidateFor } from '../src/lib/adapt.ts';
 import { prescribeExercise } from '../src/lib/progression.ts';
 import { exerciseById } from '../src/data/exercises.ts';
 import { applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
@@ -297,4 +297,31 @@ test('mid-session adjust, restore and swap-back keep the history-derived numbers
   assert.ok(press);
   const candidate = swapCandidateFor(press, profile, history, null);
   assert.deepEqual({ weight: candidate.weight, reps: candidate.reps }, live[0].planned[0]);
+});
+
+test('in lb, the reason and the target name a rack load with the same number', () => {
+  // 15 kg is on the rack; 3 × 9 holds the load and asks for a rep.
+  const { state } = finish(logAll(startLiveSession([]), 0, 15, 9));
+  const lb = { ...profile, unit: 'lb' as const };
+  const press = liveAdapted(adaptWorkout(FULL_BODY_A, constraints), lb, state.history).exercises[0];
+  const target = targetSummary(press, press.sets, 'lb').match(/@ ([\d.]+) lb/)?.[1];
+  const reason = targetReason(press.exerciseId, lb, state.history, 'lb')?.match(/([\d.]+) lb/)?.[1];
+  assert.ok(target);
+  assert.equal(reason, target);
+});
+
+test('a user-typed non-rack load keeps its stored precision in the reason', () => {
+  const { state } = finish(logAll(startLiveSession([]), 0, 42.3, 9));
+  assert.match(targetReason('dumbbell-floor-press', profile, state.history, 'kg') ?? '', /42\.3 kg/);
+});
+
+test('an open slot session gives a non-flagship movement its own rep range, not its planned reps', () => {
+  const other = ['dumbbell-romanian-deadlift', 'dumbbell-lunge', 'dumbbell-shoulder-press']
+    .map((id) => exerciseById(id)).find((exercise) => exercise && !FULL_BODY_A.exercises.some((entry) => entry.exerciseId === exercise.id));
+  assert.ok(other, 'a catalog movement outside the flagship');
+  const session = createSession({ id: 'slot', name: 'Slot B', dayIndex: 1, durationMin: 35, now: '2026-11-02T10:00:00.000Z',
+    exercises: [{ exerciseId: other.id, name: other.name, planned: [{ weight: 0, reps: 8 }], performed: [{ weight: 0, reps: 8, done: false }] }] });
+  const shown = currentWorkout(adaptWorkout(FULL_BODY_A, constraints), session).exercises[0];
+  const expected = prescribeExercise(other, profile, []).range;
+  assert.deepEqual(shown.repRange, [expected.min, expected.max]);
 });
