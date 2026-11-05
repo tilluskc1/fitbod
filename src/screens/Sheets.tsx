@@ -31,6 +31,7 @@ import { CheckIcon, LockIcon } from '../components/ui/Icons';
 interface AdjustProps {
   constraints: Constraints;
   originalMinutes: number;
+  unit: Unit;
   onClose: () => void;
   onPreview: (next: Constraints, notices: ConstraintNotice[]) => void;
 }
@@ -40,7 +41,7 @@ interface AdjustProps {
  * details below all write to the same object, so no control can drift from
 the others.
  */
-export function AdjustSheet({ constraints, originalMinutes, onClose, onPreview }: AdjustProps) {
+export function AdjustSheet({ constraints, originalMinutes, unit, onClose, onPreview }: AdjustProps) {
   const [current, setCurrent] = useState(constraints);
   const [text, setText] = useState(constraintSentence(constraints));
   const [notices, setNotices] = useState<ConstraintNotice[]>([]);
@@ -184,7 +185,7 @@ export function AdjustSheet({ constraints, originalMinutes, onClose, onPreview }
                     <span className="equipment-choice__name">{option.label}</span>
                     <span className="equipment-choice__detail">
                       {key === 'home' && current.loads?.length
-                        ? `Yours: ${current.loads.map((load) => `${load} kg`).join(', ')}`
+                        ? `Yours: ${current.loads.map((load) => formatActualWeight(load, unit)).join(', ')}`
                         : option.detail}
                     </span>
                   </span>
