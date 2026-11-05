@@ -158,14 +158,14 @@ test('the logger names the equipment, not bodyweight, and shows the prescribed r
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const render = (current: WorkoutRecord) => plain(renderToStaticMarkup(createElement(Train, {
       session: current, history: [], now: Date.now(), loadOptions: RACK, unit: 'kg', onMinimize: noop,
-      onFinish: noop, onUpdateSet: noop, onLogNext: noop, onToggleRestPause: noop, onExtendRest: noop,
-      onSwap: noop, onSkip: noop, onReturn: noop })));
+      onFinish: noop, onUpdateSet: noop, onLogSet: noop, onToggleRestPause: noop, onExtendRest: noop,
+      onReturn: noop })));
     const press = render(session);
-    assert.doesNotMatch(press, /Bodyweight · Floor mat/);
-    assert.match(press, /Dumbbell · Floor mat/);
+    assert.doesNotMatch(press, /\bBW\b|Load Reps/, 'a dumbbell press is not bodyweight');
+    assert.match(press, /Dumbbells 10 15 18 Set Previous kg each Reps/);
     for (let index = 0; index < 3; index += 1) session = logSet(session, 0, index, `2026-11-02T10:0${index + 1}:00.000Z`);
     const squat = render(session);
     assert.match(squat, /Goblet squat/i);
-    assert.match(squat, /Today’s target: 8 · 8 · 8/);
+    assert.match(squat, /Target 3 × 8 /);
   } finally { await server.close(); }
 });

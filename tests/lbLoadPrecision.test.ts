@@ -16,7 +16,7 @@ import type { Profile, WorkoutRecord } from '../src/types.ts';
 const RACK = [10, 15, 18];
 // The exercise action sheet opens on its history view, where recorded loads are listed.
 const historyView = { name: 'action-sheet-history', enforce: 'pre' as const, transform(code: string, file: string) {
-  if (file.endsWith('/src/screens/Sheets.tsx')) return code.replace("useState<ActionMode>('menu')", "useState<ActionMode>('history')");
+  if (file.endsWith('/src/screens/Sheets.tsx')) return code.replace("useState<ActionMode>(initialMode)", "useState<ActionMode>('history')");
 } };
 const actionProps = (profile: Profile) => ({ exerciseIndex: 0, exerciseCount: 1, pending: 0, done: 0, profile, inSession: false,
   skipped: false, onReplace() {}, onSaveProfile() {}, onRemoveToday() {}, onReturn() {} });
@@ -45,6 +45,10 @@ function historyAt(weight: number): WorkoutRecord[] {
     { early: true, now: '2026-11-02T10:30:00.000Z' }).history;
 }
 
+/** The visible text of the control with this accessible name. */
+const cellText = (html: string, label: string) => html.match(new RegExp(`aria-label="${label}"[^>]*>([^<]*)<`))?.[1];
+const weights = (html: string) => [1, 2, 3].map((n) => cellText(html, `Edit weight for set ${n}`));
+
 test('rack loads read like the target on every surface; typed loads keep their exact value (lb and kg)', async () => {
   const server = await createServer({ plugins: [historyView], server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
@@ -54,10 +58,11 @@ test('rack loads read like the target on every surface; typed loads keep their e
     for (const unit of ['lb', 'kg'] as const) {
       const who = { ...profile, unit };
       const props = { now: Date.parse('2026-11-04T10:01:00.000Z'), loadOptions: RACK, profileLoads: who.loads, unit,
-        onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogNext() {}, onToggleRestPause() {},
-        onExtendRest() {}, onSwap() {}, onSkip() {}, onReturn() {} };
-      const train = (history: WorkoutRecord[], weight: number, planned: number) =>
-        plain(renderToStaticMarkup(createElement(TrainScreen, { ...props, history, session: sessionAt(weight, planned) })));
+        onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {},
+        onExtendRest() {}, onReturn() {} };
+      const trainHtml = (history: WorkoutRecord[], weight: number, planned: number) =>
+        renderToStaticMarkup(createElement(TrainScreen, { ...props, history, session: sessionAt(weight, planned) }));
+      const train = (history: WorkoutRecord[], weight: number, planned: number) => plain(trainHtml(history, weight, planned));
       const sheets = (history: WorkoutRecord[]) => [
         ['exercise history', ExerciseActionsSheet, /own records\. .*?@ ([\d.]+) lb|own records\. .*?@ ([\d.]+) kg/],
         ['why sheet', WhySheet, /Working load (.+?) lb|Working load (.+?) kg/],
@@ -72,10 +77,11 @@ test('rack loads read like the target on every surface; typed loads keep their e
 
       // Rack: 15 kg is 33.07 lb stored but reads 33 lb everywhere (15 kg in kg).
       const shown = unit === 'lb' ? '33 lb' : '15 kg';
+      const number = shown.split(' ')[0];
       const rack = train(historyAt(15), 18, 18);
-      assert.match(rack, new RegExp(`Last session: .*@ ${shown} each`), `${unit} last-session`);
-      assert.match(train(historyAt(15), 15, 15), new RegExp(`Log set 1 · .*@ ${shown}`), `${unit} Log button`);
-      assert.match(train(historyAt(15), 18, 18), unit === 'lb' ? /10 reps @ 39\.5 lb each/ : /10 reps @ 18 kg each/, `${unit} planned rows`);
+      assert.match(rack, new RegExp(`Set Previous ${unit} each Reps Log 1 ${number} × 10 `), `${unit} previous`);
+      assert.deepEqual(weights(trainHtml(historyAt(15), 15, 15)), [number, number, number], `${unit} the rows ✓ logs`);
+      assert.deepEqual(weights(trainHtml(historyAt(15), 18, 18)), Array(3).fill(unit === 'lb' ? '39.5' : '18'), `${unit} planned rows`);
       assert.doesNotMatch(rack, /39\.68|33\.07/);
       for (const [label, text] of sheets(historyAt(15))) assert.equal(text, shown, `${unit} ${label}`);
       assert.match(recap(historyAt(15)), new RegExp(`@ ${shown} each`), `${unit} recap`);
@@ -84,11 +90,11 @@ test('rack loads read like the target on every surface; typed loads keep their e
       const typed = unit === 'lb' ? toKg(42.3, 'lb') : 42.3;
       const exact = `42.3 ${unit}`;
       for (const planned of [18, typed]) {
-        const off = train(historyAt(typed), typed, planned);
-        assert.match(off, new RegExp(`Last session: .*@ ${exact} each`), `${unit} typed last-session (planned ${planned})`);
-        assert.match(off, new RegExp(`Log set 1 · .*@ ${exact}`), `${unit} typed Log button`);
-        assert.match(off, new RegExp(`10 reps @ ${exact} each`), `${unit} typed planned rows`);
+        const off = trainHtml(historyAt(typed), typed, planned);
+        assert.match(plain(off), new RegExp(`Previous ${unit} each Reps Log 1 42\\.3 × 10 `), `${unit} typed previous (planned ${planned})`);
+        assert.deepEqual(weights(off), ['42.3', '42.3', '42.3'], `${unit} typed rows (planned ${planned})`);
       }
+      void exact;
       for (const [label, text] of sheets(historyAt(typed))) assert.equal(text, exact, `${unit} typed ${label}`);
       assert.match(recap(historyAt(typed)), new RegExp(`@ ${exact} each`), `${unit} typed recap`);
     }
@@ -112,12 +118,11 @@ test('a held typed load reads as typed on target, header, chip, Today row and re
       const held = liveExercises(adapted, who, history)[0];
       assert.equal(held.planned[0].weight, typed, 'held load');
       const session = createSession({ id: 'n', name: 'A', dayIndex: 0, now: '2026-11-04T10:00:00.000Z', exercises: [held] });
-      const train = plain(renderToStaticMarkup(createElement(TrainScreen, { now: Date.parse('2026-11-04T10:01:00.000Z'),
+      const trainHtml = renderToStaticMarkup(createElement(TrainScreen, { now: Date.parse('2026-11-04T10:01:00.000Z'),
         loadOptions: RACK, profileLoads: who.loads, unit, history, session, onMinimize() {}, onFinish() {}, onUpdateSet() {},
-        onLogNext() {}, onToggleRestPause() {}, onExtendRest() {}, onSwap() {}, onSkip() {}, onReturn() {} })));
-      assert.match(train, new RegExp(`fitness_center ${exact.replace('.', '\\.')} each`), `${unit} header`);
-      assert.match(train, new RegExp(`Target: \\d+ reps · ${exact.replace('.', '\\.')}`), `${unit} chip`);
-      assert.match(train, new RegExp(`Today’s target: .*@ ${exact.replace('.', '\\.')} each`), `${unit} target line`);
+        onLogSet() {}, onToggleRestPause() {}, onExtendRest() {}, onReturn() {} }));
+      assert.match(plain(trainHtml), new RegExp(`Previous ${unit} each Reps Log 1 42\\.3 × 10 `), `${unit} previous`);
+      assert.deepEqual(weights(trainHtml), ['42.3', '42.3', '42.3'], `${unit} target rows`);
       const today = plain(renderToStaticMarkup(createElement(Today, { profile: who, program: FULL_BODY_A,
         adapted: liveAdapted(adapted, who, history), equipment: 'home', adjusted: false, history, current: null,
         now: new Date('2026-11-04T10:00:00.000Z'), onPreview() {}, onAdjust() {}, onWhy() {}, onRestore() {},
@@ -174,14 +179,13 @@ test('an app-prescribed barbell step reads the same on target, rows, Log button 
     const session = createSession({ id: 'n', name: 'B', dayIndex: 0, now: '2026-11-04T10:00:00.000Z', exercises: [{ exerciseId: 'barbell-row',
       name: 'Barbell Row', planned: [0, 1, 2].map(() => ({ weight: step, reps: 10 })), performed: [0, 1, 2].map(() => ({ weight: step, reps: 10, done: false })) }] });
     const html = renderToStaticMarkup(createElement(TrainScreen, { now: Date.parse('2026-11-04T10:01:00.000Z'), loadOptions: [], profileLoads: bar.loads,
-      unit: 'lb', history, session, onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogNext() {}, onToggleRestPause() {}, onExtendRest() {},
-      onSwap() {}, onSkip() {}, onReturn() {} }));
+      unit: 'lb', history, session, onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {}, onExtendRest() {},
+      onReturn() {} }));
     const text = plain(html);
-    assert.match(text, new RegExp(`fitness_center ${X} lb total`), 'target header');
-    assert.match(text, new RegExp(`10 reps @ ${X} lb total`), 'pending rows');
-    assert.match(text, new RegExp(`Log set 1 · .*@ ${X} lb`), 'Log button');
-    assert.match(html, new RegExp(`value="${X}"`), 'input');
-    assert.doesNotMatch(text, /\d\.\d\d lb/);
+    assert.match(text, /Set Previous lb total Reps/, 'target header');
+    // The rows, the ✓ that logs them and the editor's input all read showPending.
+    assert.deepEqual(weights(html), [X, X, X], 'pending rows');
+    assert.doesNotMatch(text, /\d\.\d\d/);
     // Accept the step unchanged, log and finish: the next session still reads X, not the exact conversion.
     const accepted = record(step, step);
     assert.equal(plannedLoad(bar.loads, accepted, 'barbell-row', 'lb')(step), X, 'accepted step stays half-unit');
@@ -223,8 +227,8 @@ test('a logged load reads like its target when accepted unchanged and as typed o
       assert.equal(step, 22.5, 'the app steps to 22.5 kg');
       const X = inputValue(step, unit); // 49.5 lb / 22.5 kg
       const trainProps = { now: Date.parse('2026-11-04T10:01:00.000Z'), loadOptions: [], profileLoads: bar.loads, unit,
-        onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogNext() {}, onToggleRestPause() {}, onExtendRest() {},
-        onSwap() {}, onSkip() {}, onReturn() {} };
+        onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {}, onExtendRest() {},
+        onReturn() {} };
       const re = (value: string) => value.replace('.', '\\.');
 
       for (const [weight, shown] of [[step, X], [typed, typedText]] as const) {
@@ -232,8 +236,10 @@ test('a logged load reads like its target when accepted unchanged and as typed o
         // In session: set 1 saved at `weight`, the step still planned for the rest.
         let live = createSession({ id: 'b', name: 'B', dayIndex: 0, now: '2026-11-04T10:00:00.000Z', exercises: [exercise(step, step)] });
         live = logSet(updatePerformedSet(live, 0, 0, { weight }), 0, 0, '2026-11-04T10:01:00.000Z');
-        const row = plain(renderToStaticMarkup(createElement(TrainScreen, { ...trainProps, history: first, session: live })));
-        assert.match(row, new RegExp(`Set 1: 10 reps @ ${re(shown)} ${unit} total`), `${tag} saved row`);
+        const rowHtml = renderToStaticMarkup(createElement(TrainScreen, { ...trainProps, history: first, session: live }));
+        const row = plain(rowHtml);
+        assert.match(rowHtml, /<tr class="lg-row--done">/, `${tag} saved row`);
+        assert.equal(cellText(rowHtml, 'Edit weight for set 1'), shown, `${tag} saved row`);
 
         // 8 reps: a rep step, so the recap headline is the new best rather than an earned load.
         const history = finish(first, 'b', '2026-11-04', step, weight, 8);
@@ -254,9 +260,10 @@ test('a logged load reads like its target when accepted unchanged and as typed o
         }
         // Next session: last session and target side by side.
         const next = createSession({ id: 'c', name: 'B', dayIndex: 0, now: '2026-11-06T10:00:00.000Z', exercises: [exercise(weight, weight)] });
-        const train = plain(renderToStaticMarkup(createElement(TrainScreen, { ...trainProps, history, session: next })));
-        assert.match(train, new RegExp(`Last session: .*@ ${re(shown)} ${unit} total`), `${tag} last session`);
-        assert.match(train, new RegExp(`Today’s target: .*@ ${re(shown)} ${unit}`), `${tag} next target`);
+        const trainHtml = renderToStaticMarkup(createElement(TrainScreen, { ...trainProps, history, session: next }));
+        const train = plain(trainHtml);
+        assert.match(train, new RegExp(`Previous ${unit} total Reps Log 1 ${re(shown)} × 8 `), `${tag} last session`);
+        assert.equal(cellText(trainHtml, 'Edit weight for set 1'), shown, `${tag} next target`);
         if (unit === 'lb') assert.doesNotMatch(`${row} ${lines[0].performed} ${lines[0].reason} ${progress} ${train}`, /49\.6/, `${tag} no 49.6`);
       }
     }
