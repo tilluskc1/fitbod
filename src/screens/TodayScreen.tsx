@@ -134,7 +134,7 @@ export default function TodayScreen({
 
         <div className="today__week">
           <span>
-            {week} of {targetDays} sessions this week
+            Weekly goal: {week} of {targetDays} this week
           </span>
           <span
             className="today__dots"

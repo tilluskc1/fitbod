@@ -13,6 +13,8 @@ interface Props {
   workout: WorkoutRecord;
   /** Original → adapted → actual → next, with the reason, per exercise. */
   progression: ProgressionLine[];
+  /** One record-backed win, from `recapHighlight`. */
+  highlight: string;
   feedbackWrite: FeedbackWrite | null;
   onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
   onRetryFeedback: () => void;
@@ -31,6 +33,7 @@ function minutesOf(workout: WorkoutRecord): number {
 export default function RecapScreen({
   workout,
   progression,
+  highlight,
   feedbackWrite,
   onFeedback,
   onRetryFeedback,
@@ -65,8 +68,8 @@ export default function RecapScreen({
         <div className="check-ring" aria-hidden="true">
           <CheckIcon size={38} />
         </div>
-        <span className="recap-kicker">WORK RECORDED</span>
-        <h1 className="recap-title">You showed up.</h1>
+        {highlight !== 'Work recorded' && <span className="recap-kicker">WORK RECORDED</span>}
+        <h1 className="recap-title">{highlight}</h1>
         <p className="recap-sub">
           {workout.name}
           {workout.completedEarly ? ' · Finished early' : ''}
