@@ -308,8 +308,12 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
   const setsLabel = `${count} set${count === 1 ? '' : 's'}`;
 
   switch (basis) {
-    case 'load-increase':
-      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. One step up (+${fmtAmount(weight - workWeight, unit)} ${unitLabel(unit)}); reps restart at ${range.min}.`;
+    case 'load-increase': {
+      // The difference of the two values the user sees, so it always matches the target line.
+      const step = displayValue(weight, unit) - displayValue(workWeight, unit);
+      const stepText = step > 0 ? `One step up (+${Number.isInteger(step) ? step : step.toFixed(1)} ${unitLabel(unit)})` : 'Next load';
+      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. ${stepText}; reps restart at ${range.min}.`;
+    }
     case 'rep-increase':
       return `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
     case 'mixed-load':
