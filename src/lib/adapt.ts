@@ -5,6 +5,7 @@ import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
 import { prescribeExercise } from './progression.ts';
+import { liveExercises } from './liveProgression.ts';
 
 /**
  * The deterministic plan engine.
@@ -313,9 +314,8 @@ export function toWorkoutExercises(adapted: AdaptedWorkout): WorkoutExercise[] {
 
 /**
  * What a swap target prescribes for the remaining work. The open session's
- * logged values win; a program movement with nothing logged keeps the
- * program's own numbers. Without this a swap-back renders as bodyweight with
- * a first-time rep target the program never prescribed.
+ * logged values win; otherwise the history-derived prescription Today shows,
+ * and a hold keeps its programmed seconds.
  */
 export function swapCandidateFor(
   target: Exercise,
@@ -327,15 +327,8 @@ export function swapCandidateFor(
   if (open) {
     return { exerciseId: target.id, name: target.name, weight: open.weight, reps: open.reps };
   }
-  const program = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === target.id);
-  if (program) {
-    return {
-      exerciseId: target.id,
-      name: target.name,
-      weight: program.weight,
-      reps: program.targetReps?.[0] ?? program.holdSeconds ?? program.repRange[0],
-    };
-  }
+  const hold = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === target.id)?.holdSeconds;
+  if (hold) return { exerciseId: target.id, name: target.name, weight: 0, reps: hold };
   const prescription = prescribeExercise(target, profile, history);
   return {
     exerciseId: target.id,
@@ -372,7 +365,7 @@ export function currentWorkout(adapted: AdaptedWorkout, session: WorkoutRecord):
       sets: entry.planned.length,
       originalSets: entry.originalPlannedSets ?? entry.planned.length,
       repRange: source?.repRange ?? [reps[0] ?? 0, reps[0] ?? 0],
-      targetReps: source?.targetReps || !source || reps.some((rep) => rep !== source.repRange[0]) ? reps : undefined,
+      targetReps: reps,
       holdSeconds: source?.holdSeconds ? reps[0] : undefined,
       weight: entry.planned[0]?.weight ?? 0,
       originalWeight: entry.planned[0]?.weight ?? 0,
@@ -391,8 +384,16 @@ export function currentWorkout(adapted: AdaptedWorkout, session: WorkoutRecord):
   };
 }
 
-/** Undo a temporary adaptation without replacing work already completed. */
-export function restorePendingWorkout(session: WorkoutRecord, original: AdaptedWorkout): WorkoutRecord {
+/**
+ * Undo a temporary adaptation without replacing work already completed. With a
+ * profile, pending sets carry the history-derived prescription, not the fixture.
+ */
+export function restorePendingWorkout(
+  session: WorkoutRecord,
+  original: AdaptedWorkout,
+  profile?: Profile | null,
+  history: WorkoutRecord[] = [],
+): WorkoutRecord {
   const pattern = (id: string) => exerciseById(id)?.pattern ?? id;
   const completed = session.exercises.flatMap((exercise) => {
     const indices = exercise.performed.flatMap((set, index) => set.done ? [index] : []);
@@ -405,7 +406,7 @@ export function restorePendingWorkout(session: WorkoutRecord, original: AdaptedW
   const kept = new Set<WorkoutExercise>();
   const exercises: WorkoutExercise[] = [];
   // shortcut: flagship has one slot per primary pattern; add slot identity before multi-slot programs.
-  for (const prescribed of toWorkoutExercises(original)) {
+  for (const prescribed of profile ? liveExercises(original, profile, history) : toWorkoutExercises(original)) {
     const group = completed.filter((exercise) => pattern(exercise.exerciseId) === pattern(prescribed.exerciseId));
     group.forEach((exercise) => {
       kept.add(exercise);

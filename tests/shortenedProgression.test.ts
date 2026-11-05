@@ -70,5 +70,5 @@ test('completing the original target still earns a load increase after finish an
   const next = prescribeExercise(press, profile, history);
   assert.equal(next.basis, 'load-increase');
   assert.equal(next.weight, 17.5);
-  assert.equal(next.reps, 6);
+  assert.equal(next.reps, 8, "reps restart at the bottom of the program's 8–10 range");
 });

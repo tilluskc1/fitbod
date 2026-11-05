@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { loadModeOf, detailOf, repsTarget, setText, setUnit } from '../data/flagship';
 import type { LoadMode } from '../data/flagship';
+import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
@@ -18,6 +19,8 @@ interface Props {
   loadOptions: number[];
   /** Display unit. Records stay in kilograms. */
   unit: Unit;
+  /** One factual reason per exercise for today's computed target. */
+  targetNotes?: Record<string, string>;
   onMinimize: () => void;
   onFinish: () => void;
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => void;
@@ -66,6 +69,7 @@ export default function TrainScreen({
   now,
   loadOptions,
   unit,
+  targetNotes,
   onMinimize,
   onFinish,
   onUpdateSet,
@@ -200,7 +204,7 @@ export default function TrainScreen({
   const last = lastPerformance(history, exercise.exerciseId);
   const holdUnit = setUnit(exercise.exerciseId) === 'seconds';
   const plannedTarget = exercise.planned[activeSet === -1 ? exercise.planned.length - 1 : activeSet];
-  /** "9 · 9" list for per-set targets, "8–10 reps" for a range, never "2 × 9". */
+  /** "9 · 9" list of the prescribed reps; never "2 × 9". */
   const targetReps =
     repsTarget(exercise.exerciseId, exercise.planned.length, exercise.planned) ??
     exercise.planned.map((set) => set.reps).join(' · ');
@@ -473,7 +477,9 @@ export default function TrainScreen({
               <Icon name="fitness_center" size={18} />
               {(plannedTarget?.weight ?? 0) > 0
                 ? `${showWeight(plannedTarget.weight)} ${weightLabel} · ${detail}`
-                : `Bodyweight · ${detail}`}
+                : mode === 'none'
+                  ? `Bodyweight · ${detail}`
+                  : [...new Set([exerciseById(exercise.exerciseId)?.equipment ?? 'Dumbbell', detail])].join(' · ')}
             </div>
             <div className="aw-history">
               <div className="aw-history__line">
@@ -487,6 +493,12 @@ export default function TrainScreen({
                 Today’s target: {targetReps}
                 {targetWeight > 0 ? ` @ ${showWeight(targetWeight)} ${weightLabel}` : ''}
               </div>
+              {targetNotes?.[exercise.exerciseId] && (
+                <div className="aw-history__line">
+                  <Icon name="info" size={16} />
+                  {targetNotes[exercise.exerciseId]}
+                </div>
+              )}
             </div>
           </div>
         </section>
