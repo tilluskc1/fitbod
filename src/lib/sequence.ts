@@ -101,7 +101,10 @@ export function slotProgram(
     const prescribed = entry.planned[0]?.reps ?? 10;
     const weight = entry.planned[0]?.weight ?? 0;
     const hold = known?.holdSeconds;
-    const range = hold ? { min: hold, max: hold } : repRangeFor(catalog?.pattern ?? 'horizontal_push');
+    // Same range prescribeExercise uses: the program's own when it defines one.
+    const range = hold ? { min: hold, max: hold }
+      : known ? { min: known.repRange[0], max: known.repRange[1] }
+      : repRangeFor(catalog?.pattern ?? 'horizontal_push');
     const reps = hold ?? prescribed;
     return {
       exerciseId: entry.exerciseId,
