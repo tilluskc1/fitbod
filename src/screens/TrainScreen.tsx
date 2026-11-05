@@ -204,7 +204,7 @@ export default function TrainScreen({
   const last = lastPerformance(history, exercise.exerciseId);
   const holdUnit = setUnit(exercise.exerciseId) === 'seconds';
   const plannedTarget = exercise.planned[activeSet === -1 ? exercise.planned.length - 1 : activeSet];
-  /** "9 · 9" list for per-set targets, "8–10 reps" for a range, never "2 × 9". */
+  /** "9 · 9" list of the prescribed reps; never "2 × 9". */
   const targetReps =
     repsTarget(exercise.exerciseId, exercise.planned.length, exercise.planned) ??
     exercise.planned.map((set) => set.reps).join(' · ');

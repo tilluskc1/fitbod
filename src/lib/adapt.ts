@@ -365,7 +365,7 @@ export function currentWorkout(adapted: AdaptedWorkout, session: WorkoutRecord):
       sets: entry.planned.length,
       originalSets: entry.originalPlannedSets ?? entry.planned.length,
       repRange: source?.repRange ?? [reps[0] ?? 0, reps[0] ?? 0],
-      targetReps: source?.targetReps || !source || reps.some((rep) => rep !== source.repRange[0]) ? reps : undefined,
+      targetReps: reps,
       holdSeconds: source?.holdSeconds ? reps[0] : undefined,
       weight: entry.planned[0]?.weight ?? 0,
       originalWeight: entry.planned[0]?.weight ?? 0,

@@ -92,3 +92,11 @@ test('Today preserves the accepted hold seconds instead of the static program du
     performed: [{ weight: 0, reps: 60, done: false }] }];
   assert.equal(exerciseMeta(currentWorkout(adapted, current).exercises[0]), '1 set · 60s hold');
 });
+
+test('Today shows the open session\'s prescribed reps, not the program range', () => {
+  const current = session();
+  current.exercises = [{ exerciseId: 'goblet-squat', name: 'Goblet Squat',
+    planned: [{ weight: 0, reps: 8 }, { weight: 0, reps: 8 }, { weight: 0, reps: 8 }],
+    performed: [0, 1, 2].map(() => ({ weight: 0, reps: 8, done: false })) }];
+  assert.doesNotMatch(exerciseMeta(currentWorkout(adapted, current).exercises[0]), /8–10/);
+});
