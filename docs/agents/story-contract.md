@@ -1,6 +1,6 @@
 # Shared story contract (AS-* stories)
 
-Revision AS-2026-10-29-r2. Every `AS-*` issue on Project 11 obeys this file in addition to its own body. When an issue body disagrees with this file, the issue body wins for that issue.
+Revision AS-2026-10-29-r2. Every `AS-*` issue on Project 11 obeys this file in addition to its own body.
 
 ## Product contract
 Owner decisions (2026-10-29): Supabase database, Vercel hosting/functions, Gemini Flash-Lite preferred (or an eligible free model during synthetic testing). These decisions supersede historical no-backend/no-accounts/no-cloud restrictions; retain offline logging and portable export. Program sessions continue in sequence after missed days, without catch-up volume. Finishing shortened work may advance that sequence, but never satisfies an unmet original exercise progression target. Preserve the approved charcoal/lime mobile design.
