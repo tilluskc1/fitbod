@@ -3,7 +3,7 @@ import test from 'node:test';
 import { applyCorrection, completeSession, confirmWeight, createSession, updatePerformedSet } from '../src/lib/session.ts';
 import { revisePlan, updateProfile } from '../src/lib/sequence.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
-import { dumbbellLoadsPatch, loadLimitMessage, toKg } from '../src/lib/units.ts';
+import { dumbbellLoadsPatch, loadLimitMessage, loadLimitText, toKg } from '../src/lib/units.ts';
 import { MAX_WEIGHT, validateState } from '../src/lib/validate.ts';
 import type { Profile } from '../src/types.ts';
 
@@ -48,6 +48,7 @@ test('#101: the limit itself is still a valid load, in kg and lb', () => {
   assert.equal(updatePerformedSet(session(), 0, 0, { weight: toKg(4410, 'lb') }, NOW).exercises[0].performed[0].weight, 40);
   assert.match(loadLimitMessage('kg'), /2000 kg/);
   assert.match(loadLimitMessage('lb'), /4409 lb/);
+  assert.equal(loadLimitText('kg'), 'Loads go up to 2000 kg.', 'onboarding has saved nothing, so it states only the limit');
 });
 
 test('#101: owned dumbbells above the limit are refused in Settings and never reach state', () => {

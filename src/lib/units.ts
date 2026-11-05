@@ -42,9 +42,14 @@ export function overLoadLimit(kgs: number[]): boolean {
   return kgs.some((kg) => kg > MAX_WEIGHT);
 }
 
+/** The limit in the display unit, e.g. "Loads go up to 2000 kg." */
+export function loadLimitText(unit: Unit): string {
+  return `Loads go up to ${Math.floor(toDisplay(MAX_WEIGHT, unit))} ${unitLabel(unit)}.`;
+}
+
 /** Shown wherever a typed load is refused for being above the limit. */
 export function loadLimitMessage(unit: Unit): string {
-  return `Loads go up to ${Math.floor(toDisplay(MAX_WEIGHT, unit))} ${unitLabel(unit)}. That load was not saved.`;
+  return `${loadLimitText(unit)} That load was not saved.`;
 }
 
 /** Display value snapped to a half unit so inputs read like real plates. */

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS } from '../data/exercises';
-import { loadLimitMessage, overLoadLimit, parseLoads } from '../lib/units';
+import { loadLimitText, overLoadLimit, parseLoads } from '../lib/units';
 import type { Equipment, Experience, Goal, Profile, SupportEquipment, Unit } from '../types';
 
 interface Props {
@@ -225,7 +225,7 @@ export default function Onboarding({ onComplete }: Props) {
                 placeholder={unit === 'lb' ? 'e.g. 10, 15, 20' : 'e.g. 5, 7.5'}
               />
               <p className="muted">Targets use only weights you list. Blank keeps it unconfirmed.</p>
-              {loadsTooHeavy && <p className="error-text" role="alert">{loadLimitMessage(unit)}</p>}
+              {loadsTooHeavy && <p className="error-text" role="alert">{loadLimitText(unit)}</p>}
             </>
           ) : null}
 
