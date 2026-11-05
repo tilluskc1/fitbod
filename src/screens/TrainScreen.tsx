@@ -13,6 +13,7 @@ import { calibrationInputValue, displayValue, toKg, unitLabel } from '../lib/uni
 import type { PerformedSet, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
+import { MoreIcon } from '../components/ui/Icons';
 
 interface Props {
   session: WorkoutRecord;
@@ -32,10 +33,12 @@ interface Props {
   onMinimize: () => void;
   onFinish: () => void;
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => void;
+  onConfirmWeight: (exerciseIndex: number, weight: number) => void;
   onLogNext: () => void;
   onToggleRestPause: () => void;
   onExtendRest: () => void;
   onSwap: (exerciseIndex: number) => void;
+  onOpenActions: (exerciseIndex: number) => void;
   onSkip: (exerciseIndex: number) => void;
   onReturn: (exerciseIndex: number) => void;
 }
@@ -118,10 +121,12 @@ export default function TrainScreen({
   onMinimize,
   onFinish,
   onUpdateSet,
+  onConfirmWeight,
   onLogNext,
   onToggleRestPause,
   onExtendRest,
   onSwap,
+  onOpenActions,
   onSkip,
   onReturn,
 }: Props) {
@@ -284,7 +289,8 @@ export default function TrainScreen({
     exercise.planned.map((set) => set.reps).join(' · ');
   const targetWeight = exercise.planned[0]?.weight ?? 0;
   const canPickWeight = equipment === 'Dumbbell' && loadOptions.length > 0;
-  const canEnterWeight = mode !== 'none' && equipment !== 'Dumbbell';
+  // A dumbbell with no confirmed rack is typed, the same way a barbell load is.
+  const canEnterWeight = mode !== 'none' && !canPickWeight;
   const loadEntry = (weight: number, update: (weight: number) => void) => canEnterWeight ? (
     <input type="number" min="0" step="any" inputMode="decimal"
       aria-label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`}
@@ -443,7 +449,7 @@ export default function TrainScreen({
           selected={pick}
           onConfirm={(weight) => {
             focusWeight.current = true;
-            onUpdateSet(index, setIndex, { weight });
+            onConfirmWeight(index, weight);
           }}
           onSkip={() => {
             focusWeight.current = true;
@@ -594,8 +600,22 @@ export default function TrainScreen({
                   <Icon name="swap_horiz" size={16} />
                   Swap
                 </button>
+                {/* The same menu the row opens: instructions, history and the
+                    rest of this exercise's actions. */}
+                <button
+                  className="aw-more"
+                  onClick={() => onOpenActions(index)}
+                  aria-label={`More actions for ${exercise.name}`}
+                  aria-haspopup="dialog"
+                >
+                  <MoreIcon size={18} />
+                </button>
               </div>
-              <h2 className="aw-exercise__name">{exercise.name}</h2>
+              <h2 className="aw-exercise__name">
+                <button className="aw-exercise__name-btn" onClick={() => onOpenActions(index)} aria-haspopup="dialog">
+                  {exercise.name}
+                </button>
+              </h2>
             </div>
           </div>
           <div className="aw-exercise__info">

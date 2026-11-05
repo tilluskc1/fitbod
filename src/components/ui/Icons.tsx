@@ -75,6 +75,14 @@ export function LockIcon({ size = 20 }: IconProps) {
   );
 }
 
+export function MoreIcon({ size = 20 }: IconProps) {
+  return (
+    <svg {...base(size)} strokeWidth={2.6}>
+      <path d="M12 5.5h.01M12 12h.01M12 18.5h.01" />
+    </svg>
+  );
+}
+
 export function BackIcon({ size = 22 }: IconProps) {
   return (
     <svg {...base(size)} strokeWidth={1.9}>
