@@ -37,31 +37,52 @@ function historyAt(weight: number): WorkoutRecord[] {
     { early: true, now: '2026-11-02T10:30:00.000Z' }).history;
 }
 
-test('lb loads read one way on every surface; typed off-rack loads stay exact', async () => {
+test('rack loads read like the target on every surface; typed loads keep their exact value (lb and kg)', async () => {
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: TrainScreen } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
-    const { ExerciseSheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
-    const props = { now: Date.parse('2026-11-04T10:01:00.000Z'), loadOptions: RACK, unit: 'lb',
-      onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogNext() {}, onToggleRestPause() {},
-      onExtendRest() {}, onSwap() {}, onSkip() {}, onReturn() {} };
-    const train = (history: WorkoutRecord[], weight: number, planned: number) =>
-      plain(renderToStaticMarkup(createElement(TrainScreen, { ...props, history, session: sessionAt(weight, planned) })));
-    const sheetOf = (history: WorkoutRecord[]) => plain(renderToStaticMarkup(createElement(ExerciseSheet,
-      { exerciseId: id, planned: [{ weight: 18, reps: 10 }], history, unit: 'lb', rack: RACK, onClose() {} })));
+    const { ExerciseSheet, WhySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
+    const { progressionLines } = await server.ssrLoadModule('/src/lib/liveProgression.ts');
+    for (const unit of ['lb', 'kg'] as const) {
+      const who = { ...profile, unit };
+      const props = { now: Date.parse('2026-11-04T10:01:00.000Z'), loadOptions: RACK, profileLoads: who.loads, unit,
+        onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogNext() {}, onToggleRestPause() {},
+        onExtendRest() {}, onSwap() {}, onSkip() {}, onReturn() {} };
+      const train = (history: WorkoutRecord[], weight: number, planned: number) =>
+        plain(renderToStaticMarkup(createElement(TrainScreen, { ...props, history, session: sessionAt(weight, planned) })));
+      const sheets = (history: WorkoutRecord[]) => [
+        ['exercise sheet', ExerciseSheet, /Last recorded (.+?) lb|Last recorded (.+?) kg/],
+        ['why sheet', WhySheet, /Working load (.+?) lb|Working load (.+?) kg/],
+      ].map(([label, Sheet, re]) => {
+        const html = plain(renderToStaticMarkup(createElement(Sheet as never, { exerciseId: id, exerciseName: 'x',
+          planned: [{ weight: 18, reps: 10 }], history, unit, loads: who.loads, onClose() {} })));
+        const m = html.match(re as RegExp);
+        return [label, m ? `${m[1] ?? m[2]} ${unit}` : html] as const;
+      });
+      const recap = (history: WorkoutRecord[]) =>
+        plain(progressionLines(history[0], who, history, unit)[0].performed ?? '');
 
-    const rack = train(historyAt(15), 18, 18);
-    assert.match(rack, /Today’s target: .*39\.5 lb/);
-    assert.match(rack, /10 reps @ 39\.5 lb each/, 'planned rows');
-    assert.match(rack, /Last session: .*@ 33 lb each/, 'last-session line');
-    assert.match(train(historyAt(15), 15, 15), /Log set 1 · .*@ 33 lb/, 'Log button');
-    assert.doesNotMatch(rack, /39\.68|33\.07/);
-    assert.match(sheetOf(historyAt(15)), /Last recorded 33 lb/, 'exercise sheet');
+      // Rack: 15 kg is 33.07 lb stored but reads 33 lb everywhere (15 kg in kg).
+      const shown = unit === 'lb' ? '33 lb' : '15 kg';
+      const rack = train(historyAt(15), 18, 18);
+      assert.match(rack, new RegExp(`Last session: .*@ ${shown} each`), `${unit} last-session`);
+      assert.match(train(historyAt(15), 15, 15), new RegExp(`Log set 1 · .*@ ${shown}`), `${unit} Log button`);
+      assert.match(train(historyAt(15), 18, 18), unit === 'lb' ? /10 reps @ 39\.5 lb each/ : /10 reps @ 18 kg each/, `${unit} planned rows`);
+      assert.doesNotMatch(rack, /39\.68|33\.07/);
+      for (const [label, text] of sheets(historyAt(15))) assert.equal(text, shown, `${unit} ${label}`);
+      assert.match(recap(historyAt(15)), new RegExp(`@ ${shown} each`), `${unit} recap`);
 
-    const typed = toKg(25, 'lb');
-    const off = train(historyAt(typed), typed, 18);
-    assert.match(off, /Last session: .*@ 25 lb each/);
-    assert.match(train(historyAt(typed), typed, 18), /Log set 1 · .*@ 25 lb/);
-    assert.match(sheetOf(historyAt(typed)), /Last recorded 25 lb/);
+      // Typed 42.3 is off the confirmed rack: exact everywhere, even when planned equals it.
+      const typed = unit === 'lb' ? toKg(42.3, 'lb') : 42.3;
+      const exact = `42.3 ${unit}`;
+      for (const planned of [18, typed]) {
+        const off = train(historyAt(typed), typed, planned);
+        assert.match(off, new RegExp(`Last session: .*@ ${exact} each`), `${unit} typed last-session (planned ${planned})`);
+        assert.match(off, new RegExp(`Log set 1 · .*@ ${exact}`), `${unit} typed Log button`);
+        assert.match(off, new RegExp(`10 reps @ ${exact} each`), `${unit} typed planned rows`);
+      }
+      for (const [label, text] of sheets(historyAt(typed))) assert.equal(text, exact, `${unit} typed ${label}`);
+      assert.match(recap(historyAt(typed)), new RegExp(`@ ${exact} each`), `${unit} typed recap`);
+    }
   } finally { await server.close(); }
 });

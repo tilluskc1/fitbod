@@ -9,8 +9,9 @@ import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
 import { needsCalibration } from '../lib/liveProgression';
+import { availableLoads } from '../lib/progression';
 import { calibrationInputValue, displayValue, loadValue, toKg, unitLabel } from '../lib/units';
-import type { PerformedSet, Unit, WorkoutRecord } from '../types';
+import type { PerformedSet, Profile, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 
@@ -20,6 +21,8 @@ interface Props {
   now: number;
   /** Confirmed dumbbell weights for the chosen setup. */
   loadOptions: number[];
+  /** The profile's confirmed loads by equipment: the rack a logged load is compared with. */
+  profileLoads?: Profile['loads'];
   /** Only the user's confirmed loads; the first-weight step never offers the example rack. */
   calibrationLoads?: number[];
   /** `sessionId:exerciseIndex:exerciseId` keys whose first-weight step was skipped. */
@@ -111,6 +114,7 @@ export default function TrainScreen({
   history,
   now,
   loadOptions,
+  profileLoads = {},
   calibrationLoads = [],
   skippedCalibrations = [],
   onSkipCalibration,
@@ -275,8 +279,8 @@ export default function TrainScreen({
         : 'bodyweight';
   /** Loads are stored in kilograms; only the readout converts. */
   const showWeight = (kg: number) => displayValue(kg, unit);
-  // Planned loads and the rack are on-rack; anything else was typed.
-  const rack = [...loadOptions, ...exercise.planned.map((set) => set.weight)];
+  // Only confirmed loads are on the rack; anything else was typed and keeps its value.
+  const rack = availableLoads({ loads: profileLoads }, equipment);
   const showActual = (kg: number) => loadValue(kg, unit, rack);
   const last = lastPerformance(history, exercise.exerciseId);
   const holdUnit = setUnit(exercise.exerciseId) === 'seconds';

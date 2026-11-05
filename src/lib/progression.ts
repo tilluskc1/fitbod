@@ -6,7 +6,7 @@ import type {
   Unit,
   WorkoutRecord,
 } from '../types.ts';
-import { calibrationInputValue, displayValue, unitLabel } from './units.ts';
+import { calibrationInputValue, displayValue, loadValue, unitLabel } from './units.ts';
 import { exerciseInWorkout } from './plan.ts';
 import { programExercise } from '../data/flagship.ts';
 
@@ -87,7 +87,7 @@ export function setCountFor(exercise: Exercise): number {
 }
 
 /** Loads the profile says are actually selectable for this equipment. */
-export function availableLoads(profile: Profile, equipment: Equipment): number[] {
+export function availableLoads(profile: Pick<Profile, 'loads'>, equipment: Equipment): number[] {
   const list = profile.loads[equipment] ?? [];
   return list.filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
 }
@@ -273,19 +273,13 @@ export function prescribeExercise(
   return { ...base, weight: next, reps: range.min, basis: 'load-increase' };
 }
 
-function fmtAmount(kg: number, unit: Unit): string {
-  const value = displayValue(kg, unit);
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
 /**
  * A rack (or planned) load reads exactly as the target line does; only a
  * user-typed load off the rack keeps its stored precision.
  */
 function fmtLoad(weight: number, equipment: Equipment, unit: Unit = 'kg', available: number[] = []): string {
   if (weight <= 0) return equipment === 'Bodyweight' ? 'bodyweight' : 'no added load';
-  const onRack = available.some((load) => Math.abs(load - weight) < 0.001);
-  return `${onRack ? fmtAmount(weight, unit) : calibrationInputValue(weight, unit)} ${unitLabel(unit)}`;
+  return `${loadValue(weight, unit, available)} ${unitLabel(unit)}`;
 }
 
 function fmtDate(iso: string): string {

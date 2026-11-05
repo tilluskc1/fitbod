@@ -1,9 +1,9 @@
 import { exerciseById } from '../data/exercises.ts';
 import { loadModeOf, programExercise, setText } from '../data/flagship.ts';
 import type { AdaptedExercise, AdaptedWorkout } from './adapt.ts';
-import { coachLine, describePrescription, lastExercisePerformance, prescribeExercise } from './progression.ts';
+import { availableLoads, coachLine, describePrescription, lastExercisePerformance, prescribeExercise } from './progression.ts';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from './plan.ts';
-import { displayValue, unitLabel } from './units.ts';
+import { displayValue, loadValue, unitLabel } from './units.ts';
 import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
 
 /**
@@ -16,11 +16,18 @@ import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '..
  * record keeps whatever the user actually logged.
  */
 
-function loadText(kg: number, exerciseId: string, unit: Unit): string {
+/** The user's confirmed loads for this movement's equipment: the one "on the rack" rule. */
+function rackOf(profile: Pick<Profile, 'loads'>, exerciseId: string): number[] {
+  const equipment = exerciseById(exerciseId)?.equipment;
+  return equipment ? availableLoads(profile, equipment) : [];
+}
+
+function loadText(kg: number, exerciseId: string, unit: Unit, rack?: number[]): string {
   // No recorded load is not the same claim as a movement that has no load.
   if (kg <= 0) return loadModeOf(exerciseId) === 'none' ? 'bodyweight' : 'no load yet';
   const value = displayValue(kg, unit);
-  const text = Number.isInteger(value) ? String(value) : value.toFixed(1);
+  // Logged loads: on the confirmed rack they read like the target, typed ones stay exact.
+  const text = rack ? loadValue(kg, unit, rack) : Number.isInteger(value) ? String(value) : value.toFixed(1);
   return loadModeOf(exerciseId) === 'total'
     ? `${text} ${unitLabel(unit)} total`
     : `${text} ${unitLabel(unit)} each`;
@@ -228,7 +235,7 @@ export function progressionLines(
     const hold = holdSeconds(exerciseId);
     const required = exerciseInWorkout(workout, exerciseId)?.requirement ?? presentedSets;
     const performed = best
-      ? `${done.length}/${required} sets · best ${setText(exerciseId, best.reps)} @ ${loadText(best.weight, exerciseId, unit)}`
+      ? `${done.length}/${required} sets · best ${setText(exerciseId, best.reps)} @ ${loadText(best.weight, exerciseId, unit, rackOf(profile, exerciseId))}`
       : null;
 
     const definition = exerciseById(exerciseId);
@@ -279,6 +286,7 @@ export function recapHighlight(
   history: WorkoutRecord[],
   lines: ProgressionLine[],
   unit: Unit,
+  profile?: Pick<Profile, 'loads'>,
 ): string {
   const earned = lines.find((line) => line.earnedLoad);
   if (earned) return `Next time: ${earned.earnedLoad} on ${earned.name}`;
@@ -296,7 +304,7 @@ export function recapHighlight(
       before &&
       (today.weight > before.weight || (today.weight === before.weight && today.reps > before.reps))
     ) {
-      return `New best: ${setText(line.exerciseId, today.reps)} @ ${loadText(today.weight, line.exerciseId, unit)} on ${line.name}`;
+      return `New best: ${setText(line.exerciseId, today.reps)} @ ${loadText(today.weight, line.exerciseId, unit, profile && rackOf(profile, line.exerciseId))} on ${line.name}`;
     }
   }
   if (hasWork(workout) && !prior.some(hasWork)) return 'First session on the program';

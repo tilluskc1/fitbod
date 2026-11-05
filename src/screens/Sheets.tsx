@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
-import { formatActualWeight, formatWeight, loadValue, unitLabel } from '../lib/units';
+import { formatWeight, loadValue, unitLabel } from '../lib/units';
 import type { Profile, Unit, WorkoutExercise } from '../types';
 import { lastPerformance } from '../lib/plan';
+import { availableLoads } from '../lib/progression';
 import type { WorkoutRecord } from '../types';
 import {
   EQUIPMENT_OPTIONS as SETUPS,
@@ -200,6 +201,13 @@ export function AdjustSheet({ constraints, originalMinutes, onClose, onPreview }
 
 /* ---------------- Why this target ---------------- */
 
+/** A logged load: confirmed-rack loads read like the target, typed ones stay exact. */
+function loggedLoad(kg: number, unit: Unit, exerciseId: string, loads: Profile['loads']): string {
+  const equipment = exerciseById(exerciseId)?.equipment;
+  return kg > 0 ? `${loadValue(kg, unit, equipment ? availableLoads({ loads }, equipment) : [])} ${unitLabel(unit)}` : 'Bodyweight';
+}
+
+
 /** "9 · 9 @ 15 kg" for per-set targets, "8–10 reps @ 18 kg" for a range. */
 function targetLine(
   planned: { weight: number; reps: number }[],
@@ -218,6 +226,7 @@ export function WhySheet({
   planned,
   history,
   unit,
+  loads = {},
   reason,
   onClose,
 }: {
@@ -226,6 +235,7 @@ export function WhySheet({
   planned: { weight: number; reps: number }[];
   history: WorkoutRecord[];
   unit: Unit;
+  loads?: Profile['loads'];
   /** The precise sentence behind the target; Today shows only the coach line. */
   reason?: string;
   onClose: () => void;
@@ -256,7 +266,7 @@ export function WhySheet({
         </div>
         <div className="context-row">
           <span>Working load</span>
-          <span>{last ? formatActualWeight(last.weight, unit) : '—'}</span>
+          <span>{last ? loggedLoad(last.weight, unit, exerciseId, loads) : '—'}</span>
         </div>
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Today’s target</span>
@@ -287,15 +297,15 @@ export function ExerciseSheet({
   planned,
   history,
   unit,
-  rack = [],
+  loads = {},
   onClose,
 }: {
   exerciseId: string;
   planned: { weight: number; reps: number }[];
   history: WorkoutRecord[];
   unit: Unit;
-  /** Confirmed loads; a last load on this rack reads like the target. */
-  rack?: number[];
+  /** The profile's confirmed loads; a last load on this rack reads like the target. */
+  loads?: Profile['loads'];
   onClose: () => void;
 }) {
   const meta = exerciseById(exerciseId);
@@ -317,7 +327,7 @@ export function ExerciseSheet({
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Last recorded</span>
           <span>
-            {last ? `${last.weight > 0 ? `${loadValue(last.weight, unit, [...rack, ...planned.map((set) => set.weight)])} ${unitLabel(unit)}` : 'Bodyweight'} · ${setText(exerciseId, last.reps)}` : 'No history'}
+            {last ? `${loggedLoad(last.weight, unit, exerciseId, loads)} · ${setText(exerciseId, last.reps)}` : 'No history'}
           </span>
         </div>
       </div>
