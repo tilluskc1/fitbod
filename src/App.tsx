@@ -381,6 +381,11 @@ export default function App() {
     setState((currentState) => updateProfile(currentState, patch));
   };
 
+  /** A feasibility alternative the user chose: lift one saved exclusion, nothing else. */
+  const allowExercise = (exerciseId: string) => {
+    patchProfile({ exclusions: exclusions.filter((id) => id !== exerciseId) });
+  };
+
   const completeOnboarding = (nextProfile: Profile) => {
     setState((currentState) => ({
       ...revisePlan(currentState, nextProfile),
@@ -907,6 +912,7 @@ export default function App() {
             onRestore={restoreOriginal}
             onOpenSettings={() => setSheet({ kind: 'settings' })}
             onOpenExercise={(exerciseId, exerciseIndex) => setSheet({ kind: 'actions', exerciseId, exerciseIndex })}
+            onAllowExercise={allowExercise}
           />
         )}
         {tab === 'plan' && (            <PlanScreen
@@ -919,6 +925,7 @@ export default function App() {
             onOpenSettings={() => setSheet({ kind: 'settings' })}
             onViewDay={(dayIndex) => setSheet({ kind: 'day', dayIndex })}
             onOpenLibrary={() => setView('library')}
+            onAllowExercise={allowExercise}
           />
         )}
         {tab === 'progress' && (

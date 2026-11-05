@@ -9,6 +9,7 @@ import { currentWorkout, EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adap
 import { exercisePhoto } from '../lib/media';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import Demo from '../components/ui/Demo';
+import FeasibilityNote from '../components/ui/FeasibilityNote';
 import Icon from '../components/ui/Icon';
 
 interface Props {
@@ -31,6 +32,8 @@ interface Props {
   slotLabel?: string;
   /** Explicit skip of the slot on offer. Absent means the plan has no sequence. */
   onSkipSlot?: () => void;
+  /** Removes one exercise from the saved exclusions (a feasibility alternative). */
+  onAllowExercise?: (exerciseId: string) => void;
 }
 
 function greeting(now: Date): string {
@@ -93,6 +96,7 @@ export default function TodayScreen({
   onOpenExercise,
   slotLabel,
   onSkipSlot,
+  onAllowExercise,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -171,6 +175,11 @@ export default function TodayScreen({
             </span>
           </span>
         </section>
+
+        {/* The status describes the saved setup, not an adjusted day or an open session. */}
+        {!current && !adjusted && (
+          <FeasibilityNote feasibility={program.feasibility} onOpenSettings={onOpenSettings} onAllowExercise={onAllowExercise} />
+        )}
 
         <section className="coach-card" aria-label={adjusted ? 'Coach note' : 'Coach insight'}>
           <div className="coach-card__head">
