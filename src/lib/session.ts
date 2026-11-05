@@ -1,4 +1,5 @@
 import type { AppState, PerformedSet, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import { needsLoad } from '../data/flagship.ts';
 import { advanceAfterFinish } from './sequence.ts';
 import { MAX_WEIGHT } from './validate.ts';
 
@@ -149,7 +150,13 @@ export function updatePerformedSet(
   patch: Partial<PerformedSet>,
   now: string,
 ): WorkoutRecord {
-  if (!session.exercises[exerciseIndex]?.performed[setIndex]) return session;
+  const exercise = session.exercises[exerciseIndex];
+  const current = exercise?.performed[setIndex];
+  if (!current) return session;
+  // #103: a logged loaded set at weight 0 reads as "no load" yet drives progression; log, edit and correction all land here.
+  const weight = patch.weight === undefined ? current.weight : cleanNumber(patch.weight);
+  const done = patch.done ?? current.done;
+  if (done && weight <= 0 && (patch.weight !== undefined || patch.done) && needsLoad(exercise.exerciseId)) return session;
   const next = copyRecord(session);
   const set = next.exercises[exerciseIndex].performed[setIndex];
   // A load the loader would reject is never stored, so a reload cannot lock the app (#101).
@@ -418,6 +425,7 @@ export function applyCorrection(
   const workout = state.history.find((item) => item.id === workoutId);
   if (!workout) return state;
   const corrected = updatePerformedSet(workout, exerciseIndex, setIndex, patch, now);
+  if (corrected === workout) return state;
   return {
     ...state,
     history: state.history.map((item) => (item.id === workoutId ? corrected : item)),

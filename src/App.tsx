@@ -650,7 +650,7 @@ export default function App() {
     patch: Partial<PerformedSet>,
     refused = false,
   ) => {
-    // A refused history load arrives as the focus value, so the controlled field shows it again (#101).
+    // A refused history load arrives as the focus value the field reverts to; say why (#101).
     if (refused) setNotice(loadLimitMessage(unit));
     setState((currentState) =>
       applyCorrection(currentState, workoutId, exerciseIndex, setIndex, patch, new Date().toISOString()),

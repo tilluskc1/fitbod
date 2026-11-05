@@ -78,3 +78,28 @@ test('#101 review: typing 5-0-0-0 over a 95 lb set ends on the load held at focu
   assert.deepEqual(typedLoad('42.5', 'kg', 40), { kg: 42.5, refused: false });
   assert.equal(typedLoad('-', 'kg', 40), null, 'a half-typed value changes nothing');
 });
+
+test('#101/#103: a history weight field saves each keystroke, so leaving the screen mid-edit loses nothing', async () => {
+  const { correctionKeystroke, correctionBlur } = await import('../src/lib/units.ts');
+  const focused = toKg(95, 'lb');
+  assert.deepEqual(['1', '10', '100'].map((text) => correctionKeystroke(text, 'lb', focused, true)), [0.454, 4.536, 45.359]);
+  assert.equal(correctionBlur('100', 'lb', focused, true), null, 'a valid load stands on blur');
+});
+
+test('#101: an over-limit history load saves the focus value and reverts to it on blur with the limit', async () => {
+  const { correctionKeystroke, correctionBlur } = await import('../src/lib/units.ts');
+  const focused = toKg(95, 'lb');
+  assert.equal(correctionKeystroke('5000', 'lb', focused, true), focused, 'the stored load is back at the focus value');
+  assert.deepEqual(correctionBlur('5000', 'lb', focused, true), { kg: focused, reason: 'limit' });
+});
+
+test('#103: a cleared or 0 load on a logged loaded set is held, then reverted to the focus value with the reason', async () => {
+  const { correctionKeystroke, correctionBlur } = await import('../src/lib/units.ts');
+  const focused = toKg(95, 'lb');
+  assert.equal(correctionKeystroke('', 'lb', focused, true), null, 'held as a draft, not saved');
+  assert.equal(correctionKeystroke('0', 'lb', focused, true), null);
+  assert.deepEqual(correctionBlur('', 'lb', focused, true), { kg: focused, reason: 'needs-load' });
+  assert.deepEqual(correctionBlur('0', 'lb', focused, true), { kg: focused, reason: 'needs-load' });
+  assert.equal(correctionKeystroke('', 'lb', focused, false), 0, 'a set that needs no load can be cleared');
+  assert.equal(correctionBlur('', 'lb', focused, false), null);
+});

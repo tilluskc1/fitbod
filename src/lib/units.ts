@@ -55,6 +55,29 @@ export function typedLoad(text: string, unit: Unit, focused: number): { kg: numb
   return overLoadLimit([kg]) ? { kg: focused, refused: true } : { kg, refused: false };
 }
 
+/**
+ * A history weight keystroke: the load to save now. Saving per keystroke means a field
+ * removed while focused loses no edit (#110). Null holds it as a draft until blur: a
+ * half-typed value, or no load on a set that needs one (#103).
+ */
+export function correctionKeystroke(text: string, unit: Unit, focused: number, needsWeight: boolean): number | null {
+  const next = typedLoad(text, unit, focused);
+  return !next || (needsWeight && next.kg <= 0) ? null : next.kg;
+}
+
+/** A history weight blur: the focus value to put back and why, or null when the typed load stands. */
+export function correctionBlur(
+  text: string,
+  unit: Unit,
+  focused: number,
+  needsWeight: boolean,
+): { kg: number; reason: 'limit' | 'needs-load' } | null {
+  const next = typedLoad(text, unit, focused);
+  if (next?.refused) return { kg: focused, reason: 'limit' };
+  if (needsWeight && (next?.kg ?? 0) <= 0) return { kg: focused, reason: 'needs-load' };
+  return null;
+}
+
 /** The limit in the display unit, e.g. "Loads go up to 2000 kg." */
 export function loadLimitText(unit: Unit): string {
   return `Loads go up to ${Math.floor(toDisplay(MAX_WEIGHT, unit))} ${unitLabel(unit)}.`;
