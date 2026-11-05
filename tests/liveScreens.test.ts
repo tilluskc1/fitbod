@@ -70,10 +70,10 @@ test('Today coach line is short and states the same numbers as the target', asyn
         'Top of your rack — own 15 kg for 10.', '10 · 10 · 10 @ 15 kg each'],
       ['unfinished', profile, unfinishedHistory(), 'Finish every set: 15 kg for 10.', '10 · 10 · 10 @ 15 kg each'],
       ['unfinished below the range', profile, pressHistory([[15, 4], [15, 4]]), 'Finish every set: 15 kg for 8.', '8 · 8 · 8 @ 15 kg each'],
-      ['off-rack', profile, pressHistory([[15.25, 9], [15.25, 9]]), 'Finish every set: 15.5 kg for 9.', '9 · 9 · 9 @ 15.5 kg each'],
+      ['off-rack', profile, pressHistory([[15.25, 9], [15.25, 9]]), 'Finish every set: 15.25 kg for 9.', '9 · 9 · 9 @ 15.25 kg each'],
       ['mixed loads', profile, pressHistory([[12.3, 10], [15, 10], [15, 10]]),
-        'One load for every set: 12.5 kg for 10.', '10 · 10 · 10 @ 12.5 kg each'],
-      ['lb off-rack', { ...profile, unit: 'lb' }, pressHistory([[20, 9], [20, 9]]), 'Finish every set: 44 lb for 9.', '9 · 9 · 9 @ 44 lb each'],
+        'One load for every set: 12.3 kg for 10.', '10 · 10 · 10 @ 12.3 kg each'],
+      ['lb off-rack', { ...profile, unit: 'lb' }, pressHistory([[20, 9], [20, 9]]), 'Finish every set: 44.09 lb for 9.', '9 · 9 · 9 @ 44.09 lb each'],
       ['first session', profile, [], 'First time on this one. Start light, log what you lift.', '8 · 8 · 8'],
       ['lb', { ...profile, unit: 'lb' }, earnedHistory(), 'You owned 33 lb. Today: 39.5 lb for 8.', '8 · 8 · 8 @ 39.5 lb each'],
     ];

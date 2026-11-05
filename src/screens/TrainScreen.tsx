@@ -8,9 +8,9 @@ import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shou
 import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
 import type { EditDraft } from '../lib/editDraft';
 import { lastPerformance } from '../lib/plan';
-import { needsCalibration } from '../lib/liveProgression';
+import { needsCalibration, plannedLoad } from '../lib/liveProgression';
 import { availableLoads } from '../lib/progression';
-import { calibrationInputValue, displayValue, loadValue, toKg, unitLabel } from '../lib/units';
+import { calibrationInputValue, loadValue, toKg, unitLabel } from '../lib/units';
 import type { PerformedSet, Profile, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -278,7 +278,7 @@ export default function TrainScreen({
         ? `${unitLabel(unit)} each`
         : 'bodyweight';
   /** Loads are stored in kilograms; only the readout converts. */
-  const showWeight = (kg: number) => displayValue(kg, unit);
+  const showWeight = plannedLoad(profileLoads, history, exercise.exerciseId, unit);
   // Only confirmed loads are on the rack; anything else was typed and keeps its value.
   const rack = availableLoads({ loads: profileLoads }, equipment);
   const showActual = (kg: number) => loadValue(kg, unit, rack);
@@ -735,7 +735,7 @@ export default function TrainScreen({
               <span className="up-next__meta" style={{ display: 'block' }}>
                 {next.planned.length} {next.planned.length === 1 ? 'set' : 'sets'}
                 {next.planned[0]?.weight
-                  ? ` @ ${showWeight(next.planned[0].weight)} ${unitLabel(unit)}${
+                  ? ` @ ${plannedLoad(profileLoads, history, next.exerciseId, unit)(next.planned[0].weight)} ${unitLabel(unit)}${
                       loadModeOf(next.exerciseId) === 'total' ? ' total' : ' each'
                     }`
                   : ''}

@@ -3,7 +3,7 @@ import { loadModeOf, programExercise, setText } from '../data/flagship.ts';
 import type { AdaptedExercise, AdaptedWorkout } from './adapt.ts';
 import { availableLoads, coachLine, describePrescription, lastExercisePerformance, prescribeExercise } from './progression.ts';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from './plan.ts';
-import { displayValue, loadValue, unitLabel } from './units.ts';
+import { loadValue, unitLabel } from './units.ts';
 import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
 
 /**
@@ -17,17 +17,34 @@ import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '..
  */
 
 /** The user's confirmed loads for this movement's equipment: the one "on the rack" rule. */
-function rackOf(profile: Pick<Profile, 'loads'>, exerciseId: string): number[] {
+export function rackOf(profile: Pick<Profile, 'loads'>, exerciseId: string): number[] {
   const equipment = exerciseById(exerciseId)?.equipment;
   return equipment ? availableLoads(profile, equipment) : [];
 }
 
-function loadText(kg: number, exerciseId: string, unit: Unit, rack?: number[]): string {
+/** Every load the user has logged for this movement. */
+function typedLoads(history: WorkoutRecord[], exerciseId: string): number[] {
+  return history.flatMap((workout) => exerciseInWorkout(workout, exerciseId)?.done.map((set) => set.weight) ?? []);
+}
+
+/**
+ * Formats a planned/target load: rack loads like the rack, a load the user
+ * typed exactly as typed (even when held), a new off-rack step at half-unit.
+ */
+export function plannedLoad(
+  loads: Profile['loads'],
+  history: WorkoutRecord[],
+  exerciseId: string,
+  unit: Unit,
+): (kg: number) => string {
+  const rack = rackOf({ loads }, exerciseId);
+  const typed = typedLoads(history, exerciseId);
+  return (kg) => loadValue(kg, unit, rack, typed);
+}
+
+function loadText(kg: number, exerciseId: string, unit: Unit, text: string): string {
   // No recorded load is not the same claim as a movement that has no load.
   if (kg <= 0) return loadModeOf(exerciseId) === 'none' ? 'bodyweight' : 'no load yet';
-  const value = displayValue(kg, unit);
-  // Logged loads: on the confirmed rack they read like the target, typed ones stay exact.
-  const text = rack ? loadValue(kg, unit, rack) : Number.isInteger(value) ? String(value) : value.toFixed(1);
   return loadModeOf(exerciseId) === 'total'
     ? `${text} ${unitLabel(unit)} total`
     : `${text} ${unitLabel(unit)} each`;
@@ -169,7 +186,7 @@ export function catalogRowMeta(
   const prescription = prescribeExercise(exercise, profile, history);
   const sets = programExercise(exercise.id)?.sets ?? prescription.sets;
   const load =
-    hold === null && prescription.weight > 0 ? ` · ${loadText(prescription.weight, exercise.id, unit)}` : '';
+    hold === null && prescription.weight > 0 ? ` · ${loadText(prescription.weight, exercise.id, unit, plannedLoad(profile.loads, history, exercise.id, unit)(prescription.weight))}` : '';
   return `${sets} ${sets === 1 ? 'set' : 'sets'} · ${setText(exercise.id, hold ?? prescription.reps)}${load}`;
 }
 
@@ -235,7 +252,7 @@ export function progressionLines(
     const hold = holdSeconds(exerciseId);
     const required = exerciseInWorkout(workout, exerciseId)?.requirement ?? presentedSets;
     const performed = best
-      ? `${done.length}/${required} sets · best ${setText(exerciseId, best.reps)} @ ${loadText(best.weight, exerciseId, unit, rackOf(profile, exerciseId))}`
+      ? `${done.length}/${required} sets · best ${setText(exerciseId, best.reps)} @ ${loadText(best.weight, exerciseId, unit, loadValue(best.weight, unit, rackOf(profile, exerciseId)))}`
       : null;
 
     const definition = exerciseById(exerciseId);
@@ -256,21 +273,18 @@ export function progressionLines(
     }
 
     const prescription = prescribeExercise(definition, profile, history);
+    const nextLoad = plannedLoad(profile.loads, history, exerciseId, unit);
     return {
       exerciseId,
       name,
       original: programTarget(exerciseId, presentedSets),
       adapted: `${presentedSets} ${presentedSets === 1 ? 'set' : 'sets'}`,
       performed,
-      next: `${setText(exerciseId, prescription.reps)} @ ${loadText(
-        prescription.weight,
-        exerciseId,
-        unit,
-      )}`,
+      next: `${setText(exerciseId, prescription.reps)} @ ${loadText(prescription.weight, exerciseId, unit, nextLoad(prescription.weight))}`,
       reason: describePrescription(prescription, unit),
       earnedLoad:
         prescription.basis === 'load-increase' && prescription.last?.workoutId === workout.id
-          ? loadText(prescription.weight, exerciseId, unit)
+          ? loadText(prescription.weight, exerciseId, unit, nextLoad(prescription.weight))
           : null,
     };
   });
@@ -304,7 +318,7 @@ export function recapHighlight(
       before &&
       (today.weight > before.weight || (today.weight === before.weight && today.reps > before.reps))
     ) {
-      return `New best: ${setText(line.exerciseId, today.reps)} @ ${loadText(today.weight, line.exerciseId, unit, profile && rackOf(profile, line.exerciseId))} on ${line.name}`;
+      return `New best: ${setText(line.exerciseId, today.reps)} @ ${loadText(today.weight, line.exerciseId, unit, loadValue(today.weight, unit, profile ? rackOf(profile, line.exerciseId) : []))} on ${line.name}`;
     }
   }
   if (hasWork(workout) && !prior.some(hasWork)) return 'First session on the program';

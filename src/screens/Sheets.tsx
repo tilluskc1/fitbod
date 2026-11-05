@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
-import { formatWeight, loadValue, unitLabel } from '../lib/units';
+import { loadValue, unitLabel } from '../lib/units';
 import type { Profile, Unit, WorkoutExercise } from '../types';
 import { lastPerformance } from '../lib/plan';
 import { availableLoads } from '../lib/progression';
+import { plannedLoad } from '../lib/liveProgression';
 import type { WorkoutRecord } from '../types';
 import {
   EQUIPMENT_OPTIONS as SETUPS,
@@ -213,11 +214,12 @@ function targetLine(
   planned: { weight: number; reps: number }[],
   unit: Unit,
   exerciseId: string,
+  format: (kg: number) => string,
 ): string {
   if (planned.length === 0) return '—';
   const reps = repsTarget(exerciseId, planned.length, planned) ?? planned.map((set) => set.reps).join(' · ');
   const mode = loadModeOf(exerciseId);
-  return planned[0].weight > 0 ? `${reps} @ ${formatWeight(planned[0].weight, unit)}${mode === 'each' ? ' each' : mode === 'total' ? ' total' : ''}` : reps;
+  return planned[0].weight > 0 ? `${reps} @ ${format(planned[0].weight)} ${unitLabel(unit)}${mode === 'each' ? ' each' : mode === 'total' ? ' total' : ''}` : reps;
 }
 
 export function WhySheet({
@@ -270,7 +272,7 @@ export function WhySheet({
         </div>
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Today’s target</span>
-          <span>{targetLine(planned, unit, exerciseId)}</span>
+          <span>{targetLine(planned, unit, exerciseId, plannedLoad(loads, history, exerciseId, unit))}</span>
         </div>
       </div>
 
@@ -322,7 +324,7 @@ export function ExerciseSheet({
         </div>
         <div className="context-row">
           <span>Today</span>
-          <span>{targetLine(planned, unit, exerciseId)}</span>
+          <span>{targetLine(planned, unit, exerciseId, plannedLoad(loads, history, exerciseId, unit))}</span>
         </div>
         <div className="context-row" style={{ borderBottom: 0 }}>
           <span>Last recorded</span>
@@ -348,6 +350,8 @@ export function DaySheet({
   minutes,
   exercises,
   unit,
+  history = [],
+  loads = {},
   onStart,
   onClose,
 }: {
@@ -355,6 +359,8 @@ export function DaySheet({
   minutes: number;
   exercises: WorkoutExercise[];
   unit: Unit;
+  history?: WorkoutRecord[];
+  loads?: Profile['loads'];
   /** Today's Preview: start through the app's one validated start. */
   onStart?: () => void;
   onClose: () => void;
@@ -372,7 +378,7 @@ export function DaySheet({
           <div className="context-row" key={`${exercise.exerciseId}-${index}`}>
             <span>{exercise.name}</span>
             <span>
-              {exercise.planned.length} sets · {targetLine(exercise.planned, unit, exercise.exerciseId)}
+              {exercise.planned.length} sets · {targetLine(exercise.planned, unit, exercise.exerciseId, plannedLoad(loads, history, exercise.exerciseId, unit))}
             </span>
           </div>
         ))}

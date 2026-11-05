@@ -1,13 +1,13 @@
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
-import { formatActualWeight, unitOf } from '../lib/units';
+import { loadValue, unitLabel, unitOf } from '../lib/units';
 import { exerciseMeta, programSetCount, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { currentWorkout, EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
 import { exercisePhoto } from '../lib/media';
-import { targetCoachLine } from '../lib/liveProgression';
+import { plannedLoad, rackOf, targetCoachLine } from '../lib/liveProgression';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 
@@ -54,6 +54,7 @@ function coachInsight(
   first: ProgramExercise,
   unit: Unit,
   line: string | null,
+  rack: number[],
 ): string {
   // Built from the same prescription as the target, so it cannot contradict it.
   if (line) return line;
@@ -66,7 +67,7 @@ function coachInsight(
   // The load is what was actually logged, never the prescribed one.
   const load =
     last.weight > 0
-      ? ` at ${formatActualWeight(last.weight, unit, { perSide: first.load === 'each' })}`
+      ? ` at ${loadValue(last.weight, unit, rack)} ${unitLabel(unit)}${first.load === 'each' ? ' each' : ''}`
       : '';
   const target = first.targetReps?.[0];
   if (target !== undefined && target > Math.min(...last.reps)) {
@@ -182,7 +183,7 @@ export default function TodayScreen({
                   : current
                     ? `Session open. ${progress} of ${total} sets logged so far.`
                     : first
-                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit))
+                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit), rackOf(profile, first.exerciseId))
                       : 'Pick a workout you can keep. The program follows from that.'}
               </p>
             </div>
@@ -239,7 +240,7 @@ export default function TodayScreen({
                   <span className="workout-row__text">
                     <span className="workout-row__name">{exercise.name}</span>
                     <span className="workout-row__meta">
-                      {exerciseMeta(exercise, exercise.sets, true, unit)}
+                      {exerciseMeta(exercise, exercise.sets, true, unit, plannedLoad(profile.loads, history, exercise.exerciseId, unit))}
                     </span>
                   </span>
                   <span className="workout-row__chev">
@@ -260,7 +261,7 @@ export default function TodayScreen({
                     <span className="compare-line">
                       <span className="compare-line__label">Today’s target</span>
                       <span className="compare-line__value compare-line__value--target">
-                        {targetSummary(exercise, exercise.sets, unit)}
+                        {targetSummary(exercise, exercise.sets, unit, plannedLoad(profile.loads, history, exercise.exerciseId, unit))}
                       </span>
                     </span>
                   </span>
@@ -288,7 +289,7 @@ export default function TodayScreen({
                         </span>
                       </span>
                       <span className="workout-row__meta">
-                        {source ? exerciseMeta(source, source.sets, true, unit) : `${item.sets} sets`}
+                        {source ? exerciseMeta(source, source.sets, true, unit, plannedLoad(profile.loads, history, source.exerciseId, unit)) : `${item.sets} sets`}
                       </span>
                     </span>
                     <span className="workout-row__chev" aria-hidden="true" />

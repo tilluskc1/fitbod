@@ -277,9 +277,9 @@ export function prescribeExercise(
  * A rack (or planned) load reads exactly as the target line does; only a
  * user-typed load off the rack keeps its stored precision.
  */
-function fmtLoad(weight: number, equipment: Equipment, unit: Unit = 'kg', available: number[] = []): string {
+function fmtLoad(weight: number, equipment: Equipment, unit: Unit = 'kg', available: number[] = [], typed?: number[]): string {
   if (weight <= 0) return equipment === 'Bodyweight' ? 'bodyweight' : 'no added load';
-  return `${loadValue(weight, unit, available)} ${unitLabel(unit)}`;
+  return `${loadValue(weight, unit, available, typed)} ${unitLabel(unit)}`;
 }
 
 function fmtDate(iso: string): string {
@@ -314,7 +314,7 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
       return `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
     case 'mixed-load':
       // `weight` is the planned load: it reads exactly as the target line does.
-      return `${when}: ${setsLabel} at different loads (heaviest ${logged(workWeight)}). The load holds at ${fmtLoad(weight, equipment, unit, [weight])} — use one working load for every set to earn the next step.`;
+      return `${when}: ${setsLabel} at different loads (heaviest ${logged(workWeight)}). The load holds at ${fmtLoad(weight, equipment, unit, available, last.done.map((set) => set.weight))} — use one working load for every set to earn the next step.`;
     case 'repeat':
       return last.done.length === 0
         ? `${when} was not logged. Repeating the same prescription.`
@@ -341,7 +341,7 @@ export function coachLine(prescription: Prescription, unit: Unit): string {
       ? 'First time on this one. Log the reps you do.'
       : 'First time on this one. Start light, log what you lift.';
   if (!last) return first;
-  const today = weight > 0 ? `${fmtLoad(weight, equipment, unit, [weight])} for ${reps}` : `${reps} reps`;
+  const today = weight > 0 ? `${fmtLoad(weight, equipment, unit, available, last.done.map((set) => set.weight))} for ${reps}` : `${reps} reps`;
   const owned = last.done.length ? Math.max(...last.done.map((set) => set.weight)) : 0;
   switch (basis) {
     case 'load-increase':

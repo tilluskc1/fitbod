@@ -908,6 +908,7 @@ export default function App() {
           <ProgressScreen
             history={state.history}
             unit={unit}
+            loads={state.profile?.loads}
             onExport={exportData}
             onCorrect={correctSet}
             onDelete={deleteWorkout}
@@ -1046,6 +1047,8 @@ export default function App() {
           minutes={current?.durationMin ?? minutes}
           exercises={todayExercises}
           unit={unit}
+          history={state.history}
+          loads={state.profile?.loads}
           // The tab bar's start: the one validated path (startSession).
           onStart={sheet.kind === 'preview' && !current ? () => { closeSheet(); startWorkout(); } : undefined}
           onClose={closeSheet}

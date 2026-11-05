@@ -65,7 +65,14 @@ export function calibrationInputValue(kg: number, unit: Unit): string {
   return String(Math.round(toDisplay(kg, unit) * 100) / 100);
 }
 
-/** A rack load reads like the target (half-unit); a typed off-rack load keeps its exact value. */
-export function loadValue(kg: number, unit: Unit, rack: number[]): string {
-  return rack.some((load) => Math.abs(load - kg) < 0.001) ? inputValue(kg, unit) : calibrationInputValue(kg, unit);
+/**
+ * One rule for every load readout. On the confirmed rack: half-unit like the
+ * target. Otherwise a typed load keeps its exact value; `typed` lists loads the
+ * user logged, so a planned load that is not among them (a new app-prescribed
+ * step) reads at half-unit. Omit `typed` for a logged load: always exact.
+ */
+export function loadValue(kg: number, unit: Unit, rack: number[], typed?: number[]): string {
+  if (rack.some((load) => Math.abs(load - kg) < 0.001)) return inputValue(kg, unit);
+  if (typed && !typed.some((load) => Math.abs(load - kg) < 0.001)) return inputValue(kg, unit);
+  return calibrationInputValue(kg, unit);
 }
