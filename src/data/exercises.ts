@@ -108,6 +108,20 @@ export const EXERCISES: Exercise[] = [
   { id: 'ab-wheel', name: 'Ab Wheel Rollout', muscles: ['Core'], equipment: 'Bodyweight', pattern: 'core_stability', secondaryPatterns: ['core_flexion'], needs: ['ab-wheel'], instructions: 'From your knees, roll the wheel forward while keeping your core braced, then pull back.' },
 ];
 
+/**
+ * Variations that train the same thing the same way. A day never holds two
+ * from one group; the swap list skips them for the same reason.
+ */
+export const INCOMPATIBLE_GROUPS: string[][] = [
+  ['push-up', 'diamond-push-up'],
+  ['arnold-press', 'dumbbell-shoulder-press', 'overhead-press'],
+  ['dumbbell-floor-press', 'dumbbell-bench-press'],
+];
+
+export function areIncompatible(a: string, b: string): boolean {
+  return a !== b && INCOMPATIBLE_GROUPS.some((group) => group.includes(a) && group.includes(b));
+}
+
 export function exerciseById(id: string): Exercise | undefined {
   return EXERCISES.find((e) => e.id === id);
 }
