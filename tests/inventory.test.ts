@@ -177,3 +177,17 @@ test('a typed barbell load keeps the standard plate step', () => {
   assert.equal(next.weight, 42.5);
   assert.equal(next.basis, 'load-increase');
 });
+
+test('an unconfirmed home rack never drops a typed off-rack load as missing equipment', () => {
+  for (const typed of [6.8, 12.5]) {
+    const program = { ...FULL_BODY_A, exercises: FULL_BODY_A.exercises.map((exercise) =>
+      exercise.weight > 0 ? { ...exercise, weight: typed } : exercise) };
+    const home = adaptWorkout(program, { minutes: 35, equipment: 'home' }, []);
+    assert.deepEqual(home.skipped.filter((item) => item.reason === 'equipment'), [], `home @ ${typed}`);
+    assert.deepEqual(home.exercises.filter((exercise) => exercise.weight > 0).map((exercise) => exercise.weight),
+      program.exercises.filter((exercise) => exercise.weight > 0).map(() => typed));
+    // A hotel gym's rack is still the gym's: an off-rack load is not there.
+    const hotel = adaptWorkout(program, { minutes: 35, equipment: 'hotel' }, []);
+    assert.ok(hotel.skipped.some((item) => item.reason === 'equipment'), `hotel @ ${typed}`);
+  }
+});

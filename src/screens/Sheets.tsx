@@ -185,7 +185,7 @@ export function AdjustSheet({ constraints, originalMinutes, unit, onClose, onPre
                     <span className="equipment-choice__name">{option.label}</span>
                     <span className="equipment-choice__detail">
                       {key === 'home' && current.loads?.length
-                        ? `Yours: ${current.loads.map((load) => formatActualWeight(load, unit)).join(', ')}`
+                        ? `Yours: ${current.loads.map((load) => formatWeight(load, unit)).join(', ')}`
                         : option.detail}
                     </span>
                   </span>
