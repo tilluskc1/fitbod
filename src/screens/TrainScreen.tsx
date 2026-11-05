@@ -112,8 +112,9 @@ export function SaveSetRow({ needsWeight, onCancel, onSave }: {
 }
 
 /**
- * First-load help for an uncalibrated variant. It suggests no number: the user
- * picks from their own loads, and the warm-up it describes is never recorded.
+ * First-load help for an uncalibrated variant. It starts from a load suggested by
+ * the profile (#116), which the user confirms or changes; the warm-up it
+ * describes is never recorded.
  * A load pill confirms with its own tap; a typed load needs Confirm.
  */
 export function CalibrationStep({ selected = null, onConfirm, onSkip }: {
@@ -555,7 +556,9 @@ export default function TrainScreen({
               </label>
             )}
             {suggested !== null && experience && (
-              <p className="data-note">Suggested from your {experience} setup. Change it if it feels off.</p>
+              <p className="data-note">
+                Suggested: {calibrationInputValue(suggested, unit)} {weightLabel}, from your {experience} setup. Change it if it feels off.
+              </p>
             )}
             {calibrating && (
               <CalibrationStep

@@ -5,6 +5,8 @@ import { parseLoads } from './units.ts';
 type Role = 'small' | 'upper' | 'lower';
 
 const LOWER: ReadonlySet<MuscleGroup> = new Set<MuscleGroup>(['Quads', 'Hamstrings', 'Glutes', 'Calves']);
+/** A pull pattern, but rear-delt and rotator-cuff work: it starts as isolation. */
+const SMALL_IDS: ReadonlySet<string> = new Set(['face-pull']);
 
 /**
  * Starting load per hand for a dumbbell, in each unit's own steps (#116). A
@@ -32,16 +34,19 @@ const BAR: Record<Unit, number> = { lb: 45, kg: 20 };
  * (no number), as before.
  */
 export function suggestedFirstLoad(
-  exercise: Pick<Exercise, 'pattern' | 'muscles' | 'equipment'>,
+  exercise: Pick<Exercise, 'id' | 'pattern' | 'muscles' | 'equipment'>,
   experience: Experience,
   unit: Unit,
 ): number {
-  const role: Role = !isCompound(exercise) ? 'small' : LOWER.has(exercise.muscles[0]) ? 'lower' : 'upper';
+  const role: Role = SMALL_IDS.has(exercise.id) || !isCompound(exercise) ? 'small'
+    : LOWER.has(exercise.muscles[0]) ? 'lower' : 'upper';
   const perHand = DUMBBELL[unit][role][experience];
   const value = exercise.equipment === 'Bodyweight' ? 0
     : exercise.equipment === 'Barbell' ? BAR[unit]
     // A stack carries both hands' worth.
     : exercise.equipment === 'Machine' || exercise.equipment === 'Cable' ? perHand * 2
+    // Kettlebells come in 4 kg steps.
+    : exercise.equipment === 'Kettlebell' && unit === 'kg' ? Math.max(4, Math.round(perHand / 4) * 4)
     : perHand;
   // Same conversion and precision as a load the user typed.
   return value > 0 ? parseLoads(String(value), unit)[0] ?? 0 : 0;

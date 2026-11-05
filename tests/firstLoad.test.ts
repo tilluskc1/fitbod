@@ -32,6 +32,10 @@ test('a first-time load comes from the starting table: experience × role × equ
   assert.equal(shown('machine-chest-press', 'Intermediate', 'lb'), '50');
   assert.equal(shown('leg-extension', 'Beginner', 'kg'), '4');
   assert.equal(suggestedFirstLoad(exerciseById('push-up')!, 'Advanced', 'kg'), 0, 'bodyweight gets no number');
+  // A face pull is rear-delt work, not a compound pull: a light stack.
+  assert.equal(shown('face-pull', 'Beginner', 'lb'), '10');
+  // Kettlebells come in 4 kg steps.
+  assert.equal(shown('kettlebell-goblet-squat', 'Advanced', 'kg'), '24');
 });
 
 test('every suggestion is stored in kg at the precision a typed load gets, under the load limit', () => {
@@ -78,7 +82,7 @@ test('a typed first load is prefilled from the profile, says why, and Confirm is
   const html = await renderTrain({ experience: 'Beginner' });
   const input = html.match(/<input[^>]*aria-label="Enter dumbbell load[^"]*"[^>]*>/)?.[0] ?? '';
   assert.match(input, /value="6"/, 'floor press, Beginner, kg: 6 per hand');
-  assert.match(html, /Suggested from your Beginner setup\. Change it if it feels off\./);
+  assert.match(html, /Suggested: 6 kg each, from your Beginner setup\. Change it if it feels off\./);
   assert.match(html, /<button class="pill-primary"[^>]*>Confirm<\/button>/);
   assert.doesNotMatch(html, /<button class="pill-primary" disabled=""[^>]*>Confirm/);
 });
@@ -91,6 +95,6 @@ test('owned loads mark the nearest one as suggested without choosing it', async 
 
 test('without a profile level the step stays as it was: blank and nothing suggested', async () => {
   const html = await renderTrain({});
-  assert.doesNotMatch(html, /Suggested from your/);
+  assert.doesNotMatch(html, /Suggested:/);
   assert.match(html, /<input[^>]*aria-label="Enter dumbbell load[^"]*" value=""/);
 });
