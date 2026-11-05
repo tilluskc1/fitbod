@@ -18,11 +18,11 @@ export function shouldCue(tick: RestTick): boolean {
   return !tick.muted && restEnded(tick);
 }
 
-// Session-lifetime mute: in memory only, never stored.
-let muted = false;
-export const isRestMuted = () => muted;
-export const setRestMuted = (value: boolean) => {
-  muted = value;
+// Mute lasts for the open workout (its session id): in memory only, never stored.
+let mutedSession: string | null = null;
+export const isRestMuted = (sessionId: string) => mutedSession === sessionId;
+export const setRestMuted = (sessionId: string, value: boolean) => {
+  mutedSession = value ? sessionId : null;
 };
 
 let audio: AudioContext | null = null;

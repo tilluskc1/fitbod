@@ -2987,6 +2987,9 @@ body {
   border: 1px solid rgba(50, 59, 48, 0.6);
   margin: 0 -2px;
   flex-wrap: wrap;
+  position: sticky;
+  top: calc(56px + env(safe-area-inset-top, 0px) + 6px);
+  z-index: 10;
 }
 
 .rest-bar__left {

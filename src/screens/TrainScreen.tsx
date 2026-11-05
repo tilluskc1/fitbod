@@ -90,7 +90,7 @@ export default function TrainScreen({
   const rest = restRemaining(session, now);
   const restPaused = Boolean(session.restPausedAt);
 
-  const [muted, setMuted] = useState(isRestMuted);
+  const [muted, setMuted] = useState(() => isRestMuted(session.id));
   const [restOver, setRestOver] = useState(false);
   const [prevRest, setPrevRest] = useState(rest);
   const restActive = Boolean(session.restStartedAt);
@@ -552,7 +552,7 @@ export default function TrainScreen({
                 aria-label="Mute rest cue"
                 onClick={() => {
                   primeRestAudio();
-                  setRestMuted(!muted);
+                  setRestMuted(session.id, !muted);
                   setMuted(!muted);
                 }}
               >

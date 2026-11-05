@@ -35,3 +35,27 @@ test('+30 s before zero postpones the cue to the new zero', () => {
   assert.equal(shouldCue(tick(1, 31)), false);
   assert.equal(shouldCue(tick(1, 0)), true);
 });
+
+import { createSession, logSet, restRemaining, skipExercise } from '../src/lib/session.ts';
+import { isRestMuted, setRestMuted } from '../src/lib/restCue.ts';
+
+test('skipping the exercise through the real skip path ends the rest, so no cue', () => {
+  const set = (done: boolean) => ({ weight: 0, reps: 8, done, completedAt: null });
+  const base = createSession({
+    id: 's1', name: 'Push', dayIndex: 0, now: '2026-01-01T10:00:00.000Z',
+    exercises: [{ exerciseId: 'push-up', name: 'Push-Up', planned: [{ weight: 0, reps: 8 }, { weight: 0, reps: 8 }], performed: [set(false), set(false)] }],
+  });
+  const rested = logSet(base, 0, 0, '2026-01-01T10:01:00.000Z');
+  const before = restRemaining(rested, Date.parse('2026-01-01T10:01:30.000Z'));
+  const skipped = skipExercise(rested, 0);
+  const after = restRemaining(skipped, Date.parse('2026-01-01T10:01:30.000Z'));
+  assert.ok(before > 0);
+  assert.equal(skipped.restStartedAt, null);
+  assert.equal(shouldCue({ prev: before, remaining: after, active: Boolean(skipped.restStartedAt), paused: false, muted: false }), false);
+});
+
+test('mute belongs to the open workout and resets for a new session id', () => {
+  setRestMuted('a', true);
+  assert.equal(isRestMuted('a'), true);
+  assert.equal(isRestMuted('b'), false);
+});
