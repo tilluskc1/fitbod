@@ -296,7 +296,7 @@ function fmtDate(iso: string): string {
 
 /** One line explaining why today's numbers are what they are. Loads read in the display unit; records stay kilograms. */
 export function describePrescription(prescription: Prescription, unit: Unit): string {
-  const { basis, last, range, increment, equipment, weight, available } = prescription;
+  const { basis, last, range, equipment, weight, available } = prescription;
   const logged = (kg: number) => fmtLoad(kg, equipment, unit, available);
   if (!last) {
     return 'First time — no history. Start light and log what you actually lift.';
@@ -309,7 +309,7 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
 
   switch (basis) {
     case 'load-increase':
-      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. One step up (+${fmtAmount(increment, unit)} ${unitLabel(unit)}); reps restart at ${range.min}.`;
+      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. One step up (+${fmtAmount(weight - workWeight, unit)} ${unitLabel(unit)}); reps restart at ${range.min}.`;
     case 'rep-increase':
       return `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
     case 'mixed-load':

@@ -438,3 +438,22 @@ test('generated sessions carry the prescription into planned and performed sets'
     );
   }
 });
+
+test('the reason names the real gap to the next load: rack steps, lb display, barbell', () => {
+  const reason = (id: string, loads: number[], from: number, unit: 'kg' | 'lb' = 'kg') => {
+    const eq = meta(id).equipment;
+    const history = [record({ id: 'w1', date: '2026-01-05T10:00:00.000Z', exerciseId: id,
+      planned: sets(from, 12), performed: sets(from, 12) })];
+    const p = prescribeExercise(meta(id), makeProfile({ loads: { [eq]: loads } }), history);
+    return { p, text: describePrescription(p, unit) };
+  };
+  const rack = [10, 15, 18];
+  const a = reason('dumbbell-floor-press', rack, 10);
+  assert.equal(a.p.weight, 15);
+  assert.match(a.text, /\(\+5 kg\)/);
+  assert.match(reason('dumbbell-floor-press', rack, 15).text, /\(\+3 kg\)/);
+  assert.match(reason('dumbbell-floor-press', rack, 15, 'lb').text, /\(\+6\.5 lb\)/); // 18 kg targets 39.5 lb, 15 kg reads 33 lb
+  // Barbell with no inventory: the default increment still equals the actual gap.
+  const bb = reason('barbell-bench-press', [], 60);
+  assert.match(bb.text, new RegExp(`\\(\\+${bb.p.weight - 60} kg\\)`));
+});
