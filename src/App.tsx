@@ -338,11 +338,11 @@ export default function App() {
     const notes: Record<string, string> = {};
     if (!profile) return notes;
     for (const exercise of liveProgram.exercises) {
-      const reason = targetReason(exercise.exerciseId, profile, state.history);
+      const reason = targetReason(exercise.exerciseId, profile, state.history, unit);
       if (reason) notes[exercise.exerciseId] = reason;
     }
     return notes;
-  }, [liveProgram, profile, state.history]);
+  }, [liveProgram, profile, state.history, unit]);
   const recap = recapId ? state.history.find((workout) => workout.id === recapId) ?? null : null;
 
   const storageNote =
@@ -476,7 +476,7 @@ export default function App() {
         ...currentState,
         todayOverride: approved,
         current: currentState.current
-          ? restorePendingWorkout(currentState.current, workout)
+          ? restorePendingWorkout(currentState.current, workout, currentState.profile, currentState.history)
           : null,
       }));
       appliedProposalRef.current = proposal.id;
@@ -504,7 +504,9 @@ export default function App() {
       return {
         ...currentState,
         todayOverride: null,
-        current: currentState.current ? restorePendingWorkout(currentState.current, original) : null,
+        current: currentState.current
+          ? restorePendingWorkout(currentState.current, original, currentState.profile, currentState.history)
+          : null,
       };
     });
     proposalRevisionRef.current += 1;
@@ -795,7 +797,7 @@ export default function App() {
         feedbackWrite={feedbackWrite}
         onFeedback={saveFeedback}
         onRetryFeedback={attemptSave}
-        progression={profile ? progressionLines(recap, profile, state.history) : []}
+        progression={profile ? progressionLines(recap, profile, state.history, unit) : []}
         onViewHistory={() => {
           setView('tabs');
           setTab('progress');

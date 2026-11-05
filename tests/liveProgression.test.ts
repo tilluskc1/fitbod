@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { FULL_BODY_A } from '../src/data/flagship.ts';
-import { adaptWorkout } from '../src/lib/adapt.ts';
+import { adaptWorkout, restorePendingWorkout, swapCandidateFor } from '../src/lib/adapt.ts';
 import { prescribeExercise } from '../src/lib/progression.ts';
 import { exerciseById } from '../src/data/exercises.ts';
 import { applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
@@ -85,7 +85,7 @@ test('a logged full target earns the next selectable rack load through the real 
   const adapted = adaptWorkout(FULL_BODY_A, constraints);
   const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 18, 'all three sets at the ceiling move to the next owned load');
-  assert.equal(next.planned[0].reps, 6, 'reps restart at the bottom of the range');
+  assert.equal(next.planned[0].reps, 8, "reps restart at the bottom of the program's 8–10 range");
   assert.equal(next.originalPlannedSets, 3, 'the original 3-set target is preserved');
 });
 
@@ -116,11 +116,11 @@ test('mixed loads hold instead of rewarding the heaviest set', () => {
 
   const adapted = adaptWorkout(FULL_BODY_A, constraints);
   const next = liveExercises(adapted, profile, state.history)[0];
-  assert.equal(next.planned[0].weight, 18, 'the working load is kept, not raised again');
+  assert.equal(next.planned[0].weight, 15, 'mixed work holds at the lowest working load used');
   assert.equal(next.planned[0].reps, 10);
   assert.match(
-    targetReason('dumbbell-floor-press', profile, state.history) ?? '',
-    /different loads/,
+    targetReason('dumbbell-floor-press', profile, state.history, 'kg') ?? '',
+    /different loads.*holds at 15 kg/,
   );
 });
 
@@ -157,7 +157,7 @@ test('the top of the owned rack holds instead of inventing a heavier load', () =
   const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 18);
   assert.equal(next.planned[0].reps, 10);
-  assert.match(targetReason('dumbbell-floor-press', profile, state.history) ?? '', /available loads/);
+  assert.match(targetReason('dumbbell-floor-press', profile, state.history, 'kg') ?? '', /available loads/);
 });
 
 test('correcting a logged set changes the next target without rewriting the record', () => {
@@ -201,7 +201,7 @@ test('Today shows the computed target, not the program fixture', () => {
   const live = liveAdapted(adapted, profile, state.history);
   const press = live.exercises[0];
   assert.equal(press.weight, 18);
-  assert.deepEqual(press.targetReps?.slice(0, press.sets), [6, 6, 6]);
+  assert.deepEqual(press.targetReps?.slice(0, press.sets), [8, 8, 8]);
   // Nothing else about the adaptation changes.
   assert.equal(live.totalSets, adapted.totalSets);
   assert.equal(live.note, adapted.note);
@@ -221,7 +221,8 @@ test('recap lines state original, adapted, actual, next and one factual reason',
   assert.match(press.adapted, /3 sets/);
   assert.match(press.performed, /10 reps/);
   assert.match(press.performed, /15 kg each/);
-  assert.match(press.next, /6 reps/);
+  assert.match(press.performed, /3\/3 sets/);
+  assert.match(press.next, /8 reps/);
   assert.match(press.next, /18 kg each/);
   assert.match(press.reason, /One step up/);
   // A hold keeps its seconds and never grows a load.
@@ -245,4 +246,55 @@ test('a first session recap says there is no history instead of inventing a comp
   const pressDefinition = exerciseById('dumbbell-floor-press');
   assert.ok(pressDefinition);
   assert.equal(prescribeExercise(pressDefinition, profile, []).weight, 0);
+});
+
+test('a recap with one of three sets done says so instead of reading as the full target', () => {
+  const session = startLiveSession([]);
+  let logged = updatePerformedSet(session, 0, 0, { weight: 15, reps: 10 });
+  logged = logSet(logged, 0, 0, '2026-11-02T10:01:00.000Z');
+  const { state, workout } = finish(logged);
+  const press = progressionLines(workout, profile, state.history, 'kg').find(
+    (line) => line.exerciseId === 'dumbbell-floor-press',
+  );
+  assert.ok(press);
+  assert.match(press.performed ?? '', /1\/3 sets/);
+});
+
+test('explanation lines read in the display unit', () => {
+  const session = startLiveSession([]);
+  const { state, workout } = finish(logAll(session, 0, 15, 10));
+  const lb = { ...profile, unit: 'lb' as const };
+  const press = progressionLines(workout, lb, state.history, 'lb').find(
+    (line) => line.exerciseId === 'dumbbell-floor-press',
+  );
+  assert.ok(press);
+  assert.match(press.reason, / lb/);
+  assert.doesNotMatch(press.reason, / kg/);
+  assert.doesNotMatch(targetReason('dumbbell-floor-press', lb, state.history, 'lb') ?? '', / kg/);
+});
+
+test('mid-session adjust, restore and swap-back keep the history-derived numbers, not the fixture', () => {
+  // History: the press earned 18 kg; nothing else has been logged yet.
+  const { state } = finish(logAll(startLiveSession([]), 0, 15, 10));
+  const history = state.history;
+  const original = adaptWorkout(FULL_BODY_A, constraints);
+  const live = liveExercises(original, profile, history);
+
+  // A shortened live session with one squat set logged, then the original restored.
+  let short = startLiveSession(history, 20);
+  short = logSet(updatePerformedSet(short, 1, 0, { weight: 10, reps: 8 }), 1, 0, '2026-11-02T10:01:00.000Z');
+  const restored = restorePendingWorkout(short, original, profile, history);
+  for (const expected of live) {
+    const pending = restored.exercises
+      .filter((exercise) => exercise.exerciseId === expected.exerciseId)
+      .flatMap((exercise) => exercise.planned.filter((_, index) => !exercise.performed[index].done));
+    assert.ok(pending.length > 0);
+    for (const set of pending) assert.deepEqual(set, expected.planned[0], expected.exerciseId);
+  }
+
+  // Swapping back to a program movement asks the same history.
+  const press = exerciseById('dumbbell-floor-press');
+  assert.ok(press);
+  const candidate = swapCandidateFor(press, profile, history, null);
+  assert.deepEqual({ weight: candidate.weight, reps: candidate.reps }, live[0].planned[0]);
 });

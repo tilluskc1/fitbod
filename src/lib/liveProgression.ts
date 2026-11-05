@@ -2,6 +2,7 @@ import { exerciseById } from '../data/exercises.ts';
 import { loadModeOf, programExercise, setText } from '../data/flagship.ts';
 import type { AdaptedExercise, AdaptedWorkout } from './adapt.ts';
 import { describePrescription, prescribeExercise } from './progression.ts';
+import { exerciseInWorkout } from './plan.ts';
 import { displayValue, unitLabel } from './units.ts';
 import type { Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
 
@@ -116,7 +117,7 @@ export function targetReason(
   exerciseId: string,
   profile: Profile,
   history: WorkoutRecord[],
-  unit: Unit = 'kg',
+  unit: Unit,
 ): string | null {
   if (holdSeconds(exerciseId) !== null) return null;
   const definition = exerciseById(exerciseId);
@@ -156,7 +157,7 @@ export function progressionLines(
   workout: WorkoutRecord,
   profile: Profile,
   history: WorkoutRecord[],
-  unit: Unit = 'kg',
+  unit: Unit,
 ): ProgressionLine[] {
   const order: string[] = [];
   const segmentsById = new Map<string, WorkoutRecord['exercises']>();
@@ -182,8 +183,9 @@ export function progressionLines(
       return current;
     }, null);
     const hold = holdSeconds(exerciseId);
+    const required = exerciseInWorkout(workout, exerciseId)?.requirement ?? presentedSets;
     const performed = best
-      ? `${setText(exerciseId, best.reps)} @ ${loadText(best.weight, exerciseId, unit)}`
+      ? `${done.length}/${required} sets · best ${setText(exerciseId, best.reps)} @ ${loadText(best.weight, exerciseId, unit)}`
       : null;
 
     const definition = exerciseById(exerciseId);
