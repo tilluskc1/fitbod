@@ -197,7 +197,7 @@ export default function Onboarding({ onComplete }: Props) {
       {step === 3 && (
         <section className="onboarding-step">
           <h1>What equipment do you have?</h1>
-          <p className="muted">Only supported exercises appear. Nothing is assumed from what you pick.</p>
+          <p className="muted">Only gear you pick is used. Nothing else is assumed.</p>
 
           <span className="setup-label">Primary equipment</span>
           <div className="chip-wrap">
@@ -226,18 +226,12 @@ export default function Onboarding({ onComplete }: Props) {
                 onChange={(event) => setLoadsText(event.target.value)}
                 placeholder="e.g. 5, 7.5"
               />
-              <p className="muted">
-                Nothing is assumed from this list, and no target will offer a dumbbell you did not
-                confirm. Leave it blank to keep it unconfirmed.
-              </p>
+              <p className="muted">Targets use only weights you list. Blank keeps it unconfirmed.</p>
             </>
           ) : null}
 
           <span className="setup-label">Support equipment</span>
-          <p className="muted">
-            A bench is never assumed just because you own dumbbells, and a rack is never assumed for
-            barbell squats.
-          </p>
+          <p className="muted">Dumbbells never imply a bench, and barbells never imply a rack.</p>
           <div className="chip-wrap">
             {SUPPORT_OPTIONS.map((item) => (
               <button

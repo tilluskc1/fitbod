@@ -218,6 +218,7 @@ export function WhySheet({
   planned,
   history,
   unit,
+  reason,
   onClose,
 }: {
   exerciseId: string;
@@ -225,6 +226,8 @@ export function WhySheet({
   planned: { weight: number; reps: number }[];
   history: WorkoutRecord[];
   unit: Unit;
+  /** The precise sentence behind the target; Today shows only the coach line. */
+  reason?: string;
   onClose: () => void;
 }) {
   const last = lastPerformance(history, exerciseId);
@@ -244,6 +247,7 @@ export function WhySheet({
           </>
         )}
       </p>
+      {reason && <p className="sheet-copy" style={{ marginTop: 10 }}>{reason}</p>}
 
       <div className="context-list" style={{ marginTop: 16 }}>
         <div className="context-row">
@@ -331,12 +335,15 @@ export function DaySheet({
   minutes,
   exercises,
   unit,
+  onStart,
   onClose,
 }: {
   name: string;
   minutes: number;
   exercises: WorkoutExercise[];
   unit: Unit;
+  /** Today's Preview: start through the app's one validated start. */
+  onStart?: () => void;
   onClose: () => void;
 }) {
   return (
@@ -367,6 +374,11 @@ export function DaySheet({
         <button className="secondary" onClick={onClose}>
           Close
         </button>
+        {onStart && (
+          <button className="primary" onClick={onStart} disabled={exercises.length === 0}>
+            Start workout
+          </button>
+        )}
       </div>
     </Sheet>
   );
