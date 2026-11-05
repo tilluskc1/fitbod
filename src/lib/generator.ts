@@ -219,7 +219,7 @@ export function generateWorkout(
   const lead = pickLead(picked, day.focus);
   if (lead) picked.splice(0, picked.length, lead, ...picked.filter((exercise) => exercise !== lead));
   const exercises: WorkoutExercise[] = picked.map((exercise) => {
-    const prescription = prescribeExercise(exercise, profile, history, exercise === lead);
+    const prescription = prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined);
     const planned = Array.from({ length: prescription.sets }, () => ({
       weight: prescription.weight,
       reps: prescription.reps,

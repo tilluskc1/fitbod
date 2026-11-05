@@ -160,6 +160,8 @@ export function roleTarget(
   exercise: Exercise,
   profile: Pick<Profile, 'goal' | 'experience'>,
   lead = false,
+  /** False when the day has no loaded compound to lead: other compounds keep four sets. */
+  dayHasLead = true,
 ): { sets: number; range: RepRange } {
   const compound = isCompound(exercise);
   lead = lead && canLead(exercise);
@@ -171,7 +173,7 @@ export function roleTarget(
   // The program's own range wins, so the next target matches the recap's "3 × 8–10".
   const programmed = programExercise(exercise.id)?.repRange;
   const range = programmed ? { min: programmed[0], max: programmed[1] } : repRangeFor(exercise);
-  return { sets: compound && !heavy ? 4 : 3, range };
+  return { sets: compound && !(heavy && dayHasLead) ? 4 : 3, range };
 }
 
 /** Loads the profile says are actually selectable for this equipment. */
@@ -299,9 +301,10 @@ export function prescribeExercise(
   profile: Profile,
   history: WorkoutRecord[],
   lead = false,
+  dayHasLead = true,
 ): Prescription {
   const catalog = repRangeFor(exercise);
-  const { sets, range } = roleTarget(exercise, profile, lead);
+  const { sets, range } = roleTarget(exercise, profile, lead, dayHasLead);
   const available = availableLoads(profile, exercise.equipment);
   const increment = incrementFor(exercise.equipment, available);
   const last = lastExercisePerformance(history, exercise.id);

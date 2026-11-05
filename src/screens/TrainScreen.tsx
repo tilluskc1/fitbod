@@ -331,7 +331,7 @@ export default function TrainScreen({
     setCalibration(weight > 0 ? { key: calibrationKey, weight } : null);
   const quickLoads = calibrating ? (canPickCalibration ? calibrationLoads : []) : canPickWeight ? loadOptions : [];
   const coach = calibrating
-    ? `First time on this one. Pick a weight you could lift about ${exercise.planned[0]?.reps ?? 12} times with good form.`
+    ? `First time on this one. Pick a weight you could lift for ${exercise.planned[0]?.reps ?? 10} reps with 2–3 to spare.`
     : targetNotes?.[exercise.exerciseId];
 
   const openEditor = (set: PerformedSet, setIndex: number, field: 'weight' | 'reps') => {

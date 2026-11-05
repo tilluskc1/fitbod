@@ -270,3 +270,16 @@ test('the reason for a load step prints the reps actually logged', () => {
   assert.equal(next.basis, 'load-increase');
   assert.match(describePrescription(next, 'kg'), /4 sets at 8 reps \(top of 4–6\), 20 kg/);
 });
+
+test('a day with no loaded compound keeps four-set compounds and its total', () => {
+  const bars = profileOf({ daysPerWeek: 4, equipment: [], support: ['Pull-up bar', 'Dip bars'] });
+  const upper = generateWorkout(bars, buildPlan(bars)[0], 0).exercises;
+  assert.equal(leadCompoundId(upper.map((exercise) => exercise.exerciseId)), undefined);
+  for (const exercise of upper) {
+    assert.equal(exercise.planned.length, isCompound(def(exercise.exerciseId)) ? 4 : 3, exercise.exerciseId);
+  }
+  assert.equal(upper.reduce((sum, exercise) => sum + exercise.planned.length, 0), 16);
+  const bare = profileOf({ equipment: [], support: [] });
+  const pushUp = generateWorkout(bare, buildPlan(bare)[0], 0).exercises.find((exercise) => exercise.exerciseId === 'push-up');
+  assert.equal(pushUp?.planned.length, 4);
+});
