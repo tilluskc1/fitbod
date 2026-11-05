@@ -6,6 +6,8 @@ import { capabilitiesFor, provides } from '../lib/capabilities';
 import { catalogRowMeta } from '../lib/liveProgression';
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
+import FeasibilityNote from '../components/ui/FeasibilityNote';
+import type { ProfileChange } from '../lib/preferences';
 import { ArrowIcon, ChevronIcon, SettingsIcon } from '../components/ui/Icons';
 
 interface Props {
@@ -19,6 +21,7 @@ interface Props {
   onOpenSettings: () => void;
   onViewDay: (dayIndex: number) => void;
   onOpenLibrary: () => void;
+  onReviewChange?: (change: ProfileChange) => void;
 }
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -33,6 +36,7 @@ export default function PlanScreen({
   onOpenSettings,
   onViewDay,
   onOpenLibrary,
+  onReviewChange,
 }: Props) {
   const [tab, setTab] = useState<'week' | 'equipment'>('week');
   const minutes = program.minutes;
@@ -75,7 +79,7 @@ export default function PlanScreen({
         </button>
       </header>
       <p className="page-sub">
-        {program.exercises.length} exercises · {sessionSets} sets · {minutes} minutes ·{' '}
+        {program.exercises.length} exercises · {sessionSets} sets · {program.exercises.length > 0 && `${minutes} minutes · `}
         {profile.equipment.length === 0 ? 'Bodyweight' : profile.equipment.length >= 3 ? 'Full gym' : 'Home'}
       </p>
 
@@ -114,8 +118,9 @@ export default function PlanScreen({
                 </span>
                 <strong className="plan-name">{program.name}</strong>
                 <span className="plan-meta">
-                  {minutes} min · {program.exercises.length} exercises · {sessionSets} sets
+                  {program.exercises.length > 0 && `${minutes} min · `}{program.exercises.length} exercises · {sessionSets} sets
                 </span>
+                <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
                 <span className="plan-foot">
                   Your selected equipment
                   <button className="text-link" onClick={() => onViewDay(0)}>

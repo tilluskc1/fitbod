@@ -10,6 +10,9 @@ import { exercisePhoto } from '../lib/media';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
 import Demo from '../components/ui/Demo';
+import FeasibilityNote from '../components/ui/FeasibilityNote';
+import { missingFamilies } from '../lib/feasibility';
+import type { ProfileChange } from '../lib/preferences';
 import Icon from '../components/ui/Icon';
 
 interface Props {
@@ -32,6 +35,8 @@ interface Props {
   slotLabel?: string;
   /** Explicit skip of the slot on offer. Absent means the plan has no sequence. */
   onSkipSlot?: () => void;
+  /** Previews a feasibility alternative (allow an excluded exercise) before anything is saved. */
+  onReviewChange?: (change: ProfileChange) => void;
 }
 
 function greeting(now: Date): string {
@@ -94,6 +99,7 @@ export default function TodayScreen({
   onOpenExercise,
   slotLabel,
   onSkipSlot,
+  onReviewChange,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -107,6 +113,8 @@ export default function TodayScreen({
       ? estimatedMinutes(program, adapted.totalSets)
       : adapted.minutes;
   const minutes = current ? (current.durationMin ?? adapted.minutes) : estimated;
+  // A day with nothing to do has no duration to promise.
+  const timed = Boolean(current) || adapted.exercises.length > 0;
   const first = adapted.exercises[0];
   const heroId = first?.exerciseId ?? 'dumbbell-floor-press';
   const photo = exercisePhoto(heroId);
@@ -148,7 +156,7 @@ export default function TodayScreen({
           </span>
         </div>
 
-        <section className="hero-card" aria-label={`${program.name}, ${minutes} minutes`}>
+        <section className="hero-card" aria-label={timed ? `${program.name}, ${minutes} minutes` : program.name}>
           {photo && <img className="hero-card__photo" src={photo} alt="" />}
           <span className="hero-card__shade" aria-hidden="true" />
           <span className="hero-card__top">
@@ -160,9 +168,14 @@ export default function TodayScreen({
               {current ? current.name : program.name}
             </span>
             <span className="hero-card__meta">
-              <Icon name="timer" size={17} />
-              {estimated < adapted.minutes && !current ? '≈' : ''}
-              {minutes} min <span aria-hidden="true">·</span> {setup.short}
+              {timed && (
+                <>
+                  <Icon name="timer" size={17} />
+                  {estimated < adapted.minutes && !current ? '≈' : ''}
+                  {minutes} min <span aria-hidden="true">·</span>{' '}
+                </>
+              )}
+              {setup.short}
               {slotLabel && (
                 <>
                   {' '}
@@ -172,6 +185,11 @@ export default function TodayScreen({
             </span>
           </span>
         </section>
+
+        {/* The status describes the saved setup, not an adjusted day or an open session. */}
+        {!current && !adjusted && (
+          <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
+        )}
 
         <section className="coach-card" aria-label={adjusted ? 'Coach note' : 'Coach insight'}>
           <div className="coach-card__head">
@@ -213,13 +231,19 @@ export default function TodayScreen({
           <div className="list-head">
             <h2>The workout</h2>
             <span>
-              {estimated < adapted.minutes && !current ? '≈' : ''}
-              {minutes} min · {adapted.totalSets} {adapted.totalSets === 1 ? 'set' : 'sets'}
+              {timed && `${estimated < adapted.minutes && !current ? '≈' : ''}${minutes} min · `}
+              {adapted.totalSets} {adapted.totalSets === 1 ? 'set' : 'sets'}
             </span>
           </div>
 
           <div className="workout-list">
-            {adapted.exercises.length === 0 && (
+            {adapted.exercises.length === 0 && !adjusted && program.feasibility?.status === 'infeasible' && (
+              <div className="empty-state">
+                <p>Your equipment can’t cover {missingFamilies(program.feasibility)} yet. Add gear to fill this day.</p>
+                <button className="text-action text-action--lime" onClick={onOpenSettings}>Edit equipment</button>
+              </div>
+            )}
+            {adapted.exercises.length === 0 && (adjusted || program.feasibility?.status !== 'infeasible') && (
               <p className="empty-state">
                 No movement in this program can be done with {setup.chip.toLowerCase()}. Choose
                 another setup in Adjust today.
