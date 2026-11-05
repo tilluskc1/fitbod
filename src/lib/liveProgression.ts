@@ -1,7 +1,7 @@
 import { exerciseById } from '../data/exercises.ts';
 import { loadModeOf, programExercise, setText } from '../data/flagship.ts';
 import type { AdaptedExercise, AdaptedWorkout } from './adapt.ts';
-import { describePrescription, prescribeExercise } from './progression.ts';
+import { describePrescription, lastExercisePerformance, prescribeExercise } from './progression.ts';
 import { exerciseInWorkout } from './plan.ts';
 import { displayValue, unitLabel } from './units.ts';
 import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
@@ -110,6 +110,17 @@ export function liveExercises(
       })),
     };
   });
+}
+
+/**
+ * A loaded variant with no done set in completed history (a saved session that
+ * never reached it does not calibrate it) whose first set has no load yet and nothing logged. Holds and bodyweight never ask.
+ */
+export function needsCalibration(exercise: WorkoutExercise, history: WorkoutRecord[]): boolean {
+  const first = exercise.performed[0];
+  return loadModeOf(exercise.exerciseId) !== 'none' && holdSeconds(exercise.exerciseId) === null
+    && !lastExercisePerformance(history, exercise.exerciseId)?.done.length
+    && first !== undefined && first.weight === 0 && !exercise.performed.some((set) => set.done);
 }
 
 /** One line of the "why this number" explanation, or null where none applies. */

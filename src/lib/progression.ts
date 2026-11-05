@@ -296,7 +296,7 @@ function fmtDate(iso: string): string {
 
 /** One line explaining why today's numbers are what they are. Loads read in the display unit; records stay kilograms. */
 export function describePrescription(prescription: Prescription, unit: Unit): string {
-  const { basis, last, range, increment, equipment, weight, available } = prescription;
+  const { basis, last, range, equipment, weight, available } = prescription;
   const logged = (kg: number) => fmtLoad(kg, equipment, unit, available);
   if (!last) {
     return 'First time — no history. Start light and log what you actually lift.';
@@ -308,8 +308,14 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
   const setsLabel = `${count} set${count === 1 ? '' : 's'}`;
 
   switch (basis) {
-    case 'load-increase':
-      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. One step up (+${fmtAmount(increment, unit)} ${unitLabel(unit)}); reps restart at ${range.min}.`;
+    case 'load-increase': {
+      // Next shown load minus the current load exactly as `logged` prints it (typed loads keep precision).
+      const onRack = available.some((load) => Math.abs(load - workWeight) < 0.001);
+      const shown = onRack ? displayValue(workWeight, unit) : Number(calibrationInputValue(workWeight, unit));
+      const step = Math.round((displayValue(weight, unit) - shown) * 100) / 100;
+      const stepText = step > 0 ? `One step up (+${step} ${unitLabel(unit)})` : 'Next load';
+      return `${when}: ${setsLabel} at ${range.max} reps, ${logged(workWeight)}. ${stepText}; reps restart at ${range.min}.`;
+    }
     case 'rep-increase':
       return `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
     case 'mixed-load':

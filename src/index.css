@@ -1304,7 +1304,7 @@ textarea:focus-visible {
 
 .chip {
   flex: none;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 14px;
   border-radius: 999px;
   border: 1px solid #33402a;
@@ -3365,6 +3365,10 @@ body {
 
 .save-bar:active {
   transform: scale(0.98);
+}
+
+.save-bar:disabled {
+  opacity: 0.45;
 }
 
 .finish-btn {
