@@ -282,6 +282,51 @@ test('a session whose sets were never logged repeats the prescription', () => {
   assert.equal(prescription.reps, 8);
 });
 
+/** An early-finished session in which only the first set was logged. */
+function earlyFinish(exerciseId: string, planned: { weight: number; reps: number }[], logged: { weight: number; reps: number }) {
+  const workout = record({ id: 'w1', date: '2026-01-05T10:00:00.000Z', exerciseId, planned, performed: planned.map((set, index) => (index === 0 ? { ...logged, done: true } : { ...set, done: false })) });
+  return [{ ...workout, completedEarly: true }];
+}
+
+test('an early finish repeats the target instead of lowering it to the logged set (#104)', () => {
+  // Bodyweight: Push-Up 4 × 8, one set of 7, finish early.
+  const pushUp = prescribeExercise(meta('push-up'), makeProfile(), earlyFinish('push-up', sets(0, 8), { weight: 0, reps: 7 }));
+  assert.equal(pushUp.basis, 'repeat');
+  assert.deepEqual([pushUp.weight, pushUp.reps], [0, 8]);
+
+  // Loaded: Bench 60 × 8, one lighter set of 6, finish early.
+  const bench = prescribeExercise(meta('barbell-bench-press'), makeProfile(), earlyFinish('barbell-bench-press', sets(60, 8), { weight: 57.5, reps: 6 }));
+  assert.equal(bench.basis, 'repeat');
+  assert.deepEqual([bench.weight, bench.reps], [60, 8]);
+  assert.match(describePrescription(bench, 'kg'), /^Repeat \d+ × 8 @ 60 kg: .+ was cut short\./);
+  assert.match(describePrescription(pushUp, 'kg'), /^Repeat \d+ × 8: .+ was cut short\./);
+});
+
+test('an early finish never earns a step from one heavier or longer set (#104)', () => {
+  const bench = meta('barbell-bench-press');
+  // Heavier: 70 × 6 against 60 × 8 does not move the target to 70.
+  const heavier = prescribeExercise(bench, makeProfile(), earlyFinish(bench.id, sets(60, 8), { weight: 70, reps: 6 }));
+  assert.deepEqual([heavier.basis, heavier.weight, heavier.reps], ['repeat', 60, 8]);
+  // Extra reps: 60 × 10 or a lighter 57.5 × 10 against 60 × 8 does not move reps to 10.
+  for (const logged of [{ weight: 60, reps: 10 }, { weight: 57.5, reps: 10 }]) {
+    const longer = prescribeExercise(bench, makeProfile(), earlyFinish(bench.id, sets(60, 8), logged));
+    assert.deepEqual([longer.basis, longer.weight, longer.reps], ['repeat', 60, 8]);
+  }
+});
+
+test('a first loaded session that ends early makes the logged set the baseline', () => {
+  // No load was planned yet: the one logged set is the only real number.
+  const first = prescribeExercise(meta('barbell-bench-press'), makeProfile(), earlyFinish('barbell-bench-press', sets(0, 8), { weight: 42.5, reps: 7 }));
+  assert.deepEqual([first.basis, first.weight, first.reps], ['repeat', 42.5, 7]);
+});
+
+test('a finished exercise inside an early-finished session follows the normal rule', () => {
+  const workout = record({ id: 'w1', date: '2026-01-05T10:00:00.000Z', exerciseId: 'barbell-bench-press', planned: sets(60, 8), performed: sets(60, 8) });
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), [{ ...workout, completedEarly: true }]);
+  assert.equal(prescription.basis, 'rep-increase');
+  assert.deepEqual([prescription.weight, prescription.reps], [60, 9]);
+});
+
 test('the most recent completed session with the exercise drives the next load', () => {
   const history = [
     record({
