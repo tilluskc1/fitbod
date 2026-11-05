@@ -35,8 +35,46 @@ Out of scope: server generation, AI, wearables, copying their data, matching the
 - [ ] An excluded exercise or incompatible pair is never picked together.
 - [ ] Same inputs and day index give the same workout twice.
 - [ ] Existing `tests/generator.test.ts`, `plan.test.ts` and `trust3.test.ts` still pass.
-- [ ] Slot table for our Push/Pull/Legs recorded next to Fitbod's from one signed-in workout.
+- [x] Slot table for our Push/Pull/Legs recorded next to Fitbod's from one signed-in workout.
 
 ## Open question for the human
 
 Fitbod's server side cannot be matched. Is "same slots, same muscle coverage" the target, rather than the same exercises?
+
+## Slot table: ours vs the real app
+
+Source for the real app: the owner's screen recording of one Fitbod Day 1 (Nov 4, 2026), read frame by frame. That account is a different profile from ours (Get Lean, Advanced, 5 per week, large gym), so this compares **slot shapes**, not exercises. No exercise names are recorded for the real app.
+
+Ours is generated from `generateWorkout` at 50c3a17 for Build Muscle, Beginner, 3 days, dumbbells + bench. "Compound" means the exercise lists two or more muscles; "isolation" means one. Muscle is the primary muscle.
+
+| Our day | Status | Our slots (muscle, kind) |
+| --- | --- | --- |
+| Push | Ready (5/5) | chest compound, shoulders compound, triceps isolation, shoulders compound, chest compound |
+| Pull | Ready (5/5) | back compound, biceps isolation, core isolation, core isolation, biceps isolation |
+| Legs | Limited (5/5) | quads compound, glutes compound, hamstrings isolation, core isolation, quads compound |
+
+Real app, Day 1 "Upper Body Day", 45 min, 7 exercises, 6 muscles, in screen order:
+
+| Slot | Muscle | Kind | Group |
+| --- | --- | --- | --- |
+| 1 | chest | compound | superset A |
+| 2 | back | compound | superset A |
+| 3 | biceps | isolation | superset B |
+| 4 | rear delts | isolation | superset B |
+| 5 | triceps and chest | compound | superset C |
+| 6 | chest | compound | superset C |
+| 7 | core | isolation | alone |
+
+Other observations from the same recording: the same day at 1 hour became 10 exercises over only 3 muscles (chest, biceps, core); the Lower Body day at 1 hour was 10 exercises over 4 muscles; the first compound was 5 sets of 6, accessories 3 sets of 12 to 16.
+
+### Slots we lack (one issue each)
+
+1. #88 Supersets (paired exercises, 3 rounds).
+2. #89 Session length drives exercise count (7 at 45 min, 10 at 1 hour).
+3. #93 Upper/lower day types for short plans.
+4. #96 A third chest or triceps compound on an upper day (our cap is 2 per primary muscle).
+5. #97 Heavy top set for the first compound (5 x 6).
+
+Shapes we already match: a rear-delt isolation slot, a core finisher, a bench-press-first day.
+
+Limits: one workout, one account, frames read at 2-second steps (Day 1 fully, Lower Body only in part).
