@@ -175,6 +175,11 @@ export function loadModeOf(exerciseId: string): LoadMode {
   return equipment === 'Dumbbell' ? 'each' : equipment && equipment !== 'Bodyweight' ? 'total' : 'none';
 }
 
+/** A loaded, counted set: it cannot be logged until it carries a load (#103). */
+export function needsLoad(exerciseId: string): boolean {
+  return loadModeOf(exerciseId) !== 'none' && setUnit(exerciseId) !== 'seconds';
+}
+
 export function detailOf(exerciseId: string): string {
   return programExercise(exerciseId)?.detail ?? exerciseById(exerciseId)?.equipment ?? 'Bodyweight';
 }

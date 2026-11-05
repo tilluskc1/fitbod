@@ -1,4 +1,5 @@
 import type { AppState, PerformedSet, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import { needsLoad } from '../data/flagship.ts';
 import { advanceAfterFinish } from './sequence.ts';
 
 function cleanNumber(value: number, fallback = 0): number {
@@ -115,7 +116,11 @@ export function logSet(
   seconds = 75,
 ): WorkoutRecord {
   // A repeated tap must not rewrite when a logged set was done.
-  if (session.exercises[exerciseIndex]?.performed[setIndex]?.done) return session;
+  const exercise = session.exercises[exerciseIndex];
+  const set = exercise?.performed[setIndex];
+  if (set?.done) return session;
+  // A loaded set at weight 0 would read as "no load" and still drive progression.
+  if (set && set.weight <= 0 && needsLoad(exercise.exerciseId)) return session;
   let updated = updatePerformedSet(session, exerciseIndex, setIndex, { done: true }, now);
   if (updated === session) return session;
   // Carry the load just logged into the next unweighted set; never overwrites a chosen weight.

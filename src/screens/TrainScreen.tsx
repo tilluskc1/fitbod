@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadModeOf, repsTarget, setUnit } from '../data/flagship';
+import { loadModeOf, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
 import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
@@ -410,6 +410,9 @@ export default function TrainScreen({
     // A logged set is only ever edited through its draft.
     const open = openKey === key && (!set.done || draft !== null);
     const before = previous[setIndex];
+    const noLoad = needsLoad(exercise.exerciseId) && set.weight <= 0;
+    // While calibrating, the first-weight row already says what to do.
+    const reason = !set.done && noLoad && !calibrating && setIndex === activeSet ? `${key}:reason` : undefined;
     const row = (
       <tr key={key} className={set.done ? 'lg-row--done' : setIndex === activeSet ? 'lg-row--current' : undefined}>
         <td>{n}</td>
@@ -439,7 +442,8 @@ export default function TrainScreen({
               <Icon name="check" size={20} />
             </span>
           ) : (
-            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={calibrating}
+            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={calibrating || noLoad}
+              aria-describedby={reason}
               onClick={() => {
                 primeRestAudio();
                 if (openKey === key) setOpenKey(null);
@@ -452,9 +456,9 @@ export default function TrainScreen({
         </td>
       </tr>
     );
-    return open
-      ? [row, <tr key={`${key}:edit`} className="lg-edit"><td colSpan={5}>{editor(set, setIndex, key, draft)}</td></tr>]
-      : [row];
+    const note = reason && <tr key={reason} className="lg-note"><td colSpan={5} id={reason}>Enter a weight to log this set</td></tr>;
+    return [row, note, open && <tr key={`${key}:edit`} className="lg-edit"><td colSpan={5}>{editor(set, setIndex, key, draft)}</td></tr>]
+      .filter(Boolean);
   });
 
   return (

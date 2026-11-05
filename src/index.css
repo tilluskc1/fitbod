@@ -3949,6 +3949,16 @@ button.aw-exercise__name-btn {
   opacity: 0.4;
 }
 
+.lg-table .lg-note td {
+  height: auto;
+  padding: 0 14px 4px;
+  text-align: right;
+  background: none;
+  border-radius: 0;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
 .lg-row--current td {
   background: rgba(255, 255, 255, 0.07);
 }

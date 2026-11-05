@@ -68,7 +68,7 @@ test('needsCalibration: only an uncalibrated loaded variant before set 1 has a l
   assert.equal(needsCalibration(liveSession(pressHistory()).exercises[0], pressHistory()), false, 'history');
   assert.equal(needsCalibration(updatePerformedSet(session, 0, 0, { weight: 15 }, at(1)).exercises[0], []), false,
     'a chosen load is already calibrated');
-  assert.equal(needsCalibration(logSet(session, 0, 0, at(1)).exercises[0], []), false, 'a logged set ends it');
+  assert.equal(needsCalibration(logSet(session, 0, 0, at(1)).exercises[0], []), true, 'a ✓ at no load logs nothing (#103)');
 });
 
 test('an early finish that never reached an exercise leaves it uncalibrated', () => {
@@ -195,4 +195,37 @@ test('calibration step: Skip, Confirm and a load pill call only their own handle
     assert.deepEqual(calls.at(-1), ['pick', 15]);
     assert.equal(calls.length, 3);
   } finally { await server.close(); }
+});
+
+// #103: Skip only hides the help; a loaded set still needs a load before it can be logged.
+test('after Skip a loaded set cannot be logged at 0; bodyweight and timed sets still log', async () => {
+  const session = liveSession([]);
+  assert.equal(session.exercises[0].performed[0].weight, 0, 'first-time press has no load yet');
+  assert.equal(logSet(session, 0, 0, at(1)), session, 'logSet stores nothing at weight 0');
+  const loaded = logSet(updatePerformedSet(session, 0, 0, { weight: 15 }, at(1)), 0, 0, at(1));
+  assert.equal(loaded.exercises[0].performed[0].done, true, 'a load lets it log');
+
+  const plankIndex = session.exercises.findIndex((entry) => entry.exerciseId === 'plank');
+  assert.equal(logSet(session, plankIndex, 0, at(1)).exercises[plankIndex].performed[0].done, true, 'a hold logs at 0');
+  const pushUps = createSession({ id: 'bw', name: 'BW', dayIndex: 0, now: at(0), exercises: [{ exerciseId: 'push-up',
+    name: 'Push-Up', planned: [{ weight: 0, reps: 10 }], performed: [{ weight: 0, reps: 10, done: false, completedAt: null }] }] });
+  assert.equal(logSet(pushUps, 0, 0, at(1)).exercises[0].performed[0].done, true, 'bodyweight logs at 0');
+  const bench = createSession({ id: 'bb', name: 'BB', dayIndex: 0, now: at(0), exercises: [{ exerciseId: 'barbell-bench-press',
+    name: 'Barbell Bench Press', planned: [{ weight: 0, reps: 8 }], performed: [{ weight: 0, reps: 8, done: false, completedAt: null }] }] });
+  assert.equal(logSet(bench, 0, 0, at(1)), bench, 'a barbell set needs a load too');
+
+  await withTrain((render) => {
+    const skipped = [`${session.id}:0:${session.exercises[0].exerciseId}`];
+    const html = render(session, [], { skippedCalibrations: skipped });
+    assert.doesNotMatch(plain(html), RULE, 'the help is gone');
+    for (const n of [1, 2, 3]) assert.match(html, new RegExp(`aria-label="Log set ${n}"[^>]*disabled=""`), `set ${n} waits for a load`);
+    assert.match(plain(html), /Enter a weight to log this set/);
+    const ready = render(updatePerformedSet(session, 0, 0, { weight: 15 }, at(1)), [], { skippedCalibrations: skipped });
+    assert.match(ready, /aria-label="Log set 1">/, 'a load enables the ✓');
+    assert.doesNotMatch(plain(ready), /Enter a weight to log this set/);
+    const atPlank = { ...session, exercises: session.exercises.map((entry, i) => i < plankIndex ? { ...entry, skipped: true } : entry) };
+    const hold = render(atPlank, []);
+    assert.match(hold, /aria-label="Log set 1">/, 'a hold logs with no load');
+    assert.doesNotMatch(plain(hold), /Enter a weight to log this set/);
+  });
 });
