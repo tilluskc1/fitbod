@@ -85,7 +85,7 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
               This replaces the unreadable data with the contents of the backup. The original is kept
               under a separate browser-storage key as a safety copy.
             </p>
-            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
               <button
                 className="primary"
                 onClick={() => onRestore(pending.state, {

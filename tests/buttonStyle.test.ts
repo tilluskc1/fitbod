@@ -19,7 +19,7 @@ test('one primary action style: .primary is the .pill-primary rule, with no over
 });
 
 test('a selected chip, segment or unit reads as the filled green of a primary pill', () => {
-  for (const selector of [/^\.chip\.on$/, /^\.glass-scope \.chip\.on$/, /^\.segmented button\.on$/, /^\.unit-toggle button\.on$/]) {
+  for (const selector of [/^\.chip\.on$/, /^\.glass-scope \.chip\.on$/, /^\.segmented button\.on$/, /^\.unit-toggle button\.on$/, /^\.feedback-btns button\.on$/]) {
     const bodies = rules(selector);
     assert.ok(bodies.length > 0, `${selector} is styled`);
     assert.ok(bodies.some((body) => /background: var\(--(primary|lime)\)/.test(body)), `${selector} is filled green`);
