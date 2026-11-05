@@ -35,13 +35,13 @@ Out of scope: server generation, AI, wearables, copying their data, matching the
 - [ ] An excluded exercise or incompatible pair is never picked together.
 - [ ] Same inputs and day index give the same workout twice.
 - [ ] Existing `tests/generator.test.ts`, `plan.test.ts` and `trust3.test.ts` still pass.
-- [ ] Slot table for our Push/Pull/Legs recorded next to Fitbod's from one signed-in workout.
+- [x] Slot table for our Push/Pull/Legs recorded next to Fitbod's from one signed-in workout.
 
 ## Open question for the human
 
 Fitbod's server side cannot be matched. Is "same slots, same muscle coverage" the target, rather than the same exercises?
 
-## Slot table: ours vs the real app (PENDING: Fitbod column not filled)
+## Slot table: ours vs the real app
 
 Ours is generated from `generateWorkout` at 50c3a17 for Build Muscle, Beginner, 3 days, dumbbells + bench. "Compound" means the exercise lists two or more muscles; "isolation" means one. Muscle is the primary muscle. No exercise names.
 
@@ -51,9 +51,20 @@ Ours is generated from `generateWorkout` at 50c3a17 for Build Muscle, Beginner, 
 | Pull | Ready (5/5) | back compound, biceps isolation, core isolation, core isolation, biceps isolation |
 | Legs | Limited (5/5) | quads compound, glutes compound, hamstrings isolation, core isolation, quads compound |
 
-| Real app | Slots (muscle, kind) |
+| Real app | Slots in order (muscle, kind; superset) |
 | --- | --- |
-| Day 1, "Upper Body Day" | pending: needs the owner's screenshots of the full Day 1 exercise list |
-| Day 2, "Lower Body Day" | pending |
+| Day 1 (7 slots) | chest compound (A), back compound (A), biceps isolation (B), rear-delt isolation (B), triceps+chest compound (C), chest compound (C), core isolation |
 
-The plan names above come from the owner's plan-preview screenshot (Get Lean, 5 per week, Advanced, Large Gym), which is a different profile from ours, so even a finished table compares slot shapes, not exercises. The last acceptance box above stays unticked until the real-app column is filled.
+Recorded by the owner from one signed-in Day 1 workout in the real app, as muscle and kind per slot only (no exercise names). A, B and C mark the three supersets, each a pair done back to back; the core slot stands alone. Day 2 and later days were not recorded; the acceptance needs one workout.
+
+That workout belongs to a different profile (Advanced, large gym) from ours (Beginner, dumbbells + bench), so the table compares slot shapes only, not exercises, loads or volume.
+
+### Gaps (one issue each, all needing owner triage)
+
+| Real-app shape | Ours today | Issue |
+| --- | --- | --- |
+| Slots paired into supersets A/B/C | Straight sets only | #90 |
+| Workout length set by time; slot count changes with duration | Fixed slot template per day, trimmed to fit | #91 |
+| Upper/lower day types | Push/Pull/Legs only | #92 |
+| Three chest compounds on the upper day (one triceps+chest) | Two chest compounds on Push | #94 |
+| Heavier, lower-rep first compound (top set) | Same rep range for every slot | #95 |
