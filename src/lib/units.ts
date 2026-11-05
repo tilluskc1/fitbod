@@ -1,4 +1,4 @@
-import type { Unit } from '../types.ts';
+import type { Profile, Unit } from '../types.ts';
 
 export const KG_PER_LB = 0.45359237;
 
@@ -21,13 +21,18 @@ export function toKg(value: number, unit: Unit): number {
   return Math.round(kg * 1000) / 1000;
 }
 
-/** Owned loads typed as "10, 15 18" in the display unit, as sorted unique canonical kg. */
-export function parseLoads(text: string, unit: Unit): number[] {
+/**
+ * Owned loads typed as "10, 15 18" or "25lb, 35 lb" in the display unit, as sorted unique canonical kg.
+ * A token that still reads as one of `stored` in this unit keeps that exact kg instead of re-converting.
+ */
+export function parseLoads(text: string, unit: Unit, stored: number[] = []): number[] {
+  const kept = new Map(stored.map((kg) => [calibrationInputValue(kg, unit), kg]));
   const values = text
+    .replace(/(\d)\s*(?:kgs?|lbs?)\b/gi, '$1 ')
     .split(/[,\s]+/)
-    .map(Number)
-    .filter((value) => Number.isFinite(value) && value > 0)
-    .map((value) => toKg(value, unit));
+    .filter(Boolean)
+    .map((token) => kept.get(token) ?? (Number(token) > 0 ? toKg(Number(token), unit) : NaN))
+    .filter(Number.isFinite);
   return [...new Set(values)].sort((a, b) => a - b);
 }
 
@@ -63,6 +68,24 @@ export function calibrationInputValue(kg: number, unit: Unit): string {
   if (kg <= 0) return '';
   if (unit === 'kg') return String(kg);
   return String(Math.round(toDisplay(kg, unit) * 100) / 100);
+}
+
+/** Owned loads as editable text in the display unit, at the logger's precision. */
+export function loadsInputText(kgs: number[] | undefined, unit: Unit): string {
+  return (kgs ?? []).map((kg) => calibrationInputValue(kg, unit)).join(', ');
+}
+
+/**
+ * Settings save for owned dumbbells. Null means save nothing: the text still shows what is stored
+ * (so kg never drifts), or it is non-blank but holds no load (so a typo never wipes the rack).
+ */
+export function dumbbellLoadsPatch(text: string, profile: Profile): Partial<Profile> | null {
+  const unit = unitOf(profile);
+  const stored = profile.loads.Dumbbell ?? [];
+  if (text.trim() === loadsInputText(stored, unit)) return null;
+  const loads = parseLoads(text, unit, stored);
+  if (text.trim() && loads.length === 0) return null;
+  return { loads: { ...profile.loads, Dumbbell: loads } };
 }
 
 /**
