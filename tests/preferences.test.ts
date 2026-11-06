@@ -146,8 +146,8 @@ test('live Today path: a Library save reorders the current slot through slotProg
     return { ids: adapted.exercises.map((item) => item.exerciseId), status };
   };
   const before = today(start);
-  // The day's loaded lead opens the session (#97); push-up leads the rest.
-  assert.equal(before.ids[1], 'push-up');
+  // The day's loaded lead opens the session (#97); the ranked shoulder press follows it (#131).
+  assert.equal(before.ids[1], 'dumbbell-shoulder-press');
   assert.ok(!before.ids.includes('dumbbell-floor-press'));
 
   const more = today(updateProfile(start, withPreference(home, 'dumbbell-floor-press', 'more')));
@@ -155,12 +155,12 @@ test('live Today path: a Library save reorders the current slot through slotProg
   assert.equal(more.ids.length, before.ids.length);
   assert.equal(more.status, before.status);
 
-  const less = today(updateProfile(start, withPreference(home, 'push-up', 'less')));
-  assert.notEqual(less.ids[1], 'push-up', '"less" moves it behind a neutral alternative');
+  const less = today(updateProfile(start, withPreference(home, 'dumbbell-shoulder-press', 'less')));
+  assert.notEqual(less.ids[1], 'dumbbell-shoulder-press', '"less" moves it behind a neutral alternative');
   assert.equal(less.ids.length, before.ids.length);
   assert.equal(less.status, before.status);
 
-  const excluded = today(updateProfile(start, withExclusion(home, 'push-up', true)));
-  assert.ok(!excluded.ids.includes('push-up'), 'an exclusion removes it');
+  const excluded = today(updateProfile(start, withExclusion(home, 'dumbbell-shoulder-press', true)));
+  assert.ok(!excluded.ids.includes('dumbbell-shoulder-press'), 'an exclusion removes it');
   assert.equal(excluded.status, before.status);
 });

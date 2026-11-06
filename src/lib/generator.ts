@@ -1,4 +1,4 @@
-import { EQUIPMENT_OPTIONS, EXERCISES, SUPPORT_OPTIONS, areIncompatible } from '../data/exercises.ts';
+import { EQUIPMENT_OPTIONS, EXERCISES, SUPPORT_OPTIONS, areIncompatible, exerciseById } from '../data/exercises.ts';
 import type {
   Exercise,
   MuscleGroup,
@@ -14,7 +14,7 @@ import {
   matchesRequirement,
   requirementsForDay,
 } from './feasibility.ts';
-import { pickLead, prescribeExercise } from './progression.ts';
+import { isCompound, pickLead, prescribeExercise } from './progression.ts';
 
 const SPLITS: Record<number, PlanDay[]> = {
   2: [
@@ -50,6 +50,21 @@ const SPLITS: Record<number, PlanDay[]> = {
 };
 
 const CORE_PATTERNS = new Set(['core_flexion', 'core_stability']);
+
+/**
+ * Main lifts, best first within each movement (#131); the equipment filter
+ * skips what the user lacks. Anything unlisted is an accessory, left to the seed.
+ */
+const MAIN_LIFTS = [
+  'back-squat', 'front-squat', 'leg-press', 'goblet-squat', 'kettlebell-goblet-squat',
+  'deadlift', 'romanian-deadlift', 'hip-thrust',
+  'barbell-bench-press', 'incline-dumbbell-press', 'dumbbell-bench-press', 'machine-chest-press', 'dumbbell-floor-press', 'push-up',
+  'overhead-press', 'dumbbell-shoulder-press', 'arnold-press',
+  'barbell-row', 'pull-up', 'seated-cable-row', 'lat-pulldown', 'dumbbell-row', 'chin-up',
+];
+/** A beginner learns the hinge with the Romanian deadlift before pulling from the floor. */
+const BEGINNER_LIFTS = MAIN_LIFTS.map((id) =>
+  id === 'deadlift' ? 'romanian-deadlift' : id === 'romanian-deadlift' ? 'deadlift' : id);
 
 export function buildPlan(profile: Profile): PlanDay[] {
   const days = Math.min(6, Math.max(2, profile.daysPerWeek));
@@ -104,7 +119,7 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
   const caps = capabilitiesFor(profile);
   const exclusions = new Set(profile.exclusions);
 
-  const pool = EXERCISES.filter(
+  const eligible = EXERCISES.filter(
     (exercise) =>
       provides(caps, exercise.needs) &&
       !exclusions.has(exercise.id) &&
@@ -117,8 +132,22 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
   // eligible). The sort is stable, so compound-first below keeps it as a tiebreaker.
   const rank = (exercise: Exercise) =>
     profile.preferences?.[exercise.id] === 'more' ? 0 : profile.preferences?.[exercise.id] === 'less' ? 2 : 1;
-  const shuffled = seededShuffle(pool, 7 + dayIndex * 13).sort((a, b) => rank(a) - rank(b));
-  // Keep the seeded order as the tiebreaker, but prefer compound movements
+  const lifts = profile.experience === 'Beginner' ? BEGINNER_LIFTS : MAIN_LIFTS;
+  const family = (exercise: Exercise) => lifts.filter((id) => exerciseById(id)?.pattern === exercise.pattern);
+  const main = (exercise: Exercise) => {
+    const index = lifts.indexOf(exercise.id);
+    return index < 0 ? lifts.length : index;
+  };
+  // A day repeating an earlier day's movements this week swaps each movement's
+  // first choice for its second (Romanian Deadlift for Deadlift), so no main lift goes heavy twice.
+  const movements = (item: PlanDay) => requirementsForDay(item).map((requirement) => requirement.id).join();
+  const repeat = buildPlan(profile).slice(0, dayIndex).some((item) => movements(item) === movements(day));
+  const replaced = (exercise: Exercise) => repeat && rank(exercise) !== 0 && family(exercise)[0] === exercise.id
+    && eligible.some((item) => item.id === family(exercise)[1]);
+  const pool = eligible.filter((exercise) => !replaced(exercise));
+  // Preferences first, then the main lifts in rank, then the seeded order for accessories.
+  const shuffled = seededShuffle(pool, 7 + dayIndex * 13).sort((a, b) => rank(a) - rank(b) || main(a) - main(b));
+  // Keep that order as the tiebreaker, but prefer compound movements
   // when filling slots so an accessory cannot consume the last slot for a
   // primary muscle and leave the session short.
   const compoundFirst = [...shuffled].sort((a, b) => b.muscles.length - a.muscles.length);
@@ -167,6 +196,7 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
       (a, b) =>
         Number(b.muscles.length >= 2) - Number(a.muscles.length >= 2) ||
         rank(a) - rank(b) || // "more" and "less" outrank focus order
+        main(a) - main(b) ||
         focusRank(a) - focusRank(b),
     )[0];
     if (best) { take(best); covering.add(best); }
@@ -244,7 +274,9 @@ export function generateWorkout(
   }
 
   const lead = pickLead(picked, day.focus);
-  if (lead) picked.splice(0, picked.length, lead, ...picked.filter((exercise) => exercise !== lead));
+  // The lead, then compounds, then isolation (#131): cutting from the end drops isolation first.
+  const tier = (exercise: Exercise) => (exercise === lead ? 0 : isCompound(exercise) ? 1 : 2);
+  picked.sort((a, b) => tier(a) - tier(b));
   const prescriptions = picked.map((exercise) =>
     prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined));
   const sets = prescriptions.map((prescription) => prescription.sets);
@@ -252,21 +284,24 @@ export function generateWorkout(
   let targetCount = fixed ?? picked.length;
   if (fixed === undefined) {
     const budget = (profile.sessionMinutes ?? 35) * 60;
-    const floor = Math.min(picked.length, Math.max(MIN_EXERCISES,
-      ...picked.map((exercise, index) => (covering.has(exercise) ? index + 1 : 0))));
-    let kept = picked.length;
-    while (kept > floor && estimatedSeconds(sets.slice(0, kept)) > budget) kept -= 1;
-    const room = budget - estimatedSeconds(sets.slice(0, kept));
+    const all = picked.length;
+    // Cut from the end, never the lead nor a day requirement's only cover, while the day runs long.
+    for (let index = picked.length - 1; index > 0 && picked.length > MIN_EXERCISES && estimatedSeconds(sets) > budget; index -= 1) {
+      if (covering.has(picked[index])) continue;
+      picked.splice(index, 1);
+      sets.splice(index, 1);
+      prescriptions.splice(index, 1);
+    }
+    const kept = picked.length;
+    const room = budget - estimatedSeconds(sets);
     // A count gap is only reported when gear or exclusions caused it: the same
     // day with everything allowed shows how many the caps can actually hold.
     // Preferences stay: a 'more' pick reorders the fill, and that is the user's choice, not a gap.
     const open = { ...profile, equipment: [...EQUIPMENT_OPTIONS], support: [...SUPPORT_OPTIONS], exclusions: [] };
     const capacity = selectExercises(open, day, dayIndex, max).picked.length;
-    targetCount = kept < picked.length ? kept
+    targetCount = kept < all ? kept
       : Math.min(capacity, kept + Math.max(0, Math.floor(room / estimatedSeconds([3]))));
-    const exhausted = kept === picked.length;
-    picked.splice(kept);
-    sets.splice(kept);
+    const exhausted = kept === all;
     // Too long even at the floor: thin the last exercises first, down to 2 sets (the lead to 3).
     for (let index = kept - 1; index >= 0 && estimatedSeconds(sets) > budget; ) {
       const least = index === 0 && lead ? 3 : MIN_SETS;

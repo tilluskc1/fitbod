@@ -31,7 +31,8 @@ test('Upper A at 60 and 90 min fills its slots without a hinge; its Back work is
     assert.ok(!day.some((exercise) => isHinge(exercise.id)), label);
     const back = day.filter((exercise) => exercise.muscles[0] === 'Back');
     assert.ok(back.length > 0, label);
-    for (const exercise of back) assert.match(exercise.pattern, /^(horizontal|vertical)_pull$/, label);
+    // Face Pull is rear-delt work (#131); every other Back pick is a row or pulldown.
+    for (const exercise of back) assert.match(exercise.pattern, /^((horizontal|vertical)_pull|shoulder_horizontal_abduction)$/, label);
   }
 });
 
