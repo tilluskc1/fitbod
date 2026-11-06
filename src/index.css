@@ -4190,3 +4190,159 @@ button.aw-exercise__name-btn {
   line-height: 18px;
   color: var(--on-surface-muted);
 }
+
+/* ---------- Today v7 layout (#146) ----------
+   Photo hero with a state chip, then white cards: workout, coach, a blue week card,
+   session progress and the lead lift. Mirrors https://claude.ai/artifact/22N6X72VCQw3tAEua8sUJ1. */
+.t7-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  min-height: 220px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #ffffff;
+  background: #56706f;
+}
+.t7-hero__photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 72% center;
+}
+.t7-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(24, 40, 41, 0.8) 0%, rgba(24, 40, 41, 0.5) 45%, rgba(24, 40, 41, 0.06) 80%),
+    linear-gradient(0deg, rgba(24, 40, 41, 0.6) 0%, rgba(24, 40, 41, 0) 50%);
+}
+.t7-hero > :not(.t7-hero__photo) {
+  position: relative;
+  z-index: 1;
+}
+.t7-hero__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.t7-hero__eyebrow {
+  font-size: 13px;
+  opacity: 0.92;
+}
+.t7-hero__title {
+  margin-top: auto;
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  max-width: 12ch;
+  text-wrap: balance;
+}
+.t7-hero__meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+}
+.t7-state {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px 0 10px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.t7-state--ready { background: var(--primary); color: var(--on-primary); }
+.t7-state--limited { background: #f2c14e; color: #2b1d00; }
+.t7-state--none { background: #ff9a8c; color: #3a0b05; }
+
+.t7-card {
+  background: var(--card);
+  border-radius: var(--radius-card);
+  padding: 18px;
+}
+.t7-workout .list-head { margin-top: 0; }
+.t7-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--btn);
+  color: var(--on-btn);
+  font-size: 12px;
+  font-weight: 500;
+}
+.coach-card.t7-card .coach-card__head { align-items: flex-start; flex-direction: column; gap: 10px; }
+
+.t7-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.t7-head__l { display: inline-flex; align-items: center; gap: 12px; min-width: 0; }
+.t7-head__l h2 { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; }
+.t7-head__r { font-size: 18px; font-weight: 300; white-space: nowrap; }
+.t7-head__r small { font-size: 12px; color: var(--muted); margin-left: 2px; }
+.t7-head__r--small { font-size: 14px; color: var(--muted); }
+.t7-ico {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-container-high);
+}
+
+.t7-week {
+  background: var(--sky);
+  color: var(--on-sky);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+}
+.t7-week__copy h2 { font-size: 15px; font-weight: 600; letter-spacing: 0; }
+.t7-week__copy p { font-size: 13px; margin-top: 6px; line-height: 1.45; max-width: 22ch; }
+.t7-blocks { display: grid; grid-template-columns: repeat(7, 16px); gap: 5px; align-content: start; }
+.t7-blocks i { width: 16px; height: 16px; border-radius: 5px; background: #e4f2f8; }
+.t7-blocks i.on { background: #2f6f88; }
+.t7-blocks--big { grid-template-columns: repeat(3, 40px); }
+.t7-blocks--big i { width: 40px; height: 40px; border-radius: 12px; }
+.t7-week__toggle { display: flex; gap: 8px; align-self: end; }
+.t7-week__toggle button {
+  min-width: 64px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--on-sky);
+  font-weight: 500;
+}
+.t7-week__toggle button[aria-pressed='true'] { background: #ffffff; }
+.t7-week__big { text-align: right; align-self: end; line-height: 1; }
+.t7-week__big b { display: block; font-size: 40px; font-weight: 200; letter-spacing: -0.03em; }
+.t7-week__big span { font-size: 14px; }
+
+.t7-lead { margin: 14px 0 10px; font-size: 38px; font-weight: 200; letter-spacing: -0.03em; line-height: 1; }
+.t7-lead small { font-size: 14px; font-weight: 300; color: var(--muted); letter-spacing: 0; }
+.t7-ticks { display: flex; gap: 3px; height: 36px; }
+.t7-ticks i { flex: 1; border-radius: 3px; background: #e6eeec; }
+.t7-ticks i.on { background: #c5dd3c; }
+.t7-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 14px; }
+.t7-stats b { font-size: 18px; font-weight: 400; }
+.t7-stats span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.t7-lift { background: var(--surface-container-high); }
+.t7-chart { display: block; width: 100%; height: 90px; margin-top: 10px; }
+.t7-lift__foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.t7-lift__foot b { font-size: 52px; font-weight: 300; letter-spacing: -0.04em; line-height: 0.9; }
+.t7-lift__foot b small { font-size: 18px; margin-left: 4px; letter-spacing: 0; }
+.t7-lift__foot p { text-align: right; font-size: 12px; color: var(--muted); max-width: 20ch; }
