@@ -120,6 +120,7 @@ export const INCOMPATIBLE_GROUPS: string[][] = [
   ['arnold-press', 'dumbbell-shoulder-press', 'overhead-press'],
   ['dumbbell-floor-press', 'dumbbell-bench-press'],
   ['dumbbell-overhead-triceps-extension', 'overhead-triceps-extension'],
+  ['deadlift', 'romanian-deadlift'],
 ];
 
 export function areIncompatible(a: string, b: string): boolean {

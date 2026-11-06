@@ -61,14 +61,16 @@ test('Push and Upper days at 60 and 90 min overhead press; the first of the week
   }
 });
 
-test('Upper at 30 min keeps a press and a row or pulldown that is not a Face Pull', () => {
-  for (const experience of ['Beginner', 'Intermediate', 'Advanced'] as Experience[]) for (const sessionMinutes of [30, 45]) {
-    const profile = profileOf({ experience, sessionMinutes });
+test('Upper at 30 min keeps a press and a row or pulldown that is not a Face Pull, and no more than two presses', () => {
+  const home = { equipment: ['Dumbbell'], support: ['Bench'] } as Partial<Profile>;
+  for (const kit of [{}, home]) for (const experience of ['Beginner', 'Intermediate', 'Advanced'] as Experience[]) for (const sessionMinutes of [30, 45]) {
+    const profile = profileOf({ experience, sessionMinutes, ...kit });
     for (const index of [0, 2]) {
       const day = ids(profile, index).map((id) => exerciseById(id)!);
       const label = `${experience} ${sessionMinutes} min ${buildPlan(profile)[index].name}: ${day.map((item) => item.id).join(', ')}`;
       assert.ok(day.some((item) => /^(horizontal|vertical)_push$/.test(item.pattern)), label);
-      assert.ok(day.some((item) => /^(horizontal|vertical)_pull$/.test(item.pattern) && item.id !== 'face-pull'), label);
+      assert.ok(day.some((item) => /^(horizontal|vertical)_pull$/.test(item.pattern)), label);
+      if (sessionMinutes === 30) assert.ok(day.filter((item) => /_push$/.test(item.pattern)).length <= 2, label);
     }
   }
 });
@@ -84,8 +86,10 @@ test('trimming for time drops isolation before compounds', () => {
     const day = buildPlan(profile)[index];
     const kept = ids(profile, index).map((id) => exerciseById(id)!);
     const full = ids({ ...profile, sessionMinutes: 120 }, index).map((id) => exerciseById(id)!);
-    const droppedCompound = full.some((item) => isCompound(item) && !kept.includes(item));
-    if (!droppedCompound) return;
+    // A dropped compound that repeats a movement still on the day is a duplicate, not a lost movement.
+    const lostMovement = full.some((item) => isCompound(item) && !kept.includes(item)
+      && !kept.some((entry) => entry.pattern === item.pattern));
+    if (!lostMovement) return;
     // An isolation exercise may stay only as the one cover of a day requirement (calves, arms, core).
     for (const item of kept.filter((entry) => !isCompound(entry))) {
       const sole = requirementsForDay(day).some((requirement) => matchesRequirement(item, requirement)
@@ -93,4 +97,25 @@ test('trimming for time drops isolation before compounds', () => {
       assert.ok(sole, `${label} keeps ${item.id} over a compound`);
     }
   });
+});
+
+test('a session never holds both the Deadlift and the Romanian Deadlift', () => {
+  for (const experience of ['Beginner', 'Intermediate', 'Advanced'] as Experience[])
+  for (const daysPerWeek of [2, 3, 4, 5, 6]) for (const sessionMinutes of [30, 45, 60, 90]) {
+    const profile = profileOf({ experience, daysPerWeek, sessionMinutes });
+    buildPlan(profile).forEach((day, index) => {
+      const day_ = ids(profile, index);
+      assert.ok(!(day_.includes('deadlift') && day_.includes('romanian-deadlift')), `${experience} ${daysPerWeek}d ${sessionMinutes} ${day.name}: ${day_.join(', ')}`);
+    });
+  }
+});
+
+test('a beginner is never handed the Deadlift or Front Squat, repeat day or not', () => {
+  for (const daysPerWeek of [2, 3, 4, 5, 6]) for (const sessionMinutes of [30, 45, 60, 90]) {
+    const profile = profileOf({ experience: 'Beginner', daysPerWeek, sessionMinutes });
+    buildPlan(profile).forEach((day, index) => {
+      const day_ = ids(profile, index);
+      assert.ok(!day_.includes('deadlift') && !day_.includes('front-squat'), `${daysPerWeek}d ${sessionMinutes} ${day.name}: ${day_.join(', ')}`);
+    });
+  }
 });

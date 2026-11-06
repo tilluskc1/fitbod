@@ -138,10 +138,12 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
     const index = lifts.indexOf(exercise.id);
     return index < 0 ? lifts.length : index;
   };
-  // A day repeating an earlier day's movements this week swaps each movement's
-  // first choice for its second (Romanian Deadlift for Deadlift), so no main lift goes heavy twice.
+  // A day repeating an earlier day's movements this week (Lower B after Lower A) swaps each
+  // movement's first choice for its second (Romanian Deadlift for Deadlift). A beginner repeats
+  // the same lifts instead: practice, and the second choices include Deadlift and Front Squat.
   const movements = (item: PlanDay) => requirementsForDay(item).map((requirement) => requirement.id).join();
-  const repeat = buildPlan(profile).slice(0, dayIndex).some((item) => movements(item) === movements(day));
+  const repeat = profile.experience !== 'Beginner'
+    && buildPlan(profile).slice(0, dayIndex).some((item) => movements(item) === movements(day));
   const replaced = (exercise: Exercise) => repeat && rank(exercise) !== 0 && family(exercise)[0] === exercise.id
     && eligible.some((item) => item.id === family(exercise)[1]);
   const pool = eligible.filter((exercise) => !replaced(exercise));
@@ -274,8 +276,12 @@ export function generateWorkout(
   }
 
   const lead = pickLead(picked, day.focus);
-  // The lead, then compounds, then isolation (#131): cutting from the end drops isolation first.
-  const tier = (exercise: Exercise) => (exercise === lead ? 0 : isCompound(exercise) ? 1 : 2);
+  // The lead, then one compound per movement, then the rest (#131): cutting from the end drops
+  // isolation and second presses before a movement the day has only once.
+  const leadFirst = lead ? [lead, ...picked.filter((exercise) => exercise !== lead)] : picked;
+  const firstOfMovement = new Set(leadFirst.filter((exercise, index) => isCompound(exercise)
+    && leadFirst.findIndex((item) => item.pattern === exercise.pattern) === index));
+  const tier = (exercise: Exercise) => (exercise === lead ? 0 : firstOfMovement.has(exercise) ? 1 : 2);
   picked.sort((a, b) => tier(a) - tier(b));
   const prescriptions = picked.map((exercise) =>
     prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined));
