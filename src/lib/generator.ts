@@ -108,7 +108,9 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
     (exercise) =>
       provides(caps, exercise.needs) &&
       !exclusions.has(exercise.id) &&
-      isRelevantToDay(exercise, day),
+      // A 'more' is the user asking for it, so it may go off the day's pattern (#120).
+      (isRelevantToDay(exercise, day) ||
+        (profile.preferences?.[exercise.id] === 'more' && day.focus.includes(exercise.muscles[0]))),
   );
 
   // Within the seeded order, "more" moves ahead and "less" behind (still
