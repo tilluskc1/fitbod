@@ -3801,6 +3801,12 @@ button.aw-exercise__name-btn {
   font-weight: 700;
 }
 
+/* The load the first-weight step suggests (#116): marked, not chosen. */
+.lg-quick button.is-suggested[aria-pressed='false'] {
+  border: 1px dashed var(--primary);
+  color: var(--primary);
+}
+
 .lg-first__typed {
   display: flex;
   flex-wrap: wrap;
