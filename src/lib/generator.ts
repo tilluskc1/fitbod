@@ -280,7 +280,7 @@ export function generateWorkout(
   // isolation and second presses before a movement the day has only once.
   const leadFirst = lead ? [lead, ...picked.filter((exercise) => exercise !== lead)] : picked;
   const firstOfMovement = new Set(leadFirst.filter((exercise, index) => isCompound(exercise)
-    && leadFirst.findIndex((item) => item.pattern === exercise.pattern) === index));
+    && leadFirst.findIndex((item) => isCompound(item) && item.pattern === exercise.pattern) === index));
   const tier = (exercise: Exercise) => (exercise === lead ? 0 : firstOfMovement.has(exercise) ? 1 : 2);
   picked.sort((a, b) => tier(a) - tier(b));
   const prescriptions = picked.map((exercise) =>
