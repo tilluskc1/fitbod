@@ -185,11 +185,14 @@ export function catalogRowMeta(
   unit: Unit,
   /** The day the row is read against (Plan passes the up-next slot), so the lead and its neighbours match Today. */
   dayIds: string[] = [],
+  /** Sets the up-next day gives each of its exercises, fitted to the session length (#89). */
+  daySets: Record<string, number> = {},
 ): string {
   const hold = holdSeconds(exercise.id);
   const lead = leadCompoundId(dayIds);
   const prescription = prescribeExercise(exercise, profile, history, exercise.id === lead, lead !== undefined);
-  const sets = exercise.id === lead ? prescription.sets : programExercise(exercise.id)?.sets ?? prescription.sets;
+  const sets = daySets[exercise.id]
+    ?? (exercise.id === lead ? prescription.sets : programExercise(exercise.id)?.sets ?? prescription.sets);
   const load =
     hold === null && prescription.weight > 0 ? ` · ${loadText(prescription.weight, exercise.id, unit, plannedLoad(profile.loads, history, exercise.id, unit)(prescription.weight))}` : '';
   return `${sets} ${sets === 1 ? 'set' : 'sets'} · ${setText(exercise.id, hold ?? prescription.reps)}${load}`;

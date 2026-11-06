@@ -135,7 +135,7 @@ export default function Onboarding({ onComplete }: Props) {
       {step === 1 && (
         <section className="onboarding-step">
           <h1>How much training have you done?</h1>
-          <p className="muted">This sets exercise volume and how many exercises a session holds.</p>
+          <p className="muted">This sets exercise volume and the most exercises a session can hold.</p>
           <div className="option-list">
             {EXPERIENCES.map((option) => (
               <button

@@ -26,6 +26,8 @@ function profileOf(overrides: Partial<Profile> = {}): Profile {
     support: ['Bench', 'Rack'],
     exclusions: [],
     loads: {},
+    // 45 min holds the six exercises these lead and set-count cases were written against (#89).
+    sessionMinutes: 45,
     ...overrides,
   };
 }
@@ -238,7 +240,8 @@ test('when today\'s setup drops the lead, the next compound takes its five sets'
 });
 
 test('bodyweight never takes the heavy lead; a barbell compound does when there is one', () => {
-  const dumbbells = profileOf({ equipment: ['Dumbbell'], support: ['Bench'] });
+  // 35 min: this kit runs out of exercises at 45, and the spare time would add a set to the push-up (#89).
+  const dumbbells = profileOf({ equipment: ['Dumbbell'], support: ['Bench'], sessionMinutes: 35 });
   const push = generateWorkout(dumbbells, buildPlan(dumbbells)[0], 0).exercises;
   assert.notEqual(push[0].exerciseId, 'push-up');
   assert.equal(def(push[0].exerciseId).equipment, 'Dumbbell');
