@@ -887,7 +887,7 @@ export function SettingsSheet({
                 aria-invalid={loadsRefused || undefined}
               />
               <p className="settings-row__note" id="profile-loads-note">
-                Used by future workouts. Leave blank to keep your rack unconfirmed.
+                Used by future workouts. Leave blank at a gym; you can always type another weight.
               </p>
               {loadsRefused && <p className="error-text" role="alert">{loadLimitMessage(unit)}</p>}
             </div>

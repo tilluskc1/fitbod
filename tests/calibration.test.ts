@@ -111,7 +111,9 @@ test('the logger shows the calibration step with nothing pre-selected, only for 
     assert.match(text, RULE);
     assert.match(text, /Do 5 easy reps with it, then confirm or change/);
     assert.match(html, />Skip</);
-    assert.doesNotMatch(html, />Confirm</, 'a load pill confirms with its own tap');
+    // A load pill still confirms with its own tap; Confirm is for a typed weight off the rack (#129).
+    assert.match(html, /<button class="pill-primary" disabled=""[^>]*>Confirm</, 'nothing typed yet');
+    assert.match(html, /aria-label="Enter dumbbell load \(kg each\)"/);
     assert.match(html, /role="group" aria-label="Your dumbbells \(kg each\)"/);
     for (const weight of RACK) assert.match(html, new RegExp(`aria-pressed="false"[^>]*>${weight}<`));
     assert.doesNotMatch(html, /aria-pressed="true"/, 'no load pre-selected or suggested');

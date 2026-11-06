@@ -373,8 +373,10 @@ export function prescribeExercise(
     };
   }
 
-  // A fixed weight with no confirmed rack: the next one up is the lifter's to name, not a default step.
-  if (available.length === 0 && (exercise.equipment === 'Dumbbell' || exercise.equipment === 'Kettlebell')) {
+  // A fixed weight with no confirmed rack, or lifted above the listed one (#129, a gym has more than
+  // the user listed): the next one up is the lifter's to name, not a default step.
+  const aboveRack = available.length === 0 || workingWeight > available[available.length - 1] + 0.001;
+  if (aboveRack && (exercise.equipment === 'Dumbbell' || exercise.equipment === 'Kettlebell')) {
     return { ...base, weight: workingWeight, reps: range.min, basis: 'go-heavier' };
   }
 

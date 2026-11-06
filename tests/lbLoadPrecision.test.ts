@@ -127,7 +127,8 @@ test('a held typed load reads as typed on target, header, chip, Today row and re
         now: new Date('2026-11-04T10:00:00.000Z'), onPreview() {}, onAdjust() {}, onWhy() {}, onRestore() {},
         onOpenSettings() {}, onOpenExercise() {} })));
       assert.match(today, new RegExp(`@ ${exact.replace('.', '\\.')} each`), `${unit} Today row`);
-      assert.match(today, new RegExp(`own ${exact.replace('.', '\\.')} for`), `${unit} Today coach`);
+      // Logged above the listed rack at the top of the range: the next one up is the lifter's to name (#129).
+      assert.match(today, /Ready to go heavier: use your next dumbbell up\./, `${unit} Today coach`);
       assert.doesNotMatch(today, /42\.5/, `${unit} Today shows no 42.5`);
       const sheet = plain(renderToStaticMarkup(createElement(ExerciseActionsSheet, { exerciseId: id, exerciseName: 'x', planned: held.planned,
         history, unit, ...actionProps(who), onClose() {} })));
