@@ -43,6 +43,9 @@ test('secondary and danger buttons are pills too, and nothing puts the 13 px cor
     assert.ok(bodies.length > 0, `${selector} is styled`);
     assert.ok(bodies.some((body) => /border-radius: 999px/.test(body)), `${selector} is a pill`);
   }
-  const overrides = blocks.filter((block) => block.selectors.some((item) => /\.(secondary|danger)$/.test(item)));
-  for (const { body } of overrides) assert.doesNotMatch(body, /border-radius: (?!999px)/, `override: ${body.trim()}`);
+  // Any rule that names either class, with a state or modifier too; any corner property.
+  const overrides = blocks.filter((block) => block.selectors.some((item) => /\.(secondary|danger)\b/.test(item)));
+  for (const { body } of overrides) assert.doesNotMatch(body, /radius\s*:(?!\s*999px)/, `override: ${body.trim()}`);
+  // Clear of the rounded ends, like .pill-primary.
+  for (const selector of [/^\.secondary$/, /^\.danger$/]) assert.ok(rules(selector).some((body) => /padding: 0 18px/.test(body)));
 });
