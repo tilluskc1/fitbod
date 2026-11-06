@@ -90,3 +90,9 @@ test("the set editor's rack buttons and typed field are pills, like the rest of 
   }
   assert.match(css, /\.lg-first__typed input,\s*\.aw-field input \{[^}]*border-radius: 999px/);
 });
+
+test("the rack's top typed in the other unit is still the top of the rack, not above it", () => {
+  const kgRack: Profile = { ...profile, unit: 'kg', loads: { Dumbbell: [9] } };
+  assert.equal(prescribeExercise(press, kgRack, pressedAt(lb(20), range.max)).basis, 'hold');
+  assert.equal(prescribeExercise(press, kgRack, pressedAt(lb(25), range.max)).basis, 'go-heavier');
+});

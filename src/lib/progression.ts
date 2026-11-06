@@ -375,7 +375,8 @@ export function prescribeExercise(
 
   // A fixed weight with no confirmed rack, or lifted above the listed one (#129, a gym has more than
   // the user listed): the next one up is the lifter's to name, not a default step.
-  const aboveRack = available.length === 0 || workingWeight > available[available.length - 1] + 0.001;
+  // 0.25 kg of slack: the rack's top typed in the other unit (20 lb for 9 kg, 50 lb for 22.5 kg) is not above it.
+  const aboveRack = available.length === 0 || workingWeight > available[available.length - 1] + 0.25;
   if (aboveRack && (exercise.equipment === 'Dumbbell' || exercise.equipment === 'Kettlebell')) {
     return { ...base, weight: workingWeight, reps: range.min, basis: 'go-heavier' };
   }
