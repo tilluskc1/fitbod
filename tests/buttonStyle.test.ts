@@ -37,3 +37,12 @@ test('selected chips stay readable: day-chip label, and the reduced-transparency
   assert.ok(hover >= 0 && refill > hover, 'the selected fill comes after the hover reset');
 });
 
+test('secondary and danger buttons are pills too, and nothing puts the 13 px corner back (#125)', () => {
+  for (const selector of [/^\.secondary$/, /^\.danger$/]) {
+    const bodies = rules(selector);
+    assert.ok(bodies.length > 0, `${selector} is styled`);
+    assert.ok(bodies.some((body) => /border-radius: 999px/.test(body)), `${selector} is a pill`);
+  }
+  const overrides = blocks.filter((block) => block.selectors.some((item) => /\.(secondary|danger)$/.test(item)));
+  for (const { body } of overrides) assert.doesNotMatch(body, /border-radius: (?!999px)/, `override: ${body.trim()}`);
+});

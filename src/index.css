@@ -38,7 +38,6 @@
   --danger: #efaaa1;
   --danger-line: #673d32;
   --radius-card: 17px;
-  --radius-button: 13px;
   --shadow-phone: 0 40px 120px rgba(0, 0, 0, 0.55);
 
   /* Glass tokens (#77), read by .glass-scope controls, the settings sheet and the logger (#81). */
@@ -386,7 +385,7 @@ textarea:focus-visible {
 .secondary {
   min-height: 52px;
   width: 100%;
-  border-radius: var(--radius-button);
+  border-radius: 999px;
   border: 1px solid #465337;
   background: #1b2515;
   color: #e5eddb;
@@ -401,7 +400,7 @@ textarea:focus-visible {
 .danger {
   min-height: 52px;
   width: 100%;
-  border-radius: var(--radius-button);
+  border-radius: 999px;
   border: 1px solid var(--danger-line);
   color: var(--danger);
   font-size: 15px;
