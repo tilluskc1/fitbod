@@ -5,8 +5,6 @@ import { parseLoads } from './units.ts';
 type Role = 'small' | 'upper' | 'lower';
 
 const LOWER: ReadonlySet<MuscleGroup> = new Set<MuscleGroup>(['Quads', 'Hamstrings', 'Glutes', 'Calves']);
-/** A pull pattern, but rear-delt and rotator-cuff work: it starts as isolation. */
-const SMALL_IDS: ReadonlySet<string> = new Set(['face-pull']);
 
 /**
  * Starting load per hand for a dumbbell, in each unit's own steps (#116). A
@@ -38,7 +36,7 @@ export function suggestedFirstLoad(
   experience: Experience,
   unit: Unit,
 ): number {
-  const role: Role = SMALL_IDS.has(exercise.id) || !isCompound(exercise) ? 'small'
+  const role: Role = !isCompound(exercise) ? 'small'
     : LOWER.has(exercise.muscles[0]) ? 'lower' : 'upper';
   const perHand = DUMBBELL[unit][role][experience];
   const value = exercise.equipment === 'Bodyweight' ? 0

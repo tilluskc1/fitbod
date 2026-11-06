@@ -53,7 +53,7 @@ export const EXERCISES: Exercise[] = [
   { id: 'lat-pulldown', name: 'Lat Pulldown', muscles: ['Back', 'Biceps'], equipment: 'Cable', pattern: 'vertical_pull', secondaryPatterns: ['elbow_flexion'], needs: ['cable'], instructions: 'Grip the bar wider than shoulder width, pull it to your upper chest while driving your elbows down, then return slowly.' },
   { id: 'seated-cable-row', name: 'Seated Cable Row', muscles: ['Back', 'Biceps'], equipment: 'Cable', pattern: 'horizontal_pull', secondaryPatterns: ['elbow_flexion'], needs: ['cable'], instructions: 'Sit tall, pull the handle to your navel while squeezing your shoulder blades, then extend your arms fully.' },
   { id: 'dumbbell-row', name: 'Dumbbell Row', muscles: ['Back', 'Biceps'], equipment: 'Dumbbell', pattern: 'horizontal_pull', secondaryPatterns: ['elbow_flexion'], needs: ['dumbbell'], instructions: 'Hinge forward with a flat back and a dumbbell in each hand. Pull the weights to your hips, squeeze your shoulder blades, then lower until your arms are straight.' },
-  { id: 'face-pull', name: 'Face Pull', muscles: ['Back', 'Shoulders'], equipment: 'Cable', pattern: 'horizontal_pull', secondaryPatterns: ['shoulder_horizontal_abduction'], needs: ['cable'], instructions: 'Set the rope at face height, pull it toward your forehead while flaring your elbows, then return slowly.' },
+  { id: 'face-pull', name: 'Face Pull', muscles: ['Back', 'Shoulders'], equipment: 'Cable', pattern: 'shoulder_horizontal_abduction', needs: ['cable'], instructions: 'Set the rope at face height, pull it toward your forehead while flaring your elbows, then return slowly.' },
 
   // Shoulders
   { id: 'overhead-press', name: 'Overhead Press', muscles: ['Shoulders', 'Triceps'], equipment: 'Barbell', pattern: 'vertical_push', secondaryPatterns: ['elbow_extension'], needs: ['barbell'], instructions: 'From shoulder height, press the bar overhead until your arms lock out, keeping your core braced.' },
@@ -120,6 +120,7 @@ export const INCOMPATIBLE_GROUPS: string[][] = [
   ['arnold-press', 'dumbbell-shoulder-press', 'overhead-press'],
   ['dumbbell-floor-press', 'dumbbell-bench-press'],
   ['dumbbell-overhead-triceps-extension', 'overhead-triceps-extension'],
+  ['deadlift', 'romanian-deadlift'],
 ];
 
 export function areIncompatible(a: string, b: string): boolean {
