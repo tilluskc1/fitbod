@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, EXERCISES, SUPPORT_OPTIONS } from '../data/exercises';
 import { programSetCount } from '../data/flagship';
+import { promisedProgramMinutes } from '../lib/adapt';
 import type { Program } from '../data/flagship';
 import { capabilitiesFor, provides } from '../lib/capabilities';
 import { catalogRowMeta } from '../lib/liveProgression';
@@ -39,7 +40,8 @@ export default function PlanScreen({
   onReviewChange,
 }: Props) {
   const [tab, setTab] = useState<'week' | 'equipment'>('week');
-  const minutes = program.minutes;
+  const promised = promisedProgramMinutes(program);
+  const minutes = promised < program.minutes ? `≈${promised}` : `${program.minutes}`;
   const sessionSets = programSetCount(program);
   const dayIds = program.exercises.map((exercise) => exercise.exerciseId);
   const daySets = Object.fromEntries(program.exercises.map((exercise) => [exercise.exerciseId, exercise.sets]));

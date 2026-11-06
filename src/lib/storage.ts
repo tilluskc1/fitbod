@@ -423,7 +423,7 @@ export function serializeExport(state: AppState, now = new Date().toISOString())
 
 export function exportFilename(now = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, '0');
-  return `fitbod-backup-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.json`;
+  return `strength-backup-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.json`;
 }
 
 

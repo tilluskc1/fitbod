@@ -4,7 +4,8 @@ import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } fr
 import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
-import { leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
+import { isCompound, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
+import { estimatedSeconds } from './generator.ts';
 import { liveExercises } from './liveProgression.ts';
 
 /**
@@ -143,6 +144,33 @@ export function estimatedMinutes(program: Program, sets: number): number {
   return Math.max(1, Math.round((program.minutes * sets) / total));
 }
 
+/** Minutes these set counts take, by the generator's own per-set time. */
+export function workMinutes(sets: number[]): number {
+  const live = sets.filter((count) => count > 0);
+  if (live.length === 0) return 0;
+  return Math.max(1, Math.round(estimatedSeconds(live) / 60));
+}
+
+/**
+ * The duration a screen may promise. The requested length, unless the work
+ * cannot come close to filling it: four sets of push-ups are not a 45-minute
+ * session, whatever length was asked for.
+ */
+export function promisedMinutes(program: Program, adapted: Pick<AdaptedWorkout, 'minutes' | 'totalSets' | 'exercises'>): number {
+  if (adapted.totalSets === 0) return 0;
+  const total = program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
+  const byDensity = adapted.totalSets < total ? estimatedMinutes(program, adapted.totalSets) : adapted.minutes;
+  const byWork = workMinutes(adapted.exercises.map((exercise) => exercise.sets));
+  return byWork < adapted.minutes * 0.5 ? Math.min(byDensity, byWork) : byDensity;
+}
+
+/** The same rule for a program before any adjustment (Plan). */
+export function promisedProgramMinutes(program: Program): number {
+  const sets = program.exercises.map((exercise) => exercise.sets);
+  const totalSets = sets.reduce((sum, count) => sum + count, 0);
+  return promisedMinutes(program, { minutes: program.minutes, totalSets, exercises: program.exercises.map((exercise) => ({ ...exercise })) as AdaptedExercise[] });
+}
+
 export function adaptWorkout(
   program: Program = FULL_BODY_A,
   constraints: Constraints = DEFAULT_CONSTRAINTS,
@@ -222,23 +250,37 @@ export function adaptWorkout(
   let total = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
   const budget = setBudget(program, minutes);
 
-  // 2. Trim from the end of the session, keeping at least two working sets on
-  //    a lift and one on a hold. Volume comes off the last movement first.
-  for (let i = exercises.length - 1; i >= 0 && total > budget; i -= 1) {
-    const floor = exercises[i].holdSeconds ? 1 : 2;
-    while (exercises[i].sets > floor && total > budget) {
-      exercises[i].sets -= 1;
+  // Trim order: isolation first, then other compounds, the lead compound last;
+  // within a role, the later movement in the session goes first.
+  const leadId = leadCompoundId(exercises.map((exercise) => exercise.exerciseId));
+  const role = (exercise: AdaptedExercise): number => {
+    if (exercise.exerciseId === leadId) return 2;
+    const catalog = exerciseById(exercise.exerciseId);
+    return catalog && isCompound(catalog) ? 1 : 0;
+  };
+  const trimOrder = exercises
+    .map((exercise, index) => ({ exercise, index }))
+    .sort((a, b) => role(a.exercise) - role(b.exercise) || b.index - a.index)
+    .map((entry) => entry.exercise);
+
+  // 2. Trim sets in that order, keeping at least two working sets on a lift
+  //    and one on a hold.
+  for (const exercise of trimOrder) {
+    if (total <= budget) break;
+    const floor = exercise.holdSeconds ? 1 : 2;
+    while (exercise.sets > floor && total > budget) {
+      exercise.sets -= 1;
       total -= 1;
     }
   }
 
-  // 3. Still over: drop whole movements from the end, never the last one.
+  // 3. Still over: drop whole movements in the same order, never the last one.
   while (total > budget) {
-    const active = exercises.filter((exercise) => exercise.sets > 0);
+    const active = trimOrder.filter((exercise) => exercise.sets > 0);
     if (active.length <= 1) break;
-    const last = active[active.length - 1];
-    total -= last.sets;
-    last.sets = 0;
+    const first = active[0];
+    total -= first.sets;
+    first.sets = 0;
   }
 
   for (const exercise of exercises) {
