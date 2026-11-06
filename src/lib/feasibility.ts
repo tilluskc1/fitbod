@@ -116,7 +116,10 @@ export function matchesRequirement(exercise: Exercise, requirement: CoverageRequ
 export function isRelevantToDay(exercise: Exercise, day: PlanDay): boolean {
   // Primary muscle only. Matching any secondary tag is what let a Goblet Squat
   // (Quads/Glutes/Core) appear on a Pull day through its Core tag.
-  return day.focus.includes(exercise.muscles[0]);
+  // A hinge loads hamstrings and glutes whatever its tag says (Deadlift is
+  // tagged Back), so it belongs only on a day that trains the hinge (#120).
+  return day.focus.includes(exercise.muscles[0])
+    && (!patternsOf(exercise).includes('hinge') || requirementsForDay(day).includes(HINGE));
 }
 
 
