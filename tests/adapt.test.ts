@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { adaptWorkout, estimatedMinutes, setBudget, toWorkoutExercises } from '../src/lib/adapt.ts';
-import { keywordParser } from '../src/lib/constraints.ts';
+import { keywordParser, noticeText, programCeilingNotice, withCeiling } from '../src/lib/constraints.ts';
 import { FULL_BODY_A, programSetCount } from '../src/data/flagship.ts';
 
 const home = (minutes: number) =>
@@ -67,6 +67,34 @@ test('35 minutes leaves the programmed workout unchanged', () => {
   assert.deepEqual(adapted.exercises[0].targetReps, [9, 9, 9]);
   assert.equal(adapted.skipped.length, 0);
   assert.equal(adapted.note, 'Same exercises, weights and sets as your program.');
+});
+
+test('asking for more time than the program holds caps at the program', () => {
+  const sixty = home(60);
+  assert.equal(sixty.totalSets, 11);
+  assert.equal(sixty.minutes, 35);
+  assert.equal(sixty.skipped.length, 0);
+  assert.equal(sixty.note, 'Same exercises, weights and sets as your program.');
+
+  const seventyFive = home(75);
+  assert.equal(seventyFive.totalSets, 11);
+  assert.equal(seventyFive.minutes, 35);
+  assert.deepEqual(sixty.cappedMinutes, { asked: 60, applied: 35 });
+  assert.equal(programCeilingNotice(sixty)?.kind, 'program-ceiling');
+  assert.equal(home(20).cappedMinutes, null);
+  assert.equal(programCeilingNotice(home(35)), null);
+});
+
+test('a capped request says what the work takes, even with a movement excluded (#17)', () => {
+  const excluded = adaptWorkout(FULL_BODY_A, { minutes: 60, equipment: 'home' }, [FULL_BODY_A.exercises[0].exerciseId]);
+  assert.equal(excluded.minutes, estimatedMinutes(FULL_BODY_A, excluded.totalSets));
+  assert.ok(excluded.minutes < FULL_BODY_A.minutes);
+  assert.match(noticeText(programCeilingNotice(home(60))!), /^You asked for 60 min — the program has no more work to add, so this shows the 35 min it takes\./);
+  // At or under the program, the label is the request, as before.
+  assert.equal(adaptWorkout(FULL_BODY_A, { minutes: 30, equipment: 'home' }, [FULL_BODY_A.exercises[0].exerciseId]).minutes, 30);
+  // Nothing left to do is not a 0-minute workout.
+  const all = FULL_BODY_A.exercises.map((exercise) => exercise.exerciseId);
+  assert.equal(adaptWorkout(FULL_BODY_A, { minutes: 60, equipment: 'home' }, all).cappedMinutes, null);
 });
 
 test('the engine only ever returns loads from the program', () => {
@@ -153,4 +181,12 @@ test('excluded movements are skipped as excluded, never reloaded', () => {
   assert.ok(
     adapted.exercises.every((exercise) => exercise.exerciseId !== 'dumbbell-row'),
   );
+});
+
+test('a typed request above 120 gets one ceiling notice that keeps what was typed (#17)', () => {
+  const clamp = { kind: 'minutes-adjusted' as const, asked: '150 min', applied: '120 min' };
+  const notices = withCeiling([clamp], home(120));
+  assert.deepEqual(notices.map((notice) => notice.kind), ['program-ceiling']);
+  assert.match(noticeText(notices[0]), /^You asked for 150 min — .* shows the 35 min it takes\./);
+  assert.deepEqual(withCeiling([clamp], home(20)), [clamp]);
 });

@@ -101,6 +101,8 @@ export interface AdaptedWorkout {
   programId: string;
   name: string;
   minutes: number;
+  /** Set when the request exceeded what the program holds: asked vs applied. */
+  cappedMinutes: { asked: number; applied: number } | null;
   originalMinutes: number;
   exercises: AdaptedExercise[];
   skipped: SkippedExercise[];
@@ -270,6 +272,7 @@ export function adaptWorkout(
       originalMinutes: program.minutes,
       exercises: [],
       skipped,
+      cappedMinutes: null,
       totalSets: 0,
       originalSets,
       note: `This slot has no main movement with ${setup.chip.toLowerCase()}. Use the required equipment or skip it.`,
@@ -281,6 +284,13 @@ export function adaptWorkout(
   const forTime = skipped.filter((item) => item.reason === 'time');
   const forEquipment = skipped.filter((item) => item.reason === 'equipment');
   const timeTrimmed = trimmedSets || forTime.length > 0;
+  // The program is the ceiling: a request above its own minutes cannot add
+  // work, so cap the label at what the surviving sets take. Requests at or
+  // under the program (the trimming direction) keep their label unchanged.
+  // shortcut: with a movement skipped, 35 min still reads 35 while 36+ reads what the work takes;
+  // labelling the at-or-under direction honestly too is #141.
+  const capped = totalSets > 0 && minutes > program.minutes;
+  const appliedMinutes = capped ? estimatedMinutes(program, totalSets) : minutes;
 
   let note: string;
   if (kept.length === 0) {
@@ -308,7 +318,8 @@ export function adaptWorkout(
   return {
     programId: program.id,
     name: program.name,
-    minutes,
+    minutes: appliedMinutes,
+    cappedMinutes: capped ? { asked: minutes, applied: appliedMinutes } : null,
     originalMinutes: program.minutes,
     exercises: kept,
     skipped,

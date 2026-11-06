@@ -3,7 +3,7 @@ import
 import
  { downloadText } from './lib/download';
 import
- { activeOverride, dayKey, minutesOf } from './lib/plan';
+ { activeOverride, dayKey } from './lib/plan';
 import
  {
   adaptWorkout,
@@ -21,7 +21,7 @@ import
 import
  type { Proposal, ProposalContext } from './lib/proposal';
 import
- { defaultConstraints } from './lib/constraints';
+ { defaultConstraints, withCeiling } from './lib/constraints';
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A, programSetCount } from './data/flagship';
@@ -293,7 +293,6 @@ export default function App() {
   const unit = unitOf(profile);
   const today = useMemo(() => new Date(now), [now]);
   const override = useMemo(() => activeOverride(state, today), [state, today]);
-  const minutes = profile ? minutesOf(profile, override) : 35;
 
   /**
    * Today's constraint state: the approved adaptation, the saved equipment
@@ -502,6 +501,7 @@ export default function App() {
     const choice: EquipmentChoice = next.equipment;
     const approved: TodayOverride = {
       date: dayKey(new Date()),
+      // The request, not the capped label: every screen re-derives the label (#17).
       minutes: next.minutes,
       equipment: choice === 'home' || choice === 'hotel' ? ['Dumbbell'] : [],
       support: [],
@@ -1020,7 +1020,7 @@ export default function App() {
           }}
           onPreview={(next, notices) => {
             setPending(createProposal(next, proposalBase()));
-            setPendingNotices(notices);
+            setPendingNotices(withCeiling(notices, adaptWorkout(program, next, profile?.exclusions ?? [])));
             setSheet({ kind: 'none' });
             setView('adapt');
           }}
@@ -1117,7 +1117,7 @@ export default function App() {
       {(sheet.kind === 'day' || sheet.kind === 'preview') && (
         <DaySheet
           name={current?.name ?? adapted.name}
-          minutes={current?.durationMin ?? minutes}
+          minutes={current?.durationMin ?? adapted.minutes}
           exercises={todayExercises}
           unit={unit}
           history={state.history}

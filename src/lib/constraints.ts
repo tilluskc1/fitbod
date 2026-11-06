@@ -1,4 +1,9 @@
-import { EQUIPMENT_OPTIONS, type Constraints, type EquipmentChoice } from './adapt.ts';
+import {
+  EQUIPMENT_OPTIONS,
+  type AdaptedWorkout,
+  type Constraints,
+  type EquipmentChoice,
+} from './adapt.ts';
 import type { Profile } from '../types.ts';
 
 /**
@@ -122,7 +127,7 @@ export function isPresetActive(preset: Preset, current: Constraints): boolean {
 }
 
 /** What the user asked for that the plan could not use as asked. */
-export type ConstraintNoticeKind = 'unsupported-equipment' | 'minutes-adjusted' | 'contradictory-input';
+export type ConstraintNoticeKind = 'unsupported-equipment' | 'minutes-adjusted' | 'contradictory-input' | 'program-ceiling';
 
 export interface ConstraintNotice {
   kind: ConstraintNoticeKind;
@@ -190,6 +195,31 @@ export function resolveConstraints(
 }
 
 /**
+ * The program-ceiling notice for an already-computed adaptation: the request
+ * exceeded what the program holds, so the label was capped at the surviving
+ * work. Null when nothing was capped.
+ */
+export function programCeilingNotice(adapted: AdaptedWorkout): ConstraintNotice | null {
+  if (!adapted.cappedMinutes) return null;
+  return {
+    kind: 'program-ceiling',
+    asked: `${adapted.cappedMinutes.asked} min`,
+    applied: `${adapted.cappedMinutes.applied} min`,
+  };
+}
+
+/**
+ * The parser's notices plus the ceiling, if any. A ceiling replaces the
+ * 10–120 clamp notice, keeping what was typed, so two notices never disagree.
+ */
+export function withCeiling(notices: ConstraintNotice[], adapted: AdaptedWorkout): ConstraintNotice[] {
+  const ceiling = programCeilingNotice(adapted);
+  if (!ceiling) return notices;
+  const clamp = notices.find((notice) => notice.kind === 'minutes-adjusted');
+  return [...notices.filter((notice) => notice !== clamp), clamp ? { ...ceiling, asked: clamp.asked } : ceiling];
+}
+
+/**
  * The default setup follows the saved equipment: dumbbell owners get their
  * home plan, other configured equipment uses the home setup, and people with
  * no gear get bodyweight. Never assumes a dumbbell rack exists.
@@ -216,6 +246,9 @@ export function noticeText(notice: ConstraintNotice): string {
   if (notice.kind === 'unsupported-equipment') {
     const asked = notice.asked.charAt(0).toUpperCase() + notice.asked.slice(1);
     return `${asked} isn't covered by this program — showing ${notice.applied} instead. Start only if that works for you.`;
+  }
+  if (notice.kind === 'program-ceiling') {
+    return `You asked for ${notice.asked} — the program has no more work to add, so this shows the ${notice.applied} it takes. Start only if that works for you.`;
   }
   return `You asked for ${notice.asked} — sessions run ${MIN_MINUTES}–${MAX_MINUTES} min, so this shows ${notice.applied}. Start only if that works for you.`;
 }
