@@ -238,7 +238,7 @@ export default function ProgressScreen({
                           <stop offset="100%" stopColor="#c5f777" stopOpacity="0" />
                         </linearGradient>
                       </defs>
-                      <line x1="8" y1={CHART_H - 18} x2={CHART_W - 8} y2={CHART_H - 18} stroke="#2c3427" />
+                      <line x1="8" y1={CHART_H - 18} x2={CHART_W - 8} y2={CHART_H - 18} stroke="#dde8e6" />
                       {points.length > 1 && (
                         <polygon
                           points={`${path} ${points[points.length - 1].x},${CHART_H - 18} ${points[0].x},${CHART_H - 18}`}
@@ -249,7 +249,7 @@ export default function ProgressScreen({
                         <polyline
                           points={path}
                           fill="none"
-                          stroke="#c5f777"
+                          stroke="#5c9ab5"
                           strokeWidth="2.4"
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -261,7 +261,7 @@ export default function ProgressScreen({
                           cx={point.x}
                           cy={point.y}
                           r={index === points.length - 1 ? 4.5 : 3}
-                          fill={index === points.length - 1 ? '#c5f777' : '#7f9960'}
+                          fill={index === points.length - 1 ? '#2f6f88' : '#8fb7c7'}
                         />
                       ))}
                     </svg>

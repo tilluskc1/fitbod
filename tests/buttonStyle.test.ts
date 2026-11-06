@@ -9,7 +9,7 @@ const rules = (selector: RegExp) =>
   blocks.filter((block) => block.selectors.some((item) => selector.test(item))).map((block) => block.body);
 
 test('one primary action style: .primary is the .pill-primary rule, with no override changing its shape (#118)', () => {
-  assert.match(css, /\.primary,\s*\.pill-primary \{[^}]*border-radius: 999px;[^}]*background: var\(--primary\);/);
+  assert.match(css, /\.primary,\s*\.pill-primary \{[^}]*border-radius: 999px;[^}]*background: var\(--btn\);/);
   const overrides = blocks.filter((block) => block.selectors.some((item) => /\.primary$/.test(item))
     && !block.selectors.includes('.pill-primary'));
   for (const { body } of overrides) {

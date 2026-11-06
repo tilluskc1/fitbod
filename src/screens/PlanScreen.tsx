@@ -106,7 +106,7 @@ export default function PlanScreen({
               <div key={day.key} className={`date-cell ${day.today ? 'active' : ''}`}>
                 <span className="date-dow">{day.dow}</span>
                 <span className="date-num">{day.num}</span>
-                <span className="date-dot" style={day.logged ? { background: day.today ? '#35461f' : 'var(--lime)' } : undefined} />
+                <span className="date-dot" style={day.logged ? { background: day.today ? 'var(--accent-text)' : 'var(--lime)' } : undefined} />
               </div>
             ))}
           </div>

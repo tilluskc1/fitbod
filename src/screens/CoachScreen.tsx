@@ -245,7 +245,7 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
                 <span className="kicker" style={{ marginBottom: 4 }}>
                   {message.from === 'you' ? 'YOU' : 'COACH DEMO'}
                 </span>
-                <p style={{ color: message.from === 'you' ? '#eef1e7' : '#c3ccb7', fontSize: 14.5 }}>
+                <p style={{ color: message.from === 'you' ? 'var(--text)' : 'var(--secondary)', fontSize: 14.5 }}>
                   {message.text}
                 </p>
               </div>

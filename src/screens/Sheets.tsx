@@ -640,7 +640,7 @@ export function FinishSheet({
         <button className="secondary" onClick={onContinue}>
           Continue workout
         </button>
-        <button className="link-btn" style={{ color: '#d9a79f', alignSelf: 'center' }} onClick={onDiscard}>
+        <button className="link-btn" style={{ color: 'var(--danger)', alignSelf: 'center' }} onClick={onDiscard}>
           Discard this session
         </button>
       </div>
