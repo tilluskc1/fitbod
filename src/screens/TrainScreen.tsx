@@ -556,7 +556,7 @@ export default function TrainScreen({
               <WeightRow label={canPickCalibration ? 'Your dumbbells' : 'Dumbbells'} unitText={weightLabel}
                 loads={quickLoads} selected={exercise.performed[activeSet]?.weight ?? null}
                 suggested={calibrating && touched === undefined ? suggested : null} show={showWeight}
-                onPick={(weight) => onConfirmWeight(index, weight)} />
+                onPick={(weight) => { onConfirmWeight(index, weight); setRackTaps((taps) => taps + 1); }} />
             )}
             {calibrating && (
               <label className="lg-first__typed">
