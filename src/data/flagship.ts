@@ -7,6 +7,10 @@
  * ever overwritten by logging.
  */
 
+import { exerciseById } from './exercises.ts';
+import { displayValue, unitLabel } from '../lib/units.ts';
+import type { Feasibility, Unit } from '../types.ts';
+
 export type LoadMode = 'each' | 'total' | 'none';
 
 export interface ProgramExercise {
@@ -31,7 +35,7 @@ export interface ProgramExercise {
   /** What the load is plus any surface the movement needs. */
   detail: string;
   /** Equipment family this movement needs; drives the adaptation engine. */
-  requires: 'dumbbell' | 'bodyweight';
+  requires: 'dumbbell' | 'bodyweight' | 'configured';
 }
 
 export interface Program {
@@ -39,6 +43,8 @@ export interface Program {
   name: string;
   minutes: number;
   exercises: ProgramExercise[];
+  /** The generated slot's honest status: Ready, Limited or Not enough equipment. */
+  feasibility?: Feasibility;
 }
 
 export const FULL_BODY_A: Program = {
@@ -116,10 +122,16 @@ export function programSetCount(program: Program): number {
   return program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
 }
 
-/** "15 kg each" / "18 kg total" / "Bodyweight". */
-export function loadLabel(exercise: Pick<ProgramExercise, 'weight' | 'load'>): string {
+/** "15 kg each" / "33 lb each" / "Bodyweight". Stored loads stay kilograms. */
+export function loadLabel(
+  exercise: Pick<ProgramExercise, 'weight' | 'load'>,
+  unit: Unit = 'kg',
+  format?: (kg: number) => string,
+): string {
   if (exercise.load === 'none' || exercise.weight <= 0) return 'Bodyweight';
-  return `${exercise.weight} kg ${exercise.load}`;
+  const value = displayValue(exercise.weight, unit);
+  const text = format ? format(exercise.weight) : Number.isInteger(value) ? String(value) : value.toFixed(1);
+  return `${text} ${unitLabel(unit)}${exercise.load === 'each' ? ' each' : ' total'}`;
 }
 
 /** "9 · 9 · 9" or "8–10" when the program has no per-set targets. */
@@ -142,36 +154,64 @@ export function repLabel(
 export function targetSummary(
   exercise: Pick<ProgramExercise, 'targetReps' | 'repRange' | 'holdSeconds' | 'weight' | 'load'>,
   count?: number,
+  unit: Unit = 'kg',
+  format?: (kg: number) => string,
 ): string {
   const reps = exercise.holdSeconds
     ? `${exercise.holdSeconds}s`
     : exercise.targetReps
       ? repLabel(exercise, count)
       : `${repLabel(exercise, count)} reps`;
-  return exercise.weight > 0 ? `${reps} @ ${loadLabel(exercise)}` : reps;
+  return exercise.weight > 0 ? `${reps} @ ${loadLabel(exercise, unit, format)}` : reps;
 }
 
 export function programExercise(exerciseId: string): ProgramExercise | undefined {
   return FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === exerciseId);
 }
 
+/** Catalog swaps keep their own equipment; only the program defines special load modes. */
+export function loadModeOf(exerciseId: string): LoadMode {
+  const program = programExercise(exerciseId);
+  if (program) return program.load;
+  const equipment = exerciseById(exerciseId)?.equipment;
+  return equipment === 'Dumbbell' ? 'each' : equipment && equipment !== 'Bodyweight' ? 'total' : 'none';
+}
+
+/** Why a loaded set cannot be logged yet; one wording for logger and history (#103). */
+export const NEEDS_LOAD_REASON = 'Enter a weight to log this set';
+
+/** A loaded, counted set: it cannot be logged until it carries a load (#103). */
+export function needsLoad(exerciseId: string): boolean {
+  return loadModeOf(exerciseId) !== 'none' && setUnit(exerciseId) !== 'seconds';
+}
+
+export function detailOf(exerciseId: string): string {
+  return programExercise(exerciseId)?.detail ?? exerciseById(exerciseId)?.equipment ?? 'Bodyweight';
+}
+
 /**
  * "9 · 9 · 9" when the program carries per-set targets, "8–10 reps" when it
  * prescribes a range. A range must never collapse to its low bound on screen.
  */
-export function repsTarget(exerciseId: string, count: number): string | null {
+export function repsTarget(exerciseId: string, count: number, planned?: { reps: number }[]): string | null {
   const program = programExercise(exerciseId);
+  if (planned) {
+    const reps = planned.map((set) => set.reps);
+    return setUnit(exerciseId) === 'seconds' ? `${reps.join(' · ')}s` : reps.join(' · ');
+  }
   if (!program) return null;
   if (program.holdSeconds) return `${program.holdSeconds}s`;
   if (program.targetReps) return program.targetReps.slice(0, count).join(' · ');
   return `${program.repRange[0]}–${program.repRange[1]} reps`;
 }
 
-/** "3 sets · 8–10 reps · 15 kg each" for a workout row. */
+/** "3 sets · 8–10 reps · 15 kg each", "3 × 9 @ 15 kg each" or "3 sets · 9 · 8 · 8 @ 15 kg each" for a workout row. */
 export function exerciseMeta(
   exercise: ProgramExercise,
   count = exercise.sets,
   includeSets = true,
+  unit: Unit = 'kg',
+  format?: (kg: number) => string,
 ): string {
   const sets = `${count} ${count === 1 ? 'set' : 'sets'}`;
   const reps = exercise.holdSeconds
@@ -181,6 +221,11 @@ export function exerciseMeta(
       : `${repLabel(exercise, count)} reps`;
   // Targets read "9 · 9 @ 15 kg each"; ranges read "8–10 reps · 18 kg total".
   const load =
-    exercise.weight > 0 ? `${exercise.targetReps ? ' @ ' : ' · '}${loadLabel(exercise)}` : '';
+    exercise.weight > 0 ? `${exercise.targetReps ? ' @ ' : ' · '}${loadLabel(exercise, unit, format)}` : '';
+  // Same reps on every set reads "5 × 4 @ 20 lb each", short enough for a 360 px row.
+  const targets = exercise.holdSeconds ? [] : exercise.targetReps?.slice(0, count) ?? [];
+  if (includeSets && count > 1 && targets.length === count && targets.every((value) => value === targets[0])) {
+    return `${count} × ${targets[0]}${load}`;
+  }
   return includeSets ? `${sets} · ${reps}${load}` : `${reps}${load}`;
 }

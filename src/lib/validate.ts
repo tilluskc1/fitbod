@@ -1,6 +1,8 @@
+import { EXERCISES } from '../data/exercises.ts';
 import type {
   AppState,
   Equipment,
+  ExercisePreference,
   Experience,
   Goal,
   MuscleGroup,
@@ -11,13 +13,19 @@ import type {
   SupportEquipment,
   WorkoutExercise,
   TodayOverride,
+  WorkoutFeedback,
   WorkoutRecord,
 } from '../types.ts';
+
+export const APP_MARKER = 'fitbod-clone';
+export const SCHEMA_VERSION = 2;
 
 const GOALS: Goal[] = ['Build Muscle', 'Lose Fat', 'Get Stronger', 'General Fitness'];
 const EXPERIENCES: Experience[] = ['Beginner', 'Intermediate', 'Advanced'];
 const EQUIPMENT: Equipment[] = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell', 'Bodyweight'];
 const SUPPORT: SupportEquipment[] = ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'];
+const FEEDBACK: WorkoutFeedback[] = ['too-much', 'about-right', 'too-little'];
+const PREFERENCES: ExercisePreference[] = ['more', 'less'];
 const MUSCLES: MuscleGroup[] = [
   'Chest',
   'Back',
@@ -36,8 +44,10 @@ const MAX_EXERCISES = 40;
 const MAX_SETS = 30;
 const MAX_EXCLUSIONS = 200;
 const MAX_LOAD_ENTRIES = 200;
-const MAX_WEIGHT = 2000;
-const MAX_REPS = 1000;
+/** The heaviest load the loader accepts; every weight entry refuses above it (#101). */
+export const MAX_WEIGHT = 2000;
+/** The most reps (or seconds held) the loader accepts; every reps entry refuses above it (#109). */
+export const MAX_REPS = 1000;
 
 class Invalid extends Error {}
 
@@ -145,6 +155,19 @@ function validateProfile(value: unknown, path: string): Profile {
 
   const exclusions = raw.exclusions === undefined ? [] : uniqueStrings(raw.exclusions, `${path}.exclusions`, MAX_EXCLUSIONS);
 
+  let preferences: Profile['preferences'];
+  if (raw.preferences !== undefined) {
+    const prefsRaw = record(raw.preferences, `${path}.preferences`);
+    const keys = Object.keys(prefsRaw);
+    if (keys.length > MAX_EXCLUSIONS) fail(`${path}.preferences`, `has more than ${MAX_EXCLUSIONS} entries`);
+    preferences = {};
+    for (const key of keys) {
+      // Dropped, not rejected: a variant removed from the catalog must not lock the user out.
+      if (!EXERCISES.some((exercise) => exercise.id === key)) continue;
+      preferences[key] = oneOf(prefsRaw[key], `${path}.preferences.${key}`, PREFERENCES);
+    }
+  }
+
   return {
     goal: oneOf(raw.goal, `${path}.goal`, GOALS),
     experience: oneOf(raw.experience, `${path}.experience`, EXPERIENCES),
@@ -159,6 +182,7 @@ function validateProfile(value: unknown, path: string): Profile {
       raw.sessionMinutes === undefined
         ? undefined
         : integer(raw.sessionMinutes, `${path}.sessionMinutes`, 10, 120),
+    preferences,
   };
 }
 
@@ -196,6 +220,9 @@ function validateExercise(value: unknown, path: string): WorkoutExercise {
       raw.originalPlannedSets === undefined
         ? undefined
         : integer(raw.originalPlannedSets, `${path}.originalPlannedSets`, 1, MAX_SETS),
+    // Optional. Records and backups written before skipping existed stay valid,
+    // and no migration is implied by its absence.
+    skipped: raw.skipped === undefined ? undefined : boolean(raw.skipped, `${path}.skipped`),
     planned: plannedRaw.map((item, i) => validatePlannedSet(item, `${path}.planned[${i}]`)),
     performed: performedRaw.map((item, i) => validatePerformedSet(item, `${path}.performed[${i}]`)),
   };
@@ -209,6 +236,15 @@ function validateWorkout(value: unknown, path: string): WorkoutRecord {
     date: isoDate(raw.date, `${path}.date`),
     name: nonEmptyString(raw.name, `${path}.name`),
     dayIndex: integer(raw.dayIndex ?? 0, `${path}.dayIndex`, 0, 20),
+    // Optional: records written before the program sequence existed stay valid,
+    // and a record without a slot link simply cannot advance the cursor.
+    slotId: raw.slotId === undefined ? undefined : nonEmptyString(raw.slotId, `${path}.slotId`),
+    slotSeq:
+      raw.slotSeq === undefined ? undefined : integer(raw.slotSeq, `${path}.slotSeq`, 0, MAX_SEQ),
+    planRevision:
+      raw.planRevision === undefined
+        ? undefined
+        : integer(raw.planRevision, `${path}.planRevision`, 0, MAX_SEQ),
     status,
     completedEarly: boolean(raw.completedEarly ?? false, `${path}.completedEarly`),
     endedAt: isoDateOrNull(raw.endedAt ?? null, `${path}.endedAt`),
@@ -235,6 +271,10 @@ function validateWorkout(value: unknown, path: string): WorkoutRecord {
       raw.restPausedMs === undefined
         ? undefined
         : finiteNumber(raw.restPausedMs, `${path}.restPausedMs`, 86_400_000),
+    // Optional and enumerated. An old record without it stays valid; an
+    // unrecognised value is rejected rather than replaced with a guess.
+    feedback:
+      raw.feedback === undefined ? undefined : oneOf(raw.feedback, `${path}.feedback`, FEEDBACK),
     exercises: array(raw.exercises, `${path}.exercises`, MAX_EXERCISES).map((item, i) =>
       validateExercise(item, `${path}.exercises[${i}]`),
     ),
@@ -266,6 +306,32 @@ function validateOverride(value: unknown, path: string): TodayOverride {
         ? undefined
         : oneOf(raw.choice, `${path}.choice`, ['home', 'hotel', 'bodyweight', 'bands'] as const),
   };
+}
+
+const MAX_SEQ = 1_000_000;
+
+/** A cursor with no revision is the first slot of the current plan. */
+function validateCursor(value: unknown, revision: number): { revision: number; seq: number } {
+  if (value === null || value === undefined) return { revision, seq: 0 };
+  const raw = record(value, 'state.programCursor');
+  return {
+    revision: integer(raw.revision ?? revision, 'state.programCursor.revision', 0, MAX_SEQ),
+    seq: integer(raw.seq ?? 0, 'state.programCursor.seq', 0, MAX_SEQ),
+  };
+}
+
+function validateSkips(value: unknown): NonNullable<AppState['slotSkips']> {
+  if (value === undefined) return [];
+  return array(value, 'state.slotSkips', 1000).map((item, i) => {
+    const raw = record(item, `state.slotSkips[${i}]`);
+    return {
+      id: nonEmptyString(raw.id, `state.slotSkips[${i}].id`),
+      revision: integer(raw.revision, `state.slotSkips[${i}].revision`, 0, MAX_SEQ),
+      seq: integer(raw.seq, `state.slotSkips[${i}].seq`, 0, MAX_SEQ),
+      slotId: nonEmptyString(raw.slotId, `state.slotSkips[${i}].slotId`),
+      at: isoDate(raw.at, `state.slotSkips[${i}].at`),
+    };
+  });
 }
 
 function validatePlan(value: unknown, path: string): PlanDay[] {
@@ -393,6 +459,10 @@ function normaliseState(value: unknown): AppState {
     raw.todayOverride === null || raw.todayOverride === undefined
       ? null
       : validateOverride(raw.todayOverride, 'state.todayOverride');
+  const planRevision =
+    raw.planRevision === undefined ? 0 : integer(raw.planRevision, 'state.planRevision', 0, MAX_SEQ);
+  const programCursor = validateCursor(raw.programCursor, planRevision);
+  const slotSkips = validateSkips(raw.slotSkips);
 
   const ids = new Set<string>();
   for (const workout of [...history, ...(current ? [current] : [])]) {
@@ -400,7 +470,16 @@ function normaliseState(value: unknown): AppState {
     ids.add(workout.id);
   }
 
-  return { profile, plan, history, current, todayOverride };
+  return {
+    profile,
+    plan,
+    history,
+    current,
+    todayOverride,
+    planRevision,
+    programCursor,
+    slotSkips,
+  };
 }
 
 /** Parse a JSON string into validated state. Used by restore. */
@@ -412,6 +491,9 @@ export function parseState(text: string): { ok: true; state: AppState; migrated:
     return { ok: false, error: 'Not valid JSON. Nothing was changed.' };
   }
   if (isRecord(parsed) && 'state' in parsed) {
+    if (parsed.app !== APP_MARKER || parsed.schemaVersion !== SCHEMA_VERSION) {
+      return { ok: false, error: 'Unsupported backup app or schema version. Nothing was changed.' };
+    }
     return validateState(parsed.state);
   }
   return validateState(parsed);

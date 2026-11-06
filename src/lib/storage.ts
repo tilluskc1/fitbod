@@ -1,11 +1,9 @@
 import type { AppState, WorkoutRecord } from '../types.ts';
-import { validateState } from './validate.ts';
+import { APP_MARKER, SCHEMA_VERSION, validateState } from './validate.ts';
+export { SCHEMA_VERSION } from './validate.ts';
 
 export const STORAGE_KEY = 'fitbod-clone-v1';
 export const LEGACY_BACKUP_KEY = 'fitbod-clone-v1:legacy-backup';
-export const SCHEMA_VERSION = 2;
-
-const APP_MARKER = 'fitbod-clone';
 
 export const EMPTY_STATE: AppState = {
   profile: null,
@@ -13,6 +11,9 @@ export const EMPTY_STATE: AppState = {
   history: [],
   current: null,
   todayOverride: null,
+  planRevision: 0,
+  programCursor: { revision: 0, seq: 0 },
+  slotSkips: [],
 };
 
 interface Envelope {
@@ -36,7 +37,7 @@ export type SaveFailureReason = 'stale' | 'quota' | 'unavailable' | 'verify';
 
 export type SaveResult =
   | { ok: true; revision: number; savedAt: string }
-  | { ok: false; reason: SaveFailureReason; error: string; remoteRevision?: number };
+  | { ok: false; reason: SaveFailureReason; error: string; remoteRevision?: number; pendingWrite?: string };
 
 function storage(): Storage | null {
   try {
@@ -200,6 +201,8 @@ export interface SaveOptions {
    * Revision still moves forward monotonically.
    */
   force?: boolean;
+  /** Exact unverified write from this caller; never persisted separately. */
+  pendingWrite?: string;
 }
 
 export function saveState(
@@ -220,8 +223,14 @@ export function saveState(
   }
 
   const current = parseEnvelope(currentRaw);
+  const ownWrite = current !== null && currentRaw === options.pendingWrite &&
+    current.revision > expectedRevision;
+  if (ownWrite && JSON.stringify(current.state) === JSON.stringify(state)) {
+    return { ok: true, revision: current.revision, savedAt: current.savedAt };
+  }
+  const acknowledgedRevision = ownWrite ? current.revision : expectedRevision;
   if (!options.force) {
-    if (current && current.revision !== expectedRevision) {
+    if (current && current.revision !== acknowledgedRevision) {
       return {
         ok: false,
         reason: 'stale',
@@ -241,7 +250,7 @@ export function saveState(
 
   const baseRevision = options.force
     ? Math.max(expectedRevision, current?.revision ?? 0)
-    : expectedRevision;
+    : acknowledgedRevision;
   const savedAt = new Date().toISOString();
   const envelope: Envelope = {
     app: APP_MARKER,
@@ -251,8 +260,9 @@ export function saveState(
     state,
   };
 
+  const pendingWrite = JSON.stringify(envelope);
   try {
-    store.setItem(STORAGE_KEY, JSON.stringify(envelope));
+    store.setItem(STORAGE_KEY, pendingWrite);
   } catch (error) {
     return {
       ok: false,
@@ -263,11 +273,17 @@ export function saveState(
     };
   }
 
-  const check = parseEnvelope(store.getItem(STORAGE_KEY));
-  if (!check || check.revision !== envelope.revision || check.savedAt !== savedAt) {
+  let verified = false;
+  try {
+    verified = store.getItem(STORAGE_KEY) === pendingWrite;
+  } catch {
+    // The write may exist; only an exact read on Retry may acknowledge it.
+  }
+  if (!verified) {
     return {
       ok: false,
       reason: 'verify',
+      pendingWrite,
       error: 'The write could not be verified. Treat this change as unsaved.',
     };
   }
@@ -282,6 +298,18 @@ export interface ImportSummary {
   profileReplaced: boolean;
   planReplaced: boolean;
   activeSessionKept: boolean;
+  /**
+   * True when both copies held the same active session id, so the merge had
+   * to pick one. Exposed so the restore notice is never silent about which
+   * logged work survived.
+   */
+  activeSessionConflict: boolean;
+  /**
+   * Duplicate workouts where the imported copy carried no answer but the local
+   * copy did. Counted so an older backup keeping retained feedback is visible
+   * in the restore notice instead of happening silently.
+   */
+  feedbackPreserved: number;
 }
 
 export interface MergeResult {
@@ -299,30 +327,79 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
   const currentIds = new Set(current.history.map((workout) => workout.id));
   const duplicateWorkouts = imported.history.filter((workout) => currentIds.has(workout.id)).length;
   const localOnly = current.history.filter((workout) => !importedIds.has(workout.id));
-  const history: WorkoutRecord[] = [...imported.history, ...localOnly];
+  const localById = new Map(current.history.map((workout) => [workout.id, workout]));
+  // An older backup of a workout the user has since rated carries no answer for
+  // it. Imported data still wins for every other field, but silently dropping a
+  // retained answer is the one thing restore must not do.
+  const feedbackPreserved = imported.history.filter((workout) => {
+    const local = localById.get(workout.id);
+    return Boolean(local && local.feedback !== undefined && workout.feedback === undefined);
+  }).length;
+  const history: WorkoutRecord[] = [
+    ...imported.history.map((workout) => {
+      const local = localById.get(workout.id);
+      if (!local || local.feedback === undefined || workout.feedback !== undefined) return workout;
+      return { ...workout, feedback: local.feedback };
+    }),
+    ...localOnly,
+  ];
 
-  let active = imported.current ?? current.current;
-  let activeSessionKept = false;
-  if (imported.current && current.current && imported.current.id !== current.current.id) {
-    active = current.current;
-    activeSessionKept = true;
-  }
+  // Completed history disqualifies candidates before choosing which active session to keep.
+  const completedIds = new Set(history.map((workout) => workout.id));
+  const localActive = current.current && !completedIds.has(current.current.id) ? current.current : null;
+  const importedActive = imported.current && !completedIds.has(imported.current.id) ? imported.current : null;
+  const activeSessionKept = Boolean(localActive && importedActive && localActive.id !== importedActive.id);
+  const activeSessionConflict = Boolean(
+    localActive && importedActive && localActive.id === importedActive.id,
+  );
+  // A backup of the same open session must not roll back sets logged since the
+  // export: More above means the older copy only wins when it holds more work.
+  const loggedSets = (session: WorkoutRecord | null) =>
+    session === null
+      ? -1
+      : session.exercises.reduce((total, exercise) => total + exercise.performed.filter((set) => set.done).length, 0);
+  const active = activeSessionKept
+    ? localActive
+    : loggedSets(importedActive) > loggedSets(localActive)
+      ? importedActive ?? localActive
+      : localActive ?? importedActive;
+
+  // Older backups add history, but cannot replace a newer plan or erase skip
+  // events. Equal revisions retain the existing import behavior.
+  const currentRevision = current.planRevision ?? 0;
+  const importedRevision = imported.planRevision ?? 0;
+  const importPlan = imported.plan.length > 0 && (current.plan.length === 0 || importedRevision >= currentRevision);
+  const revision = importPlan ? importedRevision : currentRevision;
+  const cursorSeq = currentRevision === importedRevision
+    ? Math.max(current.programCursor?.seq ?? 0, imported.programCursor?.seq ?? 0)
+    : importPlan ? imported.programCursor?.seq ?? 0 : current.programCursor?.seq ?? 0;
+  const skipIds = new Set((current.slotSkips ?? []).map((skip) => skip.id));
+  const slotSkips = [
+    ...(current.slotSkips ?? []),
+    ...(imported.slotSkips ?? []).filter((skip) => !skipIds.has(skip.id)),
+  ];
+  const importProfile = imported.profile !== null && (current.profile === null || importedRevision >= currentRevision);
 
   return {
     state: {
-      profile: imported.profile ?? current.profile,
-      plan: imported.plan.length > 0 ? imported.plan : current.plan,
+      profile: importProfile ? imported.profile : current.profile,
+      plan: importPlan ? imported.plan : current.plan,
       history,
       current: active,
       todayOverride: current.todayOverride ?? null,
+      planRevision: revision,
+      programCursor: { revision, seq: cursorSeq },
+      slotSkips,
     },
     summary: {
       newWorkouts: imported.history.length - duplicateWorkouts,
       duplicateWorkouts,
       localOnlyWorkouts: localOnly.length,
-      profileReplaced: imported.profile !== null,
-      planReplaced: imported.plan.length > 0,
+      profileReplaced: importProfile,
+      planReplaced: importPlan,
       activeSessionKept,
+      activeSessionConflict,
+      feedbackPreserved,
     },
   };
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { adaptWorkout, estimatedMinutes, setBudget, toWorkoutExercises } from '../src/lib/adapt.ts';
-import { keywordParser, programCeilingNotice } from '../src/lib/constraints.ts';
+import { keywordParser, noticeText, programCeilingNotice } from '../src/lib/constraints.ts';
 import { FULL_BODY_A, programSetCount } from '../src/data/flagship.ts';
 
 const home = (minutes: number) =>
@@ -83,6 +83,18 @@ test('asking for more time than the program holds caps at the program', () => {
   assert.equal(programCeilingNotice(sixty)?.kind, 'program-ceiling');
   assert.equal(home(20).cappedMinutes, null);
   assert.equal(programCeilingNotice(home(35)), null);
+});
+
+test('a capped request says what the work takes, even with a movement excluded (#17)', () => {
+  const excluded = adaptWorkout(FULL_BODY_A, { minutes: 60, equipment: 'home' }, [FULL_BODY_A.exercises[0].exerciseId]);
+  assert.equal(excluded.minutes, estimatedMinutes(FULL_BODY_A, excluded.totalSets));
+  assert.ok(excluded.minutes < FULL_BODY_A.minutes);
+  assert.match(noticeText(programCeilingNotice(home(60))!), /^You asked for 60 min — the program has no more work to add, so this shows the 35 min it takes\./);
+  // At or under the program, the label is the request, as before.
+  assert.equal(adaptWorkout(FULL_BODY_A, { minutes: 30, equipment: 'home' }, [FULL_BODY_A.exercises[0].exerciseId]).minutes, 30);
+  // Nothing left to do is not a 0-minute workout.
+  const all = FULL_BODY_A.exercises.map((exercise) => exercise.exerciseId);
+  assert.equal(adaptWorkout(FULL_BODY_A, { minutes: 60, equipment: 'home' }, all).cappedMinutes, null);
 });
 
 test('the engine only ever returns loads from the program', () => {

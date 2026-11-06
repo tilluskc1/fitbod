@@ -121,7 +121,11 @@ export interface Profile {
   unit?: Unit;
   /** Usual session length in minutes, used by the plan preview. */
   sessionMinutes?: number;
+  /** Per-variant "more often" / "less often". Absent key = neutral. Optional so older data still loads. */
+  preferences?: Record<string, ExercisePreference>;
 }
+
+export type ExercisePreference = 'more' | 'less';
 
 /** The prescription. Never mutated by logging. */
 export interface PlannedSet {
@@ -148,7 +152,20 @@ export interface WorkoutExercise {
    * identity — `shortcut: segments stay anonymous, one field per segment`.
    */
   originalPlannedSets?: number;
+  /**
+   * Pending work the user set aside for this session only. The prescription and
+   * every completed set stay untouched; unskipping restores exactly the sets
+   * that were pending, never a fresh default count.
+   */
+  skipped?: boolean;
 }
+
+/**
+ * The user's own assessment of how a finished session fit. Deliberately three
+ * fixed choices with no preselection: it is recorded context, never a training
+ * signal, and it changes no prescription.
+ */
+export type WorkoutFeedback = 'too-much' | 'about-right' | 'too-little';
 
 export type WorkoutStatus = 'active' | 'completed';
 
@@ -172,10 +189,19 @@ export interface WorkoutRecord {
   restPausedMs?: number;
   name: string;
   dayIndex: number;
+  /** Slot this session belongs to, and its place in the plan sequence. */
+  slotId?: string;
+  slotSeq?: number;
+  planRevision?: number;
   status: WorkoutStatus;
   /** True when the user finished before completing every planned set. */
   completedEarly: boolean;
   endedAt: string | null;
+  /**
+   * Optional answer to "how did today fit?". Absent means no answer, which is a
+   * valid state; nothing infers it, and older records stay valid without it.
+   */
+  feedback?: WorkoutFeedback;
   exercises: WorkoutExercise[];
 }
 
@@ -207,6 +233,24 @@ export interface AppState {
   history: WorkoutRecord[];
   current: WorkoutRecord | null;
   todayOverride?: TodayOverride | null;
+  /**
+   * Which version of the plan the sequence belongs to. A plan change bumps it,
+   * so a cursor written for the old plan can never point at the new one.
+   */
+  planRevision?: number;
+  /** The slot the user is up to. Moves only on an explicit finish or skip. */
+  programCursor?: { revision: number; seq: number } | null;
+  /** Explicit skips, kept apart from history: a skip is not a workout. */
+  slotSkips?: SlotSkip[];
+}
+
+export interface SlotSkip {
+  /** `skip:<revision>:<seq>`; the same skip can never be recorded twice. */
+  id: string;
+  revision: number;
+  seq: number;
+  slotId: string;
+  at: string;
 }
 
 export type FeasibilityStatus = 'ok' | 'limited' | 'infeasible';

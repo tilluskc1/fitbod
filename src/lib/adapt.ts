@@ -1,6 +1,11 @@
 import type { Program, ProgramExercise } from '../data/flagship.ts';
-import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS } from '../data/flagship.ts';
-import type { WorkoutExercise } from '../types.ts';
+import { exerciseById } from '../data/exercises.ts';
+import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } from '../data/flagship.ts';
+import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import { latestDoneSet } from './session.ts';
+import type { SwapCandidate } from './session.ts';
+import { leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
+import { liveExercises } from './liveProgression.ts';
 
 /**
  * The deterministic plan engine.
@@ -28,10 +33,11 @@ export interface EquipmentOption {
 
 export const EQUIPMENT_OPTIONS: Record<EquipmentChoice, EquipmentOption> = {
   home: {
-    label: 'Home dumbbells',
-    chip: 'Home dumbbells',
+    label: 'Home setup',
+    chip: 'Home setup',
     short: 'Home',
-    detail: 'Pairs: 10 kg, 15 kg, 18 kg',
+    // Shown only while the rack is unconfirmed; the logger then takes typed loads.
+    detail: 'Your dumbbells: not confirmed — enter weights as you lift',
     loads: HOME_DUMBBELLS,
     allowsLoads: true,
   },
@@ -39,7 +45,7 @@ export const EQUIPMENT_OPTIONS: Record<EquipmentChoice, EquipmentOption> = {
     label: 'Hotel gym',
     chip: 'Hotel gym',
     short: 'Hotel gym',
-    detail: 'Dumbbells up to 25 kg',
+    detail: 'Example rack: up to 25 kg',
     loads: HOTEL_DUMBBELLS,
     allowsLoads: true,
   },
@@ -64,6 +70,11 @@ export const EQUIPMENT_OPTIONS: Record<EquipmentChoice, EquipmentOption> = {
 export interface Constraints {
   minutes: number;
   equipment: EquipmentChoice;
+  /**
+   * Loads confirmed for this setup, canonical kg per hand. Undefined means the
+   * inventory is unconfirmed, so fixture racks are only a suggestion.
+   */
+  loads?: number[];
 }
 
 export const DEFAULT_CONSTRAINTS: Constraints = { minutes: FULL_BODY_A.minutes, equipment: 'home' };
@@ -74,6 +85,8 @@ export interface AdaptedExercise extends ProgramExercise {
   /** Per-set rep targets for the kept sets. */
   targetReps?: number[];
   originalSets: number;
+  /** Program load before a confirmed rack re-targeted it. */
+  originalWeight?: number;
 }
 
 export interface SkippedExercise {
@@ -137,6 +150,13 @@ export function adaptWorkout(
 ): AdaptedWorkout {
   const minutes = clamp(Math.round(constraints.minutes), 10, 120);
   const setup = EQUIPMENT_OPTIONS[constraints.equipment] ?? EQUIPMENT_OPTIONS.home;
+  // The saved rack is a home rack: it must not cap a hotel gym or a
+  // bodyweight session the user asked for.
+  const inventory = setup.allowsLoads && constraints.equipment === 'home'
+    ? (constraints.loads ?? []).filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b)
+    : [];
+  const knownInventory = inventory.length > 0;
+  const limited: { name: string; from: number; to: number }[] = [];
   const skipped: SkippedExercise[] = [];
   const exercises: AdaptedExercise[] = [];
   const originalSets = program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
@@ -153,9 +173,14 @@ export function adaptWorkout(
       });
       continue;
     }
+    // A confirmed inventory decides what is usable: any owned load can be
+    // re-targeted below, so only a setup with no external load rules a
+    // movement out. An unconfirmed home rack is typed as lifted, so no fixture
+    // judges it; a hotel gym keeps its own rack check.
     const unusable =
       (exercise.requires === 'dumbbell' && !setup.allowsLoads) ||
-      (exercise.weight > 0 && !setup.loads.includes(exercise.weight));
+      (exercise.requires === 'configured' && constraints.equipment !== 'home') ||
+      (exercise.requires !== 'configured' && exercise.weight > 0 && !knownInventory && constraints.equipment !== 'home' && !setup.loads.includes(exercise.weight));
     if (unusable) {
       skipped.push({
         exerciseId: exercise.exerciseId,
@@ -165,12 +190,33 @@ export function adaptWorkout(
       });
       continue;
     }
+    // Never invent a weight: an owned load at or below the program's own is the
+    // only substitution, and it is reported so the review can say so.
+    let weight = exercise.weight;
+    if (exercise.requires === 'dumbbell' && knownInventory && weight > 0 && !inventory.includes(weight)) {
+      const below = inventory.filter((value) => value < weight).at(-1);
+      const substitute = below ?? inventory[0];
+      limited.push({ name: exercise.name, from: weight, to: substitute });
+      weight = substitute;
+    }
     exercises.push({
       ...exercise,
+      weight,
+      originalWeight: exercise.weight,
       sets: exercise.sets,
       targetReps: exercise.targetReps?.slice(0, exercise.sets),
       originalSets: exercise.sets,
     });
+  }
+
+  // Today's setup dropped the lead: the next compound takes over its sets.
+  const lead = program.exercises.find((exercise) => exercise.exerciseId === leadCompoundId(program.exercises.map((item) => item.exerciseId)));
+  const heir = exercises.find((exercise) => exercise.exerciseId === leadCompoundId(exercises.map((item) => item.exerciseId)));
+  if (lead && heir && heir.exerciseId !== lead.exerciseId) {
+    heir.sets = lead.sets;
+    heir.originalSets = lead.sets;
+    const reps = heir.targetReps?.[0];
+    if (reps !== undefined) heir.targetReps = Array.from({ length: lead.sets }, () => reps);
   }
 
   let total = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
@@ -213,15 +259,35 @@ export function adaptWorkout(
     }
   }
 
+  // Core accessories alone do not make a configured Push/Pull/Legs session.
+  // Leave the slot unstartable when today's setup removes all main movements.
+  const isCore = (exerciseId: string) => exerciseById(exerciseId)?.muscles[0] === 'Core';
+  if (program.id.startsWith('slot-') && kept.length > 0 &&
+      program.exercises.some((exercise) => !isCore(exercise.exerciseId)) &&
+      kept.every((exercise) => isCore(exercise.exerciseId))) {
+    return {
+      programId: program.id,
+      name: program.name,
+      minutes,
+      originalMinutes: program.minutes,
+      exercises: [],
+      skipped,
+      cappedMinutes: null,
+      totalSets: 0,
+      originalSets,
+      note: `This slot has no main movement with ${setup.chip.toLowerCase()}. Use the required equipment or skip it.`,
+    };
+  }
+
   const totalSets = kept.reduce((sum, exercise) => sum + exercise.sets, 0);
   const trimmedSets = kept.some((exercise) => exercise.sets < exercise.originalSets);
   const forTime = skipped.filter((item) => item.reason === 'time');
   const forEquipment = skipped.filter((item) => item.reason === 'equipment');
   const timeTrimmed = trimmedSets || forTime.length > 0;
   // The program is the ceiling: a request above its own minutes cannot add
-  // work, so cap the label at what the surviving sets take. Trimming (the
-  // 20/30-minute direction) is untouched; only the extend direction is capped.
-  const capped = !timeTrimmed && minutes > estimatedMinutes(program, totalSets);
+  // work, so cap the label at what the surviving sets take. Requests at or
+  // under the program (the trimming direction) keep their label unchanged.
+  const capped = totalSets > 0 && minutes > program.minutes;
   const appliedMinutes = capped ? estimatedMinutes(program, totalSets) : minutes;
 
   let note: string;
@@ -237,6 +303,10 @@ export function adaptWorkout(
   }
   if (forEquipment.length > 0) {
     note += ` ${listOf(forEquipment.map((item) => item.name))} need${forEquipment.length === 1 ? 's' : ''} a load that is not available today.`;
+  }
+  if (limited.length > 0) {
+    const loads = [...new Set(limited.map((item) => item.to))].sort((a, b) => a - b);
+    note += ` ${listOf(limited.map((item) => item.name))} use${limited.length === 1 ? 's' : ''} ${loads.join(' / ')} kg — the closest of your confirmed loads, not your program's.`;
   }
   const forExcluded = skipped.filter((item) => item.reason === 'excluded');
   if (forExcluded.length > 0) {
@@ -270,6 +340,7 @@ export function toWorkoutExercises(adapted: AdaptedWorkout): WorkoutExercise[] {
     return {
       exerciseId: exercise.exerciseId,
       name: exercise.name,
+      originalPlannedSets: exercise.originalSets,
       planned,
       performed: planned.map((set) => ({
         weight: set.weight,
@@ -281,8 +352,130 @@ export function toWorkoutExercises(adapted: AdaptedWorkout): WorkoutExercise[] {
   });
 }
 
-/** Weights the logger may offer, for the chosen setup only. */
-export function loadOptions(equipment: EquipmentChoice): number[] {
+/**
+ * What a swap target prescribes for the remaining work. The open session's
+ * logged values win; otherwise the history-derived prescription Today shows,
+ * and a hold keeps its programmed seconds.
+ */
+export function swapCandidateFor(
+  target: Exercise,
+  profile: Profile,
+  history: WorkoutRecord[],
+  session: WorkoutRecord | null,
+  /** The swapped exercise holds the day's lead slot (see `leadSlotIds`). */
+  lead = false,
+): SwapCandidate {
+  const open = session ? latestDoneSet(session, target.id) : null;
+  if (open) {
+    return { exerciseId: target.id, name: target.name, weight: open.weight, reps: open.reps };
+  }
+  const hold = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === target.id)?.holdSeconds;
+  if (hold) return { exerciseId: target.id, name: target.name, weight: 0, reps: hold };
+  const prescription = prescribeExercise(target, profile, history, lead);
+  return {
+    exerciseId: target.id,
+    name: target.name,
+    weight: prescription.weight,
+    reps: prescription.reps,
+  };
+}
+
+/**
+ * Weights the logger may offer. At home only the confirmed rack, never the
+ * example one: with nothing confirmed the logger takes a typed load instead.
+ */
+export function loadOptions(equipment: EquipmentChoice, inventory?: number[]): number[] {
+  // A hotel gym's rack is the gym's, not the user's home rack.
+  if (equipment === 'home') return confirmedLoads(equipment, inventory);
   return EQUIPMENT_OPTIONS[equipment]?.loads ?? [];
 }
 
+/** Only the loads the user confirmed for this setup; never the example rack. */
+export function confirmedLoads(equipment: EquipmentChoice, inventory?: number[]): number[] {
+  if (!EQUIPMENT_OPTIONS[equipment]?.allowsLoads || equipment !== 'home') return [];
+  return (inventory ?? []).filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
+}
+
+
+/** Display the prescription actually accepted by the open session. */
+export function currentWorkout(adapted: AdaptedWorkout, session: WorkoutRecord): AdaptedWorkout {
+  const exercises: AdaptedExercise[] = session.exercises.map((entry) => {
+    const source = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === entry.exerciseId);
+    const catalog = exerciseById(entry.exerciseId);
+    const dumbbell = catalog?.equipment === 'Dumbbell';
+    const reps = entry.planned.map((set) => set.reps);
+    const range = catalog ? repRangeFor(catalog) : null;
+    return {
+      exerciseId: entry.exerciseId,
+      name: entry.name,
+      sets: entry.planned.length,
+      originalSets: entry.originalPlannedSets ?? entry.planned.length,
+      // Not displayed (targetReps carry the accepted reps); without a profile the lead's range is unknown here.
+      repRange: source?.repRange ?? (range ? [range.min, range.max] : [reps[0] ?? 0, reps[0] ?? 0]),
+      targetReps: reps,
+      holdSeconds: source?.holdSeconds ? reps[0] : undefined,
+      weight: entry.planned[0]?.weight ?? 0,
+      originalWeight: entry.planned[0]?.weight ?? 0,
+      load: loadModeOf(entry.exerciseId),
+      detail: detailOf(entry.exerciseId),
+      requires: dumbbell ? 'dumbbell' : 'bodyweight',
+    };
+  });
+  return {
+    ...adapted,
+    name: session.name,
+    minutes: session.durationMin ?? adapted.minutes,
+    exercises,
+    totalSets: exercises.reduce((sum, exercise) => sum + exercise.sets, 0),
+    skipped: adapted.skipped.filter((item) => !exercises.some((exercise) => exercise.exerciseId === item.exerciseId)),
+  };
+}
+
+/**
+ * Undo a temporary adaptation without replacing work already completed. With a
+ * profile, pending sets carry the history-derived prescription, not the fixture.
+ */
+export function restorePendingWorkout(
+  session: WorkoutRecord,
+  original: AdaptedWorkout,
+  profile?: Profile | null,
+  history: WorkoutRecord[] = [],
+): WorkoutRecord {
+  const pattern = (id: string) => exerciseById(id)?.pattern ?? id;
+  const completed = session.exercises.flatMap((exercise) => {
+    const indices = exercise.performed.flatMap((set, index) => set.done ? [index] : []);
+    return indices.length > 0 ? [{
+      ...exercise,
+      planned: indices.map((index) => ({ ...exercise.planned[index] })),
+      performed: indices.map((index) => ({ ...exercise.performed[index] })),
+    }] : [];
+  });
+  const kept = new Set<WorkoutExercise>();
+  const exercises: WorkoutExercise[] = [];
+  // shortcut: flagship has one slot per primary pattern; add slot identity before multi-slot programs.
+  for (const prescribed of profile ? liveExercises(original, profile, history) : toWorkoutExercises(original)) {
+    const group = completed.filter((exercise) => pattern(exercise.exerciseId) === pattern(prescribed.exerciseId));
+    group.forEach((exercise) => {
+      kept.add(exercise);
+      exercise.originalPlannedSets = Math.max(exercise.originalPlannedSets ?? 0, prescribed.planned.length);
+    });
+    const done = group.reduce((sum, exercise) => sum + exercise.performed.length, 0);
+    const pending = prescribed.planned.slice(done);
+    const sameVariant = group.find((exercise) => exercise.exerciseId === prescribed.exerciseId);
+    if (sameVariant) {
+      sameVariant.planned.push(...pending.map((set) => ({ ...set })));
+      sameVariant.performed.push(...pending.map((set) => ({ ...set, done: false, completedAt: null })));
+    } else if (pending.length > 0) {
+      group.push({
+        ...prescribed,
+        originalPlannedSets: prescribed.planned.length,
+        planned: pending.map((set) => ({ ...set })),
+        performed: pending.map((set) => ({ ...set, done: false, completedAt: null })),
+      });
+    }
+    exercises.push(...group);
+  }
+  // Completed work stays even when the restored equipment/exclusions no longer prescribe it.
+  exercises.push(...completed.filter((exercise) => !kept.has(exercise)));
+  return { ...session, durationMin: original.minutes, exercises };
+}

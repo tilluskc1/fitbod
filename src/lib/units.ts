@@ -1,4 +1,5 @@
-import type { Unit } from '../types.ts';
+import type { Profile, Unit } from '../types.ts';
+import { MAX_REPS, MAX_WEIGHT } from './validate.ts';
 
 export const KG_PER_LB = 0.45359237;
 
@@ -18,7 +19,84 @@ export function toDisplay(kg: number, unit: Unit): number {
 /** Convert a typed display value back into canonical kilograms. */
 export function toKg(value: number, unit: Unit): number {
   const kg = unit === 'lb' ? value * KG_PER_LB : value;
-  return Math.round(kg * 100) / 100;
+  return Math.round(kg * 1000) / 1000;
+}
+
+/**
+ * Owned loads typed as "10, 15 18" or "25lb, 35 lb" in the display unit, as sorted unique canonical kg.
+ * A token that still reads as one of `stored` in this unit keeps that exact kg instead of re-converting.
+ */
+export function parseLoads(text: string, unit: Unit, stored: number[] = []): number[] {
+  const kept = new Map(stored.map((kg) => [calibrationInputValue(kg, unit), kg]));
+  const values = text
+    .replace(/(\d)\s*(?:kgs?|lbs?)\b/gi, '$1 ')
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .map((token) => kept.get(token) ?? (Number(token) > 0 ? toKg(Number(token), unit) : NaN))
+    .filter(Number.isFinite);
+  return [...new Set(values)].sort((a, b) => a - b);
+}
+
+/** True when any typed load is above what the loader accepts (#101). */
+export function overLoadLimit(kgs: number[]): boolean {
+  return kgs.some((kg) => kg > MAX_WEIGHT);
+}
+
+/**
+ * The next stored value of a typed load field. Above the limit it is refused and
+ * falls back to `focused`, the load held when the field was focused, so a refused
+ * last keystroke never leaves the one before it stored (#101). Null: change nothing.
+ */
+export function typedLoad(text: string, unit: Unit, focused: number): { kg: number; refused: boolean } | null {
+  if (text === '') return { kg: 0, refused: false };
+  const value = Number(text);
+  if (!Number.isFinite(value) || value < 0) return null;
+  const kg = toKg(value, unit);
+  return overLoadLimit([kg]) ? { kg: focused, refused: true } : { kg, refused: false };
+}
+
+/** A typed reps or seconds value. Above the limit it is refused and falls back to `focused`, as a load does (#109). */
+export function typedReps(text: string, focused: number): { reps: number; refused: boolean } {
+  const reps = Number(text) || 0;
+  return reps > MAX_REPS ? { reps: focused, refused: true } : { reps, refused: false };
+}
+
+/** Shown wherever a typed reps or seconds value is refused for being above the limit. */
+export function repsLimitMessage(seconds: boolean): string {
+  return `${seconds ? 'Seconds' : 'Reps'} go up to ${MAX_REPS}. That entry was not saved.`;
+}
+
+/**
+ * A history weight keystroke: the load to save now. Saving per keystroke means a field
+ * removed while focused loses no edit (#110). Null holds it as a draft until blur: a
+ * half-typed value, or no load on a set that needs one (#103).
+ */
+export function correctionKeystroke(text: string, unit: Unit, focused: number, needsWeight: boolean): number | null {
+  const next = typedLoad(text, unit, focused);
+  return !next || (needsWeight && next.kg <= 0) ? null : next.kg;
+}
+
+/** A history weight blur: the focus value to put back and why, or null when the typed load stands. */
+export function correctionBlur(
+  text: string,
+  unit: Unit,
+  focused: number,
+  needsWeight: boolean,
+): { kg: number; reason: 'limit' | 'needs-load' } | null {
+  const next = typedLoad(text, unit, focused);
+  if (next?.refused) return { kg: focused, reason: 'limit' };
+  if (needsWeight && (next?.kg ?? 0) <= 0) return { kg: focused, reason: 'needs-load' };
+  return null;
+}
+
+/** The limit in the display unit, e.g. "Loads go up to 2000 kg." */
+export function loadLimitText(unit: Unit): string {
+  return `Loads go up to ${Math.floor(toDisplay(MAX_WEIGHT, unit))} ${unitLabel(unit)}.`;
+}
+
+/** Shown wherever a typed load is refused for being above the limit. */
+export function loadLimitMessage(unit: Unit): string {
+  return `${loadLimitText(unit)} That load was not saved.`;
 }
 
 /** Display value snapped to a half unit so inputs read like real plates. */
@@ -35,9 +113,53 @@ export function formatWeight(kg: number, unit: Unit, options: { perSide?: boolea
   return `${text} ${unitLabel(unit)}${options.perSide ? ' each' : ''}`;
 }
 
+/** Format a recorded load without rounding it to a planned plate step. */
+export function formatActualWeight(kg: number, unit: Unit, options: { perSide?: boolean } = {}): string {
+  if (kg <= 0) return 'Bodyweight';
+  return `${calibrationInputValue(kg, unit)} ${unitLabel(unit)}${options.perSide ? ' each' : ''}`;
+}
+
 /** Numeric display value without the unit, used for editable inputs. */
 export function inputValue(kg: number, unit: Unit): string {
   if (kg <= 0) return '';
   const value = displayValue(kg, unit);
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+/** Preserve a calibrated load's stored precision when opening its editor. */
+export function calibrationInputValue(kg: number, unit: Unit): string {
+  if (kg <= 0) return '';
+  if (unit === 'kg') return String(kg);
+  return String(Math.round(toDisplay(kg, unit) * 100) / 100);
+}
+
+/** Owned loads as editable text in the display unit, at the logger's precision. */
+export function loadsInputText(kgs: number[] | undefined, unit: Unit): string {
+  return (kgs ?? []).map((kg) => calibrationInputValue(kg, unit)).join(', ');
+}
+
+/**
+ * Settings save for owned dumbbells. Null means save nothing: the text still shows what is stored
+ * (so kg never drifts), it is non-blank but holds no load (so a typo never wipes the rack), or it holds
+ * a load above the limit (#101).
+ */
+export function dumbbellLoadsPatch(text: string, profile: Profile): Partial<Profile> | null {
+  const unit = unitOf(profile);
+  const stored = profile.loads.Dumbbell ?? [];
+  if (text.trim() === loadsInputText(stored, unit)) return null;
+  const loads = parseLoads(text, unit, stored);
+  if ((text.trim() && loads.length === 0) || overLoadLimit(loads)) return null;
+  return { loads: { ...profile.loads, Dumbbell: loads } };
+}
+
+/**
+ * One rule for every load readout. On the confirmed rack: half-unit like the
+ * target. Otherwise a typed load keeps its exact value; `typed` lists loads the
+ * user logged, so a planned load that is not among them (a new app-prescribed
+ * step) reads at half-unit. Omit `typed` for a logged load: always exact.
+ */
+export function loadValue(kg: number, unit: Unit, rack: number[], typed?: number[]): string {
+  if (rack.some((load) => Math.abs(load - kg) < 0.001)) return inputValue(kg, unit);
+  if (typed && !typed.some((load) => Math.abs(load - kg) < 0.001)) return inputValue(kg, unit);
+  return calibrationInputValue(kg, unit);
 }

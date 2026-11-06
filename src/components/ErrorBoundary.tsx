@@ -48,10 +48,10 @@ export default class ErrorBoundary extends Component<Props, State> {
         </p>
         <pre className="error-detail">{this.state.error.message}</pre>
         <div className="data-actions">
-          <button className="btn btn-primary" onClick={() => window.location.reload()}>
+          <button className="pill-primary" onClick={() => window.location.reload()}>
             Reload app
           </button>
-          <button className="btn" onClick={this.downloadRaw}>
+          <button className="pill-quiet" onClick={this.downloadRaw}>
             Download stored data
           </button>
         </div>

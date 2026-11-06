@@ -1,4 +1,7 @@
 import type { AppState, PerformedSet, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import { needsLoad } from '../data/flagship.ts';
+import { advanceAfterFinish } from './sequence.ts';
+import { MAX_REPS, MAX_WEIGHT } from './validate.ts';
 
 function cleanNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -20,6 +23,9 @@ export function createSession(args: {
   id: string;
   name: string;
   dayIndex: number;
+  slotId?: string;
+  slotSeq?: number;
+  planRevision?: number;
   exercises: WorkoutExercise[];
   now: string;
   durationMin?: number;
@@ -29,6 +35,11 @@ export function createSession(args: {
     date: args.now,
     name: args.name,
     dayIndex: args.dayIndex,
+    // Only written when there is a slot to link: a record with no program
+    // sequence keeps exactly the shape it always had.
+    ...(args.slotId === undefined ? {} : { slotId: args.slotId }),
+    ...(args.slotSeq === undefined ? {} : { slotSeq: args.slotSeq }),
+    ...(args.planRevision === undefined ? {} : { planRevision: args.planRevision }),
     status: 'active',
     completedEarly: false,
     endedAt: null,
@@ -105,9 +116,31 @@ export function logSet(
   now: string,
   seconds = 75,
 ): WorkoutRecord {
-  const updated = updatePerformedSet(session, exerciseIndex, setIndex, { done: true }, now);
+  // A repeated tap must not rewrite when a logged set was done.
+  if (session.exercises[exerciseIndex]?.performed[setIndex]?.done) return session;
+  let updated = updatePerformedSet(session, exerciseIndex, setIndex, { done: true }, now);
   if (updated === session) return session;
+  // Carry the load just logged into the next unweighted set; never overwrites a chosen weight.
+  const weight = updated.exercises[exerciseIndex].performed[setIndex].weight;
+  const next = updated.exercises[exerciseIndex].performed.findIndex((set, i) => i > setIndex && !set.done);
+  if (weight > 0 && next !== -1 && updated.exercises[exerciseIndex].performed[next].weight === 0) {
+    updated = updatePerformedSet(updated, exerciseIndex, next, { weight }, now);
+  }
   return startRest(updated, now, seconds);
+}
+
+/** Confirming the first weight applies it to every set of the exercise not yet logged. */
+export function confirmWeight(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  weight: number,
+  now: string,
+): WorkoutRecord {
+  let next = session;
+  session.exercises[exerciseIndex]?.performed.forEach((set, i) => {
+    if (!set.done) next = updatePerformedSet(next, exerciseIndex, i, { weight }, now);
+  });
+  return next;
 }
 
 export function updatePerformedSet(
@@ -117,11 +150,19 @@ export function updatePerformedSet(
   patch: Partial<PerformedSet>,
   now: string,
 ): WorkoutRecord {
-  if (!session.exercises[exerciseIndex]?.performed[setIndex]) return session;
+  const exercise = session.exercises[exerciseIndex];
+  const current = exercise?.performed[setIndex];
+  if (!current) return session;
+  // #103: a logged loaded set at weight 0 reads as "no load" yet drives progression; log, edit and correction all land here.
+  // A load or reps the loader would reject is never stored, so a reload cannot lock the app (#101, #109);
+  // the #103 check sees the load that stays.
+  const weight = patch.weight === undefined || patch.weight > MAX_WEIGHT ? current.weight : cleanNumber(patch.weight);
+  const done = patch.done ?? current.done;
+  if (done && weight <= 0 && (patch.weight !== undefined || patch.done) && needsLoad(exercise.exerciseId)) return session;
   const next = copyRecord(session);
   const set = next.exercises[exerciseIndex].performed[setIndex];
-  if (patch.weight !== undefined) set.weight = cleanNumber(patch.weight);
-  if (patch.reps !== undefined) set.reps = cleanNumber(patch.reps);
+  set.weight = weight;
+  if (patch.reps !== undefined && !(patch.reps > MAX_REPS)) set.reps = cleanNumber(patch.reps);
   if (patch.done !== undefined) {
     set.done = patch.done;
     if (patch.done) set.completedAt = patch.completedAt ?? now;
@@ -193,6 +234,48 @@ export function latestDoneSet(
 }
 
 /**
+ * The exercise with work still to log: the first one that is neither skipped
+ * nor fully completed. `-1` means nothing is left to log today, which the
+ * trainer shows as an honest review state rather than a silent next exercise.
+ */
+export function pendingExerciseIndex(session: WorkoutRecord): number {
+  return session.exercises.findIndex(
+    (exercise) => !exercise.skipped && exercise.performed.some((set) => !set.done),
+  );
+}
+
+/**
+ * Skip one exercise's pending work for this session. Only the marker changes:
+ * no set is marked done, no planned set is removed, no target is reduced, and
+ * completed sets keep their values and timestamps. Calling it twice, or on an
+ * exercise with nothing pending, returns the session unchanged, so a repeated
+ * click or a stale callback cannot touch logged work.
+ */
+export function skipExercise(session: WorkoutRecord, exerciseIndex: number): WorkoutRecord {
+  const exercise = session.exercises[exerciseIndex];
+  if (!exercise || exercise.skipped) return session;
+  if (!exercise.performed.some((set) => !set.done)) return session;
+  const next = copyRecord(session);
+  next.exercises[exerciseIndex].skipped = true;
+  // A skipped exercise ends its rest, so no end-of-rest cue follows.
+  next.restStartedAt = null;
+  next.restPausedAt = null;
+  return next;
+}
+
+/**
+ * Bring a skipped exercise back, restoring exactly the sets that were pending.
+ * Nothing is re-prescribed and no other logged work is touched.
+ */
+export function unskipExercise(session: WorkoutRecord, exerciseIndex: number): WorkoutRecord {
+  const exercise = session.exercises[exerciseIndex];
+  if (!exercise || !exercise.skipped) return session;
+  const next = copyRecord(session);
+  delete next.exercises[exerciseIndex].skipped;
+  return next;
+}
+
+/**
  * Swap one exercise's remaining work. Completed sets stay under their original
  * exercise with their values and completion timestamps, exactly once; the
  * replacement inherits exactly the pending working-set budget, never its own
@@ -257,13 +340,20 @@ export function swapPendingExercise(
 export interface SessionProgress {
   total: number;
   done: number;
+  /** Pending sets on exercises the user skipped today. */
+  skipped: number;
+  /** Pending sets still on offer, including a session finished early. */
+  pending: number;
   volume: number;
+  /** Every set logged. Skipped work means this stays false, honestly. */
   complete: boolean;
 }
 
 export function sessionProgress(session: WorkoutRecord): SessionProgress {
   let total = 0;
   let done = 0;
+  let skipped = 0;
+  let pending = 0;
   let volume = 0;
   for (const exercise of session.exercises) {
     for (const set of exercise.performed) {
@@ -271,10 +361,14 @@ export function sessionProgress(session: WorkoutRecord): SessionProgress {
       if (set.done) {
         done += 1;
         volume += set.weight * set.reps;
+      } else if (exercise.skipped) {
+        skipped += 1;
+      } else {
+        pending += 1;
       }
     }
   }
-  return { total, done, volume, complete: total > 0 && done === total };
+  return { total, done, skipped, pending, volume, complete: total > 0 && done === total };
 }
 
 /**
@@ -307,11 +401,13 @@ export function applyFinish(
   if (!state.current || state.current.id !== sessionId) return state;
   const completed = completeSession(state.current, options);
   const alreadyStored = state.history.some((workout) => workout.id === completed.id);
-  return {
+  const next: AppState = {
     ...state,
     history: alreadyStored ? state.history : [completed, ...state.history],
     current: null,
   };
+  // Explicit completion with work advances the program sequence exactly once.
+  return advanceAfterFinish(next, completed);
 }
 
 export function applyCancel(state: AppState, sessionId: string): AppState {
@@ -330,6 +426,7 @@ export function applyCorrection(
   const workout = state.history.find((item) => item.id === workoutId);
   if (!workout) return state;
   const corrected = updatePerformedSet(workout, exerciseIndex, setIndex, patch, now);
+  if (corrected === workout) return state;
   return {
     ...state,
     history: state.history.map((item) => (item.id === workoutId ? corrected : item)),

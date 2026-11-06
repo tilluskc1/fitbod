@@ -1,20 +1,30 @@
-import { useMemo, useState } from 'react';
-import { formatWeight, inputValue, toKg } from '../lib/units';
-import { exerciseInWorkout, hasWork } from '../lib/plan';
-import type { Unit, WorkoutRecord } from '../types';
+import { useMemo, useRef, useState } from 'react';
+import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, setText, setUnit } from '../data/flagship';
+import {
+  calibrationInputValue, correctionBlur, correctionKeystroke, loadLimitMessage, repsLimitMessage, typedReps, unitLabel,
+} from '../lib/units';
+import { plannedLoad } from '../lib/liveProgression';
+import { bestCompletedSet, exerciseInWorkout, hasWork } from '../lib/plan';
+import type { Profile, Unit, WorkoutFeedback, WorkoutRecord } from '../types';
+import { FEEDBACK_CHOICES, feedbackLabel } from '../lib/feedback';
 import { ArrowIcon, BarIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
 
 interface Props {
   history: WorkoutRecord[];
   unit: Unit;
+  /** The profile's confirmed loads, so a rack load reads like the target. */
+  loads?: Profile['loads'];
   onExport: () => void;
   onCorrect: (
     workoutId: string,
     exerciseIndex: number,
     setIndex: number,
     patch: { weight?: number; reps?: number; done?: boolean },
+    /** Why the typed value was refused; the patch then carries the focus value (#101, #109). */
+    refused?: string,
   ) => void;
   onDelete: (workoutId: string) => void;
+  onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
   onGoTrain: () => void;
 }
 
@@ -47,14 +57,22 @@ const CHART_H = 128;
 export default function ProgressScreen({
   history,
   unit,
+  loads = {},
   onExport,
   onCorrect,
   onDelete,
+  onFeedback,
   onGoTrain,
 }: Props) {
   const [tab, setTab] = useState<'overview' | 'history'>('overview');
   const [openId, setOpenId] = useState<string | null>(null);
+  /** The weight a history field held when focused; a refused load reverts to it (#101). */
+  const focusedLoad = useRef<number | null>(null);
+  /** The reps a history field held when focused; refused reps revert to it (#109). */
+  const focusedReps = useRef<number | null>(null);
   const [selectedId, setSelectedId] = useState<string>('');
+  /** The exercise whose weight correction was just refused, as `workoutId:exerciseIndex`. */
+  const [refused, setRefused] = useState('');
 
   const sessions = useMemo(
     () => [...history].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)),
@@ -81,15 +99,44 @@ export default function ProgressScreen({
         // all count; the first segment alone would understate the chart.
         const found = exerciseInWorkout(workout, activeExerciseId);
         if (!found) return null;
-        const performed = found.segments.flatMap((segment) => segment.performed);
-        const source = found.done.length > 0 ? found.done : performed;
-        const best = source.reduce((max, set) => Math.max(max, set.weight), 0);
-        return { date: workout.date, best, reps: source[0]?.reps ?? 0 };
+        // Only a completed set is a performance: an untouched prescription is not.
+        const best = bestCompletedSet(found.done);
+        if (!best) return null;
+        return {
+          workoutId: workout.id,
+          workoutName: workout.name,
+          date: workout.date,
+          best: best.weight,
+          reps: best.reps,
+        };
       })
-      .filter((item): item is { date: string; best: number; reps: number } => item !== null)
+      .filter(
+        (item): item is {
+          workoutId: string;
+          workoutName: string;
+          date: string;
+          best: number;
+          reps: number;
+        } => item !== null,
+      )
       .reverse()
       .slice(-8);
   }, [activeExerciseId, sessions]);
+
+  // A bodyweight or hold exercise has no load to chart; its recorded count is
+  // shown as it was logged instead of as a zero-kg strength record.
+  // shortcut: the flag is per exercise, so a lifted movement that once logged
+  // a zero-kg set still charts that one point on the baseline.
+  const weighted = series.some((point) => point.best > 0);
+  const latest = series[series.length - 1];
+  // The program owns per-hand vs total; "18 kg" alone would drop that.
+  const loadMode = loadModeOf(activeExerciseId);
+  const loadText = (kg: number) =>
+    kg <= 0
+      ? 'Bodyweight'
+      : `${plannedLoad(loads, history, activeExerciseId, unit)(kg)} ${unitLabel(unit)}${loadMode === 'each' ? ' each' : loadMode === 'total' ? ' total' : ''}`;
+  const sessionLabel = (point: { date: string; workoutName: string }) =>
+    `${dateParts(point.date).month} ${dateParts(point.date).day} · ${point.workoutName}`;
 
   const worked = sessions.filter(hasWork);
   const totalSets = worked.reduce((sum, workout) => sum + setsOf(workout), 0);
@@ -170,9 +217,14 @@ export default function ProgressScreen({
                   ))}
                 </select>
                 <p className="data-note" style={{ marginTop: 10 }}>
-                  Best recorded load per set · {unit}. Open any session to compare the full record.
+                  {weighted ? `Best recorded load per set · ${unit}` : 'Best recorded set per session'}.
+                  Open any session to compare the full record.
                 </p>
-                {series.length > 0 ? (
+                {series.length === 0 ? (
+                  <p className="data-note" style={{ marginTop: 14 }}>
+                    No completed sets recorded for this exercise yet.
+                  </p>
+                ) : weighted ? (
                   <>
                     <svg
                       className="chart"
@@ -205,7 +257,7 @@ export default function ProgressScreen({
                       )}
                       {points.map((point, index) => (
                         <circle
-                          key={point.date}
+                          key={point.workoutId}
                           cx={point.x}
                           cy={point.y}
                           r={index === points.length - 1 ? 4.5 : 3}
@@ -214,17 +266,23 @@ export default function ProgressScreen({
                       ))}
                     </svg>
                     <div className="context-row" style={{ borderBottom: 0 }}>
-                      <span>Latest best set</span>
                       <span>
-                        {formatWeight(series[series.length - 1]?.best ?? 0, unit)} ×{' '}
-                        {series[series.length - 1]?.reps ?? 0}
+                        Latest best set{latest ? ` · ${sessionLabel(latest)}` : ''}
+                      </span>
+                      <span>
+                        {loadText(latest?.best ?? 0)} × {latest?.reps ?? 0}
                       </span>
                     </div>
                   </>
                 ) : (
-                  <p className="data-note" style={{ marginTop: 14 }}>
-                    No completed sets recorded for this exercise yet.
-                  </p>
+                  <div style={{ marginTop: 10 }}>
+                    {series.slice(-4).map((point) => (
+                      <div className="context-row" key={point.workoutId} style={{ borderBottom: 0 }}>
+                        <span>{sessionLabel(point)}</span>
+                        <span>{setText(activeExerciseId, point.reps)}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </>
             ) : (
@@ -281,41 +339,70 @@ export default function ProgressScreen({
                     </p>
                     {workout.exercises.map((exercise, exerciseIndex) => {
                       const done = exercise.performed.filter((set) => set.done).length;
+                      const timed = setUnit(exercise.exerciseId) === 'seconds';
+                      const loaded = needsLoad(exercise.exerciseId);
+                      const exerciseKey = `${workout.id}:${exerciseIndex}`;
+                      const blocked = (set: { weight: number; done: boolean }) => loaded && !set.done && set.weight <= 0;
                       return (
                         <div className="history-ex" key={`${exercise.exerciseId}-${exerciseIndex}`}>
                           <div className="history-ex-head">
                             <span>{exercise.name}</span>
                             <span className="tag">
-                              {exercise.planned.length} × {exercise.planned[0]?.reps ?? 0} prescribed
+                              {timed
+                                ? `${exercise.planned.length} ${exercise.planned.length === 1 ? 'set' : 'sets'} · ${setText(exercise.exerciseId, exercise.planned.map((set) => set.reps))}`
+                                : `${exercise.planned.length} × ${exercise.planned[0]?.reps ?? 0}`} prescribed
                               {' · '}
                               {done} done
+                              {exercise.skipped ? ' · Skipped' : ''}
                             </span>
                           </div>
                           <div className="history-sets">
                             {exercise.performed.map((set, setIndex) => (
                               <span className={`mini-set ${set.done ? 'done' : ''}`} key={setIndex}>
+                                {!timed && (
+                                  <>
+                                    {/* Saved per keystroke; a missing (#103) or over-limit (#101) load reverts to the focus value on blur. */}
+                                    <input
+                                      type="number"
+                                      key={unit}
+                                      aria-label={`Correct weight for set ${setIndex + 1} of ${exercise.name}`}
+                                      defaultValue={calibrationInputValue(set.weight, unit)}
+                                      onFocus={() => { focusedLoad.current = set.weight; }}
+                                      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
+                                      onChange={(event) => {
+                                        const kg = correctionKeystroke(event.target.value, unit,
+                                          focusedLoad.current ?? set.weight, loaded && set.done);
+                                        if (kg !== null) onCorrect(workout.id, exerciseIndex, setIndex, { weight: kg });
+                                      }}
+                                      onBlur={(event) => {
+                                        const focused = focusedLoad.current ?? set.weight;
+                                        focusedLoad.current = null;
+                                        const revert = correctionBlur(event.target.value, unit, focused, loaded && set.done);
+                                        setRefused(revert?.reason === 'needs-load' ? exerciseKey : '');
+                                        if (!revert) return;
+                                        event.target.value = calibrationInputValue(revert.kg, unit);
+                                        onCorrect(workout.id, exerciseIndex, setIndex, { weight: revert.kg },
+                                          revert.reason === 'limit' ? loadLimitMessage(unit) : undefined);
+                                      }}
+                                    />
+                                    {unitLabel(unit)} ×
+                                  </>
+                                )}
                                 <input
                                   type="number"
-                                  aria-label={`Correct weight for set ${setIndex + 1} of ${exercise.name}`}
-                                  value={inputValue(set.weight, unit)}
-                                  onChange={(event) =>
-                                    onCorrect(workout.id, exerciseIndex, setIndex, {
-                                      weight: toKg(Number(event.target.value) || 0, unit),
-                                    })
-                                  }
-                                />
-                                kg ×
-                                <input
-                                  type="number"
-                                  aria-label={`Correct reps for set ${setIndex + 1} of ${exercise.name}`}
+                                  aria-label={`Correct ${timed ? 'seconds' : 'reps'} for set ${setIndex + 1} of ${exercise.name}`}
                                   value={set.reps || ''}
-                                  onChange={(event) =>
-                                    onCorrect(workout.id, exerciseIndex, setIndex, {
-                                      reps: Number(event.target.value) || 0,
-                                    })
-                                  }
+                                  onFocus={() => { focusedReps.current = set.reps; }}
+                                  onBlur={() => { focusedReps.current = null; }}
+                                  onChange={(event) => {
+                                    const next = typedReps(event.target.value, focusedReps.current ?? set.reps);
+                                    onCorrect(workout.id, exerciseIndex, setIndex, { reps: next.reps },
+                                      next.refused ? repsLimitMessage(timed) : undefined);
+                                  }}
                                 />
+                                {timed && ' seconds'}
                                 <button
+                                  disabled={blocked(set)}
                                   onClick={() =>
                                     onCorrect(workout.id, exerciseIndex, setIndex, {
                                       done: !set.done,
@@ -333,9 +420,47 @@ export default function ProgressScreen({
                               </span>
                             ))}
                           </div>
+                          {(refused === exerciseKey || exercise.performed.some(blocked)) && (
+                            <p className="data-note" role="status">{NEEDS_LOAD_REASON}</p>
+                          )}
                         </div>
                       );
                     })}
+                    <div className="history-ex">
+                      <div className="history-ex-head">
+                        <span>How it fit</span>
+                        <span className="tag">
+                          {workout.feedback ? feedbackLabel(workout.feedback) : 'No answer'}
+                        </span>
+                      </div>
+                      <p className="data-note" style={{ marginTop: 0 }}>
+                        Your own answer about this session. Changing or clearing it never touches the
+                        recorded sets.
+                      </p>
+                      <div className="feedback-btns">
+                        {FEEDBACK_CHOICES.map((choice) => (
+                          <button
+                            key={choice.value}
+                            className={workout.feedback === choice.value ? 'on' : ''}
+                            aria-pressed={workout.feedback === choice.value}
+                            aria-label={`${choice.label} for ${workout.name}`}
+                            onClick={() => onFeedback(workout.id, choice.value)}
+                          >
+                            {choice.label}
+                          </button>
+                        ))}
+                        {workout.feedback && (
+                          <button
+                            className="secondary"
+                            aria-label={`Clear feedback for ${workout.name}`}
+                            onClick={() => onFeedback(workout.id, null)}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                     <button
                       className="danger"
                       style={{ marginTop: 10 }}

@@ -40,18 +40,20 @@ The board is GitHub Project 11 ("Fitbod", owner `tilluskc1`). Its issues are the
 - Never mark `Done` from a feature branch, a passing helper test, or a screenshot that has not been reproduced at 390×844 and 360×780.
 - Work left uncommitted, unmerged or unverified keeps its issue open and says so in the comment. Reopening is cheaper than a false `Done`.
 - New scope found mid-task gets its own issue; do not quietly widen the one being worked.
+- Every `AS-*` story also obeys `docs/agents/story-contract.md` (shared product contract, guardrails and readiness rules).
 
 Status and field IDs are read with `gh project field-list 11 --owner tilluskc1 --format json`; update with `gh project item-edit`. `docs/agents/issue-tracker.md` covers the issue commands.
 
 ## Work board loop
 
-`.agents/skills/github-work-board/` drives one issue at a time from a configured board, using `.github/work-board.json` (Project 11, `main`, `work/<issue>-<slug>` branches, `ready-for-agent` once claimed, `needs-info` when parked). It stops at `Ready to merge`; merging and `Done` stay with a human.
+`.agents/skills/orchestrate-github/` drives one issue at a time from a configured board, using `.github/work-board.json` (Project 11, `main`, `work/<issue>-<slug>` branches, `ready-for-agent` once claimed, `needs-info` when parked). It runs each Ready issue through `.agents/skills/orchestrate/` (goal in, plan on defaults, subagent build and per-task review), publishes a draft PR, and stops at `Ready to merge`; merging and `Done` stay with a human. `.agents/skills/github-work-board/` stays available as the lighter controller for single-issue moves.
 
 Each phase runs the skill that fits it, from `.agents/skills/`:
 
 | Phase | Skill |
 | --- | --- |
 | Requirements check | `grilling` (or `grill-with-docs` when `GLOSSARY.md`/ADRs decide it) |
+| Goal loop | `orchestrate` (inside `orchestrate-github`; implementation and review dispatches are separate agents) |
 | Implementation | `tdd`, `diagnosing-bugs` when the defect is not yet reproduced |
 | Independent review | `code-review`, plus `ponytail-review` on the diff size |
 | Handoff between turns | `handoff` |

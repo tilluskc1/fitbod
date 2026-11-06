@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS } from '../data/exercises';
+import { DEFAULT_SUPPORT, EQUIPMENT_OPTIONS, SUPPORT_OPTIONS } from '../data/exercises';
+import { loadLimitText, overLoadLimit, parseLoads } from '../lib/units';
 import type { Equipment, Experience, Goal, Profile, SupportEquipment, Unit } from '../types';
 
 interface Props {
@@ -22,12 +23,15 @@ const EXPERIENCES: { value: Experience; label: string; blurb: string }[] = [
 export default function Onboarding({ onComplete }: Props) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
-  const [unit, setUnit] = useState<Unit>('kg');
+  const [unit, setUnit] = useState<Unit>('lb');
   const [goal, setGoal] = useState<Goal>('Build Muscle');
   const [experience, setExperience] = useState<Experience>('Beginner');
   const [daysPerWeek, setDaysPerWeek] = useState(3);
+  // No preselection: the first plan must not assume a length the user never chose.
+  const [sessionMinutes, setSessionMinutes] = useState<number | null>(null);
   const [equipment, setEquipment] = useState<Equipment[]>(['Dumbbell']);
-  const [support, setSupport] = useState<SupportEquipment[]>(['Bench']);
+  const [support, setSupport] = useState<SupportEquipment[]>(DEFAULT_SUPPORT);
+  const [loadsText, setLoadsText] = useState('');
 
   const toggleEquipment = (item: Equipment) => {
     setEquipment((current) =>
@@ -41,7 +45,13 @@ export default function Onboarding({ onComplete }: Props) {
     );
   };
 
+  // Typed in the chosen unit; converted once, here, so switching units never double-converts.
+  const confirmedLoads = () => parseLoads(loadsText, unit);
+  // A load above the limit blocks the plan with a message instead of being stored (#101).
+  const loadsTooHeavy = equipment.includes('Dumbbell') && overLoadLimit(confirmedLoads());
+
   const finish = () => {
+    const loads = confirmedLoads();
     onComplete({
       goal,
       experience,
@@ -49,15 +59,15 @@ export default function Onboarding({ onComplete }: Props) {
       equipment,
       support,
       exclusions: [],
-      loads: {},
+      loads: equipment.includes('Dumbbell') && loads.length > 0 ? { Dumbbell: loads } : {},
       name: name.trim() || 'Athlete',
       unit,
-      sessionMinutes: 35,
+      sessionMinutes: sessionMinutes ?? 35,
     });
   };
 
   return (
-    <div className="onboarding">
+    <div className="onboarding glass-scope">
       <div className="onboarding-top">
         <div className="logo">
           YOUR STRENGTH <b>·</b> COACH
@@ -125,7 +135,7 @@ export default function Onboarding({ onComplete }: Props) {
       {step === 1 && (
         <section className="onboarding-step">
           <h1>How much training have you done?</h1>
-          <p className="muted">This sets exercise volume and how many exercises a session holds.</p>
+          <p className="muted">This sets exercise volume and the most exercises a session can hold.</p>
           <div className="option-list">
             {EXPERIENCES.map((option) => (
               <button
@@ -159,13 +169,33 @@ export default function Onboarding({ onComplete }: Props) {
               </button>
             ))}
           </div>
+
+          <span className="setup-label">How long can you train?</span>
+          <p className="muted">
+            Your first plan is built for the length you pick. Pick it here, change it any time.
+          </p>
+          <div className="chip-wrap">
+            {[20, 30, 45, 60].map((value) => (
+              <button
+                key={value}
+                className={`chip ${sessionMinutes === value ? 'on' : ''}`}
+                aria-pressed={sessionMinutes === value}
+                onClick={() => setSessionMinutes(value)}
+              >
+                {value} min
+              </button>
+            ))}
+          </div>
+          {sessionMinutes === null && (
+            <p className="data-note" role="status">Pick a session length to continue.</p>
+          )}
         </section>
       )}
 
       {step === 3 && (
         <section className="onboarding-step">
           <h1>What equipment do you have?</h1>
-          <p className="muted">Only supported exercises appear. Nothing is assumed from what you pick.</p>
+          <p className="muted">Only gear you pick is used. Nothing else is assumed.</p>
 
           <span className="setup-label">Primary equipment</span>
           <div className="chip-wrap">
@@ -181,11 +211,26 @@ export default function Onboarding({ onComplete }: Props) {
             ))}
           </div>
 
+          {equipment.includes('Dumbbell') ? (
+            <>
+              <label className="setup-label" htmlFor="onboarding-loads">
+                Dumbbell loads you own ({unit}, per hand)
+              </label>
+              <input
+                id="onboarding-loads"
+                className="search"
+                inputMode="decimal"
+                value={loadsText}
+                onChange={(event) => setLoadsText(event.target.value)}
+                placeholder={unit === 'lb' ? 'e.g. 10, 15, 20' : 'e.g. 5, 7.5'}
+              />
+              <p className="muted">Training at a gym? Leave this blank. At home, list the pairs you own; you can still type any other weight.</p>
+              {loadsTooHeavy && <p className="error-text" role="alert">{loadLimitText(unit)}</p>}
+            </>
+          ) : null}
+
           <span className="setup-label">Support equipment</span>
-          <p className="muted">
-            A bench is never assumed just because you own dumbbells, and a rack is never assumed for
-            barbell squats.
-          </p>
+          <p className="muted">Dumbbells never imply a bench, and barbells never imply a rack.</p>
           <div className="chip-wrap">
             {SUPPORT_OPTIONS.map((item) => (
               <button
@@ -211,11 +256,15 @@ export default function Onboarding({ onComplete }: Props) {
           </button>
         )}
         {step < 3 ? (
-          <button className="primary" onClick={() => setStep((value) => value + 1)}>
+          <button
+            className="primary"
+            disabled={step === 2 && sessionMinutes === null}
+            onClick={() => setStep((value) => value + 1)}
+          >
             Continue
           </button>
         ) : (
-          <button className="primary" onClick={finish}>
+          <button className="primary" disabled={loadsTooHeavy} onClick={finish}>
             Build my plan
           </button>
         )}

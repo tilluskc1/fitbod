@@ -34,7 +34,12 @@ export function workoutsThisWeek(history: WorkoutRecord[], now: Date): number {
   const start = new Date(now);
   start.setDate(start.getDate() - start.getDay());
   start.setHours(0, 0, 0, 0);
-  return history.filter((workout) => hasWork(workout) && new Date(workout.date) >= start).length;
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  return history.filter((workout) => {
+    const date = new Date(workout.date);
+    return workout.status === 'completed' && hasWork(workout) && date >= start && date < end;
+  }).length;
 }
 
 export interface LastPerformance {
@@ -85,6 +90,32 @@ export function exerciseInWorkout(
     requirement: Math.max(plannedTotal, marked),
     firstPlanned: segments[0].planned[0] ?? null,
   };
+}
+
+/**
+ * The one set a chart point may print: greatest load, then most reps, then the
+ * earliest completion. Null when nothing was completed, so a prescription is
+ * never charted as a performance.
+ */
+export function bestCompletedSet(sets: PerformedSet[]): PerformedSet | null {
+  let best: PerformedSet | null = null;
+  for (const set of sets) {
+    if (!set.done) continue;
+    if (best === null) {
+      best = set;
+      continue;
+    }
+    const at = set.completedAt ? Date.parse(set.completedAt) : Infinity;
+    const bestAt = best.completedAt ? Date.parse(best.completedAt) : Infinity;
+    if (
+      set.weight > best.weight ||
+      (set.weight === best.weight &&
+        (set.reps > best.reps || (set.reps === best.reps && at < bestAt)))
+    ) {
+      best = set;
+    }
+  }
+  return best;
 }
 
 /** Most recent completed session that actually trained an exercise. */

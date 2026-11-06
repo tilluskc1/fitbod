@@ -1,33 +1,57 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { downloadText } from './lib/download';
-import { buildPlan } from './lib/generator';
-import { activeOverride, dayKey, minutesOf } from './lib/plan';
-import {
+import
+ { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import
+ { downloadText } from './lib/download';
+import
+ { activeOverride, dayKey, minutesOf } from './lib/plan';
+import
+ {
   adaptWorkout,
+  confirmedLoads,
   DEFAULT_CONSTRAINTS,
   loadOptions,
+  restorePendingWorkout,
+  swapCandidateFor,
   toWorkoutExercises,
 } from './lib/adapt';
-import type { AdaptedWorkout, Constraints, EquipmentChoice } from './lib/adapt';
-import { defaultConstraints, programCeilingNotice } from './lib/constraints';
-import type { ConstraintNotice } from './lib/constraints';
-import { FULL_BODY_A, programSetCount } from './data/flagship';
+import
+ type { Constraints, EquipmentChoice } from './lib/adapt';
+import
+ { createProposal, decideProposalApproval } from './lib/proposal';
+import
+ type { Proposal, ProposalContext } from './lib/proposal';
+import
+ { defaultConstraints, programCeilingNotice } from './lib/constraints';
+import
+ type { ConstraintNotice } from './lib/constraints';
+import  { FULL_BODY_A, programSetCount } from './data/flagship';
+import { cursorFor, planRevisionOf, planSlots, revisePlan, skipCurrentSlot, slotAt, slotProgram, updateProfile } from './lib/sequence';
 import {
+  liveAdapted,
+  liveExercises,
+  progressionLines,
+  recapHighlight,
+  targetReason,
+} from './lib/liveProgression';
+import { leadCompoundId, leadSlotIds } from './lib/progression';
+import
+ {
   applyCancel,
   applyCorrection,
   applyFinish,
   createSession,
   extendRest,
-  latestDoneSet,
+  confirmWeight,
   logSet,
   sessionProgress,
+  skipExercise,
   swapPendingExercise,
   toggleRestPause,
+  unskipExercise,
   updatePerformedSet,
-} from './lib/session';
-import type { SwapCandidate } from './lib/session';
-import {
-  EMPTY_STATE,
+} from './lib/session';import { setWorkoutFeedback } from './lib/feedback';
+import
+ { EMPTY_STATE,
   STORAGE_KEY,
   exportFilename,
   loadState,
@@ -38,33 +62,56 @@ import {
 } from './lib/storage';
 import type { ImportSummary, LoadedState, SaveFailureReason } from './lib/storage';
 import { parseState } from './lib/validate';
-import { unitOf } from './lib/units';
-import { prescribeExercise } from './lib/progression';
-import { EXERCISES, exerciseById } from './data/exercises';
-import { capabilitiesFor, provides } from './lib/capabilities';
-import type {
+import
+ { unitOf } from './lib/units';
+import
+ { EXERCISES, exerciseById } from './data/exercises';
+import
+ { capabilitiesFor, provides } from './lib/capabilities';
+import
+ type {
   AppState,
   PerformedSet,
   Profile,
   TodayOverride,
+  WorkoutFeedback,
 } from './types';
-import { PhoneFrame, TabBar } from './components/ui/Chrome';
-import type { Tab } from './components/ui/Chrome';
-import TodayScreen from './screens/TodayScreen';
-import PlanScreen from './screens/PlanScreen';
-import ProgressScreen from './screens/ProgressScreen';
-import CoachScreen from './screens/CoachScreen';
-import TrainScreen from './screens/TrainScreen';
-import RecapScreen from './screens/RecapScreen';
-import LibraryScreen from './screens/LibraryScreen';
-import AdaptScreen from './screens/AdaptScreen';
-import Onboarding from './components/Onboarding';
-import SplashScreen from './screens/SplashScreen';
-import Recovery from './components/Recovery';
-import {
+import
+ { PhoneFrame, TabBar } from './components/ui/Chrome';
+import
+ type { Tab } from './components/ui/Chrome';
+import { tabBarAction } from './lib/tabBarAction';
+import type { ProfileChange } from './lib/preferences';
+import Sheet from './components/ui/Sheet';
+import
+ TodayScreen from './screens/TodayScreen';
+import
+ PlanScreen from './screens/PlanScreen';
+import
+ ProgressScreen from './screens/ProgressScreen';
+import
+ CoachScreen from './screens/CoachScreen';
+import
+ TrainScreen from './screens/TrainScreen';
+import
+ RecapScreen from './screens/RecapScreen';
+import
+ LibraryScreen from './screens/LibraryScreen';
+import
+ AdaptScreen from './screens/AdaptScreen';
+import
+ Onboarding from './components/Onboarding';
+import
+ SplashScreen from './screens/SplashScreen';
+import
+ Recovery from './components/Recovery';
+import
+ {
   AdjustSheet,
+  ConfirmChange,
   DaySheet,
-  ExerciseSheet,
+  DiscardSessionSheet,
+  ExerciseActionsSheet,
   FinishSheet,
   SettingsSheet,
   SwapSheet,
@@ -77,11 +124,13 @@ type SheetState =
   | { kind: 'none' }
   | { kind: 'adjust' }
   | { kind: 'settings' }
-  | { kind: 'exercise'; exerciseId: string }
+  | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' }
   | { kind: 'day'; dayIndex: number }
-  | { kind: 'why'; exerciseId: string }
+  | { kind: 'preview' }
+  | { kind: 'why'; exerciseId: string; exerciseIndex: number }
   | { kind: 'finish' }
-  | { kind: 'swap'; exerciseIndex: number };
+  | { kind: 'swap'; exerciseIndex: number }
+  | { kind: 'confirm'; change: ProfileChange };
 
 interface SaveUi {
   kind: 'idle' | 'saved' | 'error';
@@ -118,11 +167,16 @@ export default function App() {
   const [view, setView] = useState<View>('tabs');
   const [tab, setTab] = useState<Tab>('today');
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' });
-  const [pending, setPending] = useState<Constraints | null>(null);
+  const [pending, setPending] = useState<Proposal | null>(null);
   const [pendingNotices, setPendingNotices] = useState<ConstraintNotice[]>([]);
   const [recapId, setRecapId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(INITIAL));
+  // The one feedback write the screens can speak about. It only becomes "saved"
+  // when saveState verified the write that carried this answer.
+  const [feedbackWrite, setFeedbackWrite] = useState<
+    { key: string; kind: 'saving' | 'saved' | 'error' } | null
+  >(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // A stored profile means onboarding already happened: a reload must never
@@ -133,13 +187,46 @@ export default function App() {
       ? { message: INITIAL.error ?? 'Saved data could not be read.', raw: INITIAL.raw ?? '' }
       : null,
   );
+  // Active-session replacement asks in-app (#19); the native prompt blocked
+  // automated renderers and deadlocked a tab.
+  const [replacePrompt, setReplacePrompt] = useState<Constraints | null>(null);
+  /** First-weight steps skipped in this tab; in memory only, never stored. */
+  const [calibrationSkips, setCalibrationSkips] = useState<string[]>([]);
 
+  const appliedProposalRef = useRef<string | null>(null);
+  const proposalRevisionRef = useRef(0);
   const revisionRef = useRef(INITIAL.revision);
+  const pendingWriteRef = useRef<string | undefined>(undefined);
   const skipSaveRef = useRef(true);
   const adoptingRef = useRef(false);
   const forceSaveRef = useRef(INITIAL.status === 'corrupt');
 
   /* ---------- persistence ---------- */
+
+  /**
+   * One write attempt. The failed-save banner's Retry runs the same path, so a
+   * retry after freeing space or unblocking storage persists exactly once.
+   */
+  const attemptSave = useCallback(() => {
+    const result = saveState(state, revisionRef.current, {
+      force: forceSaveRef.current,
+      pendingWrite: pendingWriteRef.current,
+    });
+    if (result.ok) {
+      pendingWriteRef.current = undefined;
+      forceSaveRef.current = false;
+      revisionRef.current = result.revision;
+      setSaveUi({ kind: 'saved' });
+      setConflict(null);
+      // The write that covered this answer succeeded, so it is genuinely saved.
+      setFeedbackWrite((current) => (current ? { ...current, kind: 'saved' } : current));
+    } else {
+      if (result.pendingWrite) pendingWriteRef.current = result.pendingWrite;
+      setSaveUi({ kind: 'error', reason: result.reason, message: result.error });
+      if (result.reason === 'stale') setConflict(result.error);
+      setFeedbackWrite((current) => (current ? { ...current, kind: 'error' } : current));
+    }
+  }, [state]);
 
   useEffect(() => {
     if (recovery) {
@@ -154,17 +241,8 @@ export default function App() {
       adoptingRef.current = false;
       return;
     }
-    const result = saveState(state, revisionRef.current, { force: forceSaveRef.current });
-    if (result.ok) {
-      forceSaveRef.current = false;
-      revisionRef.current = result.revision;
-      setSaveUi({ kind: 'saved' });
-      setConflict(null);
-    } else {
-      setSaveUi({ kind: 'error', reason: result.reason, message: result.error });
-      if (result.reason === 'stale') setConflict(result.error);
-    }
-  }, [state, recovery]);
+    attemptSave();
+  }, [state, recovery, attemptSave]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -176,8 +254,18 @@ export default function App() {
         setConflict('Another tab saved newer data. This tab still has unsaved changes.');
         return;
       }
+      proposalRevisionRef.current += 1;
       adoptingRef.current = true;
       revisionRef.current = loaded.revision;
+      // A newer snapshot can merge/reorder even same-ID exercise segments.
+      setSheet((open) =>
+        open.kind === 'actions' ||
+        open.kind === 'why' ||
+        open.kind === 'day' ||
+        open.kind === 'swap'
+          ? { kind: 'none' }
+          : open,
+      );
       setState(loaded.state);
       setSaveUi({ kind: 'saved' });
     };
@@ -217,18 +305,46 @@ export default function App() {
       minutes: override.minutes,
       equipment:
         override.choice ?? (override.equipment.includes('Dumbbell') ? 'home' : 'bodyweight'),
+      loads: profile && profile.loads.Dumbbell?.length ? profile.loads.Dumbbell : undefined,
     };
   }, [override, profile]);
 
   const exclusions = profile?.exclusions ?? NO_EXCLUSIONS;
+  /** The slot the sequence is up to: the real A/B/C day, not a repeated fixture. */
+  const slot = useMemo(
+    () => slotAt(state.plan, state.planRevision, state.programCursor),
+    [state.plan, state.planRevision, state.programCursor],
+  );
+  const slotLabel = useMemo(() => {
+    const slots = planSlots(state.plan);
+    return slot && slots.length > 1 ? `Slot ${slot.index + 1} of ${slots.length}` : undefined;
+  }, [slot, state.plan]);
+  /**
+   * The slot's own program, prescribed from this user's plan and history. One
+   * value feeds Today, the review, the logger and the sheets, so no screen can
+   * describe work the next one will not ask for.
+   */
+  const program = useMemo(
+    () => (profile && slot ? slotProgram(profile, slot, state.history) : FULL_BODY_A),
+    [profile, slot, state.history],
+  );
   const adapted = useMemo(
-    () => adaptWorkout(FULL_BODY_A, constraints, exclusions),
-    [constraints, exclusions],
+    () => adaptWorkout(program, constraints, exclusions),
+    [program, constraints, exclusions],
+  );
+
+  /**
+   * Today's numbers come from the recorded history, not the program fixture.
+   * The shape of the session still comes from the adaptation.
+   */
+  const liveProgram = useMemo(
+    () => (profile ? liveAdapted(adapted, profile, state.history) : adapted),
+    [adapted, profile, state.history],
   );
 
   const pendingAdapted = useMemo(
-    () => (pending ? adaptWorkout(FULL_BODY_A, pending, exclusions) : null),
-    [pending, exclusions],
+    () => (pending ? adaptWorkout(program, pending.constraints, exclusions) : null),
+    [pending, program, exclusions],
   );
 
   const current = state.current;
@@ -239,9 +355,23 @@ export default function App() {
    * that is not on screen.
    */
   const todayExercises = useMemo(
-    () => current?.exercises ?? toWorkoutExercises(adapted),
-    [current, adapted],
+    () =>
+      current?.exercises ??
+      (profile ? liveExercises(liveProgram, profile, state.history) : toWorkoutExercises(adapted)),
+    [current, adapted, liveProgram, profile, state.history],
   );
+
+  /** The one-line reason behind each computed target, keyed by exercise. */
+  const targetNotes = useMemo(() => {
+    const notes: Record<string, string> = {};
+    if (!profile) return notes;
+    const lead = leadCompoundId(liveProgram.exercises.map((exercise) => exercise.exerciseId));
+    for (const exercise of liveProgram.exercises) {
+      const reason = targetReason(exercise.exerciseId, profile, state.history, unit, exercise.exerciseId === lead);
+      if (reason) notes[exercise.exerciseId] = reason;
+    }
+    return notes;
+  }, [liveProgram, profile, state.history, unit]);
   const recap = recapId ? state.history.find((workout) => workout.id === recapId) ?? null : null;
 
   const storageNote =
@@ -254,81 +384,182 @@ export default function App() {
   /* ---------- actions ---------- */
 
   const patchProfile = (patch: Partial<Profile>) => {
-    setState((currentState) =>
-      currentState.profile
-        ? { ...currentState, profile: { ...currentState.profile, ...patch } }
-        : currentState,
-    );
+    setState((currentState) => updateProfile(currentState, patch));
   };
 
   const completeOnboarding = (nextProfile: Profile) => {
     setState((currentState) => ({
-      ...currentState,
-      profile: nextProfile,
-      plan: buildPlan(nextProfile),
+      ...revisePlan(currentState, nextProfile),
       current: null,
       todayOverride: null,
     }));
     setTab('today');
   };
 
-  /**
-   * Starting is always built from the same engine output the screens showed,
-   * so the preview, the review and the logger can never disagree.
-   */
-  const startSession = (next: Constraints): AdaptedWorkout | null => {
-    const workout = adaptWorkout(FULL_BODY_A, next, profile?.exclusions ?? []);
-    if (workout.exercises.length === 0) {
-      setNotice('No movement in this workout can be done with that setup.');
-      return null;
-    }
-    if (
-      current &&
-      !window.confirm(
-        `"${current.name}" is still in progress. Discard it and start "${workout.name}"? Logged sets from the active session will be lost.`,
-      )
-    ) {
-      return null;
-    }
+  /** One creation path for every start, so preview and logger can never disagree. */
+  const beginSession = (workout: ReturnType<typeof adaptWorkout>) => {
+    // The link back to the slot is what makes completion advance once, and
+    // only for the plan it was started under.
+    const revision = planRevisionOf(state);
+    const cursor = state.programCursor;
     const session = createSession({
       id: uid(),
       name: workout.name,
-      dayIndex: 0,
-      exercises: toWorkoutExercises(workout),
+      dayIndex: slot?.index ?? 0,
+      slotId: slot?.id,
+      slotSeq: cursor && cursor.revision === revision ? cursor.seq : 0,
+      planRevision: revision,
+      exercises: profile
+        ? liveExercises(workout, profile, state.history)
+        : toWorkoutExercises(workout),
       now: new Date().toISOString(),
       durationMin: workout.minutes,
     });
     setState((currentState) => ({ ...currentState, current: session }));
     setView('train');
-    return workout;
+  };
+
+  /**
+   * Starting is always built from the same engine output the screens showed,
+   * so the preview, the review and the logger can never disagree.
+   */
+  const startSession = (next: Constraints): boolean => {
+    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
+    if (workout.exercises.length === 0) {
+      setNotice('No movement in this workout can be done with that setup.');
+      return false;
+    }
+    if (current) {
+      // Ask in-app; only an explicit discard reaches the replacement below.
+      setReplacePrompt(next);
+      return false;
+    }
+    beginSession(workout);
+    return true;
   };
 
   const startWorkout = () => {
     startSession(constraints);
   };
 
-  /** Review changes → start: persist today's adaptation, then open the session. */
-  const acceptAdaptation = (next: Constraints) => {
-    const workout = startSession(next);
-    if (!workout) return;
-    setPendingNotices([]);
+  /**
+   * Skip the slot on offer. Explicit only: nothing skips because a date passed,
+   * and a skip is recorded apart from history so it counts as no training.
+   */  const skipTodaySlot = () => {
+    if (!slot) return;
+    if (current) {
+      setNotice('Finish or discard the open session before skipping to the next slot.');
+      return;
+    }
+    const offered = cursorFor(state);
+    setState((currentState) => skipCurrentSlot(currentState, new Date().toISOString(), offered));
+    setNotice('Slot skipped. A skip is not a workout and earns no progression.');
+  };
+
+  /** Explicit discard consent from the in-app sheet (#19) runs the replacement once. */
+  const discardAndBegin = () => {
+    const next = replacePrompt;
+    setReplacePrompt(null);
+    if (!next) return;
+    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
+    if (workout.exercises.length > 0) beginSession(workout);
+  };
+
+  /** Fingerprint of everything a preview was built against. */
+  const proposalBase = (): ProposalContext => ({
+    sessionId: current?.id ?? null,
+    revision: proposalRevisionRef.current,
+    done: current ? sessionProgress(current).done : 0,
+    historyLength: state.history.length,
+    equipmentKey: [
+      ...(profile?.equipment ?? []),
+      ...(profile?.support ?? []),
+      ...(profile?.exclusions ?? []),
+    ].join(','),
+  });
+
+  /**
+   * Review changes → start: refuse a preview built before intervening logging
+   * or equipment changes, then persist today's adaptation and open the
+   * session. A second approval of the same preview only navigates.
+   */
+  const acceptAdaptation = (proposal: Proposal) => {
+    const decision = decideProposalApproval(proposal, proposalBase(), appliedProposalRef.current);
+    if (decision === 'already-applied') {
+      setView(current ? 'train' : 'tabs');
+      return;
+    }
+    if (decision === 'stale') {
+      setNotice(
+        'That preview is stale — a set was logged or equipment changed. Preview again for a fresh approval.',
+      );
+      setView('tabs');
+      setTab('today');
+      setSheet({ kind: 'adjust' });
+      return;
+    }
+    const next = proposal.constraints;
     const choice: EquipmentChoice = next.equipment;
+    // An open session keeps its completed sets: the adaptation replaces only
+    // the pending prescriptions, so adjusting mid-workout never discards work.
+    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
     const approved: TodayOverride = {
       date: dayKey(new Date()),
+      // What the work takes, not the request: a program cannot be stretched (#17).
       minutes: workout.minutes,
       equipment: choice === 'home' || choice === 'hotel' ? ['Dumbbell'] : [],
       support: [],
       appliedAt: new Date().toISOString(),
       choice,
     };
+    if (current) {
+      if (workout.exercises.length === 0) {
+        setNotice('No movement in this workout can be done with that setup.');
+        return;
+      }
+      setState((currentState) => ({
+        ...currentState,
+        todayOverride: approved,
+        current: currentState.current
+          ? restorePendingWorkout(currentState.current, workout, currentState.profile, currentState.history)
+          : null,
+      }));
+      appliedProposalRef.current = proposal.id;
+      setPendingNotices([]);
+      setPending(null);
+      setSheet({ kind: 'none' });
+      setView('train');
+      return;
+    }
+    if (!startSession(next)) return;
+    appliedProposalRef.current = proposal.id;
+    setPendingNotices([]);
     setState((currentState) => ({ ...currentState, todayOverride: approved }));
     setPending(null);
     setSheet({ kind: 'none' });
   };
 
   const restoreOriginal = () => {
-    setState((currentState) => ({ ...currentState, todayOverride: null }));
-    setNotice('Original workout restored. Your program never changed.');
+    setState((currentState) => {
+      const original = adaptWorkout(
+        program,
+        currentState.profile ? defaultConstraints(currentState.profile) : DEFAULT_CONSTRAINTS,
+        currentState.profile?.exclusions ?? [],
+      );
+      return {
+        ...currentState,
+        todayOverride: null,
+        current: currentState.current
+          ? restorePendingWorkout(currentState.current, original, currentState.profile, currentState.history)
+          : null,
+      };
+    });
+    proposalRevisionRef.current += 1;
+    appliedProposalRef.current = null;
+    setPending(null);
+    setPendingNotices([]);
+    setSheet({ kind: 'none' });
+    setNotice('Original remaining work restored. Logged sets were kept.');
   };
 
   const updateSet = (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => {
@@ -343,17 +574,24 @@ export default function App() {
     );
   };
 
-  const logNext = () => {
+  const confirmFirstWeight = (exerciseIndex: number, weight: number) => {
+    const stamp = new Date().toISOString();
+    setState((currentState) =>
+      currentState.current
+        ? { ...currentState, current: confirmWeight(currentState.current, exerciseIndex, weight, stamp) }
+        : currentState,
+    );
+  };
+
+  const logOneSet = (exerciseIndex: number, setIndex: number, exerciseId: string) => {
     const stamp = new Date().toISOString();
     setState((currentState) => {
       const session = currentState.current;
-      if (!session) return currentState;
-      const exerciseIndex = session.exercises.findIndex((exercise) =>
-        exercise.performed.some((set) => !set.done),
-      );
-      if (exerciseIndex === -1) return currentState;
-      const setIndex = session.exercises[exerciseIndex].performed.findIndex((set) => !set.done);
-      return { ...currentState, current: logSet(session, exerciseIndex, setIndex, stamp) };
+      const exercise = session?.exercises[exerciseIndex];
+      // A tap rendered against another exercise, or on work the user set aside, records nothing.
+      if (!session || exercise?.exerciseId !== exerciseId || exercise.skipped) return currentState;
+      const logged = logSet(session, exerciseIndex, setIndex, stamp);
+      return logged === session ? currentState : { ...currentState, current: logged };
     });
   };
 
@@ -363,7 +601,7 @@ export default function App() {
   const requestFinish = () => {
     if (current) {
       const progress = sessionProgress(current);
-      if (progress.total > 0 && progress.done === progress.total) {
+      if (progress.total > 0 && progress.pending === 0) {
         saveFinish();
         return;
       }
@@ -390,7 +628,13 @@ export default function App() {
     setRecapId(id);
     setSheet({ kind: 'none' });
     setView('recap');
-    setNotice(early ? 'Saved the completed sets. Unfinished work was not recorded.' : 'Session saved to history.');
+    setNotice(
+      early
+        ? progress.skipped > 0
+          ? 'Saved the completed sets. Skipped and unfinished work was not recorded.'
+          : 'Saved the completed sets. Unfinished work was not recorded.'
+        : 'Session saved to history.',
+    );
   };
 
   const discardSession = () => {
@@ -407,7 +651,10 @@ export default function App() {
     exerciseIndex: number,
     setIndex: number,
     patch: Partial<PerformedSet>,
+    refused?: string,
   ) => {
+    // A refused history load or reps arrives as the focus value the field reverts to; say why (#101, #109).
+    if (refused) setNotice(refused);
     setState((currentState) =>
       applyCorrection(currentState, workoutId, exerciseIndex, setIndex, patch, new Date().toISOString()),
     );
@@ -444,18 +691,18 @@ export default function App() {
     const merged = mergeImport(state, parsed.state);
     setState({ ...merged.state, todayOverride: state.todayOverride ?? null });
     setNotice(
-      `Restored ${merged.summary.newWorkouts} workout${merged.summary.newWorkouts === 1 ? '' : 's'}; ${merged.summary.duplicateWorkouts} already present.`,
+      `Restored ${merged.summary.newWorkouts} workout${merged.summary.newWorkouts === 1 ? '' : 's'}; ${merged.summary.duplicateWorkouts} already present.` +
+        (merged.summary.activeSessionConflict
+          ? ' Both files had the same open session; the copy with more logged sets was kept.'
+          : '') +
+        // Restore must not drop an answer the backup simply predates, and it
+        // must say so rather than keeping it quietly.
+        (merged.summary.feedbackPreserved > 0
+          ? ` Kept your saved workout feedback on ${merged.summary.feedbackPreserved} workout${
+              merged.summary.feedbackPreserved === 1 ? '' : 's'
+            } the backup did not contain.`
+          : ''),
     );
-  };
-
-  const toggleExclusion = (exerciseId: string) => {
-    if (!profile) return;
-    const has = profile.exclusions.includes(exerciseId);
-    patchProfile({
-      exclusions: has
-        ? profile.exclusions.filter((value) => value !== exerciseId)
-        : [...profile.exclusions, exerciseId],
-    });
   };
 
   const swapExercise = (exerciseIndex: number, nextExerciseId: string) => {
@@ -463,17 +710,12 @@ export default function App() {
     const target = EXERCISES.find((exercise) => exercise.id === nextExerciseId);
     if (!target) return;
     // The replacement's own prescription only; the session action decides how
-    // many sets it receives and keeps every completed set where it is.
-    // A swap-back first sees the load already logged in the open session, so
-    // the segment cannot render as bodyweight with a first-time rep target.
-    const open = state.current ? latestDoneSet(state.current, target.id) : null;
-    const prescription = open ?? prescribeExercise(target, profile, state.history);
-    const candidate: SwapCandidate = {
-      exerciseId: target.id,
-      name: target.name,
-      weight: prescription.weight,
-      reps: prescription.reps,
-    };
+    // many sets it receives and keeps every completed set where it is. A
+    // program movement with nothing logged keeps the program's own numbers,
+    // so a swap-back cannot render as bodyweight with a first-time target.
+    const swapped = state.current?.exercises[exerciseIndex]?.exerciseId;
+    const lead = state.current !== null && swapped !== undefined && leadSlotIds(state.current.exercises).includes(swapped);
+    const candidate = swapCandidateFor(target, profile, state.history, state.current, lead);
     setState((currentState) =>
       currentState.current
         ? { ...currentState, current: swapPendingExercise(currentState.current, exerciseIndex, candidate) }
@@ -481,6 +723,40 @@ export default function App() {
     );
     setSheet({ kind: 'none' });
     setNotice(`${target.name} swapped in for the remaining sets. Completed sets stay put.`);
+  };
+
+  const skipCurrentExercise = (exerciseIndex: number) => {
+    const name = current?.exercises[exerciseIndex]?.name ?? 'That exercise';
+    setState((currentState) => {
+      if (!currentState.current) return currentState;
+      const skipped = skipExercise(currentState.current, exerciseIndex);
+      return skipped === currentState.current ? currentState : { ...currentState, current: skipped };
+    });
+    setNotice(`${name} skipped for today. Nothing was recorded for it.`);
+  };
+
+  const returnToExercise = (exerciseIndex: number) => {
+    const name = current?.exercises[exerciseIndex]?.name ?? 'That exercise';
+    setState((currentState) => {
+      if (!currentState.current) return currentState;
+      const restored = unskipExercise(currentState.current, exerciseIndex);
+      return restored === currentState.current
+        ? currentState
+        : { ...currentState, current: restored };
+    });
+    setNotice(`${name} is back in today's session. Nothing else changed.`);
+  };
+
+  /**
+   * Record the user's explicit choice. The answer is kept in state immediately
+   * (so a failed write is recoverable and retryable), and the recap only calls
+   * it saved once the persistence boundary has confirmed it. A stale id never
+   * attaches an answer to another workout.
+   */
+  const saveFeedback = (workoutId: string, value: WorkoutFeedback | null) => {
+    if (!state.history.some((workout) => workout.id === workoutId)) return;
+    setFeedbackWrite({ key: `${workoutId}:${value ?? 'none'}`, kind: 'saving' });
+    setState((currentState) => setWorkoutFeedback(currentState, workoutId, value));
   };
 
   /* ---------- render ---------- */
@@ -527,13 +803,20 @@ export default function App() {
     );
   }
 
+  const recapLines = recap ? progressionLines(recap, profile, state.history, unit) : [];
   const activeScreen =
     view === 'train' && current ? (
       <TrainScreen
         session={current}
         history={state.history}
         now={now}
-        loadOptions={loadOptions(constraints.equipment)}
+        loadOptions={loadOptions(constraints.equipment, constraints.loads)}
+        profileLoads={state.profile?.loads}
+        calibrationLoads={confirmedLoads(constraints.equipment, constraints.loads)}
+        experience={state.profile?.experience}
+        skippedCalibrations={calibrationSkips}
+        onSkipCalibration={(key) => setCalibrationSkips((keys) => [...keys, key])}
+        targetNotes={targetNotes}
         unit={unit}
         onMinimize={() => {
           setView('tabs');
@@ -541,7 +824,8 @@ export default function App() {
         }}
         onFinish={requestFinish}
         onUpdateSet={updateSet}
-        onLogNext={logNext}
+        onConfirmWeight={confirmFirstWeight}
+        onLogSet={logOneSet}
         onToggleRestPause={() => {
           const stamp = new Date().toISOString();
           setState((currentState) =>
@@ -557,11 +841,24 @@ export default function App() {
               : currentState,
           )
         }
-        onSwap={(exerciseIndex) => setSheet({ kind: 'swap', exerciseIndex })}
+        onOpenActions={(exerciseIndex, mode) =>
+          setSheet({
+            kind: 'actions',
+            exerciseId: current?.exercises[exerciseIndex]?.exerciseId ?? '',
+            exerciseIndex,
+            mode,
+          })
+        }
+        onReturn={returnToExercise}
       />
     ) : view === 'recap' && recap ? (
       <RecapScreen
         workout={recap}
+        feedbackWrite={feedbackWrite}
+        onFeedback={saveFeedback}
+        onRetryFeedback={attemptSave}
+        progression={recapLines}
+        highlight={recapHighlight(recap, state.history, recapLines, unit, state.profile ?? undefined)}
         onViewHistory={() => {
           setView('tabs');
           setTab('progress');
@@ -573,16 +870,21 @@ export default function App() {
       />
     ) : view === 'library' ? (
       <LibraryScreen
-        exclusions={profile.exclusions}
-        onToggleExclusion={toggleExclusion}
+        profile={profile}
+        onSave={patchProfile}
         onBack={() => setView('tabs')}
       />
     ) : view === 'adapt' && pendingAdapted && pending ? (
       <AdaptScreen
-        originalSets={programSetCount(FULL_BODY_A)}
-        adapted={pendingAdapted}
-        constraints={pending}
+        originalSets={programSetCount(program)}
+        adapted={
+          profile ? liveAdapted(pendingAdapted, profile, state.history) : pendingAdapted
+        }
+        constraints={pending.constraints}
         notices={pendingNotices}
+        unit={unit}
+        loads={state.profile?.loads}
+        history={state.history}
         onStart={() => acceptAdaptation(pending)}
         onEdit={() => {
           setView('tabs');
@@ -601,41 +903,48 @@ export default function App() {
         {tab === 'today' && (
           <TodayScreen
             profile={profile}
-            program={FULL_BODY_A}
-            adapted={adapted}
+            program={program}
+            slotLabel={slotLabel}
+            onSkipSlot={skipTodaySlot}
+            adapted={liveProgram}
             equipment={constraints.equipment}
             adjusted={Boolean(override)}
             history={state.history}
             current={current}
             now={today}
-            onStart={startWorkout}
-            onResume={() => setView('train')}
+            onPreview={() => setSheet({ kind: 'preview' })}
             onAdjust={() => setSheet({ kind: 'adjust' })}
             onWhy={() =>
-              setSheet({ kind: 'why', exerciseId: adapted.exercises[0]?.exerciseId ?? '' })
+              setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
             }
             onRestore={restoreOriginal}
             onOpenSettings={() => setSheet({ kind: 'settings' })}
-            onOpenExercise={(exerciseId) => setSheet({ kind: 'exercise', exerciseId })}
+            onOpenExercise={(exerciseId, exerciseIndex) => setSheet({ kind: 'actions', exerciseId, exerciseIndex })}
+            onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
           />
         )}
         {tab === 'plan' && (            <PlanScreen
             profile={profile}
+            program={program}
+            slotLabel={slotLabel}
             history={state.history}
             unit={unit}
             now={today}
             onOpenSettings={() => setSheet({ kind: 'settings' })}
             onViewDay={(dayIndex) => setSheet({ kind: 'day', dayIndex })}
             onOpenLibrary={() => setView('library')}
+            onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
           />
         )}
         {tab === 'progress' && (
           <ProgressScreen
             history={state.history}
             unit={unit}
+            loads={state.profile?.loads}
             onExport={exportData}
             onCorrect={correctSet}
             onDelete={deleteWorkout}
+            onFeedback={saveFeedback}
             onGoTrain={() => setTab('today')}
           />
         )}
@@ -643,9 +952,9 @@ export default function App() {
           <CoachScreen
             profile={profile}
             history={state.history}
-            program={{ name: adapted.name, minutes: adapted.minutes }}
+            program={{ name: current?.name ?? adapted.name, minutes: current?.durationMin ?? adapted.minutes }}
             onWhy={() =>
-              setSheet({ kind: 'why', exerciseId: adapted.exercises[0]?.exerciseId ?? '' })
+              setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
             }
             onEdit={() => setSheet({ kind: 'settings' })}
           />
@@ -655,6 +964,10 @@ export default function App() {
           onChange={(next) => {
             setTab(next);
             setView('tabs');
+          }}
+          workoutAction={{
+            ...tabBarAction(current, adapted),
+            onActivate: current ? () => setView('train') : startWorkout,
           }}
         />
       </>
@@ -688,6 +1001,7 @@ export default function App() {
             <span>
               <strong>Not saved.</strong> {saveUi.message}
             </span>
+            <button onClick={attemptSave}>Retry</button>
             <button onClick={() => setSheet({ kind: 'settings' })}>Data</button>
           </div>
         </div>
@@ -697,22 +1011,35 @@ export default function App() {
 
       {sheet.kind === 'adjust' && (
         <AdjustSheet
-          constraints={pending ?? constraints}
-          originalMinutes={FULL_BODY_A.minutes}
+          constraints={pending?.constraints ?? constraints}
+          originalMinutes={program.minutes}
+          unit={unit}
           onClose={() => {
             setPending(null);
             setPendingNotices([]);
             closeSheet();
           }}
           onPreview={(next, notices) => {
-            const previewed = adaptWorkout(FULL_BODY_A, next, exclusions);
-            const ceiling = programCeilingNotice(previewed);
-            setPending(next);
+            const ceiling = programCeilingNotice(adaptWorkout(program, next, profile?.exclusions ?? []));
+            setPending(createProposal(next, proposalBase()));
             setPendingNotices(ceiling ? [...notices, ceiling] : notices);
             setSheet({ kind: 'none' });
             setView('adapt');
           }}
         />
+      )}
+
+      {sheet.kind === 'confirm' && (
+        <Sheet title={sheet.change.title} onClose={closeSheet}>
+          <ConfirmChange
+            change={sheet.change}
+            onConfirm={(patch) => {
+              closeSheet();
+              patchProfile(patch);
+            }}
+            onCancel={closeSheet}
+          />
+        </Sheet>
       )}
 
       {sheet.kind === 'settings' && (
@@ -726,17 +1053,46 @@ export default function App() {
         />
       )}
 
-      {sheet.kind === 'exercise' &&
+      {sheet.kind === 'actions' &&
         (() => {
-          const planned =
-            todayExercises.find((exercise) => exercise.exerciseId === sheet.exerciseId)?.planned ??
-            [];
+          const exercise = todayExercises[sheet.exerciseIndex];
+          // A shifted segment or a discarded session closes the menu rather than
+          // letting an action land on whichever exercise now sits at that index.
+          if (!exercise || exercise.exerciseId !== sheet.exerciseId || !profile) return null;
+          const pending = exercise.performed.filter((set) => !set.done).length;
+          const done = exercise.performed.filter((set) => set.done).length;
           return (
-            <ExerciseSheet
-              exerciseId={sheet.exerciseId}
-              planned={planned}
+            <ExerciseActionsSheet
+              exerciseId={exercise.exerciseId}
+              exerciseName={exercise.name}
+              exerciseIndex={sheet.exerciseIndex}
+              exerciseCount={todayExercises.length}
+              initialMode={sheet.mode}
+              planned={exercise.planned}
+              pending={pending}
+              done={done}
               history={state.history}
               unit={unit}
+              profile={profile}
+              inSession={Boolean(current)}
+              skipped={Boolean(exercise.skipped)}
+              onReplace={() => setSheet({ kind: 'swap', exerciseIndex: sheet.exerciseIndex })}
+              onSaveProfile={(patch) => {
+                // Closing first: a saved preference can reorder today's preview under the sheet.
+                closeSheet();
+                patchProfile(patch);
+                setNotice('Saved for future workouts. Logged sets are unchanged.');
+              }}
+              onRemoveToday={() => {
+                const index = sheet.exerciseIndex;
+                closeSheet();
+                skipCurrentExercise(index);
+              }}
+              onReturn={() => {
+                const index = sheet.exerciseIndex;
+                closeSheet();
+                returnToExercise(index);
+              }}
               onClose={closeSheet}
             />
           );
@@ -744,8 +1100,8 @@ export default function App() {
 
       {sheet.kind === 'why' &&
         (() => {
-          const exercise = todayExercises.find((item) => item.exerciseId === sheet.exerciseId);
-          if (!exercise) return null;
+          const exercise = todayExercises[sheet.exerciseIndex];
+          if (!exercise || exercise.exerciseId !== sheet.exerciseId) return null;
           return (
             <WhySheet
               exerciseId={exercise.exerciseId}
@@ -753,17 +1109,23 @@ export default function App() {
               planned={exercise.planned}
               history={state.history}
               unit={unit}
+              loads={state.profile?.loads}
+              reason={targetNotes[exercise.exerciseId]}
               onClose={closeSheet}
             />
           );
         })()}
 
-      {sheet.kind === 'day' && (
+      {(sheet.kind === 'day' || sheet.kind === 'preview') && (
         <DaySheet
-          name={adapted.name}
-          minutes={minutes}
+          name={current?.name ?? adapted.name}
+          minutes={current?.durationMin ?? minutes}
           exercises={todayExercises}
           unit={unit}
+          history={state.history}
+          loads={state.profile?.loads}
+          // The tab bar's start: the one validated path (startSession).
+          onStart={sheet.kind === 'preview' && !current ? () => { closeSheet(); startWorkout(); } : undefined}
           onClose={closeSheet}
         />
       )}
@@ -805,6 +1167,16 @@ export default function App() {
             />
           );
         })()}
+
+      {replacePrompt && current && (
+        <DiscardSessionSheet
+          currentName={current.name}
+          nextName={adaptWorkout(program, replacePrompt, profile?.exclusions ?? []).name}
+          onDiscard={discardAndBegin}
+          onKeep={() => setReplacePrompt(null)}
+          onClose={() => setReplacePrompt(null)}
+        />
+      )}
     </PhoneFrame>
   );
 }

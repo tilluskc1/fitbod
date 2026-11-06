@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { EXERCISES } from '../src/data/exercises.ts';
+import { EXERCISES, INCOMPATIBLE_GROUPS } from '../src/data/exercises.ts';
 import { capabilitiesFor, provides } from '../src/lib/capabilities.ts';
-import { buildPlan, generateWorkout, targetCountFor } from '../src/lib/generator.ts';
+import { buildPlan, generateWorkout } from '../src/lib/generator.ts';
+import { rankedReplacements } from '../src/lib/replacements.ts';
 import type {
   CoverageResult,
   Exercise,
@@ -52,11 +53,10 @@ test('kettlebell-only: Push is honestly limited, Pull is infeasible', () => {
   const pull = generateWorkout(profile, plan[1], 1);
 
   assert.equal(push.feasibility.status, 'limited');
-  assert.equal(push.exercises.length, 2);
-  assert.deepEqual(
-    push.exercises.map((exercise) => exercise.exerciseId).sort(),
-    ['diamond-push-up', 'push-up'],
-  );
+  // Push-Up and Diamond Push-Up are one group, so a kettlebell-only Push holds one of them
+  // and says which focus muscles it could not fill.
+  assert.deepEqual(push.exercises.map((exercise) => exercise.exerciseId), ['push-up']);
+  assert.match(push.feasibility.reason, / No shoulders exercise is possible with these constraints\./);
   assert.ok(push.exercises.every((exercise) => meta(exercise.exerciseId).equipment === 'Bodyweight'));
 
   assert.equal(pull.feasibility.status, 'infeasible');
@@ -112,13 +112,15 @@ test('full equipment produces a full, coverage-complete Push session', () => {
   const profile = makeProfile({
     equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'],
     support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'],
+    sessionMinutes: 45, // long enough for every exercise the Push caps allow (#89)
   });
   const plan = buildPlan(profile);
   const push = generateWorkout(profile, plan[0], 0);
   const counts = patternCounts(push.exercises);
 
   assert.equal(push.feasibility.status, 'ok');
-  assert.equal(push.exercises.length, targetCountFor(profile));
+  assert.equal(push.exercises.length, 6, 'every exercise the Push caps allow');
+  assert.equal(push.targetCount, 6);
   assert.ok(push.feasibility.coverage.every((item) => item.satisfied));
   assert.ok((counts.get('core_stability') ?? 0) <= 1);
   assert.ok((counts.get('core_flexion') ?? 0) <= 1);
@@ -130,12 +132,14 @@ test('a common home kit still fills a full Push session', () => {
   const profile = makeProfile({
     equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable'],
     support: ['Bench', 'Rack', 'Pull-up bar'],
+    sessionMinutes: 45, // long enough for every exercise the Push caps allow (#89)
   });
   const plan = buildPlan(profile);
   const push = generateWorkout(profile, plan[0], 0);
 
   assert.equal(push.feasibility.status, 'ok');
-  assert.equal(push.exercises.length, targetCountFor(profile));
+  assert.equal(push.exercises.length, 6, 'every exercise the Push caps allow');
+  assert.equal(push.targetCount, 6);
   assert.ok(push.feasibility.coverage.every((item) => item.satisfied));
   assert.ok(push.feasibility.alternatives.length === 0);
 });
@@ -223,4 +227,130 @@ test('every exercise declares a pattern and complete needs', () => {
     }
   }
   assert.equal(new Set(EXERCISES.map((exercise) => exercise.id)).size, EXERCISES.length);
+});
+
+// #67: a Push day must be filled by slots, not left short by the per-muscle caps.
+test('beginner dumbbells + bench: Push is a full Ready day with one triceps-primary and at most two shoulder-primary', () => {
+  // 40 min: the five-exercise Beginner day this case was written against (#89).
+  const profile = makeProfile({ experience: 'Beginner', equipment: ['Dumbbell'], support: ['Bench'], sessionMinutes: 40 });
+  const push = generateWorkout(profile, buildPlan(profile)[0], 0);
+  const primaries = push.exercises.map((exercise) => meta(exercise.exerciseId).muscles[0]);
+
+  assert.equal(push.exercises.length, 5, push.feasibility.reason);
+  assert.equal(push.feasibility.status, 'ok');
+  assert.equal(primaries.filter((muscle) => muscle === 'Triceps').length, 1);
+  assert.ok(primaries.filter((muscle) => muscle === 'Shoulders').length <= 2);
+});
+
+// #67: incompatible pairs, named open slots, ranked replacements.
+const PROFILES: Profile[] = [
+  makeProfile({ experience: 'Beginner', equipment: ['Dumbbell'], support: ['Bench'] }),
+  makeProfile({ experience: 'Intermediate', equipment: ['Dumbbell', 'Barbell', 'Cable', 'Machine'], support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars'] }),
+  makeProfile({ experience: 'Advanced', equipment: ['Kettlebell'], support: [] }),
+  makeProfile({ experience: 'Beginner', equipment: [], support: [] }),
+  makeProfile({ experience: 'Intermediate', equipment: ['Dumbbell', 'Cable'], support: ['Dip bars'] }),
+];
+
+test('incompatible exercises never share a day, across splits and kits', () => {
+  for (const profile of PROFILES) {
+    for (let daysPerWeek = 2; daysPerWeek <= 6; daysPerWeek += 1) {
+      const p = { ...profile, daysPerWeek };
+      buildPlan(p).forEach((day, index) => {
+        const ids = generateWorkout(p, day, index).exercises.map((exercise) => exercise.exerciseId);
+        for (const group of INCOMPATIBLE_GROUPS) {
+          const hits = ids.filter((id) => group.includes(id));
+          assert.ok(hits.length <= 1, `${day.name}: ${hits.join(' + ')} are incompatible`);
+        }
+      });
+    }
+  }
+});
+
+test('incompatible groups only name real exercises', () => {
+  for (const group of INCOMPATIBLE_GROUPS) {
+    assert.ok(group.length >= 2);
+    for (const id of group) meta(id);
+  }
+});
+
+test('the open-slot note names exactly the focus muscles nothing can train, and only those', () => {
+  let named = 0;
+  for (const profile of PROFILES) {
+    for (let daysPerWeek = 2; daysPerWeek <= 6; daysPerWeek += 1) {
+      const p = { ...profile, daysPerWeek };
+      const caps = capabilitiesFor(p);
+      buildPlan(p).forEach((day, index) => {
+        const session = generateWorkout(p, day, index);
+        const picked = new Set(session.exercises.map((exercise) => meta(exercise.exerciseId).muscles[0]));
+        const expected = day.focus.filter(
+          (muscle) =>
+            !picked.has(muscle) &&
+            !EXERCISES.some((item) => item.muscles[0] === muscle && provides(caps, item.needs) && !p.exclusions.includes(item.id)),
+        );
+        const note = session.feasibility.reason.match(/ No (.+) exercise is possible with these constraints\./);
+        const label = `${day.name} (${p.equipment.join('+') || 'bodyweight'}, ${daysPerWeek}d)`;
+        if (session.exercises.length === 0) return; // infeasible days have their own wording
+        if (expected.length === 0) {
+          assert.equal(note, null, `${label} must not claim a muscle is impossible`);
+        } else {
+          assert.ok(note, `${label} must name ${expected.join(', ')}`);
+          assert.deepEqual(note[1].split(/, | and /).sort(), expected.map((muscle) => muscle.toLowerCase()).sort(), label);
+          named += 1;
+        }
+      });
+    }
+  }
+  assert.ok(named > 0, 'the matrix must exercise at least one named gap');
+});
+
+test('a focus muscle that has an exercise but lost the slot race is not called impossible', () => {
+  const profile = makeProfile({ experience: 'Beginner', equipment: ['Dumbbell'], support: [], daysPerWeek: 2 });
+  const session = generateWorkout(profile, buildPlan(profile)[0], 0);
+  assert.doesNotMatch(session.feasibility.reason, /No core exercise/);
+});
+
+test('a "more" preference still wins over focus order', () => {
+  const kit = { experience: 'Beginner' as const, equipment: ['Dumbbell', 'Barbell', 'Cable', 'Machine', 'Kettlebell'] as Profile['equipment'], support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'] as Profile['support'] };
+  const cases: [number, number, string][] = [
+    [6, 5, 'hip-thrust'], // Legs B
+    [3, 0, 'diamond-push-up'], // Push
+    [4, 0, 'deadlift'], // Upper A
+  ];
+  for (const [daysPerWeek, dayIndex, id] of cases) {
+    const profile = makeProfile({ ...kit, daysPerWeek, preferences: { [id]: 'more' } });
+    const ids = generateWorkout(profile, buildPlan(profile)[dayIndex], dayIndex).exercises.map((item) => item.exerciseId);
+    assert.ok(ids.includes(id), `${id} is marked "more" but ${buildPlan(profile)[dayIndex].name} picked ${ids.join(', ')}`);
+  }
+});
+
+test('the dumbbell and cable overhead triceps extensions never share a day', () => {
+  const profile = makeProfile({ experience: 'Intermediate', equipment: ['Dumbbell', 'Cable'], support: ['Dip bars'] });
+  const ids = generateWorkout(profile, buildPlan(profile)[0], 0).exercises.map((item) => item.exerciseId);
+  assert.ok(!(ids.includes('dumbbell-overhead-triceps-extension') && ids.includes('overhead-triceps-extension')), ids.join(', '));
+});
+
+test('ranked replacements: same primary muscle, feasible, allowed, stable, best match first', () => {
+  const profile = makeProfile({ experience: 'Beginner', equipment: ['Dumbbell'], support: ['Bench'], exclusions: ['push-up'] });
+  const caps = capabilitiesFor(profile);
+  const incline = meta('incline-dumbbell-press');
+  const ranked = rankedReplacements(incline, profile);
+
+  assert.ok(ranked.length > 0 && ranked.length <= 5);
+  assert.deepEqual(ranked.map((item) => item.id), rankedReplacements(incline, profile).map((item) => item.id));
+  for (const item of ranked) {
+    assert.notEqual(item.id, incline.id);
+    assert.equal(item.muscles[0], incline.muscles[0]);
+    assert.ok(provides(caps, item.needs), `${item.id} needs gear the profile lacks`);
+    assert.ok(!profile.exclusions.includes(item.id));
+  }
+  assert.equal(ranked[0].pattern, incline.pattern, 'same movement pattern outranks the rest');
+});
+
+test('ranked replacements skip what is already in the day or incompatible with it', () => {
+  const profile = makeProfile({ experience: 'Beginner', equipment: ['Dumbbell'], support: ['Bench'] });
+  const arnold = meta('arnold-press');
+  const withPress = rankedReplacements(arnold, profile, [meta('dumbbell-shoulder-press')]);
+  assert.ok(!withPress.some((item) => item.id === 'dumbbell-shoulder-press'));
+  const others = rankedReplacements(arnold, profile, [meta('lateral-raise')]);
+  assert.ok(!others.some((item) => item.id === 'lateral-raise'), 'already picked');
 });

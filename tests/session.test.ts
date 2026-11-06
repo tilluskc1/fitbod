@@ -6,6 +6,7 @@ import {
   applyCorrection,
   applyFinish,
   completeSession,
+  confirmWeight,
   createSession,
   latestDoneSet,
   logSet,
@@ -264,10 +265,14 @@ test('sets can be added and removed as a correction, keeping planned in sync', (
 
 test('progress and partial completion are computed from performed sets', () => {
   let session = updatePerformedSet(makeSession(), 0, 0, { weight: 20, reps: 10, done: true }, LATER);
-  assert.deepEqual(sessionProgress(session), { total: 2, done: 1, volume: 200, complete: false });
+  assert.deepEqual(sessionProgress(session), {
+    total: 2, done: 1, skipped: 0, pending: 1, volume: 200, complete: false,
+  });
 
   session = updatePerformedSet(session, 0, 1, { weight: 20, reps: 10, done: true }, LATER);
-  assert.deepEqual(sessionProgress(session), { total: 2, done: 2, volume: 400, complete: true });
+  assert.deepEqual(sessionProgress(session), {
+    total: 2, done: 2, skipped: 0, pending: 0, volume: 400, complete: true,
+  });
 });
 
 test('completeSession records late set timestamps and flags early finishes', () => {
@@ -337,4 +342,55 @@ test('a swap-back sees the load already logged in the open session', () => {
   const done = latestDoneSet(session, 'dumbbell-floor-press');
   assert.deepEqual(done, { weight: 10, reps: 10 });
   assert.equal(latestDoneSet(session, 'goblet-squat'), null);
+});
+
+function unweighted(sets: number): WorkoutRecord {
+  return createSession({
+    id: 'workout-cal',
+    name: 'Full body A',
+    dayIndex: 0,
+    now: START,
+    exercises: [
+      {
+        exerciseId: 'dumbbell-floor-press',
+        name: 'Dumbbell floor press',
+        planned: Array.from({ length: sets }, () => ({ weight: 0, reps: 10 })),
+        performed: Array.from({ length: sets }, () => ({ weight: 0, reps: 10, done: false, completedAt: null })),
+      },
+    ],
+  });
+}
+
+test('confirming the first weight fills every unlogged set and leaves logged ones', () => {
+  let s = unweighted(4);
+  s = updatePerformedSet(s, 0, 0, { weight: 8 }, LATER);
+  s = logSet(s, 0, 0, LATER);
+  s = confirmWeight(s, 0, 12, LATER);
+  assert.deepEqual(s.exercises[0].performed.map((p) => p.weight), [8, 12, 12, 12]);
+});
+
+test('logging a set pre-fills the next unweighted set only', () => {
+  let s = unweighted(3);
+  s = updatePerformedSet(s, 0, 0, { weight: 15 }, LATER);
+  s = updatePerformedSet(s, 0, 2, { weight: 20 }, LATER);
+  s = logSet(s, 0, 0, LATER);
+  assert.deepEqual(s.exercises[0].performed.map((p) => p.weight), [15, 15, 20]);
+  s = updatePerformedSet(s, 0, 1, { weight: 17.5 }, LATER);
+  s = logSet(s, 0, 1, LATER);
+  assert.deepEqual(s.exercises[0].performed.map((p) => p.weight), [15, 17.5, 20]);
+});
+
+test('bodyweight and holds stay at zero', () => {
+  let s = logSet(makeSession(), 0, 0, LATER);
+  assert.deepEqual(s.exercises[0].performed.map((p) => p.weight), [0, 0]);
+  s = confirmWeight(s, 0, 0, LATER);
+  assert.deepEqual(s.exercises[0].performed.map((p) => p.weight), [0, 0]);
+});
+
+test('confirm then logging every set records one load for progression', () => {
+  let s = confirmWeight(unweighted(4), 0, 12, LATER);
+  for (let i = 0; i < 4; i += 1) s = logSet(s, 0, i, LATER);
+  const done = completeSession(s, { early: false, now: FINISH });
+  assert.deepEqual(done.exercises[0].performed.map((p) => p.weight), [12, 12, 12, 12]);
+  assert.equal(new Set(done.exercises[0].performed.map((p) => p.weight)).size, 1);
 });

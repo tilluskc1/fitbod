@@ -1,14 +1,26 @@
-import { useState } from 'react';
-import type { WorkoutRecord } from '../types';
+import type { WorkoutFeedback, WorkoutRecord } from '../types';
+import { FEEDBACK_CHOICES } from '../lib/feedback';
+import type { ProgressionLine } from '../lib/liveProgression';
 import { ArrowIcon, CheckIcon } from '../components/ui/Icons';
+
+/** The write covering this recap's answer, as the app last observed it. */
+export interface FeedbackWrite {
+  key: string;
+  kind: 'saving' | 'saved' | 'error';
+}
 
 interface Props {
   workout: WorkoutRecord;
+  /** Original → adapted → actual → next, with the reason, per exercise. */
+  progression: ProgressionLine[];
+  /** One record-backed win, from `recapHighlight`. */
+  highlight: string;
+  feedbackWrite: FeedbackWrite | null;
+  onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
+  onRetryFeedback: () => void;
   onViewHistory: () => void;
   onBackToday: () => void;
 }
-
-type Feedback = 'too-much' | 'about-right' | 'too-little';
 
 function minutesOf(workout: WorkoutRecord): number {
   if (workout.endedAt) {
@@ -18,8 +30,17 @@ function minutesOf(workout: WorkoutRecord): number {
   return workout.durationMin ?? 1;
 }
 
-export default function RecapScreen({ workout, onViewHistory, onBackToday }: Props) {
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
+export default function RecapScreen({
+  workout,
+  progression,
+  highlight,
+  feedbackWrite,
+  onFeedback,
+  onRetryFeedback,
+  onViewHistory,
+  onBackToday,
+}: Props) {
+  const feedback = workout.feedback;
   const setCount = workout.exercises.reduce(
     (sum, exercise) => sum + exercise.performed.filter((set) => set.done).length,
     0,
@@ -27,6 +48,19 @@ export default function RecapScreen({ workout, onViewHistory, onBackToday }: Pro
   const exerciseCount = workout.exercises.filter((exercise) =>
     exercise.performed.some((set) => set.done),
   ).length;
+  // Work set aside today, counted from what was actually left pending.
+  const skippedCount = workout.exercises.reduce(
+    (sum, exercise) =>
+      sum + (exercise.skipped ? exercise.performed.filter((set) => !set.done).length : 0),
+    0,
+  );
+
+  // "Saved" is only ever claimed for a write this app verified. A value that
+  // arrived from storage is already saved; a pending or failed write is not.
+  const key = `${workout.id}:${feedback ?? 'none'}`;
+  const write = feedbackWrite && feedbackWrite.key === key ? feedbackWrite.kind : null;
+  const status: 'idle' | 'saving' | 'saved' | 'error' =
+    write ?? (feedback ? 'saved' : 'idle');
 
   return (
     <div className="screen no-tabs">
@@ -34,8 +68,8 @@ export default function RecapScreen({ workout, onViewHistory, onBackToday }: Pro
         <div className="check-ring" aria-hidden="true">
           <CheckIcon size={38} />
         </div>
-        <span className="recap-kicker">WORK RECORDED</span>
-        <h1 className="recap-title">You showed up.</h1>
+        {highlight !== 'Work recorded' && <span className="recap-kicker">WORK RECORDED</span>}
+        <h1 className="recap-title">{highlight}</h1>
         <p className="recap-sub">
           {workout.name}
           {workout.completedEarly ? ' · Finished early' : ''}
@@ -59,33 +93,70 @@ export default function RecapScreen({ workout, onViewHistory, onBackToday }: Pro
         <section className="feedback">
           <h2>How did today fit?</h2>
           <p>
-            Saved for your review. This build does not automatically change prescriptions from
-            feedback, and no catch-up work is added.
+            Optional, and saved with this workout only. It never changes a prescription and adds no
+            catch-up work. Nothing is chosen for you.
           </p>
           <div className="feedback-btns">
-            <button
-              className={feedback === 'too-much' ? 'on' : ''}
-              aria-pressed={feedback === 'too-much'}
-              onClick={() => setFeedback('too-much')}
-            >
-              Too much
-            </button>
-            <button
-              className={feedback === 'about-right' ? 'on' : ''}
-              aria-pressed={feedback === 'about-right'}
-              onClick={() => setFeedback('about-right')}
-            >
-              About right
-            </button>
-            <button
-              className={feedback === 'too-little' ? 'on' : ''}
-              aria-pressed={feedback === 'too-little'}
-              onClick={() => setFeedback('too-little')}
-            >
-              Too little
-            </button>
+            {FEEDBACK_CHOICES.map((choice) => (
+              <button
+                key={choice.value}
+                className={feedback === choice.value ? 'on' : ''}
+                aria-pressed={feedback === choice.value}
+                onClick={() => onFeedback(workout.id, choice.value)}
+              >
+                {choice.label}
+              </button>
+            ))}
           </div>
+          <p className="data-note" role="status">
+            {status === 'saving' && 'Saving…'}
+            {status === 'saved' && 'Saved with this workout.'}
+            {status === 'error' && 'Not saved yet. Your answer is only in this tab.'}
+            {status === 'idle' && 'No answer saved.'}
+            {status === 'error' && (
+              <>
+                {' '}
+                <button className="text-link" onClick={onRetryFeedback}>
+                  Retry save
+                </button>
+              </>
+            )}
+          </p>
+          {feedback && (
+            <button className="text-link" onClick={() => onFeedback(workout.id, null)}>
+              Clear answer
+            </button>
+          )}
         </section>
+
+        {skippedCount > 0 && (
+          <p className="recap-note">
+            {skippedCount} {skippedCount === 1 ? 'set was' : 'sets were'} skipped today. Nothing was
+            recorded for that work, and it is not owed later.
+          </p>
+        )}
+
+        {progression.length > 0 && (
+          <section aria-label="Progress by exercise">
+            <div className="list-head">
+              <h2>What moved</h2>
+              <span>From your records</span>
+            </div>
+            {progression.map((line) => (
+              <div className="card" key={line.exerciseId} style={{ marginBottom: 10 }}>
+                <div className="context-row" style={{ borderBottom: 0 }}>
+                  <strong>{line.name}</strong>
+                  <span className="tag">{line.adapted}</span>
+                </div>
+                <p className="data-note">
+                  Program: {line.original} · Logged: {line.performed ?? 'nothing logged'}
+                </p>
+                <p className="data-note">Next: {line.next}</p>
+                <p className="data-note">{line.reason}</p>
+              </div>
+            ))}
+          </section>
+        )}
 
         <p className="recap-note">
           Only completed sets were recorded. There is no automatic catch-up work.

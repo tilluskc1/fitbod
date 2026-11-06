@@ -2,6 +2,8 @@ import type { AdaptedWorkout } from '../lib/adapt';
 import { EQUIPMENT_OPTIONS } from '../lib/adapt';
 import type { Constraints } from '../lib/adapt';
 import { noticeText, type ConstraintNotice } from '../lib/constraints';
+import type { Profile, Unit, WorkoutRecord } from '../types.ts';
+import { plannedLoad } from '../lib/liveProgression';
 import { targetSummary } from '../data/flagship';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -11,6 +13,10 @@ interface Props {
   adapted: AdaptedWorkout;
   constraints: Constraints;
   notices: ConstraintNotice[];
+  unit?: Unit;
+  /** With the logged history these keep a held typed load reading as typed. */
+  loads?: Profile['loads'];
+  history?: WorkoutRecord[];
   onStart: () => void;
   onKeep: () => void;
   onEdit: () => void;
@@ -19,8 +25,13 @@ interface Props {
 /** A plain description of what changed, derived from the two workouts. */
 function summaryLine(adapted: AdaptedWorkout, originalSets: number): string {
   const trimmed = adapted.exercises.filter((exercise) => exercise.sets < exercise.originalSets);
+  const reweighted = adapted.exercises.filter(
+    (exercise) => (exercise.originalWeight ?? exercise.weight) !== exercise.weight,
+  );
   const parts: string[] = [];
-  if (adapted.exercises.length > 0) parts.push('Same exercises and weights.');
+  if (adapted.exercises.length > 0) {
+    parts.push(reweighted.length > 0 ? 'Same exercises and sets, loads set to what you own.' : 'Same exercises and weights.');
+  }
   if (trimmed.length > 0) {
     const drops = new Set(trimmed.map((exercise) => exercise.originalSets - exercise.sets));
     if (drops.size === 1) {
@@ -49,6 +60,9 @@ export default function AdaptScreen({
   adapted,
   constraints,
   notices,
+  unit = 'kg',
+  loads = {},
+  history = [],
   onStart,
   onKeep,
   onEdit,
@@ -184,7 +198,7 @@ export default function AdaptScreen({
                   />
                   <div>
                     <div className="review-row__name">{exercise.name}</div>
-                    <div className="review-row__load">{targetSummary(exercise)}</div>
+                    <div className="review-row__load">{targetSummary(exercise, exercise.sets, unit, plannedLoad(loads, history, exercise.exerciseId, unit))}</div>
                   </div>
                 </div>
               </div>
@@ -223,8 +237,12 @@ export default function AdaptScreen({
 
       <div className="flow-dock flow-dock--edge">
         <div className="review-footer">
-          <p className="review-footer__note">Today only. Your program is unchanged.</p>
-          <button className="pill-primary" onClick={onStart}>
+          <p className="review-footer__note" role={kept === 0 ? 'status' : undefined}>
+            {kept === 0
+              ? `No movement in this workout can be done with ${setup.chip.toLowerCase()}. Edit the setup or keep the original workout.`
+              : 'Today only. Your program is unchanged.'}
+          </p>
+          <button className="pill-primary" onClick={onStart} disabled={kept === 0}>
             {adapted.minutes === adapted.originalMinutes
               ? 'Start workout'
               : `Start ${adapted.minutes}-min workout`}
