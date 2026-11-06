@@ -224,7 +224,7 @@ export default function Onboarding({ onComplete }: Props) {
                 onChange={(event) => setLoadsText(event.target.value)}
                 placeholder={unit === 'lb' ? 'e.g. 10, 15, 20' : 'e.g. 5, 7.5'}
               />
-              <p className="muted">Targets use only weights you list. Blank keeps it unconfirmed.</p>
+              <p className="muted">Training at a gym? Leave this blank. At home, list the pairs you own; you can still type any other weight.</p>
               {loadsTooHeavy && <p className="error-text" role="alert">{loadLimitText(unit)}</p>}
             </>
           ) : null}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
@@ -221,6 +221,8 @@ export default function TrainScreen({
 
   const [muted, setMuted] = useState(() => isRestMuted(session.id));
   const [restOver, setRestOver] = useState(false);
+  // The typed field is uncontrolled: a rack tap remounts it, so it never shows a weight the pill replaced.
+  const [rackTaps, setRackTaps] = useState(0);
   const [prevRest, setPrevRest] = useState(rest);
   const restActive = Boolean(session.restStartedAt);
   const ended = restEnded({ prev: prevRest, remaining: rest, active: restActive, paused: restPaused, muted });
@@ -362,9 +364,9 @@ export default function TrainScreen({
   const canPickWeight = equipment === 'Dumbbell' && loadOptions.length > 0;
   // A dumbbell with no confirmed rack is typed, the same way a barbell load is.
   const canEnterWeight = mode !== 'none' && !canPickWeight;
-  const loadEntry = (weight: number, update: (weight: number) => void, shown?: string) => (
-    <LoadEntry weight={weight} update={update} shown={shown} unit={unit}
-      label={`Enter ${equipment.toLowerCase()} load (${weightLabel})`} />
+  const loadEntry = (weight: number, update: (weight: number) => void, shown?: string,
+    label = `Enter ${equipment.toLowerCase()} load (${weightLabel})`) => (
+    <LoadEntry weight={weight} update={update} shown={shown} unit={unit} label={label} />
   );
 
   // #80: everything a row renders is keyed by exercise, segment and set, so a
@@ -417,15 +419,21 @@ export default function TrainScreen({
               <span>Weight ({weightLabel})</span>
               <span className="aw-field__note">{equipment}</span>
             </div>
-            {canPickWeight ? (
+            {canPickWeight && (
               <div className="weight-pills">
                 {loadOptions.map((weight) => (
-                  <button key={weight} aria-pressed={value.weight === weight} onClick={() => patch({ weight })}>
+                  <button key={weight} aria-pressed={value.weight === weight}
+                    onClick={() => { patch({ weight }); setRackTaps((taps) => taps + 1); }}>
                     {showWeight(weight)}
                   </button>
                 ))}
               </div>
-            ) : loadEntry(value.weight, (weight) => patch({ weight }), draft ? undefined : showPending(set.weight, setIndex))}
+            )}
+            {/* A listed rack is a shortcut, never a cap: a gym has more than the user listed (#129). */}
+            <Fragment key={rackTaps}>
+              {loadEntry(value.weight, (weight) => patch({ weight }), draft ? undefined : showPending(set.weight, setIndex),
+                `Set ${setIndex + 1} load (${weightLabel})`)}
+            </Fragment>
           </div>
         )}
         <div className="reps-field">
@@ -547,12 +555,12 @@ export default function TrainScreen({
             {quickLoads.length > 0 && (
               <WeightRow label={canPickCalibration ? 'Your dumbbells' : 'Dumbbells'} unitText={weightLabel}
                 loads={quickLoads} selected={exercise.performed[activeSet]?.weight ?? null}
-                suggested={calibrating ? suggested : null} show={showWeight}
-                onPick={(weight) => onConfirmWeight(index, weight)} />
+                suggested={calibrating && touched === undefined ? suggested : null} show={showWeight}
+                onPick={(weight) => { onConfirmWeight(index, weight); setRackTaps((taps) => taps + 1); }} />
             )}
-            {calibrating && quickLoads.length === 0 && (
+            {calibrating && (
               <label className="lg-first__typed">
-                <span>Weight ({weightLabel})</span>
+                <span>{quickLoads.length > 0 ? 'Or type a weight' : 'Weight'} ({weightLabel})</span>
                 {loadEntry(held ?? 0, choose)}
               </label>
             )}
@@ -564,7 +572,7 @@ export default function TrainScreen({
             {calibrating && (
               <CalibrationStep
                 selected={held}
-                onConfirm={quickLoads.length > 0 ? undefined : (weight) => {
+                onConfirm={(weight) => {
                   focusNext.current = 'log';
                   onConfirmWeight(index, weight);
                 }}
