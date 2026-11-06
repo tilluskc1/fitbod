@@ -420,79 +420,95 @@ textarea:focus-visible {
   justify-content: center;
 }
 
-/* ---------- Tab bar ---------- */
+/* ---------- Tab bar (#147) ----------
+   A floating white pill: Today and Plan, a raised lime Start/Resume, Progress and Coach.
+   Resume carries a ring showing the share of sets logged. */
 
 .tabbar {
   flex: none;
-  display: flex;
-  align-items: stretch;
-  background: rgba(230, 242, 241, 0.96);
-  backdrop-filter: blur(14px);
-  border-top: 1px solid #dde8e6;
-  padding: 10px 12px 4px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 92px 1fr 1fr;
+  align-items: center;
+  margin: 24px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  height: 72px;
+  border-radius: 36px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px -12px rgba(20, 40, 40, 0.35);
+  /* Above the screen and its dock, so the raised Start is never clipped. */
+  position: relative;
+  z-index: 30;
 }
 
 .tab {
-  flex: 1;
+  min-height: 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  min-height: 53px;
-  font-size: 11px;
-  color: #56615f;
-  padding: 2px 0 0;
-}
-
-.tab svg {
-  width: 22px;
-  height: 22px;
+  justify-content: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .tab.active {
-  color: var(--accent-text);
+  color: var(--text);
+  font-weight: 600;
 }
 
-/* (#20) Centered Start / Resume in the tab bar: a lime play bubble between
-   Plan and Progress. The label state is the same charcoal/lime palette. */
-
 .tab-action {
-  color: var(--accent-text);
-  font-weight: 700;
+  align-self: start;
+  justify-self: center;
+  min-height: 0;
 }
 
 .tab-action:disabled {
-  color: var(--secondary);
   cursor: not-allowed;
+  opacity: 1;
 }
 
 .tab-action__play {
-  width: 44px;
-  height: 44px;
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin-top: -24px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   background: var(--lime);
   color: var(--lime-ink);
-  margin-top: -8px;
-  box-shadow: 0 10px 22px rgba(163, 184, 58, 0.28);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 0 0 6px var(--surface);
+  transition: transform 0.15s ease;
+}
+
+.tab-action:disabled .tab-action__play {
+  background: #e4ece9;
+  color: var(--muted);
 }
 
 .tab-action:not(:disabled):active .tab-action__play {
-  transform: translateY(1px) scale(0.96);
-  box-shadow: 0 6px 14px rgba(163, 184, 58, 0.24);
+  transform: scale(0.96);
 }
 
 .tab-action__play .ms {
-  font-size: 26px;
+  font-size: 28px;
 }
 
-@media (max-width: 719px) {
-  .tabbar {
-    padding-bottom: calc(4px + env(safe-area-inset-bottom));
-  }
+.tab-action__ring {
+  position: absolute;
+  inset: -2px;
+  width: 76px;
+  height: 76px;
+}
+
+/* The centre keeps its text for tests and assistive tech; the ring and icon carry it visually. */
+.tab-action__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* ---------- Segmented control ---------- */

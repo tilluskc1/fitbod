@@ -967,6 +967,12 @@ export default function App() {
           workoutAction={{
             ...tabBarAction(current, adapted),
             onActivate: current ? () => setView('train') : startWorkout,
+            progress: current
+              ? (() => {
+                  const sets = current.exercises.flatMap((exercise) => exercise.performed);
+                  return sets.length ? sets.filter((set) => set.done).length / sets.length : 0;
+                })()
+              : undefined,
           }}
         />
       </>
