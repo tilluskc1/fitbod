@@ -209,6 +209,17 @@ export function programCeilingNotice(adapted: AdaptedWorkout): ConstraintNotice 
 }
 
 /**
+ * The parser's notices plus the ceiling, if any. A ceiling replaces the
+ * 10–120 clamp notice, keeping what was typed, so two notices never disagree.
+ */
+export function withCeiling(notices: ConstraintNotice[], adapted: AdaptedWorkout): ConstraintNotice[] {
+  const ceiling = programCeilingNotice(adapted);
+  if (!ceiling) return notices;
+  const clamp = notices.find((notice) => notice.kind === 'minutes-adjusted');
+  return [...notices.filter((notice) => notice !== clamp), clamp ? { ...ceiling, asked: clamp.asked } : ceiling];
+}
+
+/**
  * The default setup follows the saved equipment: dumbbell owners get their
  * home plan, other configured equipment uses the home setup, and people with
  * no gear get bodyweight. Never assumes a dumbbell rack exists.

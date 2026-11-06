@@ -3,7 +3,7 @@ import
 import
  { downloadText } from './lib/download';
 import
- { activeOverride, dayKey, minutesOf } from './lib/plan';
+ { activeOverride, dayKey } from './lib/plan';
 import
  {
   adaptWorkout,
@@ -21,7 +21,7 @@ import
 import
  type { Proposal, ProposalContext } from './lib/proposal';
 import
- { defaultConstraints, programCeilingNotice } from './lib/constraints';
+ { defaultConstraints, withCeiling } from './lib/constraints';
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A, programSetCount } from './data/flagship';
@@ -293,7 +293,6 @@ export default function App() {
   const unit = unitOf(profile);
   const today = useMemo(() => new Date(now), [now]);
   const override = useMemo(() => activeOverride(state, today), [state, today]);
-  const minutes = profile ? minutesOf(profile, override) : 35;
 
   /**
    * Today's constraint state: the approved adaptation, the saved equipment
@@ -500,18 +499,18 @@ export default function App() {
     }
     const next = proposal.constraints;
     const choice: EquipmentChoice = next.equipment;
-    // An open session keeps its completed sets: the adaptation replaces only
-    // the pending prescriptions, so adjusting mid-workout never discards work.
-    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
     const approved: TodayOverride = {
       date: dayKey(new Date()),
-      // What the work takes, not the request: a program cannot be stretched (#17).
-      minutes: workout.minutes,
+      // The request, not the capped label: every screen re-derives the label (#17).
+      minutes: next.minutes,
       equipment: choice === 'home' || choice === 'hotel' ? ['Dumbbell'] : [],
       support: [],
       appliedAt: new Date().toISOString(),
       choice,
     };
+    // An open session keeps its completed sets: the adaptation replaces only
+    // the pending prescriptions, so adjusting mid-workout never discards work.
+    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
     if (current) {
       if (workout.exercises.length === 0) {
         setNotice('No movement in this workout can be done with that setup.');
@@ -1020,9 +1019,8 @@ export default function App() {
             closeSheet();
           }}
           onPreview={(next, notices) => {
-            const ceiling = programCeilingNotice(adaptWorkout(program, next, profile?.exclusions ?? []));
             setPending(createProposal(next, proposalBase()));
-            setPendingNotices(ceiling ? [...notices, ceiling] : notices);
+            setPendingNotices(withCeiling(notices, adaptWorkout(program, next, profile?.exclusions ?? [])));
             setSheet({ kind: 'none' });
             setView('adapt');
           }}
@@ -1119,7 +1117,7 @@ export default function App() {
       {(sheet.kind === 'day' || sheet.kind === 'preview') && (
         <DaySheet
           name={current?.name ?? adapted.name}
-          minutes={current?.durationMin ?? minutes}
+          minutes={current?.durationMin ?? adapted.minutes}
           exercises={todayExercises}
           unit={unit}
           history={state.history}

@@ -287,6 +287,8 @@ export function adaptWorkout(
   // The program is the ceiling: a request above its own minutes cannot add
   // work, so cap the label at what the surviving sets take. Requests at or
   // under the program (the trimming direction) keep their label unchanged.
+  // shortcut: with a movement skipped, 35 min still reads 35 while 36+ reads what the work takes;
+  // labelling the at-or-under direction honestly too is #141.
   const capped = totalSets > 0 && minutes > program.minutes;
   const appliedMinutes = capped ? estimatedMinutes(program, totalSets) : minutes;
 

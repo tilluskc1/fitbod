@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { adaptWorkout, estimatedMinutes, setBudget, toWorkoutExercises } from '../src/lib/adapt.ts';
-import { keywordParser, noticeText, programCeilingNotice } from '../src/lib/constraints.ts';
+import { keywordParser, noticeText, programCeilingNotice, withCeiling } from '../src/lib/constraints.ts';
 import { FULL_BODY_A, programSetCount } from '../src/data/flagship.ts';
 
 const home = (minutes: number) =>
@@ -181,4 +181,12 @@ test('excluded movements are skipped as excluded, never reloaded', () => {
   assert.ok(
     adapted.exercises.every((exercise) => exercise.exerciseId !== 'dumbbell-row'),
   );
+});
+
+test('a typed request above 120 gets one ceiling notice that keeps what was typed (#17)', () => {
+  const clamp = { kind: 'minutes-adjusted' as const, asked: '150 min', applied: '120 min' };
+  const notices = withCeiling([clamp], home(120));
+  assert.deepEqual(notices.map((notice) => notice.kind), ['program-ceiling']);
+  assert.match(noticeText(notices[0]), /^You asked for 150 min — .* shows the 35 min it takes\./);
+  assert.deepEqual(withCeiling([clamp], home(20)), [clamp]);
 });
