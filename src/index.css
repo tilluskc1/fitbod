@@ -2888,14 +2888,14 @@ body {
   grid-auto-columns: 1fr;
   gap: 6px;
   padding: 5px;
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--surface-container-low);
   border: 1px solid rgba(50, 59, 48, 0.6);
 }
 
 .weight-pills button {
   min-height: 44px;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 14px;
   font-weight: 600;
   color: var(--on-surface-variant);
@@ -3804,7 +3804,9 @@ button.aw-exercise__name-btn {
   margin-top: 0;
 }
 
-.lg-first__typed input {
+/* The set editor's typed load reads like the first-load field (#129). */
+.lg-first__typed input,
+.aw-field input {
   flex: 1;
   min-width: 0;
   min-height: 44px;
@@ -3814,6 +3816,16 @@ button.aw-exercise__name-btn {
   background: var(--glass-fill);
   color: var(--on-surface);
   font-size: 16px;
+}
+
+.aw-field input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.aw-field .weight-pills + input {
+  margin-top: 8px;
 }
 
 .lg-first__step {

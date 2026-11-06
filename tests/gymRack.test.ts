@@ -78,3 +78,15 @@ test('onboarding and Settings say to leave the rack blank at a gym', async () =>
     assert.match(readFileSync(new URL(file, import.meta.url), 'utf8'), /Leave (this )?blank( at a gym)?[.;]/i, file);
   }
 });
+
+test("the set editor's rack buttons and typed field are pills, like the rest of the logger", async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  for (const selector of ['.weight-pills {', '.weight-pills button {', '.aw-field input {']) {
+    const at = css.indexOf(selector.replace(' {', ''));
+    assert.ok(at >= 0, selector);
+    const rule = css.slice(css.lastIndexOf('}', at) + 1, css.indexOf('}', at));
+    if (selector !== '.aw-field input {') assert.match(rule, /border-radius: 999px/, selector);
+  }
+  assert.match(css, /\.lg-first__typed input,\s*\.aw-field input \{[^}]*border-radius: 999px/);
+});
