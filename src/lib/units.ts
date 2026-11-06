@@ -1,5 +1,5 @@
 import type { Profile, Unit } from '../types.ts';
-import { MAX_WEIGHT } from './validate.ts';
+import { MAX_REPS, MAX_WEIGHT } from './validate.ts';
 
 export const KG_PER_LB = 0.45359237;
 
@@ -53,6 +53,17 @@ export function typedLoad(text: string, unit: Unit, focused: number): { kg: numb
   if (!Number.isFinite(value) || value < 0) return null;
   const kg = toKg(value, unit);
   return overLoadLimit([kg]) ? { kg: focused, refused: true } : { kg, refused: false };
+}
+
+/** A typed reps or seconds value. Above the limit it is refused and falls back to `focused`, as a load does (#109). */
+export function typedReps(text: string, focused: number): { reps: number; refused: boolean } {
+  const reps = Number(text) || 0;
+  return reps > MAX_REPS ? { reps: focused, refused: true } : { reps, refused: false };
+}
+
+/** Shown wherever a typed reps or seconds value is refused for being above the limit. */
+export function repsLimitMessage(seconds: boolean): string {
+  return `${seconds ? 'Seconds' : 'Reps'} go up to ${MAX_REPS}. That entry was not saved.`;
 }
 
 /**

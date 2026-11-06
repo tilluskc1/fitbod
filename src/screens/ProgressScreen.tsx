@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, setText, setUnit } from '../data/flagship';
-import { calibrationInputValue, correctionBlur, correctionKeystroke, unitLabel } from '../lib/units';
+import {
+  calibrationInputValue, correctionBlur, correctionKeystroke, loadLimitMessage, repsLimitMessage, typedReps, unitLabel,
+} from '../lib/units';
 import { plannedLoad } from '../lib/liveProgression';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from '../lib/plan';
 import type { Profile, Unit, WorkoutFeedback, WorkoutRecord } from '../types';
@@ -18,7 +20,8 @@ interface Props {
     exerciseIndex: number,
     setIndex: number,
     patch: { weight?: number; reps?: number; done?: boolean },
-    refused?: boolean,
+    /** Why the typed value was refused; the patch then carries the focus value (#101, #109). */
+    refused?: string,
   ) => void;
   onDelete: (workoutId: string) => void;
   onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
@@ -65,6 +68,8 @@ export default function ProgressScreen({
   const [openId, setOpenId] = useState<string | null>(null);
   /** The weight a history field held when focused; a refused load reverts to it (#101). */
   const focusedLoad = useRef<number | null>(null);
+  /** The reps a history field held when focused; refused reps revert to it (#109). */
+  const focusedReps = useRef<number | null>(null);
   const [selectedId, setSelectedId] = useState<string>('');
   /** The exercise whose weight correction was just refused, as `workoutId:exerciseIndex`. */
   const [refused, setRefused] = useState('');
@@ -376,7 +381,8 @@ export default function ProgressScreen({
                                         setRefused(revert?.reason === 'needs-load' ? exerciseKey : '');
                                         if (!revert) return;
                                         event.target.value = calibrationInputValue(revert.kg, unit);
-                                        onCorrect(workout.id, exerciseIndex, setIndex, { weight: revert.kg }, revert.reason === 'limit');
+                                        onCorrect(workout.id, exerciseIndex, setIndex, { weight: revert.kg },
+                                          revert.reason === 'limit' ? loadLimitMessage(unit) : undefined);
                                       }}
                                     />
                                     {unitLabel(unit)} ×
@@ -386,11 +392,13 @@ export default function ProgressScreen({
                                   type="number"
                                   aria-label={`Correct ${timed ? 'seconds' : 'reps'} for set ${setIndex + 1} of ${exercise.name}`}
                                   value={set.reps || ''}
-                                  onChange={(event) =>
-                                    onCorrect(workout.id, exerciseIndex, setIndex, {
-                                      reps: Number(event.target.value) || 0,
-                                    })
-                                  }
+                                  onFocus={() => { focusedReps.current = set.reps; }}
+                                  onBlur={() => { focusedReps.current = null; }}
+                                  onChange={(event) => {
+                                    const next = typedReps(event.target.value, focusedReps.current ?? set.reps);
+                                    onCorrect(workout.id, exerciseIndex, setIndex, { reps: next.reps },
+                                      next.refused ? repsLimitMessage(timed) : undefined);
+                                  }}
                                 />
                                 {timed && ' seconds'}
                                 <button

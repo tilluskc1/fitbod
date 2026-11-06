@@ -46,7 +46,8 @@ const MAX_EXCLUSIONS = 200;
 const MAX_LOAD_ENTRIES = 200;
 /** The heaviest load the loader accepts; every weight entry refuses above it (#101). */
 export const MAX_WEIGHT = 2000;
-const MAX_REPS = 1000;
+/** The most reps (or seconds held) the loader accepts; every reps entry refuses above it (#109). */
+export const MAX_REPS = 1000;
 
 class Invalid extends Error {}
 
