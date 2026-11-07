@@ -124,6 +124,8 @@ function uniqueStrings(value: unknown, path: string, max: number): string[] {
   return out;
 }
 
+const SETUPS = ['home', 'hotel', 'bodyweight', 'bands'] as const;
+
 function validateProfile(value: unknown, path: string): Profile {
   const raw = record(value, path);
   const daysPerWeek = integer(raw.daysPerWeek, `${path}.daysPerWeek`, 2, 6);
@@ -223,6 +225,8 @@ function validateExercise(value: unknown, path: string): WorkoutExercise {
     // Optional. Records and backups written before skipping existed stay valid,
     // and no migration is implied by its absence.
     skipped: raw.skipped === undefined ? undefined : boolean(raw.skipped, `${path}.skipped`),
+    // Optional (#188): absent on every record written before today-only setups were recorded.
+    ...(raw.setup === undefined ? {} : { setup: oneOf(raw.setup, `${path}.setup`, SETUPS) }),
     planned: plannedRaw.map((item, i) => validatePlannedSet(item, `${path}.planned[${i}]`)),
     performed: performedRaw.map((item, i) => validatePerformedSet(item, `${path}.performed[${i}]`)),
   };
@@ -304,7 +308,7 @@ function validateOverride(value: unknown, path: string): TodayOverride {
     choice:
       raw.choice === undefined
         ? undefined
-        : oneOf(raw.choice, `${path}.choice`, ['home', 'hotel', 'bodyweight', 'bands'] as const),
+        : oneOf(raw.choice, `${path}.choice`, SETUPS),
   };
 }
 

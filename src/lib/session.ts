@@ -318,6 +318,7 @@ export function swapPendingExercise(
           exerciseId: original.exerciseId,
           name: original.name,
           originalPlannedSets: slotRequirement,
+          ...(original.setup ? { setup: original.setup } : {}),
           planned: keptIndices.map((setIndex) => original.planned[setIndex]),
           performed: keptIndices.map((setIndex) => original.performed[setIndex]),
         }
@@ -331,6 +332,8 @@ export function swapPendingExercise(
     exerciseId: candidate.exerciseId,
     name: candidate.name,
     originalPlannedSets: slotRequirement,
+    // A swap runs on the same setup as the sets it replaces (#188).
+    ...(original.setup ? { setup: original.setup } : {}),
     planned: plannedSets,
     performed: plannedSets.map((set) => ({
       weight: set.weight,

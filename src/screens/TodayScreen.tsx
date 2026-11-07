@@ -408,7 +408,7 @@ export default function TodayScreen({
                   : current
                     ? `Session open. ${progress} of ${total} sets logged so far.`
                     : first
-                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit, first.exerciseId === leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId))), plannedLoad(profile.loads, history, first.exerciseId, unit))
+                      ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit, first.exerciseId === leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId)), adapted.setup), plannedLoad(profile.loads, history, first.exerciseId, unit))
                       : 'Pick a workout you can keep. The program follows from that.'}
               </p>
               {adapted.exercises.length === 0 && alternativeDay && <p className="coach-card__text">{alternativeDay}</p>}

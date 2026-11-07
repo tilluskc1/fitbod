@@ -51,6 +51,9 @@ test('#17: with the day rebuilt per length, 60 and 90 min add work and say what 
 test('#17: Today builds the day at a longer today-only length and the length sheet gets the rebuild', async () => {
   const { readFileSync } = await import('node:fs');
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
-  assert.match(app, /override\.minutes > \(profile\.sessionMinutes \?\? 35\) \? override\.minutes : undefined/);
-  assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programAt\(minutes\), profile\.goal\)/);
+  // Since #188 the longer-than-saved rule lives in todayProgram (pinned in gearRebuild.test.ts).
+  assert.match(app, /const program = useMemo\(\(\) => programFor\(constraints\)/);
+  assert.match(app, /todayProgram\(profile, slot, state\.history, today\)/);
+  // #203 passes the goal so each length is trimmed by the timer's model.
+  assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programFor\(\{ minutes, equipment: constraints\.equipment \}\), profile\.goal\)/);
 });

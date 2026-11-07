@@ -1,10 +1,10 @@
 import type { Program, ProgramExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } from '../data/flagship.ts';
-import type { Exercise, Goal, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import type { Exercise, Goal, Profile, SetupChoice, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
-import { isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
+import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
 import { estimatedSeconds } from './generator.ts';
 import { sessionRests } from './sessionTime.ts';
 import { liveExercises } from './liveProgression.ts';
@@ -18,7 +18,7 @@ import { liveExercises } from './liveProgression.ts';
  * the program; the engine's whole job is deciding what to leave out.
  */
 
-export type EquipmentChoice = 'home' | 'hotel' | 'bodyweight' | 'bands';
+export type EquipmentChoice = SetupChoice;
 
 export interface EquipmentOption {
   label: string;
@@ -126,6 +126,10 @@ export interface AdaptedWorkout {
   originalSets: number;
   /** Factual sentence shown under "Coach note". No readiness scores. */
   note: string;
+  /** Set when the day was rebuilt from today's setup's kit (#188), not adapted from the program. */
+  setup?: Program['setup'];
+  /** The rebuilt day's own feasibility, so a review of it can say Limited (#188). */
+  feasibility?: Program['feasibility'];
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -214,6 +218,8 @@ export function adaptWorkout(
     : [];
   const knownInventory = inventory.length > 0;
   const limited: { name: string; from: number; to: number }[] = [];
+  /** Lighter than any load today's setup has: kept with no load, for the lifter to pick (#188). */
+  const pickOwn: string[] = [];
   const skipped: SkippedExercise[] = [];
   const exercises: AdaptedExercise[] = [];
   const originalSets = program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
@@ -233,11 +239,16 @@ export function adaptWorkout(
     // A confirmed inventory decides what is usable: any owned load can be
     // re-targeted below, so only a setup with no external load rules a
     // movement out. An unconfirmed home rack is typed as lifted, so no fixture
-    // judges it; a hotel gym keeps its own rack check.
+    // judges it; a hotel gym keeps its own rack check, taking its closest load
+    // at or under the program's, or none for the lifter to pick when even its
+    // lightest is heavier: never a heavier one (#188). A day rebuilt for today's
+    // setup was already built from that kit.
+    const travelRack = exercise.requires === 'dumbbell' && constraints.equipment !== 'home' && setup.allowsLoads;
+    const travelLoad = travelRack && exercise.weight > 0 ? atOrUnder(setup.loads, exercise.weight) ?? 0 : undefined;
     const unusable =
       (exercise.requires === 'dumbbell' && !setup.allowsLoads) ||
-      (exercise.requires === 'configured' && constraints.equipment !== 'home') ||
-      (exercise.requires !== 'configured' && exercise.weight > 0 && !knownInventory && constraints.equipment !== 'home' && !setup.loads.includes(exercise.weight));
+      (exercise.requires === 'configured' && constraints.equipment !== 'home' && program.setup !== constraints.equipment) ||
+      (exercise.requires !== 'configured' && exercise.weight > 0 && !knownInventory && constraints.equipment !== 'home' && !setup.loads.includes(exercise.weight) && travelLoad === undefined);
     if (unusable) {
       skipped.push({
         exerciseId: exercise.exerciseId,
@@ -255,6 +266,11 @@ export function adaptWorkout(
       const substitute = below ?? inventory[0];
       limited.push({ name: exercise.name, from: weight, to: substitute });
       weight = substitute;
+    }
+    if (travelLoad !== undefined && travelLoad !== weight) {
+      if (travelLoad > 0) limited.push({ name: exercise.name, from: weight, to: travelLoad });
+      else pickOwn.push(exercise.name);
+      weight = travelLoad;
     }
     exercises.push({
       ...exercise,
@@ -379,9 +395,16 @@ export function adaptWorkout(
   const capped = totalSets > 0 && minutes > program.minutes;
   const appliedMinutes = capped ? estimatedMinutes(program, totalSets) : minutes;
 
+  // A day rebuilt for today's setup is not the program, so it never says "same as your program" (#188).
+  const rebuilt = program.setup !== undefined && program.setup === constraints.equipment ? program.setup : undefined;
   let note: string;
   if (kept.length === 0) {
     note = `None of this workout can be done with ${setup.chip.toLowerCase()}.`;
+  } else if (rebuilt) {
+    // Bands have no movements in the library yet, so that day is bodyweight work: say so.
+    note = rebuilt === 'bands' ? `No band exercises yet: ${program.name} uses bodyweight moves today.`
+      : `${program.name} rebuilt for ${setup.chip.toLowerCase()} today.`;
+    if (timeTrimmed) note += ` Volume trimmed to ${totalSets} ${totalSets === 1 ? 'set' : 'sets'} to fit ${minutes} min.`;
   } else if (!timeTrimmed) {
     note = 'Same exercises, weights and sets as your program.';
   } else {
@@ -394,8 +417,11 @@ export function adaptWorkout(
     note += ` ${listOf(forEquipment.map((item) => item.name))} need${forEquipment.length === 1 ? 's' : ''} a load that is not available today.`;
   }
   if (limited.length > 0) {
-    const loads = [...new Set(limited.map((item) => item.to))].sort((a, b) => a - b);
-    note += ` ${listOf(limited.map((item) => item.name))} use${limited.length === 1 ? 's' : ''} ${loads.join(' / ')} kg — the closest of your confirmed loads, not your program's.`;
+    const source = constraints.equipment === 'home' ? 'the closest of your confirmed loads, not' : `the closest ${setup.chip.toLowerCase()} load at or under`;
+    note += ` ${listOf(limited.map((item) => `${item.name} ${item.to} kg`))} — ${source} your program's.`;
+  }
+  if (pickOwn.length > 0) {
+    note += ` ${listOf(pickOwn)}: no ${setup.chip.toLowerCase()} dumbbell is this light — pick your load.`;
   }
   const forExcluded = skipped.filter((item) => item.reason === 'excluded');
   if (forExcluded.length > 0) {
@@ -414,6 +440,7 @@ export function adaptWorkout(
     totalSets,
     originalSets,
     note,
+    ...(rebuilt ? { setup: rebuilt, feasibility: program.feasibility } : {}),
   };
 }
 
@@ -431,6 +458,7 @@ export function toWorkoutExercises(adapted: AdaptedWorkout): WorkoutExercise[] {
       exerciseId: exercise.exerciseId,
       name: exercise.name,
       originalPlannedSets: exercise.originalSets,
+      ...(adapted.setup ? { setup: adapted.setup } : {}),
       planned,
       performed: planned.map((set) => ({
         weight: set.weight,
@@ -454,6 +482,8 @@ export function swapCandidateFor(
   session: WorkoutRecord | null,
   /** The swapped exercise holds the day's lead slot (see `leadSlotIds`). */
   lead = false,
+  /** The setup the swapped sets run on (#188). */
+  setup: EquipmentChoice = 'home',
 ): SwapCandidate {
   const open = session ? latestDoneSet(session, target.id) : null;
   if (open) {
@@ -461,7 +491,7 @@ export function swapCandidateFor(
   }
   const hold = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === target.id)?.holdSeconds;
   if (hold) return { exerciseId: target.id, name: target.name, weight: 0, reps: hold };
-  const prescription = prescribeExercise(target, profile, history, lead);
+  const prescription = prescribeExercise(target, profile, history, lead, true, setup);
   return {
     exerciseId: target.id,
     name: target.name,
@@ -551,7 +581,9 @@ export function restorePendingWorkout(
     });
     const done = group.reduce((sum, exercise) => sum + exercise.performed.length, 0);
     const pending = prescribed.planned.slice(done);
-    const sameVariant = group.find((exercise) => exercise.exerciseId === prescribed.exerciseId);
+    // Pending sets join a segment on the same setup; a gear switch starts a new segment, so
+    // each set keeps the setup it ran on (#188).
+    const sameVariant = group.find((exercise) => exercise.exerciseId === prescribed.exerciseId && exercise.setup === prescribed.setup);
     if (sameVariant) {
       sameVariant.planned.push(...pending.map((set) => ({ ...set })));
       sameVariant.performed.push(...pending.map((set) => ({ ...set, done: false, completedAt: null })));
@@ -599,7 +631,8 @@ export function lengthOptions(
   const base = adaptWorkout(program, { ...constraints, minutes: defaultMinutes }, exclusions, goal);
   const kept = new Set(base.exercises.map((exercise) => exercise.exerciseId));
   return LENGTH_CHOICES.map((minutes) => {
-    const source = programAt && minutes > defaultMinutes ? programAt(minutes) : program;
+    // A day rebuilt for today's setup (#188) is rebuilt at every length, as picking it would.
+    const source = programAt && (minutes > defaultMinutes || program.setup) ? programAt(minutes) : program;
     const adapted = adaptWorkout(source, { ...constraints, minutes }, exclusions, goal);
     const now = new Set(adapted.exercises.map((exercise) => exercise.exerciseId));
     const dropped = base.exercises.filter((exercise) => kept.has(exercise.exerciseId) && !now.has(exercise.exerciseId)).map((exercise) => exercise.name);
@@ -643,17 +676,29 @@ export interface SetupOption {
   /** The day's minutes with this setup, by the timer's model (#203). */
   minutes: number;
   approx: boolean;
-  kind: 'program' | 'same' | 'fewer' | 'none';
+  /** 'rebuilt': the day is built again from that setup's kit (#188). */
+  kind: 'program' | 'same' | 'fewer' | 'rebuilt' | 'none';
 }
 
-/** What each setup leaves of today's workout, at today's length, against the saved home setup. */
-export function setupOptions(program: Program, constraints: Constraints, exclusions: string[], goal?: Goal): SetupOption[] {
-  const base = adaptWorkout(program, { ...constraints, equipment: 'home' }, exclusions, goal);
+/**
+ * What each setup leaves of today's workout, at today's length, against the saved home setup.
+ * With `programFor`, each setup previews the day it rebuilds (#188) instead of what survives.
+ */
+export function setupOptions(
+  program: Program,
+  constraints: Constraints,
+  exclusions: string[],
+  goal?: Goal,
+  programFor?: (choice: EquipmentChoice) => Program,
+): SetupOption[] {
+  const sourceFor = (choice: EquipmentChoice) => programFor?.(choice) ?? program;
+  const base = adaptWorkout(sourceFor('home'), { ...constraints, equipment: 'home' }, exclusions, goal);
   return SETUP_CHOICES.map((choice) => {
-    const adapted = adaptWorkout(program, { ...constraints, equipment: choice }, exclusions, goal);
+    const adapted = adaptWorkout(sourceFor(choice), { ...constraints, equipment: choice }, exclusions, goal);
     const kind: SetupOption['kind'] =
       adapted.totalSets === 0 ? 'none'
       : choice === 'home' ? 'program'
+      : programFor ? 'rebuilt'
       : adapted.totalSets === base.totalSets ? 'same'
       : 'fewer';
     const { minutes, approx } = todayGlance(adapted, null, false, goal);
@@ -668,5 +713,6 @@ export function setupConsequence(option: SetupOption, dayName: string): string {
   if (option.kind === 'none') return `Nothing in ${dayName} works`;
   if (option.kind === 'program') return `${sets} · ${minutes} · your gear`;
   if (option.kind === 'same') return `${sets} · ${minutes} · same workout`;
+  if (option.kind === 'rebuilt') return `${sets} · ${minutes} · ${option.choice === 'bands' ? 'bodyweight moves' : 'rebuilt for this gear'}`;
   return `${option.totalSets} of ${option.baseSets} sets fit · ${minutes}`;
 }

@@ -7,10 +7,14 @@ import { plannedLoad } from '../lib/liveProgression';
 import { targetSummary } from '../data/flagship';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
+import FeasibilityNote from '../components/ui/FeasibilityNote';
 
 interface Props {
-  /** Saved gear, so a gym kit's own setup reads "Your gym" (#206). */
-  profile?: Pick<Profile, 'equipment'> | null;
+  /**
+   * Saved gear, so a gym kit's own setup reads "Your gym" (#206). The full profile also lets a
+   * rebuilt day show its own Limited note (#188).
+   */
+  profile?: Pick<Profile, 'equipment'> | Profile | null;
   originalSets: number;
   adapted: AdaptedWorkout;
   constraints: Constraints;
@@ -25,6 +29,13 @@ interface Props {
   onStart: () => void;
   onKeep: () => void;
   onEdit: () => void;
+  /** Where the Limited note's "More in Equipment" goes. */
+  onOpenSettings?: () => void;
+}
+
+/** The whole saved profile, not only its gear (the Limited note's alternatives read it). */
+function isFullProfile(profile: Pick<Profile, 'equipment'> | Profile | null | undefined): profile is Profile {
+  return Boolean(profile && 'goal' in profile);
 }
 
 /** A plain description of what changed, derived from the two workouts. */
@@ -34,7 +45,11 @@ function summaryLine(adapted: AdaptedWorkout, originalSets: number): string {
     (exercise) => (exercise.originalWeight ?? exercise.weight) !== exercise.weight,
   );
   const parts: string[] = [];
-  if (adapted.exercises.length > 0) {
+  if (adapted.setup && adapted.exercises.length > 0) {
+    parts.push(adapted.setup === 'bands'
+      ? `No band exercises yet: ${adapted.exercises.length} bodyweight moves.`
+      : `Rebuilt for ${setupFor(adapted.setup).chip.toLowerCase()}: ${adapted.exercises.length} exercises.`);
+  } else if (adapted.exercises.length > 0) {
     parts.push(reweighted.length > 0 ? 'Same exercises and sets, loads set to what you own.' : 'Same exercises and weights.');
   }
   if (trimmed.length > 0) {
@@ -74,6 +89,7 @@ export default function AdaptScreen({
   onStart,
   onKeep,
   onEdit,
+  onOpenSettings = onEdit,
 }: Props) {
   const setup = setupFor(constraints.equipment, profile);
   const kept = adapted.exercises.length;
@@ -130,6 +146,7 @@ export default function AdaptScreen({
             </button>
           </div>
           <p className="review__lede">{summaryLine(adapted, originalSets)}</p>
+          {isFullProfile(profile) && <FeasibilityNote feasibility={adapted.feasibility} profile={profile} onOpenSettings={onOpenSettings} />}
           {notices.map((notice) => (
             <p key={notice.kind} className="constraint-notice" role="status">
               {noticeText(notice)}

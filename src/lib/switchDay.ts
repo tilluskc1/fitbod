@@ -2,7 +2,7 @@ import type { AppState, Profile, WorkoutRecord } from '../types.ts';
 import { adaptWorkout, todayGlance } from './adapt.ts';
 import type { Constraints } from './adapt.ts';
 import { defaultConstraints } from './constraints.ts';
-import { currentSlot, cursorFor, planSlots, skipCurrentSlot, slotProgram, slotProgramAt } from './sequence.ts';
+import { currentSlot, cursorFor, planSlots, skipCurrentSlot, slotProgram, todayProgram } from './sequence.ts';
 import type { PlanSlot } from './sequence.ts';
 
 export interface SwitchOption {
@@ -36,8 +36,9 @@ export function switchOptions(
   const start = slots.findIndex((slot) => slot.id === here.id);
   return slots.map((_, step) => {
     const slot = slots[(start + step) % slots.length];
-    // Built at today's length, as Today builds it, so the sheet and Today agree (#203).
-    const program = slotProgramAt(profile, slot, history, constraints.minutes);
+    // Built at today's length, as Today builds it, so the sheet and Today agree (#203). The saved
+    // setup rates the saved day; another setup rates the day it rebuilds from its kit (#188).
+    const program = todayProgram(profile, slot, history, constraints);
     const adapted = adaptWorkout(program, constraints, profile.exclusions ?? [], profile.goal);
     const status: SwitchOption['status'] =
       adapted.totalSets === 0 || program.feasibility?.status === 'infeasible' ? 'none'

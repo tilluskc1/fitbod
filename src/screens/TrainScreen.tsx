@@ -308,6 +308,11 @@ export default function TrainScreen({
           {session.exercises.map((entry, entryIndex) => {
             const done = entry.performed.filter((set) => set.done).length;
             const pendingSets = entry.performed.filter((set) => !set.done).length;
+            // A gear switch splits one exercise into segments (#188): the line is said once, on its
+            // last segment, about all of its sets.
+            const lastSegment = session.exercises.slice(entryIndex + 1).every((other) => other.exerciseId !== entry.exerciseId);
+            const carried = session.exercises.filter((other) => other.exerciseId === entry.exerciseId)
+              .reduce((sum, other) => sum + other.performed.length, 0);
             return (
               <div className="card" key={`${entry.exerciseId}-${entryIndex}`}>
                 <div className="context-row" style={{ borderBottom: 0 }}>
@@ -318,10 +323,10 @@ export default function TrainScreen({
                     {!entry.skipped && pendingSets > 0 ? ' · Not logged' : ''}
                   </span>
                 </div>
-                {(entry.originalPlannedSets ?? 0) > entry.performed.length && (
+                {lastSegment && (entry.originalPlannedSets ?? 0) > carried && (
                   <p className="data-note">
                     Original prescription: {entry.originalPlannedSets} sets. This session carried{' '}
-                    {entry.performed.length}.
+                    {carried}.
                   </p>
                 )}
                 {entry.skipped && pendingSets > 0 && (

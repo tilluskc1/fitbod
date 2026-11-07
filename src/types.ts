@@ -141,6 +141,9 @@ export interface PerformedSet {
   completedAt: string | null;
 }
 
+/** Where a session ran: the saved setup ('home') or a today-only one (#188). */
+export type SetupChoice = 'home' | 'hotel' | 'bodyweight' | 'bands';
+
 export interface WorkoutExercise {
   exerciseId: string;
   name: string;
@@ -158,6 +161,12 @@ export interface WorkoutExercise {
    * that were pending, never a fresh default count.
    */
   skipped?: boolean;
+  /**
+   * The setup these sets ran on, written only for a today-only setup (#188). Absent means the
+   * saved setup, so older records read as home. Per segment, because a mid-session gear switch
+   * leaves done sets on one setup and pending sets on another within one exercise.
+   */
+  setup?: SetupChoice;
 }
 
 /**
@@ -224,7 +233,7 @@ export interface TodayOverride {
    * The named setup behind the override. Stored beside the legacy equipment
    * array so hotel/bodyweight/bands survive a reload, not just "has dumbbells".
    */
-  choice?: 'home' | 'hotel' | 'bodyweight' | 'bands';
+  choice?: SetupChoice;
 }
 
 export interface AppState {

@@ -4,6 +4,7 @@ import type {
   MuscleGroup,
   PlanDay,
   Profile,
+  SetupChoice,
   WorkoutExercise,
   WorkoutRecord,
 } from '../types.ts';
@@ -289,6 +290,8 @@ export function generateWorkout(
   dayIndex: number,
   history: WorkoutRecord[] = [],
   targetCountOverride?: number,
+  /** Where the day runs (#188): that setup's own history prescribes it. */
+  setup: SetupChoice = 'home',
 ): GeneratedSession {
   const max = MAX_EXERCISES[profile.experience];
   const fixed = targetCountOverride && targetCountOverride > 0
@@ -329,7 +332,7 @@ export function generateWorkout(
   const spare = (exercise: Exercise) => Number(exercise === freed && exercise !== lead);
   picked.sort((a, b) => spare(a) - spare(b) || tier(a) - tier(b) || focusRank(a) - focusRank(b));
   const prescriptions = picked.map((exercise) =>
-    prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined));
+    prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined, setup));
   const sets = prescriptions.map((prescription) => prescription.sets);
   const rests = picked.map((exercise) => restSecondsFor(exercise, exercise === lead, profile.goal, profile.sessionMinutes ?? 35));
   const seconds = () => estimatedSeconds(sets, rests, profile.sessionMinutes ?? 35);
@@ -401,8 +404,9 @@ export function generateWorkout(
   const exercises: WorkoutExercise[] = order.map((index) => {
     const exercise = picked[index];
     const prescription = prescriptions[index];
+    // A rack-lowered load is planned at its target so the adaptation caps it and says so (#188).
     const planned = Array.from({ length: sets[index] }, () => ({
-      weight: prescription.weight,
+      weight: prescription.uncapped ?? prescription.weight,
       reps: prescription.reps,
     }));
     return {
