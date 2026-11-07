@@ -32,6 +32,9 @@ export interface RepRange {
   max: number;
 }
 
+/** Core work keeps its own catalog range; the bodyweight rule is for limb movements. */
+const CORE_RANGE_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>(['core_flexion', 'core_stability']);
+
 const COMPOUND_PATTERNS: ReadonlySet<MovementPattern> = new Set<MovementPattern>([
   'horizontal_push',
   'vertical_push',
@@ -62,6 +65,13 @@ export const REP_RANGES: Record<
   small: { min: 12, max: 20 },
 };
 
+/** Bodyweight work that cannot add load climbs in reps instead (#133). */
+const BODYWEIGHT_RANGE: RepRange = { min: 10, max: 20 };
+/** Bodyweight moves that are hard at any level keep a strength-style range: pull-ups, chin-ups, dips. */
+const HARD_BODYWEIGHT: ReadonlySet<string> = new Set(['pull-up', 'chin-up', 'dip']);
+/** Nordic curls are near-maximal eccentrics: a few clean reps, not a pump set. */
+const RANGE_BY_ID: Readonly<Record<string, RepRange>> = { 'nordic-curl': { min: 3, max: 6 } };
+
 /**
  * Fallback steps when no load inventory exists. These are starting points, not
  * claims about every gym: a barbell moves in plate pairs, a kettlebell in whole
@@ -86,8 +96,18 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-/** The range outside the lead: compound 6–10, isolation 10–15, small-muscle isolation 12–20. */
-export function repRangeFor(exercise: Pick<Exercise, 'pattern' | 'muscles'>): RepRange {
+/**
+ * The range outside the lead, from the exercise's role (#133): compound 6–10,
+ * isolation 10–15, small-muscle isolation 12–20, unloadable bodyweight work 10–20
+ * (pull-ups, chin-ups and dips stay 6–10), and Nordic curls 3–6.
+ */
+export function repRangeFor(exercise: Pick<Exercise, 'pattern' | 'muscles'> & Partial<Pick<Exercise, 'id' | 'equipment'>>): RepRange {
+  const byId = exercise.id ? RANGE_BY_ID[exercise.id] : undefined;
+  if (byId) return byId;
+  if (exercise.equipment === 'Bodyweight' && !(exercise.id && HARD_BODYWEIGHT.has(exercise.id))
+    && !CORE_RANGE_PATTERNS.has(exercise.pattern)) {
+    return BODYWEIGHT_RANGE;
+  }
   if (isCompound(exercise)) return REP_RANGES.compound;
   return SMALL_MUSCLE_PATTERNS.has(exercise.pattern) ? REP_RANGES.small : REP_RANGES.accessory;
 }
@@ -170,7 +190,8 @@ export function roleTarget(
   if (lead && heavy) {
     return { sets: 5, range: profile.goal === 'Get Stronger' ? REP_RANGES.strength : REP_RANGES.lead };
   }
-  if (lead && profile.experience === 'Beginner') return { sets: 3, range: REP_RANGES.technique };
+  // Four technique sets: the lead never has fewer sets than the 4-set compounds behind it (#133).
+  if (lead && profile.experience === 'Beginner') return { sets: 4, range: REP_RANGES.technique };
   // The program's own range wins, so the next target matches the recap's "3 × 8–10".
   const programmed = programExercise(exercise.id)?.repRange;
   const range = programmed ? { min: programmed[0], max: programmed[1] } : repRangeFor(exercise);
