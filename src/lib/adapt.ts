@@ -698,7 +698,8 @@ export function setupOptions(
     const kind: SetupOption['kind'] =
       adapted.totalSets === 0 ? 'none'
       : choice === 'home' ? 'program'
-      : programFor ? 'rebuilt'
+      // Only a day actually rebuilt for a today-only setup says so; the saved setup is the program.
+      : programFor && adapted.setup ? 'rebuilt'
       : adapted.totalSets === base.totalSets ? 'same'
       : 'fewer';
     const { minutes, approx } = todayGlance(adapted, null, false, goal);

@@ -5,7 +5,7 @@ import {
   type Constraints,
   type EquipmentChoice,
 } from './adapt.ts';
-import { ownedLoads } from './progression.ts';
+import { ownedLoads, savedSetup } from './progression.ts';
 import type { Profile, TodayOverride } from '../types.ts';
 
 /**
@@ -231,12 +231,12 @@ export function defaultConstraints(profile: Profile): Constraints {
   return saved.length > 0
     ? {
         minutes: profile.sessionMinutes ?? 35,
-        equipment: profile.equipment.length > 0 || profile.support.length > 0 ? 'home' : 'bodyweight',
+        equipment: savedSetup(profile),
         loads: saved,
       }
     : {
         minutes: profile.sessionMinutes ?? 35,
-        equipment: profile.equipment.length > 0 || profile.support.length > 0 ? 'home' : 'bodyweight',
+        equipment: savedSetup(profile),
       };
 }
 

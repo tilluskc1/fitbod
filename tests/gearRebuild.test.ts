@@ -410,3 +410,58 @@ test('#188: after a switch the finish summary describes each exercise once, by a
     await server.close();
   }
 });
+
+// The saved setup is whatever defaultConstraints(profile).equipment is: a profile with no gear saves
+// bodyweight, so its own day is never a today-only rebuild (#188 follow-up).
+const noGear: Profile = {
+  goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 3, equipment: [], support: [],
+  exclusions: [], loads: {}, unit: 'kg', sessionMinutes: 45,
+};
+
+test('#188: a no-gear profile\'s saved bodyweight day is its program, not a rebuild', async () => {
+  const { defaultConstraints } = await import('../src/lib/constraints.ts');
+  const constraints = defaultConstraints(noGear);
+  assert.equal(constraints.equipment, 'bodyweight');
+  for (const slot of planSlots(buildPlan(noGear))) {
+    const program = todayProgram(noGear, slot, [], constraints);
+    assert.equal(program.setup, undefined, slot.name);
+    assert.deepEqual(program, slotProgram(noGear, slot, []), `${slot.name}: the saved day exactly`);
+    const adapted = adaptWorkout(program, constraints, [], noGear.goal);
+    assert.equal(adapted.setup, undefined, slot.name);
+    assert.doesNotMatch(adapted.note, /rebuilt|No band exercises/, `${slot.name}: ${adapted.note}`);
+    assert.ok(liveExercises(adapted, noGear, []).every((exercise) => !('setup' in exercise)), `${slot.name}: no setup tag`);
+    const bodyweight = setupOptions(program, constraints, [], noGear.goal,
+      (choice) => todayProgram(noGear, slot, [], { ...constraints, equipment: choice })).find((option) => option.choice === 'bodyweight')!;
+    assert.notEqual(bodyweight.kind, 'rebuilt', slot.name);
+  }
+});
+
+test('#188: a no-gear profile\'s sessions drive its next targets and the recap', async () => {
+  const { defaultConstraints } = await import('../src/lib/constraints.ts');
+  const constraints = defaultConstraints(noGear);
+  const slot = planSlots(buildPlan(noGear))[0];
+  const adapted = adaptWorkout(todayProgram(noGear, slot, [], constraints), constraints, [], noGear.goal);
+  let session = createSession({ id: 'n-1', name: slot.name, dayIndex: slot.index, now: '2026-11-01T10:00:00.000Z',
+    exercises: liveExercises(adapted, noGear, []) });
+  session.exercises.forEach((exercise, i) => exercise.performed.forEach((_, j) => {
+    session = updatePerformedSet(session, i, j, { done: true, reps: 12 }, '2026-11-01T10:00:00.000Z');
+  }));
+  const record = completeSession(session, { early: false, now: '2026-11-01T10:30:00.000Z' });
+  assert.ok(record.exercises.every((exercise) => exercise.setup === undefined), 'saved-setup sets are untagged');
+  const history = [record];
+  for (const line of progressionLines(record, noGear, history, 'kg')) {
+    const definition = exerciseById(line.exerciseId);
+    if (!definition) continue;
+    const next = prescribeExercise(definition, noGear, history, false);
+    assert.notEqual(next.basis, 'first-time', `${line.exerciseId}: reads its own history`);
+    assert.equal(next.last?.workoutId, 'n-1', line.exerciseId);
+  }
+});
+
+test('#188: a gym profile choosing bodyweight today still rebuilds and tags its sets', () => {
+  const { program, adapted } = day('bodyweight');
+  assert.equal(program.setup, 'bodyweight');
+  assert.equal(adapted.setup, 'bodyweight');
+  assert.match(adapted.note, /Legs rebuilt for bodyweight today\./);
+  assert.ok(liveExercises(adapted, gym, []).every((exercise) => exercise.setup === 'bodyweight'));
+});

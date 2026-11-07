@@ -231,6 +231,14 @@ export function ownedLoads(profile: Pick<Profile, 'equipment' | 'loads'>): Profi
   return isGymKit(profile) ? {} : profile.loads;
 }
 
+/**
+ * The setup the profile saved (#188): its own gear, or bodyweight when it has none. Only a
+ * today-only setup other than this one is a rebuild; the saved setup's sessions are untagged.
+ */
+export function savedSetup(profile: Pick<Profile, 'equipment' | 'support'>): SetupChoice {
+  return profile.equipment.length > 0 || profile.support.length > 0 ? 'home' : 'bodyweight';
+}
+
 /** Loads the profile says are actually selectable for this equipment. */
 export function availableLoads(profile: Pick<Profile, 'loads'>, equipment: Equipment): number[] {
   const list = profile.loads[equipment] ?? [];

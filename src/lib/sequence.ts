@@ -4,7 +4,7 @@ import type { EquipmentChoice } from './adapt.ts';
 import { detailOf, loadModeOf, programExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { buildPlan, generateWorkout } from './generator.ts';
-import { leadCompoundId, REP_RANGES, roleTarget } from './progression.ts';
+import { leadCompoundId, REP_RANGES, roleTarget, savedSetup } from './progression.ts';
 import { MAX_WEIGHT } from './validate.ts';
 
 /**
@@ -152,7 +152,8 @@ const SETUP_KIT: Record<Exclude<EquipmentChoice, 'home'>, Pick<Profile, 'equipme
  * `slotProgramAt` does: a longer day is rebuilt there (#17), a shorter one keeps the saved length
  * and `adaptWorkout` trims it on the timer's model (#203). The saved setup keeps the saved day;
  * another setup rebuilds the day from that setup's kit, so it gets that kit's best work and its
- * own honest feasibility instead of what survives the saved day.
+ * own honest feasibility instead of what survives the saved day. The saved setup is the one
+ * `defaultConstraints` picks (`savedSetup`): a no-gear profile's bodyweight day is its program.
  */
 export function todayProgram(
   profile: Profile,
@@ -160,7 +161,8 @@ export function todayProgram(
   history: WorkoutRecord[],
   today: { minutes?: number; equipment?: EquipmentChoice } = {},
 ): Program {
-  if (!today.equipment || today.equipment === 'home') {
+  // The saved setup (bodyweight for a profile with no gear) is the program, never a rebuild.
+  if (!today.equipment || today.equipment === 'home' || today.equipment === savedSetup(profile)) {
     return slotProgramAt(profile, slot, history, today.minutes);
   }
   const saved = profile.sessionMinutes ?? 35;
