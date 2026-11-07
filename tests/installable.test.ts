@@ -31,6 +31,7 @@ test('index.html links the manifest and the iPhone home-screen icon', () => {
 
 test('the service worker caches the manifest and icons, and main asks to keep storage', () => {
   const sw = read('public/sw.js').toString('utf8');
-  for (const path of ['/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png']) assert.ok(sw.includes(`'${path}'`), path);
-  assert.match(read('src/main.tsx').toString('utf8'), /navigator\.storage\.persist\(\)/);
+  for (const path of ['/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png']) assert.ok(sw.includes(`'${path}'`), path);
+  // Asked only from the home screen: a browser tab may show a permission prompt (Firefox).
+  assert.match(read('src/main.tsx').toString('utf8'), /if \(currentDevice\(\)\.standalone && navigator\.storage\?\.persist\)/);
 });

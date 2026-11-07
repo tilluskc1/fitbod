@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
 import { dumbbellLoadsPatch, formatWeight, loadLimitMessage, loadsInputText, overLoadLimit, parseLoads, unitLabel, unitOf } from '../lib/units';
 import type { Profile, Unit, WorkoutExercise } from '../types';
@@ -29,7 +29,8 @@ import { PREF_LABEL, conflictChanges, exclusionChange, preferenceChange, type Pr
 import Sheet from '../components/ui/Sheet';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
-import { CheckIcon, LockIcon } from '../components/ui/Icons';
+import { CheckIcon, LockIcon, PhoneIcon } from '../components/ui/Icons';
+import { currentDevice, installHint } from '../lib/install';
 
 /* ---------------- Adjust today ---------------- */
 
@@ -785,6 +786,8 @@ export function SettingsSheet({
   onClose,
   storageNote,
 }: SettingsProps) {
+  // How to keep the app on this phone; nothing once installed or on desktop (#214).
+  const install = useMemo(() => (typeof window === 'undefined' ? null : installHint(currentDevice())), []);
   const unit = unitOf(profile);
   const [name, setName] = useState(profile.name ?? '');
   const [loadsText, setLoadsText] = useState(() => loadsInputText(profile.loads.Dumbbell, unit));
@@ -968,6 +971,15 @@ export function SettingsSheet({
               <p>There is no account or cloud sync. Export before clearing site data or changing devices.</p>
             </div>
           </div>
+          {install && (
+            <div className="settings-card settings-lock" role="note">
+              <PhoneIcon size={22} />
+              <div>
+                <strong>{install.title}</strong>
+                <p>{install.how}</p>
+              </div>
+            </div>
+          )}
         </section>
 
         <div className="sheet-actions">
