@@ -513,3 +513,14 @@ test('#193: finishing a custom day at the saved gear and length clears the overr
   const finished = applyFinish({ ...start, current: logSet(session, 0, 0, '2026-11-07T10:05:00.000Z') }, 'c2', { early: true, now: '2026-11-07T10:30:00.000Z' });
   assert.equal(finished.todayOverride, null);
 });
+
+test('a sore word anywhere in the few words after "everything but" makes the rest the sore part (#193)', async () => {
+  const { talkParse } = await import('../src/lib/todayTalk.ts');
+  for (const text of ['everything but legs is really sore', 'everything but legs is pretty tired', 'everything but legs, sore']) {
+    const read = talkParse(text);
+    assert.deepEqual(read.train, ['Legs'], text);
+    assert.deepEqual([...(read.avoid ?? [])].sort(), ['Arms', 'Back', 'Chest', 'Core', 'Shoulders'], text);
+  }
+  assert.deepEqual(talkParse('everything but legs, 45 min').train, ['Chest', 'Back', 'Shoulders', 'Arms', 'Core']);
+  assert.equal(talkParse('everything but legs, 45 min').minutes, 45, 'the words after the list still count');
+});
