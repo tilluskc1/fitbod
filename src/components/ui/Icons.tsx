@@ -66,6 +66,15 @@ export function EditIcon({ size = 18 }: IconProps) {
   );
 }
 
+export function PhoneIcon({ size = 20 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <rect x="6.5" y="2.8" width="11" height="18.4" rx="2.4" />
+      <path d="M12 7.6v6.2M9.4 11.4 12 14l2.6-2.6" />
+    </svg>
+  );
+}
+
 export function LockIcon({ size = 20 }: IconProps) {
   return (
     <svg {...base(size)}>

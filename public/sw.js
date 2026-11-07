@@ -5,8 +5,17 @@
  * shell and previously loaded media available when the network disappears.
  * Uncached images still fall back to the text placeholder in ExerciseMedia.
  */
-const CACHE = 'fitbod-clone-shell-v4';
-const SHELL = ['/', '/index.html', '/favicon.svg'];
+const CACHE = 'fitbod-clone-shell-v5';
+const SHELL = [
+  '/',
+  '/index.html',
+  '/favicon.svg',
+  '/manifest.webmanifest',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
+  '/icons/apple-touch-icon.png',
+];
 const NETWORK_TIMEOUT_MS = 4000;
 
 function offlineResponse() {
