@@ -6,6 +6,7 @@ import { exerciseById } from '../data/exercises.ts';
 import { buildPlan, generateWorkout } from './generator.ts';
 import { leadCompoundId, REP_RANGES, roleTarget } from './progression.ts';
 import { MAX_WEIGHT } from './validate.ts';
+import { customDayName } from './areas.ts';
 
 /**
  * The program sequence.
@@ -150,13 +151,18 @@ const SETUP_KIT: Record<Exclude<EquipmentChoice, 'home'>, Pick<Profile, 'equipme
  */
 export function todayProgram(
   profile: Profile,
-  slot: PlanSlot,
+  plannedSlot: PlanSlot,
   history: WorkoutRecord[],
-  today: { minutes?: number; equipment?: EquipmentChoice } = {},
+  today: { minutes?: number; equipment?: EquipmentChoice; focus?: MuscleGroup[]; skip?: MuscleGroup[] } = {},
 ): Program {
   const saved = profile.sessionMinutes ?? 35;
+  // A day the lifter described (#193) is generated like any other, from its own focus, at today's length.
+  const focus = today.focus?.filter((muscle) => !today.skip?.includes(muscle)) ?? [];
+  const custom = focus.length > 0;
+  const slot = custom ? { ...plannedSlot, id: `${plannedSlot.id}-today`, name: customDayName(focus), focus } : plannedSlot;
   if (!today.equipment || today.equipment === 'home') {
-    return slotProgram(today.minutes && today.minutes > saved ? { ...profile, sessionMinutes: today.minutes } : profile, slot, history);
+    const minutes = custom ? today.minutes ?? saved : today.minutes && today.minutes > saved ? today.minutes : saved;
+    return slotProgram(minutes === saved ? profile : { ...profile, sessionMinutes: minutes }, slot, history);
   }
   const kit = SETUP_KIT[today.equipment];
   const program = slotProgram({ ...profile, ...kit, sessionMinutes: today.minutes ?? saved }, slot, history, today.equipment);
@@ -167,6 +173,21 @@ export function todayProgram(
     alternatives: program.feasibility.alternatives.filter((alt) => alt.kind !== 'capability'),
   };
   return { ...program, feasibility, setup: today.equipment };
+}
+
+/**
+ * The slot link a new session carries. A today-only described day (#193) carries none, so
+ * finishing it records the session but cannot move the plan: the planned day stays next.
+ */
+export function slotLinkFor(state: AppState, custom: boolean): { slotId?: string; slotSeq?: number; planRevision: number } {
+  const revision = planRevisionOf(state);
+  if (custom) return { planRevision: revision };
+  const cursor = state.programCursor;
+  return {
+    slotId: currentSlot(state)?.id,
+    slotSeq: cursor && cursor.revision === revision ? cursor.seq : 0,
+    planRevision: revision,
+  };
 }
 
 /**

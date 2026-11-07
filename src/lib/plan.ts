@@ -20,6 +20,20 @@ export function activeOverride(state: AppState, now: Date): TodayOverride | null
   return override.date === dayKey(now) ? override : null;
 }
 
+/**
+ * Today's override without its described day (#193): once that day is trained, Today goes back
+ * to the planned day. Today's gear and time stay; an override left saying only the saved setup
+ * at the saved length is no override at all.
+ */
+export function withoutCustomDay(state: AppState): AppState {
+  const override = state.todayOverride;
+  if (!override || (override.focus === undefined && override.skip === undefined)) return state;
+  const { focus: _focus, skip: _skip, ...rest } = override;
+  const saved = state.profile?.sessionMinutes ?? 35;
+  const plain = (rest.choice ?? 'home') === 'home' && rest.minutes === saved;
+  return { ...state, todayOverride: plain ? null : rest };
+}
+
 export function minutesOf(profile: Profile, override: TodayOverride | null): number {
   return override?.minutes ?? profile.sessionMinutes ?? 35;
 }

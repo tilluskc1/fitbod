@@ -1,6 +1,7 @@
 import type { AppState, PerformedSet, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { needsLoad } from '../data/flagship.ts';
 import { advanceAfterFinish } from './sequence.ts';
+import { withoutCustomDay } from './plan.ts';
 import { MAX_REPS, MAX_WEIGHT } from './validate.ts';
 
 function cleanNumber(value: number, fallback = 0): number {
@@ -417,8 +418,9 @@ export function applyFinish(
     history: alreadyStored ? state.history : [completed, ...state.history],
     current: null,
   };
-  // Explicit completion with work advances the program sequence exactly once.
-  return advanceAfterFinish(next, completed);
+  // Explicit completion with work advances the program sequence exactly once. A described
+  // day (#193) has no slot link, so it moves nothing; Today goes back to the planned day.
+  return completed.slotSeq === undefined ? withoutCustomDay(next) : advanceAfterFinish(next, completed);
 }
 
 export function applyCancel(state: AppState, sessionId: string): AppState {

@@ -299,6 +299,11 @@ function validateOverride(value: unknown, path: string): TodayOverride {
     const item = oneOf(supportRaw[i], `${path}.support[${i}]`, SUPPORT);
     if (!support.includes(item)) support.push(item);
   }
+  // A described day (#193): both optional, written only when present so older data reads unchanged.
+  const focus = raw.focus === undefined ? undefined : muscleList(raw.focus, `${path}.focus`);
+  if (focus && focus.length === 0) fail(`${path}.focus`, 'must include at least one muscle group');
+  const skip = raw.skip === undefined ? undefined : muscleList(raw.skip, `${path}.skip`);
+  if (focus && skip?.some((muscle) => focus.includes(muscle))) fail(`${path}.skip`, 'must not repeat a focus muscle group');
   return {
     date: string(raw.date, `${path}.date`),
     minutes: integer(raw.minutes, `${path}.minutes`, 10, 120),
@@ -309,7 +314,19 @@ function validateOverride(value: unknown, path: string): TodayOverride {
       raw.choice === undefined
         ? undefined
         : oneOf(raw.choice, `${path}.choice`, SETUPS),
+    ...(focus ? { focus } : {}),
+    ...(skip ? { skip } : {}),
   };
+}
+
+function muscleList(value: unknown, path: string): MuscleGroup[] {
+  const items = array(value, path, MUSCLES.length);
+  const out: MuscleGroup[] = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const muscle = oneOf(items[i], `${path}[${i}]`, MUSCLES);
+    if (!out.includes(muscle)) out.push(muscle);
+  }
+  return out;
 }
 
 const MAX_SEQ = 1_000_000;
