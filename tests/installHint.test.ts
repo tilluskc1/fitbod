@@ -14,6 +14,22 @@ test('iPhone and iPad get Share → Add to Home Screen; Android gets Install app
   assert.match(installHint({ userAgent: ANDROID, touchPoints: 5, standalone: false })!.how, /Install app/);
 });
 
+test('iPhone is told to export first: a Home Screen app starts with its own storage', () => {
+  const how = installHint({ userAgent: IPHONE, touchPoints: 5, standalone: false })!.how;
+  assert.match(how, /^Export JSON backup first\..*Restore from backup/);
+});
+
+test('Android names the browser it is in, and falls back to a generic menu', () => {
+  const samsung = ANDROID.replace('Chrome/131.0.0.0 Mobile', 'SamsungBrowser/27.0 Chrome/131.0.0.0 Mobile');
+  const firefox = 'Mozilla/5.0 (Android 15; Mobile; rv:133.0) Gecko/133.0 Firefox/133.0';
+  const other = 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Mobile Safari/537.36';
+  const how = (userAgent: string) => installHint({ userAgent, touchPoints: 5, standalone: false })!.how;
+  assert.match(how(ANDROID), /^In Chrome/);
+  assert.match(how(samsung), /^In Samsung Internet/);
+  assert.match(how(firefox), /^In Firefox/);
+  assert.match(how(other), /^Open your browser’s menu/);
+});
+
 test('no hint once installed, or on a desktop', () => {
   assert.equal(installHint({ userAgent: IPHONE, touchPoints: 5, standalone: true }), null);
   assert.equal(installHint({ userAgent: ANDROID, touchPoints: 5, standalone: true }), null);

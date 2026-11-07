@@ -22,13 +22,21 @@ export function installHint({ userAgent, touchPoints, standalone }: DeviceInfo):
   if (apple) {
     return {
       title: 'Add Home Strength to your Home Screen.',
-      how: 'In Safari, tap Share, then Add to Home Screen. Safari can clear a site’s data after 7 days of browsing without opening it; a Home Screen app keeps it.',
+      // A Home Screen web app on iOS has its own storage: Safari's workouts do not move into it.
+      how: 'Export JSON backup first. Then tap Share, then Add to Home Screen, open the new app and use Restore from backup. Safari can clear a site’s data after 7 days of browsing without opening it; a Home Screen app keeps it.',
     };
   }
   if (/Android/.test(userAgent)) {
+    const steps = /SamsungBrowser/.test(userAgent)
+      ? 'In Samsung Internet, open the menu, then Add page to, then Home screen.'
+      : /Firefox|FxiOS/.test(userAgent)
+        ? 'In Firefox, open the ⋮ menu, then Add to Home screen.'
+        : /Chrome\//.test(userAgent) && !/EdgA|OPR|YaBrowser/.test(userAgent)
+          ? 'In Chrome, open the ⋮ menu, then Install app (or Add to Home screen).'
+          : 'Open your browser’s menu, then Install app or Add to Home screen.';
     return {
-      title: 'Install Home Strength on this phone.',
-      how: 'In Chrome, open the ⋮ menu, then Install app (or Add to Home screen). It opens like an app and keeps your data on this phone.',
+      title: 'Install Home Strength on this device.',
+      how: `${steps} It opens like an app and keeps your data here.`,
     };
   }
   return null;

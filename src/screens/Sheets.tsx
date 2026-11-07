@@ -973,7 +973,7 @@ export function SettingsSheet({
           </div>
           {install && (
             <div className="settings-card settings-lock" role="note">
-              <PhoneIcon size={22} />
+              <PhoneIcon />
               <div>
                 <strong>{install.title}</strong>
                 <p>{install.how}</p>
