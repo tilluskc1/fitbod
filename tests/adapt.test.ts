@@ -5,17 +5,18 @@ import { keywordParser, noticeText, programCeilingNotice, withCeiling } from '..
 import { FULL_BODY_A, programSetCount } from '../src/data/flagship.ts';
 
 const home = (minutes: number) =>
-  adaptWorkout(FULL_BODY_A, { minutes, equipment: 'home' });
+  adaptWorkout(FULL_BODY_A, { minutes, equipment: 'home' }, [], undefined);
 
 // #203: trimming fits the length by the rest timer's clock, not by the program's sets-per-minute
-// ratio, so 20 min keeps 7 sets (18 min by the timer) where the ratio kept 6 and dropped the plank.
-test('20 minutes with home dumbbells fits 7 sets by the timer', () => {
+// ratio, then refills what still fits: 20 min keeps 8 sets (19 min by the timer) where the ratio
+// kept 6 and dropped the plank.
+test('20 minutes with home dumbbells fits 8 sets by the timer', () => {
   const adapted = home(20);
 
   assert.equal(adapted.minutes, 20);
   assert.equal(adapted.originalMinutes, 35);
   assert.equal(adapted.originalSets, 11);
-  assert.equal(adapted.totalSets, 7);
+  assert.equal(adapted.totalSets, 8);
   assert.ok(todayGlance(adapted, null).minutes <= 20);
   assert.deepEqual(
     adapted.exercises.map((exercise) => [exercise.exerciseId, exercise.sets]),
@@ -23,7 +24,7 @@ test('20 minutes with home dumbbells fits 7 sets by the timer', () => {
       ['dumbbell-floor-press', 2],
       ['goblet-squat', 2],
       ['dumbbell-row', 2],
-      ['plank', 1],
+      ['plank', 2],
     ],
   );
 
@@ -38,7 +39,7 @@ test('20 minutes with home dumbbells fits 7 sets by the timer', () => {
   assert.equal(squat.load, 'total');
 
   assert.deepEqual(adapted.skipped, []);
-  assert.equal(adapted.note, 'Volume trimmed to 7 sets to fit 20 min.');
+  assert.equal(adapted.note, 'Volume trimmed to 8 sets to fit 20 min.');
 });
 
 test('30 minutes with home dumbbells fits 10 sets by the timer (#203)', () => {
@@ -54,9 +55,9 @@ test('30 minutes with home dumbbells fits 10 sets by the timer (#203)', () => {
   assert.equal(adapted.note, 'Volume trimmed to 10 sets to fit 30 min.');
 });
 
-test('a 15-minute day drops whole movements until the timer fits it (#203)', () => {
+test('a 15-minute day drops whole movements until the timer fits it, then refills the lead (#203)', () => {
   const adapted = home(15);
-  assert.deepEqual(adapted.exercises.map((exercise) => [exercise.exerciseId, exercise.sets]), [['dumbbell-floor-press', 2], ['goblet-squat', 2]]);
+  assert.deepEqual(adapted.exercises.map((exercise) => [exercise.exerciseId, exercise.sets]), [['dumbbell-floor-press', 3], ['goblet-squat', 2]]);
   assert.ok(todayGlance(adapted, null).minutes <= 15);
 });
 
@@ -92,15 +93,15 @@ test('asking for more time than the program holds caps at the program', () => {
 });
 
 test('a capped request says what the work takes, even with a movement excluded (#17)', () => {
-  const excluded = adaptWorkout(FULL_BODY_A, { minutes: 60, equipment: 'home' }, [FULL_BODY_A.exercises[0].exerciseId]);
+  const excluded = adaptWorkout(FULL_BODY_A, { minutes: 60, equipment: 'home' }, [FULL_BODY_A.exercises[0].exerciseId], undefined);
   assert.equal(excluded.minutes, estimatedMinutes(FULL_BODY_A, excluded.totalSets));
   assert.ok(excluded.minutes < FULL_BODY_A.minutes);
   assert.match(noticeText(programCeilingNotice(home(60))!), /^You asked for 60 min — the program has no more work to add, so this shows the 31 min it takes\./);
   // At or under the program, the label is the request, as before.
-  assert.equal(adaptWorkout(FULL_BODY_A, { minutes: 30, equipment: 'home' }, [FULL_BODY_A.exercises[0].exerciseId]).minutes, 30);
+  assert.equal(adaptWorkout(FULL_BODY_A, { minutes: 30, equipment: 'home' }, [FULL_BODY_A.exercises[0].exerciseId], undefined).minutes, 30);
   // Nothing left to do is not a 0-minute workout.
   const all = FULL_BODY_A.exercises.map((exercise) => exercise.exerciseId);
-  assert.equal(adaptWorkout(FULL_BODY_A, { minutes: 60, equipment: 'home' }, all).cappedMinutes, null);
+  assert.equal(adaptWorkout(FULL_BODY_A, { minutes: 60, equipment: 'home' }, all, undefined).cappedMinutes, null);
 });
 
 test('the engine only ever returns loads from the program', () => {
@@ -113,7 +114,7 @@ test('the engine only ever returns loads from the program', () => {
 });
 
 test('bodyweight setup drops loaded movements instead of inventing weights', () => {
-  const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'bodyweight' });
+  const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'bodyweight' }, [], undefined);
 
   assert.deepEqual(
     adapted.exercises.map((exercise) => exercise.exerciseId),
@@ -127,7 +128,7 @@ test('bodyweight setup drops loaded movements instead of inventing weights', () 
 });
 
 test('a hotel gym keeps every programmed load', () => {
-  const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'hotel' });
+  const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'hotel' }, [], undefined);
   // #203: 20 min by the timer keeps all four movements; nothing is skipped.
   assert.equal(adapted.exercises.length, 4);
   assert.equal(adapted.skipped.length, 0);
@@ -171,7 +172,7 @@ test('excluded movements are skipped as excluded, never reloaded', () => {
   const adapted = adaptWorkout(
     FULL_BODY_A,
     { minutes: 35, equipment: 'home' },
-    ['dumbbell-row'],
+    ['dumbbell-row'], undefined,
   );
   assert.deepEqual(
     adapted.skipped.map((item) => [item.exerciseId, item.reason]),

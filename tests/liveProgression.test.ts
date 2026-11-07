@@ -31,7 +31,7 @@ const constraints = { minutes: 35, equipment: 'home' as const, loads: RACK };
 
 /** The real start path: adapted program → live prescription → session. */
 function startLiveSession(history: WorkoutRecord[] = [], minutes = 35) {
-  const adapted = adaptWorkout(FULL_BODY_A, { ...constraints, minutes });
+  const adapted = adaptWorkout(FULL_BODY_A, { ...constraints, minutes }, [], undefined);
   return createSession({
     id: 'live-1',
     name: adapted.name,
@@ -82,7 +82,7 @@ test('a logged full target earns the next selectable rack load through the real 
   const { state } = finish(logged);
 
   // The next real session — the same path Today and Start use — asks history.
-  const adapted = adaptWorkout(FULL_BODY_A, constraints);
+  const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
   const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 18, 'all three sets at the ceiling move to the next owned load');
   assert.equal(next.planned[0].reps, 8, "reps restart at the bottom of the program's 8–10 range");
@@ -98,7 +98,7 @@ test('a shortened session at the same load does not earn the step', () => {
   const logged = logAll(short, 0, 15, 10);
   const { state } = finish(logged);
 
-  const adapted = adaptWorkout(FULL_BODY_A, constraints);
+  const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
   const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 15, 'two of three required sets is unfinished work');
   assert.equal(next.planned[0].reps, 10);
@@ -114,7 +114,7 @@ test('mixed loads hold instead of rewarding the heaviest set', () => {
   logged = logSet(logged, 0, 2, '2026-11-02T10:03:00.000Z');
   const { state } = finish(logged);
 
-  const adapted = adaptWorkout(FULL_BODY_A, constraints);
+  const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
   const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 15, 'mixed work holds at the lowest working load used');
   assert.equal(next.planned[0].reps, 10);
@@ -133,13 +133,13 @@ test('an unlogged or warm-up set is not qualifying evidence', () => {
   logged = logSet(logged, 0, 2, '2026-11-02T10:03:00.000Z');
   const { state } = finish(logged);
 
-  const adapted = adaptWorkout(FULL_BODY_A, constraints);
+  const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
   const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 15, 'two marked sets cannot complete a three-set target');
 });
 
 test('a new variant calibrates instead of inheriting a load from another exercise', () => {
-  const adapted = adaptWorkout(FULL_BODY_A, constraints);
+  const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
   const squat = liveExercises(adapted, profile, []).find(
     (exercise) => exercise.exerciseId === 'goblet-squat',
   );
@@ -153,7 +153,7 @@ test('the top of the owned rack holds instead of inventing a heavier load', () =
   const logged = logAll(session, 0, 18, 10);
   const { state } = finish(logged);
 
-  const adapted = adaptWorkout(FULL_BODY_A, constraints);
+  const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
   const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 18);
   assert.equal(next.planned[0].reps, 10);
@@ -186,7 +186,7 @@ test('correcting a logged set changes the next target without rewriting the reco
     ],
   };
 
-  const adapted = adaptWorkout(FULL_BODY_A, constraints);
+  const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
   const next = liveExercises(adapted, profile, corrected.history)[0];
   assert.equal(next.planned[0].weight, 15, 'a corrected set removes the earned load step');
   assert.equal(next.planned[0].reps, 9, 'the lowest completed set drives the next rep target');
@@ -197,7 +197,7 @@ test('Today shows the computed target, not the program fixture', () => {
   const logged = logAll(session, 0, 15, 10);
   const { state } = finish(logged);
 
-  const adapted = adaptWorkout(FULL_BODY_A, constraints);
+  const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
   const live = liveAdapted(adapted, profile, state.history);
   const press = live.exercises[0];
   assert.equal(press.weight, 18);
@@ -277,7 +277,7 @@ test('mid-session adjust, restore and swap-back keep the history-derived numbers
   // History: the press earned 18 kg; nothing else has been logged yet.
   const { state } = finish(logAll(startLiveSession([]), 0, 15, 10));
   const history = state.history;
-  const original = adaptWorkout(FULL_BODY_A, constraints);
+  const original = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
   const live = liveExercises(original, profile, history);
 
   // A shortened live session with one squat set logged, then the original restored.
@@ -303,7 +303,7 @@ test('in lb, the reason and the target name a rack load with the same number', (
   // 15 kg is on the rack; 3 × 9 holds the load and asks for a rep.
   const { state } = finish(logAll(startLiveSession([]), 0, 15, 9));
   const lb = { ...profile, unit: 'lb' as const };
-  const press = liveAdapted(adaptWorkout(FULL_BODY_A, constraints), lb, state.history).exercises[0];
+  const press = liveAdapted(adaptWorkout(FULL_BODY_A, constraints, [], undefined), lb, state.history).exercises[0];
   const target = targetSummary(press, press.sets, 'lb').match(/@ ([\d.]+) lb/)?.[1];
   const reason = targetReason(press.exerciseId, lb, state.history, 'lb')?.match(/([\d.]+) lb/)?.[1];
   assert.ok(target);
@@ -321,7 +321,7 @@ test('an open slot session gives a non-flagship movement its own rep range, not 
   assert.ok(other, 'a catalog movement outside the flagship');
   const session = createSession({ id: 'slot', name: 'Slot B', dayIndex: 1, durationMin: 35, now: '2026-11-02T10:00:00.000Z',
     exercises: [{ exerciseId: other.id, name: other.name, planned: [{ weight: 0, reps: 8 }], performed: [{ weight: 0, reps: 8, done: false }] }] });
-  const shown = currentWorkout(adaptWorkout(FULL_BODY_A, constraints), session).exercises[0];
+  const shown = currentWorkout(adaptWorkout(FULL_BODY_A, constraints, [], undefined), session).exercises[0];
   const expected = prescribeExercise(other, profile, []).range;
   assert.deepEqual(shown.repRange, [expected.min, expected.max]);
 });

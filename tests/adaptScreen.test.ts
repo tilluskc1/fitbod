@@ -10,7 +10,7 @@ test('review explains an empty adapted workout and disables Start', async () => 
   const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' });
   try {
     const { default: AdaptScreen } = await server.ssrLoadModule('/src/screens/AdaptScreen.tsx');
-    const adapted = { ...adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'bands' }), exercises: [], totalSets: 0 };
+    const adapted = { ...adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'bands' }, [], undefined), exercises: [], totalSets: 0 };
     const html = renderToStaticMarkup(createElement(AdaptScreen, {
       originalSets: adapted.originalSets,
       adapted,

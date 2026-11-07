@@ -4,7 +4,10 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { buildPlan } from '../src/lib/generator.ts';
-import { planSlots, slotProgram } from '../src/lib/sequence.ts';
+import { planSlots, slotProgram, slotProgramAt } from '../src/lib/sequence.ts';
+import { estimatedSeconds } from '../src/lib/generator.ts';
+import { sessionRests } from '../src/lib/sessionTime.ts';
+import { leadCompoundId } from '../src/lib/progression.ts';
 import { readFileSync } from 'node:fs';
 import { adaptWorkout, setupOptions, todayGlance } from '../src/lib/adapt.ts';
 import { defaultConstraints, noticeText, withCeiling } from '../src/lib/constraints.ts';
@@ -68,11 +71,11 @@ test('#203: each day reads the same minutes on Plan, the switch and gym sheets a
 test('#203: the review names the honest figure, not the asked length', async () => {
   const profile = profileFor(KITS.gym, 4, 60);
   const program = slotProgram(profile, planSlots(buildPlan(profile))[1], []);
-  const constraints = { ...defaultConstraints(profile), minutes: 30 };
+  const constraints = { ...defaultConstraints(profile), minutes: 20 };
   const adapted = adaptWorkout(program, constraints, [], profile.goal);
   const before = todayGlance(adaptWorkout(program, defaultConstraints(profile), [], profile.goal), null, false, profile.goal);
   const after = todayGlance(adapted, null, false, profile.goal);
-  assert.ok(after.minutes !== 30 && before.minutes !== 60, `pick a case where the honest figure differs: ${before.minutes} → ${after.minutes}`);
+  assert.ok(after.minutes !== 20 && before.minutes !== 60, `pick a case where the honest figure differs: ${before.minutes} → ${after.minutes}`);
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: AdaptScreen } = await server.ssrLoadModule('/src/screens/AdaptScreen.tsx');
@@ -83,10 +86,10 @@ test('#203: the review names the honest figure, not the asked length', async () 
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     assert.match(text, new RegExp(`Start ${after.minutes}-min workout`));
     assert.match(text, new RegExp(`${before.minutes} min → ${after.minutes} min`));
-    assert.doesNotMatch(text, /Start 30-min workout/);
+    assert.doesNotMatch(text, /Start 20-min workout/);
     // The title names the length asked for as the setting it is, not as the session's duration.
-    assert.match(text, /Lower A, set to 30 min/);
-    assert.doesNotMatch(text, /30-minute version/);
+    assert.match(text, /Lower A, set to 20 min/);
+    assert.doesNotMatch(text, /20-minute version/);
   } finally {
     await server.close();
   }
@@ -220,4 +223,41 @@ test('#203: rendered, the app\'s Today, Plan\'s later list, the switch sheet and
     if (oldStorage) Object.defineProperty(globalThis, 'localStorage', oldStorage);
     else Reflect.deleteProperty(globalThis, 'localStorage');
   }
+});
+
+test('#203: a trimmed day fits its length, cannot take one more set back, and keeps its lead', () => {
+  const seconds = (work: { exerciseId: string; sets: number }[], goal: Profile['goal'], minutes: number) => {
+    const live = work.filter((exercise) => exercise.sets > 0);
+    return estimatedSeconds(live.map((exercise) => exercise.sets), sessionRests(live.map((exercise) => exercise.exerciseId), goal, minutes), minutes);
+  };
+  const problems: string[] = [];
+  for (const [kit, gear] of Object.entries(KITS)) {
+    for (const goal of ['Build Muscle', 'Get Stronger']) {
+      for (const days of [2, 3, 4, 5, 6]) {
+        for (const saved of [20, 30, 45, 60]) {
+          const profile = profileFor(gear, days, saved, goal);
+          for (const slot of planSlots(buildPlan(profile))) {
+            for (const minutes of [15, 20, 30, 45]) {
+              if (minutes >= saved) continue;
+              const program = slotProgramAt(profile, slot, [], minutes);
+              const adapted = adaptWorkout(program, { ...defaultConstraints(profile), minutes }, [], profile.goal);
+              const where = `${kit} ${goal} ${days}d saved ${saved} today ${minutes} ${slot.name}`;
+              if (adapted.exercises.length === 0) continue;
+              const work = adapted.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.sets }));
+              if (seconds(work, profile.goal, minutes) > minutes * 60) problems.push(`over: ${where}`);
+              adapted.exercises.forEach((exercise, index) => {
+                if (exercise.sets > exercise.originalSets) problems.push(`above its program: ${where} ${exercise.exerciseId}`);
+                if (exercise.sets === exercise.originalSets) return;
+                const more = work.map((item, k) => (k === index ? { ...item, sets: item.sets + 1 } : item));
+                if (seconds(more, profile.goal, minutes) <= minutes * 60) problems.push(`room for a set: ${where} ${exercise.exerciseId}`);
+              });
+              const lead = leadCompoundId(program.exercises.map((exercise) => exercise.exerciseId));
+              if (lead && !adapted.exercises.some((exercise) => exercise.exerciseId === lead)) problems.push(`lead dropped: ${where}`);
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.deepEqual(problems.slice(0, 10), [], `${problems.length} problems`);
 });

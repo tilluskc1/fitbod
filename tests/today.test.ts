@@ -17,7 +17,7 @@ test('Today shows the accepted active targets instead of a recomputed program', 
   });
   try {
     const { default: TodayScreen } = await server.ssrLoadModule('/src/screens/TodayScreen.tsx');
-    const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' });
+    const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' }, [], undefined);
     const current = logSet(createSession({
       id: 'accepted', name: adapted.name, dayIndex: 0, durationMin: 20,
       exercises: toWorkoutExercises(adapted), now: '2026-10-31T10:00:00.000Z',
@@ -27,15 +27,15 @@ test('Today shows the accepted active targets instead of a recomputed program', 
       profile: { goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
         equipment: ['Dumbbell'], support: [], exclusions: [], loads: {}, name: 'Today review' },
       program: FULL_BODY_A,
-      adapted: adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' }),
+      adapted: adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' }, [], undefined),
       equipment: 'home', adjusted: false, history: [], current,
       now: new Date('2026-10-31T10:10:00.000Z'),
       onPreview: noop, onAdjust: noop, onWhy: noop, onRestore: noop,
       onOpenSettings: noop, onOpenExercise: noop,
     }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-    // The session's own time with the timer's short rests (#200); 20 min trims to 7 sets by the timer (#203).
-    assert.match(text, /The workout 18 min · 7 sets/);
+    // The session's own time with the timer's short rests (#200); 20 min trims to 8 sets by the timer (#203).
+    assert.match(text, /The workout 19 min · 8 sets/);
     // Uniform reps read compactly ("2 × 9"), so the row fits at 360 px (#97).
     assert.match(text, /2 × 9 @ 15 kg each/);
     assert.doesNotMatch(text, /11 sets|3 × 9|3 sets · 9 · 9 · 9/);
@@ -49,7 +49,7 @@ test('Today preserves the actual fractional load in last performance', async () 
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: TodayScreen } = await server.ssrLoadModule('/src/screens/TodayScreen.tsx');
-    const adapted = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' });
+    const adapted = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' }, [], undefined);
     const profile: Profile = { goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
       equipment: ['Dumbbell'], support: [], exclusions: [], loads: {}, name: 'Today review' };
     // A first live session plans no load, so the one typed set is the baseline an early finish repeats (#104).

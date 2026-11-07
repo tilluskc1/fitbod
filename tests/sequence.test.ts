@@ -50,7 +50,7 @@ function runSlot(state: AppState, options: { sets?: number } = {}): AppState {
   const slot = currentSlot(state);
   assert.ok(slot, 'a slot must be on offer');
   const program = slotProgram(profile, slot, state.history);
-  const adapted = adaptWorkout(program, { minutes: 35, equipment: 'home' }, []);
+  const adapted = adaptWorkout(program, { minutes: 35, equipment: 'home' }, [], undefined);
   const session = createSession({
     id: `s-${slot.index}-${state.history.length}`,
     name: adapted.name,
@@ -135,7 +135,7 @@ test('an unfinished session stays resumable and a zero-work discard keeps the cu
   const state = fresh();
   const slot = currentSlot(state)!;
   const program = slotProgram(profile, slot, []);
-  const adapted = adaptWorkout(program, { minutes: 35, equipment: 'home' }, []);
+  const adapted = adaptWorkout(program, { minutes: 35, equipment: 'home' }, [], undefined);
   const open = { ...state, current: createSession({
     id: 'open', name: adapted.name, dayIndex: slot.index, slotId: slot.id, slotSeq: 0,
     planRevision: state.planRevision, exercises: toWorkoutExercises(adapted),
@@ -211,7 +211,7 @@ test('a configured barbell plan keeps its actual Push and Pull lifts in Today', 
   const state = fresh({ profile: equipped, plan: buildPlan(equipped) });
   for (const index of [0, 1]) {
     const program = slotProgram(equipped, planSlots(state.plan)[index], []);
-    const adapted = adaptWorkout(program, defaultConstraints(equipped), equipped.exclusions);
+    const adapted = adaptWorkout(program, defaultConstraints(equipped), equipped.exclusions, equipped.goal);
     assert.deepEqual(adapted.exercises.map((exercise) => exercise.exerciseId), program.exercises.map((exercise) => exercise.exerciseId));
   }
 });
@@ -219,7 +219,7 @@ test('a configured barbell plan keeps its actual Push and Pull lifts in Today', 
 test('bodyweight override cannot start a configured Pull slot with only core accessories', () => {
   const equipped: Profile = { ...profile, equipment: ['Barbell'], support: ['Rack', 'Bench'], loads: { Barbell: [20, 30, 40] } };
   const program = slotProgram(equipped, planSlots(buildPlan(equipped))[1], []);
-  const adapted = adaptWorkout(program, { minutes: 35, equipment: 'bodyweight' }, []);
+  const adapted = adaptWorkout(program, { minutes: 35, equipment: 'bodyweight' }, [], undefined);
   assert.equal(adapted.exercises.length, 0);
   assert.match(adapted.note, /main movement/i);
 });
@@ -265,7 +265,7 @@ test('settings that leave the slot list unchanged keep the revision, cursor and 
 test('a finish with no completed working set does not advance the cursor', () => {
   const state = fresh();
   const slot = currentSlot(state)!;
-  const adapted = adaptWorkout(slotProgram(profile, slot, []), { minutes: 35, equipment: 'home' }, []);
+  const adapted = adaptWorkout(slotProgram(profile, slot, []), { minutes: 35, equipment: 'home' }, [], undefined);
   const session = createSession({
     id: 'empty', name: adapted.name, dayIndex: slot.index, slotId: slot.id, slotSeq: 0,
     planRevision: state.planRevision, exercises: toWorkoutExercises(adapted), now: '2026-11-01T10:00:00.000Z',

@@ -43,7 +43,7 @@ test('a load typed above the listed rack is the next target, at every rep count'
 });
 
 test("Start's target keeps the typed 20, never the rack's 10", () => {
-  const adapted = adaptWorkout(FULL_BODY_A, defaultConstraints(profile), []);
+  const adapted = adaptWorkout(FULL_BODY_A, defaultConstraints(profile), [], profile.goal);
   const live = liveExercises(adapted, profile, pressedAt(lb(20), range.min)).find((entry) => entry.exerciseId === press.id);
   assert.ok(live, 'the floor press is on the day');
   assert.deepEqual([...new Set(live.planned.map((set) => set.weight))], [lb(20)]);
@@ -52,7 +52,7 @@ test("Start's target keeps the typed 20, never the rack's 10", () => {
 const noop = () => {};
 async function renderTrain(history: WorkoutRecord[]) {
   const constraints = defaultConstraints(profile);
-  const adapted = adaptWorkout(FULL_BODY_A, constraints, []);
+  const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
   const session = createSession({ id: 's0', name: adapted.name, dayIndex: 0, durationMin: 35,
     exercises: liveExercises(adapted, profile, history), now: '2026-11-05T10:00:00.000Z' });
   const rack = loadOptions(constraints.equipment, constraints.loads);

@@ -17,7 +17,7 @@ const push = (profile: Profile) => slotProgram(profile, planSlots(plan)[0], []);
 
 test('UI7-02: a bodyweight day never promises the requested 45 minutes for a few sets', () => {
   const program = push({ ...base, equipment: [] } as Profile);
-  const adapted = adaptWorkout(program, { minutes: 45, equipment: 'home' }, []);
+  const adapted = adaptWorkout(program, { minutes: 45, equipment: 'home' }, [], undefined);
   assert.ok(adapted.totalSets > 0 && adapted.totalSets <= 6, `expected a small day, got ${adapted.totalSets} sets`);
   const { minutes, approx } = todayGlance(adapted, null, false, 'Build Muscle');
   assert.ok(minutes < 20 && approx, `promised ${minutes} min for ${adapted.totalSets} sets`);
@@ -25,7 +25,7 @@ test('UI7-02: a bodyweight day never promises the requested 45 minutes for a few
 
 test('UI7-02: a day that fills the requested length shows what it takes, never more than asked', () => {
   const program = push({ ...base, equipment: ['Dumbbell'], support: ['Bench'] } as Profile);
-  const adapted = adaptWorkout(program, { minutes: 45, equipment: 'home' }, []);
+  const adapted = adaptWorkout(program, { minutes: 45, equipment: 'home' }, [], undefined);
   // #203: this used to read 45, the asked length, while the rest timer runs 14 sets in 40 minutes.
   // Every surface now reads the timer's figure; the length pill alone keeps naming the 45 asked for.
   assert.deepEqual(todayGlance(adapted, null, false, 'Build Muscle'), {
@@ -39,7 +39,7 @@ test('UI7-03: a short session trims isolation before a later compound', () => {
   const ids = program.exercises.map((exercise) => exercise.exerciseId);
   assert.ok(ids.includes('dumbbell-bench-press') && ids.includes('lateral-raise'), ids.join(', '));
   for (const minutes of [15, 20]) {
-    const adapted = adaptWorkout(program, { minutes, equipment: 'home' }, []);
+    const adapted = adaptWorkout(program, { minutes, equipment: 'home' }, [], undefined);
     const kept = adapted.exercises.map((exercise) => exercise.exerciseId);
     const lead = ids[0];
     assert.ok(kept.includes(lead), `${minutes} min dropped the lead ${lead}`);

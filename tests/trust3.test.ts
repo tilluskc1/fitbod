@@ -73,7 +73,7 @@ test('approve handler refuses a stale proposal and ignores a repeat tap', () => 
 // Box 1: after a 3-to-2 adaptation and swap-back, the segment keeps the same
 // history-derived load and rep target the session started with.
 test('swap-back after a 3-to-2 adaptation keeps the session\'s own load and target', () => {
-  const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' }, []);
+  const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' }, [], undefined);
   assert.equal(adapted.exercises[0].sets, 2);
   const press = exerciseById('dumbbell-floor-press');
   const pushup = exerciseById('push-up');
@@ -109,13 +109,13 @@ test('swap-back after a 3-to-2 adaptation keeps the session\'s own load and targ
 // Box 1, second half: current surfaces read the two adapted targets while a
 // completed three-set session keeps all three sets as history.
 test('adapted surfaces read two current targets beside a three-set history', () => {
-  const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' }, []);
+  const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' }, [], undefined);
   assert.equal(targetSummary(adapted.exercises[0], adapted.exercises[0].sets), '9 · 9 @ 15 kg each');
   const history = createSession({
     id: 'hist',
     name: adapted.name,
     dayIndex: 0,
-    exercises: toWorkoutExercises(adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' }, [])),
+    exercises: toWorkoutExercises(adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' }, [], undefined)),
     now: '2026-10-29T10:00:00.000Z',
   });
   const done = history.exercises[0].performed.map((set) => ({ ...set, done: true }));

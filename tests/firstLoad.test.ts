@@ -66,7 +66,7 @@ const at = (minute: number) => `2026-11-04T10:${String(minute).padStart(2, '0')}
 const noop = () => {};
 
 async function renderTrain(extra: Record<string, unknown>) {
-  const adapted = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home', loads: [] });
+  const adapted = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home', loads: [] }, [], undefined);
   const session = createSession({ id: 's0', name: adapted.name, dayIndex: 0, durationMin: 35,
     exercises: liveExercises(adapted, profile, []), now: at(0) });
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });

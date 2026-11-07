@@ -65,7 +65,7 @@ test('a number too large to be a load becomes neither minutes nor a load', () =>
 test('the home rack never caps a hotel gym or a bodyweight session', () => {
   assert.deepEqual(loadOptions('hotel', [5, 7.5]), loadOptions('hotel'));
   assert.deepEqual(loadOptions('bodyweight', [5, 7.5]), []);
-  const hotel = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'hotel', loads: [5, 7.5] }, []);
+  const hotel = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'hotel', loads: [5, 7.5] }, [], undefined);
   assert.deepEqual(
     [...new Set(hotel.exercises.filter((exercise) => exercise.weight > 0).map((exercise) => exercise.weight))].sort((a, b) => a - b),
     [15, 18],
@@ -75,7 +75,7 @@ test('the home rack never caps a hotel gym or a bodyweight session', () => {
 test('a confirmed rack reaches Start: no target offers a load the user does not own', () => {
   const constraints = defaultConstraints(sparseRack);
   assert.deepEqual(constraints.loads, [5, 7.5]);
-  const adapted = adaptWorkout(FULL_BODY_A, constraints, sparseRack.exclusions);
+  const adapted = adaptWorkout(FULL_BODY_A, constraints, sparseRack.exclusions, undefined);
   assert.ok(adapted.exercises.length > 0);
   assert.deepEqual(
     adapted.exercises.filter((exercise) => exercise.weight > 0).map((exercise) => exercise.weight),
@@ -105,7 +105,7 @@ test('an unknown rack offers no example dumbbells, only typed entry', () => {
 });
 
 test('an unknown rack never gets a target it did not log', () => {
-  const adapted = adaptWorkout(FULL_BODY_A, defaultConstraints(unconfirmed), []);
+  const adapted = adaptWorkout(FULL_BODY_A, defaultConstraints(unconfirmed), [], unconfirmed.goal);
   const exercises = liveExercises(adapted, unconfirmed, []);
   assert.deepEqual([...new Set(exercises.flatMap((entry) => entry.planned.map((set) => set.weight)))], [0]);
   // The user types 30 lb for every press set; the next target is that load, not a rack value.
@@ -182,12 +182,12 @@ test('an unconfirmed home rack never drops a typed off-rack load as missing equi
   for (const typed of [6.8, 12.5]) {
     const program = { ...FULL_BODY_A, exercises: FULL_BODY_A.exercises.map((exercise) =>
       exercise.weight > 0 ? { ...exercise, weight: typed } : exercise) };
-    const home = adaptWorkout(program, { minutes: 35, equipment: 'home' }, []);
+    const home = adaptWorkout(program, { minutes: 35, equipment: 'home' }, [], undefined);
     assert.deepEqual(home.skipped.filter((item) => item.reason === 'equipment'), [], `home @ ${typed}`);
     assert.deepEqual(home.exercises.filter((exercise) => exercise.weight > 0).map((exercise) => exercise.weight),
       program.exercises.filter((exercise) => exercise.weight > 0).map(() => typed));
     // A hotel gym's rack is still the gym's: an off-rack load is not there.
-    const hotel = adaptWorkout(program, { minutes: 35, equipment: 'hotel' }, []);
+    const hotel = adaptWorkout(program, { minutes: 35, equipment: 'hotel' }, [], undefined);
     assert.ok(hotel.skipped.some((item) => item.reason === 'equipment'), `hotel @ ${typed}`);
   }
 });

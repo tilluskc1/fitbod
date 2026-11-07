@@ -13,7 +13,7 @@ import { EMPTY_STATE, STORAGE_KEY, saveState, loadState } from '../src/lib/stora
 test('adopting another tab closes prescription sheets even when duplicate IDs survive at the same index', () => {
   const profile = { goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
     equipment: ['Dumbbell'], support: [], exclusions: [], loads: {}, unit: 'kg' };
-  const short = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' });
+  const short = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' }, [], undefined);
   let current = createSession({ id: 'active', name: short.name, dayIndex: 0, durationMin: 20,
     exercises: toWorkoutExercises(short), now: '2026-10-31T10:00:00.000Z' });
   current = logSet(updatePerformedSet(current, 0, 0, { weight: 20, reps: 10 }), 0, 0);
@@ -21,7 +21,7 @@ test('adopting another tab closes prescription sheets even when duplicate IDs su
   current = swapPendingExercise(current, 1, swapCandidateFor(exerciseById('dumbbell-floor-press')!, profile, [], current));
   const state = { ...EMPTY_STATE, profile, current };
   const undo = { ...state, current: restorePendingWorkout(current,
-    adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' })) };
+    adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' }, [], undefined)) };
   assert.equal(state.current.exercises[1].exerciseId, 'dumbbell-floor-press');
   assert.equal(undo.current.exercises[1].exerciseId, 'goblet-squat');
   const oldStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
@@ -68,13 +68,13 @@ test('adopting another tab closes prescription sheets even when duplicate IDs su
 test('accepted cross-tab pending-work adoption invalidates old previews but ignored updates preserve them', () => {
   const profile = { goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
     equipment: ['Dumbbell'], support: [], exclusions: [], loads: {}, unit: 'kg' };
-  const short = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' });
+  const short = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' }, [], undefined);
   const current = logSet(updatePerformedSet(createSession({ id: 'preview-session', name: short.name,
     dayIndex: 0, durationMin: 20, exercises: toWorkoutExercises(short), now: '2026-10-31T10:00:00.000Z' }),
     0, 0, { weight: 20, reps: 10 }), 0, 0);
   const before = { ...EMPTY_STATE, profile, current };
   const after = { ...before, current: restorePendingWorkout(current,
-    adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' })) };
+    adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' }, [], undefined)) };
   const oldStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
   let raw: string | null = null;
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
@@ -105,7 +105,7 @@ test('accepted cross-tab pending-work adoption invalidates old previews but igno
         (update: (open: typeof sheet) => typeof sheet) => { sheet = update(sheet); }, proposalRevisionRef);
       onStorage({ key: scenario === 'wrong-key' ? 'unrelated' : STORAGE_KEY });
       const accepted = scenario === 'accepted';
-      assert.equal(sessionProgress(state.current).total, accepted ? 11 : 7, scenario); // 20 min: 7 sets by the timer (#203)
+      assert.equal(sessionProgress(state.current).total, accepted ? 11 : 8, scenario); // 20 min: 8 sets by the timer (#203)
       assert.equal(decideProposalApproval(oldPreview, context(), null), accepted ? 'stale' : 'accept', scenario);
       assert.equal(proposalRevisionRef.current, accepted ? 1 : 0, scenario);
       assert.equal(adoptingRef.current, accepted, scenario);

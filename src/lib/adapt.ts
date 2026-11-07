@@ -199,11 +199,14 @@ export function todayGlance(adapted: AdaptedWorkout, current: WorkoutRecord | nu
 }
 
 export function adaptWorkout(
-  program: Program = FULL_BODY_A,
-  constraints: Constraints = DEFAULT_CONSTRAINTS,
-  excluded: string[] = [],
-  /** The goal sets the lead's rest, so trimming fits the length by the timer's own clock (#203). */
-  goal?: Goal,
+  program: Program,
+  constraints: Constraints,
+  excluded: string[],
+  /**
+   * Required, even when unknown (undefined): the goal sets the lead's rest, so trimming fits the
+   * length by the timer's own clock and a Get Stronger day is never trimmed with short rests (#203).
+   */
+  goal: Goal | undefined,
 ): AdaptedWorkout {
   const minutes = clamp(Math.round(constraints.minutes), 10, 120);
   const setup = EQUIPMENT_OPTIONS[constraints.equipment] ?? EQUIPMENT_OPTIONS.home;
@@ -313,11 +316,24 @@ export function adaptWorkout(
     active[0].sets = 0;
   }
 
+  // 4. Refill: undo the trim in reverse order (lead first), a set at a time while the day still
+  //    fits, up to each movement's own sets. A dropped movement stays dropped (#203).
+  for (const exercise of [...trimOrder].reverse()) {
+    if (exercise.sets === 0) continue;
+    while (exercise.sets < exercise.originalSets) {
+      exercise.sets += 1;
+      if (seconds() > budget) {
+        exercise.sets -= 1;
+        break;
+      }
+    }
+  }
+
   for (const exercise of exercises) {
     exercise.targetReps = exercise.targetReps?.slice(0, exercise.sets);
   }
 
-  // 4. Anything reduced to nothing was dropped to fit the time, so the review
+  // 5. Anything reduced to nothing was dropped to fit the time, so the review
   //    screen can say what went and why.
   const kept = exercises.filter((exercise) => exercise.sets > 0);
   for (const exercise of exercises) {
