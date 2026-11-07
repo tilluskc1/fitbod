@@ -10,6 +10,7 @@ import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { currentWorkout, setupFor, todayGlance } from '../lib/adapt';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
+import { isDescribedSession } from '../lib/sequence';
 import Demo from '../components/ui/Demo';
 import FeasibilityNote, { DescribedNote } from '../components/ui/FeasibilityNote';
 import { missingFamilies } from '../lib/feasibility';
@@ -53,7 +54,10 @@ interface Props {
   composing?: boolean;
   /** (#193) False while a described session runs: it has no planned work to restore into. */
   canRestore?: boolean;
-  /** (#219) A described day's status and reasons, the composer preview's own; absent on a planned day. */
+  /**
+   * (#219) A described day's status and reasons, the composer preview's own; absent on a planned day.
+   * (#220) While a described session runs, the session's own; absent once its day has passed.
+   */
   described?: DayStatus | null;
 }
 
@@ -221,6 +225,11 @@ export default function TodayScreen({
             icon: 'info',
           }
         : { tone: 'ready', label: 'Ready', icon: 'check' };
+  // (#220) A running described session is today's own: its name, "Today only", never a plan slot,
+  // and no chip once its ask has expired (App passes no status then).
+  const todayOnly = current ? isDescribedSession(current) : false;
+  const heroName = todayOnly && current ? current.name : program.name;
+  const heroSlot = todayOnly ? 'Today only' : slotLabel;
   const leadId = leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId));
   const leadName = adapted.exercises.find((exercise) => exercise.exerciseId === leadId)?.name;
   const loads = leadId ? topLoads(history, leadId).map((kg) => toDisplay(kg, unit)) : [];
@@ -275,7 +284,7 @@ export default function TodayScreen({
 
         <section
           className="t7-hero"
-          aria-label={timed ? `${program.name}, ${minutes} minutes` : program.name}
+          aria-label={timed ? `${heroName}, ${minutes} minutes` : heroName}
         >
           <img className="t7-hero__photo" src={HERO_PHOTO} alt="" />
           <span className="t7-hero__top">
@@ -298,17 +307,19 @@ export default function TodayScreen({
               </>
             )}
             {setup.short}
-            {slotLabel && (
+            {heroSlot && (
               <>
                 {' '}
-                <span aria-hidden="true">·</span> {slotLabel}
+                <span aria-hidden="true">·</span> {heroSlot}
               </>
             )}
           </span>
-          <span className={`t7-state t7-state--${chip.tone}`}>
-            <Icon name={chip.icon} size={16} />
-            {chip.label}
-          </span>
+          {(!todayOnly || described) && (
+            <span className={`t7-state t7-state--${chip.tone}`}>
+              <Icon name={chip.icon} size={16} />
+              {chip.label}
+            </span>
+          )}
         </section>
 
         {/* A described day names its gaps, open or not (#219); otherwise the status describes the saved setup. */}

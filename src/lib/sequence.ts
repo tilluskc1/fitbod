@@ -232,6 +232,11 @@ export function slotLinkFor(state: AppState, custom: boolean): { slotId?: string
   };
 }
 
+/** A session built from a described day (#193): it carries no slot link (#220: never judged by name). */
+export function isDescribedSession(workout: Pick<WorkoutRecord, 'slotSeq'>): boolean {
+  return workout.slotSeq === undefined;
+}
+
 /**
  * Move past a finished slot. The cursor only ever moves forward, and only for a
  * session recorded under the plan that is still current, so a repeated finish,
