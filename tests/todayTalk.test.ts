@@ -239,7 +239,7 @@ test('#193: "back is sore, legs" leaves out every exercise that works the back',
   assert.ok(preview.why.every((line) => !/deadlift/i.test(line.text)));
 });
 
-test('#193: the skip rule — first or second listed muscle, every listed muscle on a hinge, never a trailing Core', () => {
+test('#193: the skip rule — first or second listed muscle, every listed muscle on a hinge, never a trailing Core, arms only first', () => {
   const ex = (id: string) => exerciseById(id)!;
   assert.equal(worksSkipped(ex('romanian-deadlift'), ['Back']), true, 'hinge, Back listed third');
   assert.equal(worksSkipped(ex('chin-up'), ['Back']), true, 'Back listed second');
@@ -249,6 +249,35 @@ test('#193: the skip rule — first or second listed muscle, every listed muscle
   assert.equal(worksSkipped(ex('deadlift'), ['Core']), false);
   assert.equal(worksSkipped(ex('plank'), ['Core']), true);
   assert.equal(worksSkipped(ex('deadlift'), ['Hamstrings']), true);
+  // Arms count only when listed first: sore arms skip arm work, not every press and row.
+  const arms: MuscleGroup[] = ['Biceps', 'Triceps'];
+  for (const id of ['barbell-bench-press', 'dumbbell-bench-press', 'push-up', 'dip', 'barbell-row', 'lat-pulldown', 'overhead-press']) {
+    assert.equal(worksSkipped(ex(id), arms), false, id);
+  }
+  for (const id of ['barbell-curl', 'hammer-curl', 'triceps-pushdown', 'skull-crusher', 'chin-up', 'close-grip-bench', 'diamond-push-up']) {
+    assert.equal(worksSkipped(ex(id), arms), true, id);
+  }
+});
+
+test('#193: "back" as an adverb trains nothing', () => {
+  for (const text of ['back at the gym, chest', 'back home today, chest', 'back to it, chest', 'back in the gym, chest', 'get back into it, chest', 'came back from a trip, chest']) {
+    assert.deepEqual(talkParse(text).train, ['Chest'], text);
+    assert.equal(talkParse(text).avoid, undefined, text);
+  }
+  assert.deepEqual(talkParse('back and chest').train, ['Chest', 'Back']);
+  assert.deepEqual(talkParse('back is sore, legs').avoid, ['Back']);
+  assert.deepEqual(talkParse('my back, at the gym').train, ['Back']);
+});
+
+test('#193: "sore arms, chest and back" keeps presses and rows, and drops arm work', () => {
+  const upper = planSlots(plan)[0];
+  const { adapted, preview } = build('sore arms, chest and back', gym, upper);
+  const ids = adapted.exercises.map((e) => e.exerciseId);
+  assert.ok(ids.some((id) => exerciseById(id)!.pattern === 'horizontal_push'), ids.join());
+  assert.ok(ids.some((id) => ['horizontal_pull', 'vertical_pull'].includes(exerciseById(id)!.pattern)), ids.join());
+  for (const id of ids) assert.ok(!['Biceps', 'Triceps'].includes(primaryOf(id)), id);
+  assert.deepEqual(preview.gaps, []);
+  assert.equal(preview.status, 'ready');
 });
 
 const SETUPS: EquipmentChoice[] = ['home', 'hotel', 'bodyweight'];

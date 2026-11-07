@@ -32,6 +32,8 @@ export function customDayName(focus: MuscleGroup[]): string {
   return areasOf(focus).join(' + ') || 'Today';
 }
 
+const ARM_MUSCLES: MuscleGroup[] = ['Biceps', 'Triceps'];
+
 /** "No shoulder work": the area as a noun before "work" or "exercise". */
 export const AREA_NOUN: Record<Area, string> = {
   Chest: 'chest', Back: 'back', Shoulders: 'shoulder', Arms: 'arm', Legs: 'leg', Core: 'core',
@@ -41,12 +43,13 @@ export const AREA_NOUN: Record<Area, string> = {
  * Whether an exercise works a muscle group the lifter skipped today (#193). Its first or second
  * listed muscle counts; on a hip hinge every listed muscle counts, because a hinge loads the
  * whole back of the body (a Romanian deadlift is listed Hamstrings, Glutes, Back). Core listed
- * last never counts: it is the brace every standing lift needs, not the work.
+ * last never counts: it is the brace every standing lift needs, not the work. Arms count only
+ * listed first: sore arms skip curls and extensions, not every press and row they assist.
  */
 export function worksSkipped(exercise: Pick<Exercise, 'muscles' | 'pattern'>, skip: MuscleGroup[]): boolean {
   if (skip.length === 0) return false;
   const listed = exercise.muscles.filter((muscle, index) =>
     !(muscle === 'Core' && index > 0 && index === exercise.muscles.length - 1));
   const counted = exercise.pattern === 'hinge' ? listed : listed.slice(0, 2);
-  return counted.some((muscle) => skip.includes(muscle));
+  return counted.some((muscle, index) => skip.includes(muscle) && (index === 0 || !ARM_MUSCLES.includes(muscle)));
 }

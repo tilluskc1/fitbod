@@ -45,7 +45,8 @@ export interface TalkParse extends ParsedConstraints {
 /** Words for each area; "upper body" and "lower body" name several. */
 const AREA_WORDS: { word: string; areas: Area[] }[] = [
   { word: 'chest|pecs?', areas: ['Chest'] },
-  { word: 'back|lats?', areas: ['Back'] },
+  // "Back" the muscle, not the adverb: "back at the gym", "get back", "came back" train nothing.
+  { word: `(?<!\\b(?:get|got|getting|came|come|coming|go|going|went|be|been|i'm|im|we're)\\s)back(?!\\s+(?:at|home|to|in|into|from|on)\\b)|lats?`, areas: ['Back'] },
   { word: 'shoulders?|delts?', areas: ['Shoulders'] },
   { word: 'arms?|biceps?|triceps?', areas: ['Arms'] },
   { word: 'legs?|quads?|hamstrings?|glutes?|calf|calves', areas: ['Legs'] },
