@@ -2784,7 +2784,7 @@ body {
   line-height: 28px;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: #fff;
+  color: var(--on-surface);
 }
 
 .diff-cell__unit {
