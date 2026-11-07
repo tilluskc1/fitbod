@@ -6,7 +6,7 @@ import type {
   WorkoutExercise,
   WorkoutRecord,
 } from '../types.ts';
-import { savedSetup } from './progression.ts';
+import { savedSetup } from './setup.ts';
 
 /** Local calendar day key, used to scope a one-day override. */
 export function dayKey(now: Date): string {
