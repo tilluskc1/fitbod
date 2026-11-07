@@ -111,3 +111,17 @@ test('a full-gym kit reads as "Gym" on Today, never "Home" (#180)', async () => 
   assert.equal(setupFor('hotel', gym).short, 'Travel', 'only the saved setup is renamed');
   assert.equal(setupFor('hotel', gym).label, 'Travel gym', 'the today-only travel option is never called a plain gym');
 });
+
+test('Adjust today never shows a stale rack on a gym profile; a home profile keeps "Yours:" (#192)', async () => {
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { AdjustSheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
+    const render = (equipment: Profile['equipment']) => renderToStaticMarkup(createElement(AdjustSheet, {
+      constraints: { minutes: 35, equipment: 'home', loads: [lb(10)] }, originalMinutes: 35, unit: 'lb',
+      profile: { ...profile, equipment }, onClose: noop, onPreview: noop })).replace(/<[^>]+>/g, ' ');
+    const gym = render(['Barbell', 'Dumbbell', 'Machine', 'Cable']);
+    assert.doesNotMatch(gym, /Yours:/, 'a gym has every dumbbell, not the stored 10 lb');
+    assert.match(gym, /Your gym: enter weights as you lift/);
+    assert.match(render(['Dumbbell']), /Yours: 10 lb/);
+  } finally { await server.close(); }
+});
