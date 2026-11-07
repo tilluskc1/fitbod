@@ -18,6 +18,7 @@ import
   restorePendingWorkout,
   swapCandidateFor,
   toWorkoutExercises,
+  todayGlance,
 } from './lib/adapt';
 import
  type { Constraints, EquipmentChoice } from './lib/adapt';
@@ -404,6 +405,8 @@ export default function App() {
       (profile ? liveExercises(liveProgram, profile, state.history) : toWorkoutExercises(adapted)),
     [current, adapted, liveProgram, profile, state.history],
   );
+  /** The name, counts and minutes of that same day, for Plan and View session alike (#189). */
+  const todayDay = useMemo(() => todayGlance(program, adapted, current), [program, adapted, current]);
 
   /** The one-line reason behind each computed target, keyed by exercise. */
   const targetNotes = useMemo(() => {
@@ -1104,6 +1107,8 @@ export default function App() {
             upcoming={upcoming}
             focus={slot?.focus}
             program={program}
+            today={todayDay}
+            adjusted={Boolean(override) && !current}
             slotLabel={slotLabel}
             history={state.history}
             unit={unit}
@@ -1331,8 +1336,8 @@ export default function App() {
 
       {(sheet.kind === 'day' || sheet.kind === 'preview') && (
         <DaySheet
-          name={current?.name ?? adapted.name}
-          minutes={current?.durationMin ?? adapted.minutes}
+          name={todayDay.name}
+          minutes={todayDay.minutes}
           exercises={todayExercises}
           unit={unit}
           history={state.history}

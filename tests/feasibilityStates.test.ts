@@ -4,7 +4,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { EXERCISES } from '../src/data/exercises.ts';
-import { adaptWorkout } from '../src/lib/adapt.ts';
+import { adaptWorkout, todayGlance } from '../src/lib/adapt.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import { buildPlan } from '../src/lib/generator.ts';
 import { planSlots, slotProgram } from '../src/lib/sequence.ts';
@@ -63,7 +63,7 @@ function screens(Today: unknown, Plan: unknown, who: Profile, name: string) {
   const today = renderToStaticMarkup(createElement(Today as never, { profile: who, program, adapted,
     equipment: 'home', adjusted: false, history: [], current: null, now, onPreview: noop, onAdjust: noop,
     onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop }));
-  const plan = renderToStaticMarkup(createElement(Plan as never, { profile: who, program, history: [],
+  const plan = renderToStaticMarkup(createElement(Plan as never, { profile: who, program, today: todayGlance(program, adapted, null), history: [],
     unit: 'kg', now, onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop, onReviewChange: noop }));
   return { today, plan, adapted };
 }

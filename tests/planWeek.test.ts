@@ -5,6 +5,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { buildPlan } from '../src/lib/generator.ts';
 import { planSlots, slotProgram } from '../src/lib/sequence.ts';
+import { adaptWorkout, todayGlance } from '../src/lib/adapt.ts';
+import { defaultConstraints } from '../src/lib/constraints.ts';
 import type { Profile } from '../src/types.ts';
 
 // #186: Plan showed only the day up next and left the week blank.
@@ -19,7 +21,8 @@ test('Plan lists every day of the week after the one up next, and names a gym ki
   try {
     const { default: Plan } = await server.ssrLoadModule('/src/screens/PlanScreen.tsx');
     const noop = () => {};
-    const html = renderToStaticMarkup(createElement(Plan, { profile: gym, upcoming, focus: slots[0].focus, program, slotLabel: 'Slot 1 of 4', history: [], unit: 'kg',
+    const html = renderToStaticMarkup(createElement(Plan, { profile: gym, upcoming, focus: slots[0].focus, program,
+      today: todayGlance(program, adaptWorkout(program, defaultConstraints(gym), []), null), slotLabel: 'Slot 1 of 4', history: [], unit: 'kg',
       now: new Date('2026-11-07T10:00:00Z'), onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     assert.match(text, /UP NEXT · SLOT 1 OF 4 Upper A Chest · Back · Shoulders · Biceps · Triceps/);
