@@ -318,15 +318,24 @@ export function generateWorkout(
       else index -= 1;
     }
     // No exercise left to add and at least one more exercise's worth of time:
-    // the 3-set work behind the lead gets a fourth set, in priority order, while it fits.
+    // 3-set work gets a fourth set in priority order while it fits, the lead first, so a
+    // later compound never ends up with more sets than the lead (#133). A 5-set lead is already past 4.
     if (exhausted && room >= estimatedSeconds([3])) {
-      for (let index = lead ? 1 : 0; index < kept; index += 1) {
+      for (let index = 0; index < kept; index += 1) {
         if (sets[index] < 4 && estimatedSeconds(sets) + SET_SECONDS <= budget) sets[index] += 1;
       }
     }
   }
 
-  const exercises: WorkoutExercise[] = picked.map((exercise, index) => {
+  // Trimming used the priority above; the session itself runs lead, compounds, isolation, core (#133).
+  const showTier = (exercise: Exercise) => (exercise === lead ? 0
+    : isCompound(exercise) ? 1
+    : CORE_PATTERNS.has(exercise.pattern) ? 3 : 2);
+  const order = picked.map((_, index) => index)
+    .sort((a, b) => showTier(picked[a]) - showTier(picked[b]) || a - b);
+
+  const exercises: WorkoutExercise[] = order.map((index) => {
+    const exercise = picked[index];
     const prescription = prescriptions[index];
     const planned = Array.from({ length: sets[index] }, () => ({
       weight: prescription.weight,
