@@ -2,10 +2,11 @@ import type { AppState, MuscleGroup, PlanDay, Profile, SlotSkip, WorkoutRecord }
 import type { Program, ProgramExercise } from '../data/flagship.ts';
 import type { EquipmentChoice } from './adapt.ts';
 import { detailOf, loadModeOf, programExercise } from '../data/flagship.ts';
-import { exerciseById } from '../data/exercises.ts';
+import { EXERCISES, exerciseById } from '../data/exercises.ts';
 import { buildPlan, generateWorkout } from './generator.ts';
 import { leadCompoundId, REP_RANGES, roleTarget, savedSetup } from './progression.ts';
 import { MAX_WEIGHT } from './validate.ts';
+import { customDayName, worksSkipped } from './areas.ts';
 
 /**
  * The program sequence.
@@ -147,6 +148,20 @@ const SETUP_KIT: Record<Exclude<EquipmentChoice, 'home'>, Pick<Profile, 'equipme
   bands: { equipment: [], support: [] },
 };
 
+/** The profile as today's setup sees it: the saved kit, or that setup's own (#188, #193). */
+export function kitProfile(profile: Profile, equipment: EquipmentChoice = 'home'): Profile {
+  return equipment === 'home' ? profile : { ...profile, ...SETUP_KIT[equipment] };
+}
+
+/**
+ * The profile with everything that works a skipped muscle group left out (#193), the same rule
+ * a described day is built with and its in-session swaps are offered by (see `worksSkipped`).
+ */
+export function withSkipped(profile: Profile, skip: MuscleGroup[]): Profile {
+  const spared = EXERCISES.filter((exercise) => worksSkipped(exercise, skip) && !profile.exclusions.includes(exercise.id));
+  return spared.length === 0 ? profile : { ...profile, exclusions: [...profile.exclusions, ...spared.map((exercise) => exercise.id)] };
+}
+
 /**
  * Today's program for the slot (#188). Every setup builds at today's length the way
  * `slotProgramAt` does: a longer day is rebuilt there (#17), a shorter one keeps the saved length
@@ -154,19 +169,41 @@ const SETUP_KIT: Record<Exclude<EquipmentChoice, 'home'>, Pick<Profile, 'equipme
  * another setup rebuilds the day from that setup's kit, so it gets that kit's best work and its
  * own honest feasibility instead of what survives the saved day. The saved setup is the one
  * `defaultConstraints` picks (`savedSetup`): a no-gear profile's bodyweight day is its program.
+ * A day the lifter described (#193: focus and skip) is generated from its own focus at today's
+ * length, on whichever setup today has.
  */
 export function todayProgram(
   profile: Profile,
-  slot: PlanSlot,
+  plannedSlot: PlanSlot,
   history: WorkoutRecord[],
-  today: { minutes?: number; equipment?: EquipmentChoice } = {},
+  today: { minutes?: number; equipment?: EquipmentChoice; focus?: MuscleGroup[]; skip?: MuscleGroup[] } = {},
 ): Program {
-  // The saved setup (bodyweight for a profile with no gear) is the program, never a rebuild.
-  if (!today.equipment || today.equipment === 'home' || today.equipment === savedSetup(profile)) {
-    return slotProgramAt(profile, slot, history, today.minutes);
-  }
   const saved = profile.sessionMinutes ?? 35;
-  const minutes = today.minutes !== undefined && today.minutes > saved ? today.minutes : saved;
+  // A day the lifter described (#193) is generated like any other, from its own focus, at today's length.
+  const skip = today.skip ?? [];
+  const focus = today.focus?.filter((muscle) => !skip.includes(muscle)) ?? [];
+  const custom = focus.length > 0;
+  const slot = custom ? { ...plannedSlot, id: `${plannedSlot.id}-today`, name: customDayName(focus), focus } : plannedSlot;
+  // A skipped muscle group stays out of the whole day, not just its focus: nothing that works it
+  // is picked (see `worksSkipped`). Those are no exclusions of the lifter's, so none is offered back.
+  const spared = custom ? withSkipped(profile, skip).exclusions.slice(profile.exclusions.length) : [];
+  if (spared.length > 0) {
+    const program = todayProgram(withSkipped(profile, skip), plannedSlot, history, { ...today, skip: [], focus });
+    const feasibility = program.feasibility && {
+      ...program.feasibility,
+      alternatives: program.feasibility.alternatives.filter((alt) => !(alt.exerciseId && spared.includes(alt.exerciseId))),
+    };
+    return { ...program, feasibility };
+  }
+  // The saved setup (bodyweight for a profile with no gear) is the program, never a gear rebuild;
+  // a described day on it is the lifter's own day, still untagged (#188 follow-up).
+  if (!today.equipment || today.equipment === 'home' || today.equipment === savedSetup(profile)) {
+    if (!custom) return slotProgramAt(profile, slot, history, today.minutes);
+    const minutes = today.minutes ?? saved;
+    return slotProgram(minutes === saved ? profile : { ...profile, sessionMinutes: minutes }, slot, history);
+  }
+  // A described day keeps today's length (#193); a rebuilt planned day is trimmed from the saved one.
+  const minutes = custom ? today.minutes ?? saved : today.minutes !== undefined && today.minutes > saved ? today.minutes : saved;
   const kit = SETUP_KIT[today.equipment];
   const program = slotProgram({ ...profile, ...kit, sessionMinutes: minutes }, slot, history, today.equipment);
   // Gear chips would add to the saved setup, which today's gear does not change: the reason
@@ -176,6 +213,21 @@ export function todayProgram(
     alternatives: program.feasibility.alternatives.filter((alt) => alt.kind !== 'capability'),
   };
   return { ...program, feasibility, setup: today.equipment };
+}
+
+/**
+ * The slot link a new session carries. A today-only described day (#193) carries none, so
+ * finishing it records the session but cannot move the plan: the planned day stays next.
+ */
+export function slotLinkFor(state: AppState, custom: boolean): { slotId?: string; slotSeq?: number; planRevision: number } {
+  const revision = planRevisionOf(state);
+  if (custom) return { planRevision: revision };
+  const cursor = state.programCursor;
+  return {
+    slotId: currentSlot(state)?.id,
+    slotSeq: cursor && cursor.revision === revision ? cursor.seq : 0,
+    planRevision: revision,
+  };
 }
 
 /**

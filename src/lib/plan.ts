@@ -6,6 +6,7 @@ import type {
   WorkoutExercise,
   WorkoutRecord,
 } from '../types.ts';
+import { savedSetup } from './progression.ts';
 
 /** Local calendar day key, used to scope a one-day override. */
 export function dayKey(now: Date): string {
@@ -18,6 +19,22 @@ export function activeOverride(state: AppState, now: Date): TodayOverride | null
   const override = state.todayOverride ?? null;
   if (!override) return null;
   return override.date === dayKey(now) ? override : null;
+}
+
+/**
+ * Today's override without its described day (#193): once that day is trained, Today goes back
+ * to the planned day. Today's gear and time stay; an override left saying only the saved setup
+ * at the saved length is no override at all.
+ */
+export function withoutCustomDay(state: AppState): AppState {
+  const override = state.todayOverride;
+  if (!override || (override.focus === undefined && override.skip === undefined)) return state;
+  const { focus: _focus, skip: _skip, ...rest } = override;
+  const saved = state.profile?.sessionMinutes ?? 35;
+  // The saved setup is the profile's own (bodyweight for no gear, #188 follow-up), as todayProgram reads it.
+  const choice = rest.choice ?? 'home';
+  const plain = (choice === 'home' || (state.profile !== null && choice === savedSetup(state.profile))) && rest.minutes === saved;
+  return { ...state, todayOverride: plain ? null : rest };
 }
 
 export function minutesOf(profile: Profile, override: TodayOverride | null): number {

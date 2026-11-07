@@ -52,8 +52,9 @@ test('#17: Today builds the day at a longer today-only length and the length she
   const { readFileSync } = await import('node:fs');
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   // Since #188 the longer-than-saved rule lives in todayProgram (pinned in gearRebuild.test.ts).
+  // Since #193 the sheet passes today's whole day (setup and any described day) at each length.
   assert.match(app, /const program = useMemo\(\(\) => programFor\(constraints\)/);
   assert.match(app, /todayProgram\(profile, slot, state\.history, today\)/);
   // #203 passes the goal so each length is trimmed by the timer's model.
-  assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programFor\(\{ minutes, equipment: constraints\.equipment \}\), profile\.goal\)/);
+  assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programFor\(\{ \.\.\.constraints, minutes \}\), profile\.goal\)/);
 });

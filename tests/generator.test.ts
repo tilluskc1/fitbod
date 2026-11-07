@@ -384,6 +384,8 @@ test('ranked replacements respect the day: no duplicate, no incompatible pair, n
 
 test('the logger Replace sheet lists rankedReplacements against today\'s other exercises', () => {
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
-  assert.match(app, /rankedReplacements\(meta, profile, inDay, 6\)/);
+  // #193: a described session passes the same profile with its skipped work left out.
+  assert.match(app, /rankedReplacements\(meta, swapProfile, inDay, 6\)/);
+  assert.match(app, /const swapProfile = describedSession && state\.todayOverride\?\.skip \? withSkipped\(profile, state\.todayOverride\.skip\) : profile;/);
   assert.match(app, /index !== sheet\.exerciseIndex/);
 });

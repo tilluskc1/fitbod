@@ -190,7 +190,9 @@ test('#203: rendered, the app\'s Today, Plan\'s later list, the switch sheet and
   // App wiring: Plan's later days, the switch sheet and the review's "before" use the shared helpers.
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   assert.match(app, /upcomingDays\(profile, state\.plan, slot, state\.history\)/);
-  assert.match(app, /switchOptions\(profile, state, state\.history, constraints\)/);
+  // #193 rates the planned days with today's gear and time minus any described day (plainConstraints).
+  assert.match(app, /switchOptions\(profile, state, state\.history, plainConstraints\)/);
+  assert.match(app, /const \{ focus: _focus, skip: _skip, \.\.\.plain \} = constraints;/);
   assert.match(app, /before=\{todayDay\}/);
   assert.match(app, /upcoming=\{upcoming\}/);
 

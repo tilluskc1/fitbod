@@ -1,7 +1,7 @@
 import type { Program, ProgramExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } from '../data/flagship.ts';
-import type { Exercise, Goal, Profile, SetupChoice, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import type { Exercise, Goal, MuscleGroup, Profile, SetupChoice, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
 import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
@@ -91,6 +91,9 @@ export interface Constraints {
    * inventory is unconfirmed, so fixture racks are only a suggestion.
    */
   loads?: number[];
+  /** A today-only day the lifter described (#193): what it trains, and what it leaves alone. */
+  focus?: MuscleGroup[];
+  skip?: MuscleGroup[];
 }
 
 export const DEFAULT_CONSTRAINTS: Constraints = { minutes: FULL_BODY_A.minutes, equipment: 'home' };

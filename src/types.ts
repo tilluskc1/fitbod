@@ -234,6 +234,13 @@ export interface TodayOverride {
    * array so hotel/bodyweight/bands survive a reload, not just "has dumbbells".
    */
   choice?: SetupChoice;
+  /**
+   * A day the lifter described for today (#193): the muscle groups it trains. Absent means
+   * the planned day. Today-only like the rest of the override; it never moves the plan.
+   */
+  focus?: MuscleGroup[];
+  /** Muscle groups the lifter said to leave alone today (sore). Never overlaps `focus`. */
+  skip?: MuscleGroup[];
 }
 
 export interface AppState {

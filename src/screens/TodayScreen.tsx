@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
@@ -45,6 +46,12 @@ interface Props {
   onOpenSwitch?: () => void;
   /** (#149) On a day nothing fits, another day in the split that does, in one sentence. */
   alternativeDay?: string;
+  /** (#193) "Tell me about today", shown above the workout card while no session is open. */
+  composer?: ReactNode;
+  /** (#193) The composer is open or previewing: its button is the screen's one primary, so the dock steps aside. */
+  composing?: boolean;
+  /** (#193) False while a described session runs: it has no planned work to restore into. */
+  canRestore?: boolean;
 }
 
 function greeting(now: Date): string {
@@ -165,6 +172,9 @@ export default function TodayScreen({
   onOpenGym,
   onOpenSwitch,
   alternativeDay,
+  composer,
+  canRestore = true,
+  composing = false,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -298,6 +308,7 @@ export default function TodayScreen({
           <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
         )}
 
+        {!current && composer}
 
         <section className="t7-card t7-workout" aria-label="The workout">
           <div className="list-head">
@@ -415,7 +426,7 @@ export default function TodayScreen({
             </div>
           </div>
           <div className="coach-card__actions">
-            {adjusted && (
+            {adjusted && canRestore && (
               <button className="text-action text-action--lime" onClick={onRestore}>
                 <Icon name="undo" size={16} />
                 Restore original
@@ -491,7 +502,7 @@ export default function TodayScreen({
         )}
       </div>
 
-      <div className="flow-dock">
+      <div className="flow-dock" hidden={composing && !current}>
         <button className="text-action" onClick={onAdjust}>
           <Icon name="tune" size={16} />
           Short on time or gear?

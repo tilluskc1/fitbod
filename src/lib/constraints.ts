@@ -193,7 +193,9 @@ export function resolveConstraints(
       applied: EQUIPMENT_OPTIONS[equipment].chip,
     });
   }
-  return { constraints: loads === undefined ? { minutes, equipment } : { minutes, equipment, loads }, notices };
+  // A described day (#193) is set by the Today composer; other edits keep it.
+  const day = current.focus ? { focus: current.focus, ...(current.skip ? { skip: current.skip } : {}) } : {};
+  return { constraints: loads === undefined ? { minutes, equipment, ...day } : { minutes, equipment, loads, ...day }, notices };
 }
 
 /**
@@ -256,6 +258,9 @@ export function todayConstraints(profile: Profile | null, override: TodayOverrid
     minutes: override.minutes,
     equipment: override.choice ?? (override.equipment.includes('Dumbbell') ? 'home' : 'bodyweight'),
     loads: owned.length ? owned : undefined,
+    // A described day (#193) rebuilds today from its own focus.
+    ...(override.focus ? { focus: override.focus } : {}),
+    ...(override.skip ? { skip: override.skip } : {}),
   };
 }
 
