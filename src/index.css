@@ -26,6 +26,8 @@
   /* Primary actions are black pills with white text, as in the reference. */
   --btn: #121515;
   --on-btn: #ffffff;
+  /* Keyboard focus ring: ink, 15:1 on mint and 18:1 on white. Lime measured 1.1–1.3:1 (#168). */
+  --focus: #121515;
   --sky: #a3d1e5;
   --on-sky: #0f2f3c;
 
@@ -150,7 +152,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--lime);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 
@@ -3582,7 +3584,7 @@ body {
 }
 
 .glass-range:focus-visible {
-  outline: 2px solid var(--lime);
+  outline: 2px solid var(--focus);
   outline-offset: 4px;
   border-radius: 999px;
 }
@@ -3601,7 +3603,7 @@ body {
 
 .settings-row--action:focus-visible,
 .settings-row--action:focus-within {
-  outline: 2px solid var(--lime);
+  outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
 
