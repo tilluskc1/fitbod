@@ -395,6 +395,14 @@ test('#211: sweep — every muscle of an asked area is trained or named, no skip
             assert.ok(!worksSkipped(exerciseById(exercise.exerciseId)!, skipped), `${at} works a skipped area`);
           }
           const why = preview.why.map((line) => `${line.label} ${line.text}`).join(' ');
+          // #216: a described day is never empty while the kit has an allowed exercise for an asked muscle,
+          // and an empty one never blames time.
+          if (live.exercises.length === 0) {
+            const doable = musclesOf(train).filter((muscle) => EXERCISES.some((exercise) => exercise.muscles[0] === muscle
+              && provides(caps, exercise.needs) && !worksSkipped(exercise, skipped)));
+            assert.deepEqual(doable, [], `${at}: empty beside allowed ${doable} work`);
+            assert.ok(preview.why.every((line) => line.label !== 'Not enough time:'), `${at}: empty day blames time: ${why}`);
+          }
           for (const area of train) {
             for (const muscle of AREA_MUSCLES[area]) {
               const trained = live.exercises.some((e) => primaryOf(e.exerciseId) === muscle);
@@ -429,6 +437,39 @@ test('#211: sweep — every muscle of an asked area is trained or named, no skip
     }
   }
   assert.equal(checked, 2232);
+});
+
+test('#216: an Arms day with Chest skipped at the travel gym builds curls and extensions that spare the chest', () => {
+  for (const minutes of [30, 45, 60]) {
+    const talk: TalkState = { equipment: 'hotel', minutes, train: ['Arms'], skip: ['Chest'], sore: [], pain: false, notices: [] };
+    const constraints = talkConstraints(talk, undefined, lower.focus);
+    const program = todayProgram(gym, lower, [], constraints);
+    const live = liveAdapted(adaptWorkout(program, constraints, [], gym.goal), gym, []);
+    const preview = customDayPreview(talk, program, live, gym, lower.focus);
+    const ids = live.exercises.map((e) => e.exerciseId);
+    const at = `${minutes} min: ${ids.join()}`;
+    assert.ok(ids.some((id) => primaryOf(id) === 'Biceps'), at);
+    assert.ok(ids.some((id) => primaryOf(id) === 'Triceps'), at);
+    for (const id of ids) assert.ok(!worksSkipped(exerciseById(id)!, ['Chest']), `${at}: ${id} works the chest`);
+    assert.ok(preview.minutes > 0 && preview.minutes <= minutes, `${at}: ${preview.minutes} min`);
+    assert.deepEqual(preview.gaps, [], at);
+    // Honest: the asked muscles are trained; the day still has no press (Chest skipped) or pull in this kit.
+    assert.equal(preview.status, 'limited', at);
+    assert.equal(program.feasibility?.reason, 'Limited session: no pressing and pulling work is available with these constraints.', at);
+    assert.ok(preview.why.every((line) => line.label !== 'Not enough time:'), JSON.stringify(preview.why));
+  }
+});
+
+test('#216: an empty described day never blames time or the cap', () => {
+  const talk: TalkState = { equipment: 'hotel', minutes: 60, train: ['Arms'], skip: ['Chest'], sore: [], pain: false, notices: [] };
+  const constraints = talkConstraints(talk, undefined, lower.focus);
+  const program = todayProgram(gym, lower, [], constraints);
+  const adapted = adaptWorkout(program, constraints, [], gym.goal);
+  const empty = { ...adapted, exercises: [], totalSets: 0 };
+  const preview = customDayPreview(talk, { ...program, exercises: [] }, empty, gym, lower.focus);
+  assert.equal(preview.status, 'none');
+  assert.ok(preview.gaps.length > 0 && preview.gaps.every((gap) => gap.cause !== 'time' && gap.cause !== 'cap'), JSON.stringify(preview.gaps));
+  assert.ok(preview.why.every((line) => line.label !== 'Not enough time:'), JSON.stringify(preview.why));
 });
 
 test('#211: "back is sore, legs, 45 min" at a full gym trains hamstrings, not a second quad move', () => {
