@@ -1,7 +1,7 @@
 import { exerciseById } from '../data/exercises.ts';
 import { loadModeOf, programExercise, setText } from '../data/flagship.ts';
 import type { AdaptedExercise, AdaptedWorkout } from './adapt.ts';
-import { availableLoads, typedLoads, coachLine, describePrescription, lastExercisePerformance, leadCompoundId, leadSlotIds, prescribeExercise } from './progression.ts';
+import { atOrUnder, availableLoads, typedLoads, coachLine, describePrescription, lastExercisePerformance, leadCompoundId, leadSlotIds, prescribeExercise } from './progression.ts';
 import { bestCompletedSet, exerciseInWorkout, hasWork } from './plan.ts';
 import { loadValue, unitLabel } from './units.ts';
 import type { Exercise, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types.ts';
@@ -83,8 +83,7 @@ function numbersFor(
   if (prescription.basis === 'go-heavier') return { weight: 0, reps: prescription.reps };
   // A travel rack (#188) has what it has: the closest load at or under the target, else the lifter's pick.
   if (exercise.rackLoads && prescription.weight > 0) {
-    const rack = [...exercise.rackLoads].sort((a, b) => a - b).filter((value) => value <= prescription.weight).at(-1);
-    return { weight: rack ?? 0, reps: prescription.reps };
+    return { weight: atOrUnder(exercise.rackLoads, prescription.weight) ?? 0, reps: prescription.reps };
   }
   return { weight: prescription.weight, reps: prescription.reps };
 }

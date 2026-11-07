@@ -222,6 +222,11 @@ export function availableLoads(profile: Pick<Profile, 'loads'>, equipment: Equip
   return list.filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
 }
 
+/** The heaviest of these loads at or under `weight`; undefined when none is (never a heavier one). */
+export function atOrUnder(loads: number[], weight: number): number | undefined {
+  return [...loads].sort((a, b) => a - b).filter((value) => value <= weight).at(-1);
+}
+
 /**
  * One step for this equipment. With a real inventory the step is the smallest
  * gap between listed loads, so a fixed dumbbell rack progresses by rack steps.
@@ -271,23 +276,32 @@ export interface ExercisePerformance {
 }
 
 /**
+ * Planned below the lightest load of the session it follows: the app never plans
+ * that by itself, only a setup's rack cap does (#188), so it says nothing about the
+ * lifter's own load. Unplanned (0) loads are the lifter's pick and always count.
+ */
+function cappedByGear(before: ExercisePerformance, next: ExercisePerformance): boolean {
+  const loads = [...before.done.map((set) => set.weight), before.plannedWeight].filter((kg) => kg > 0);
+  return next.plannedWeight > 0 && loads.length > 0 && next.plannedWeight < Math.min(...loads) - 0.001;
+}
+
+/**
  * The most recent completed session that contains this exercise. Active
- * sessions are ignored: unfinished data must not drive the next prescription.
+ * sessions are ignored: unfinished data must not drive the next prescription,
+ * and neither does a session a today-only rack capped (#188).
  */
 export function lastExercisePerformance(
   history: WorkoutRecord[],
   exerciseId: string,
 ): ExercisePerformance | null {
-  let latest: ExercisePerformance | null = null;
-  let latestTime = Number.NEGATIVE_INFINITY;
+  const sessions: { time: number; performance: ExercisePerformance }[] = [];
   for (const workout of history) {
     if (workout.status !== 'completed') continue;
     const found = exerciseInWorkout(workout, exerciseId);
     if (!found) continue;
     const time = new Date(workout.date).getTime();
-    if (!(time > latestTime)) continue;
-    latestTime = time;
-    latest = {
+    if (Number.isNaN(time)) continue;
+    sessions.push({ time, performance: {
       workoutId: workout.id,
       workoutName: workout.name,
       date: workout.date,
@@ -297,7 +311,16 @@ export function lastExercisePerformance(
       plannedWeight: found.firstPlanned?.weight ?? 0,
       plannedReps: found.firstPlanned?.reps ?? 0,
       done: found.done.map((set) => ({ weight: set.weight, reps: set.reps })),
-    };
+    } });
+  }
+  // Oldest first (stable, so the first record at one time still wins), skipping capped sessions.
+  sessions.sort((a, b) => a.time - b.time);
+  let latest: ExercisePerformance | null = null;
+  let latestTime = Number.NEGATIVE_INFINITY;
+  for (const { time, performance } of sessions) {
+    if (!(time > latestTime) || (latest && cappedByGear(latest, performance))) continue;
+    latestTime = time;
+    latest = performance;
   }
   return latest;
 }

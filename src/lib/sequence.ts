@@ -159,7 +159,13 @@ export function todayProgram(
   }
   const kit = SETUP_KIT[today.equipment];
   const program = slotProgram({ ...profile, ...kit, sessionMinutes: today.minutes ?? saved }, slot, history);
-  return { ...program, setup: today.equipment };
+  // Gear chips would add to the saved setup, which today's gear does not change: the reason
+  // already names what today's setup cannot train, and the gym sheet switches back.
+  const feasibility = program.feasibility && {
+    ...program.feasibility,
+    alternatives: program.feasibility.alternatives.filter((alt) => alt.kind !== 'capability'),
+  };
+  return { ...program, feasibility, setup: today.equipment };
 }
 
 /**

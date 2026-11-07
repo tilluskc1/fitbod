@@ -1057,6 +1057,7 @@ export default function App() {
     ) : view === 'adapt' && pendingAdapted && pending ? (
       <AdaptScreen
         originalSets={programSetCount(program)}
+        profile={profile}
         adapted={
           profile ? liveAdapted(pendingAdapted, profile, state.history) : pendingAdapted
         }

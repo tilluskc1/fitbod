@@ -187,13 +187,13 @@ test('an unconfirmed home rack never drops a typed off-rack load as missing equi
     assert.deepEqual(home.exercises.filter((exercise) => exercise.weight > 0).map((exercise) => exercise.weight),
       program.exercises.filter((exercise) => exercise.weight > 0).map(() => typed));
     // A hotel gym's rack is still the gym's: an off-rack load is not there. Since #188 a load
-    // between its dumbbells takes the closest one under it (reported); one under its lightest drops.
+    // between its dumbbells takes the closest one under it (reported); one under its lightest keeps
+    // the movement with no load for the lifter to pick (reported). Never a heavier one.
     const hotel = adaptWorkout(program, { minutes: 35, equipment: 'hotel' }, []);
-    if (typed < 10) assert.ok(hotel.skipped.some((item) => item.reason === 'equipment'), `hotel @ ${typed}`);
-    else {
-      assert.deepEqual(hotel.skipped, [], `hotel @ ${typed}`);
-      assert.ok(hotel.exercises.every((exercise) => exercise.weight === 0 || exercise.weight === 10), `hotel @ ${typed}`);
-      assert.match(hotel.note, /10 kg — the closest travel gym load at or under your program's/);
-    }
+    assert.deepEqual(hotel.skipped, [], `hotel @ ${typed}`);
+    const expected = typed < 10 ? 0 : 10;
+    assert.ok(hotel.exercises.every((exercise) => exercise.weight === 0 || exercise.weight === expected), `hotel @ ${typed}`);
+    assert.match(hotel.note, typed < 10 ? /no travel gym dumbbell is this light — pick your load/
+      : /10 kg — the closest travel gym load at or under your program's/);
   }
 });

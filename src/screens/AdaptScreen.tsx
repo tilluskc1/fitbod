@@ -7,6 +7,7 @@ import { plannedLoad } from '../lib/liveProgression';
 import { targetSummary } from '../data/flagship';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
+import FeasibilityNote from '../components/ui/FeasibilityNote';
 
 interface Props {
   originalSets: number;
@@ -17,6 +18,8 @@ interface Props {
   /** With the logged history these keep a held typed load reading as typed. */
   loads?: Profile['loads'];
   history?: WorkoutRecord[];
+  /** Lets a rebuilt day show its own Limited note (#188). */
+  profile?: Profile | null;
   onStart: () => void;
   onKeep: () => void;
   onEdit: () => void;
@@ -30,7 +33,9 @@ function summaryLine(adapted: AdaptedWorkout, originalSets: number): string {
   );
   const parts: string[] = [];
   if (adapted.setup && adapted.exercises.length > 0) {
-    parts.push(`Rebuilt for ${EQUIPMENT_OPTIONS[adapted.setup].chip.toLowerCase()}: ${adapted.exercises.length} exercises.`);
+    parts.push(adapted.setup === 'bands'
+      ? `No band exercises yet: ${adapted.exercises.length} bodyweight moves.`
+      : `Rebuilt for ${EQUIPMENT_OPTIONS[adapted.setup].chip.toLowerCase()}: ${adapted.exercises.length} exercises.`);
   } else if (adapted.exercises.length > 0) {
     parts.push(reweighted.length > 0 ? 'Same exercises and sets, loads set to what you own.' : 'Same exercises and weights.');
   }
@@ -65,6 +70,7 @@ export default function AdaptScreen({
   unit = 'kg',
   loads = {},
   history = [],
+  profile,
   onStart,
   onKeep,
   onEdit,
@@ -122,6 +128,7 @@ export default function AdaptScreen({
             </button>
           </div>
           <p className="review__lede">{summaryLine(adapted, originalSets)}</p>
+          {profile && <FeasibilityNote feasibility={adapted.feasibility} profile={profile} onOpenSettings={onEdit} />}
           {notices.map((notice) => (
             <p key={notice.kind} className="constraint-notice" role="status">
               {noticeText(notice)}

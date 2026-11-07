@@ -4,7 +4,7 @@ import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } fr
 import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
-import { isCompound, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
+import { atOrUnder, isCompound, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
 import { estimatedSeconds } from './generator.ts';
 import { sessionRests } from './sessionTime.ts';
 import { liveExercises } from './liveProgression.ts';
@@ -133,15 +133,12 @@ export interface AdaptedWorkout {
   note: string;
   /** Set when the day was rebuilt from today's setup's kit (#188), not adapted from the program. */
   setup?: Program['setup'];
+  /** The rebuilt day's own feasibility, so a review of it can say Limited (#188). */
+  feasibility?: Program['feasibility'];
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-/** The heaviest of these loads at or under `weight`; undefined when none is (never a heavier one). */
-export function atOrUnder(loads: number[], weight: number): number | undefined {
-  return [...loads].sort((a, b) => a - b).filter((value) => value <= weight).at(-1);
 }
 
 function listOf(names: string[]): string {
@@ -213,6 +210,8 @@ export function adaptWorkout(
     : [];
   const knownInventory = inventory.length > 0;
   const limited: { name: string; from: number; to: number }[] = [];
+  /** Lighter than any load today's setup has: kept with no load, for the lifter to pick (#188). */
+  const pickOwn: string[] = [];
   const skipped: SkippedExercise[] = [];
   const exercises: AdaptedExercise[] = [];
   const originalSets = program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
@@ -233,10 +232,11 @@ export function adaptWorkout(
     // re-targeted below, so only a setup with no external load rules a
     // movement out. An unconfirmed home rack is typed as lifted, so no fixture
     // judges it; a hotel gym keeps its own rack check, taking its closest load
-    // at or under the program's (#188). A day rebuilt for today's setup was
-    // already built from that kit.
+    // at or under the program's, or none for the lifter to pick when even its
+    // lightest is heavier: never a heavier one (#188). A day rebuilt for today's
+    // setup was already built from that kit.
     const travelRack = exercise.requires === 'dumbbell' && constraints.equipment !== 'home' && setup.allowsLoads;
-    const travelLoad = travelRack ? atOrUnder(setup.loads, exercise.weight) : undefined;
+    const travelLoad = travelRack && exercise.weight > 0 ? atOrUnder(setup.loads, exercise.weight) ?? 0 : undefined;
     const unusable =
       (exercise.requires === 'dumbbell' && !setup.allowsLoads) ||
       (exercise.requires === 'configured' && constraints.equipment !== 'home' && program.setup !== constraints.equipment) ||
@@ -259,8 +259,9 @@ export function adaptWorkout(
       limited.push({ name: exercise.name, from: weight, to: substitute });
       weight = substitute;
     }
-    if (travelLoad !== undefined && travelLoad !== weight && weight > 0) {
-      limited.push({ name: exercise.name, from: weight, to: travelLoad });
+    if (travelLoad !== undefined && travelLoad !== weight) {
+      if (travelLoad > 0) limited.push({ name: exercise.name, from: weight, to: travelLoad });
+      else pickOwn.push(exercise.name);
       weight = travelLoad;
     }
     exercises.push({
@@ -377,7 +378,9 @@ export function adaptWorkout(
   if (kept.length === 0) {
     note = `None of this workout can be done with ${setup.chip.toLowerCase()}.`;
   } else if (rebuilt) {
-    note = `${program.name} rebuilt for ${setup.chip.toLowerCase()} today.`;
+    // Bands have no movements in the library yet, so that day is bodyweight work: say so.
+    note = rebuilt === 'bands' ? `No band exercises yet: ${program.name} uses bodyweight moves today.`
+      : `${program.name} rebuilt for ${setup.chip.toLowerCase()} today.`;
     if (timeTrimmed) note += ` Volume trimmed to ${totalSets} ${totalSets === 1 ? 'set' : 'sets'} to fit ${minutes} min.`;
   } else if (!timeTrimmed) {
     note = 'Same exercises, weights and sets as your program.';
@@ -391,9 +394,11 @@ export function adaptWorkout(
     note += ` ${listOf(forEquipment.map((item) => item.name))} need${forEquipment.length === 1 ? 's' : ''} a load that is not available today.`;
   }
   if (limited.length > 0) {
-    const loads = [...new Set(limited.map((item) => item.to))].sort((a, b) => a - b);
     const source = constraints.equipment === 'home' ? 'the closest of your confirmed loads, not' : `the closest ${setup.chip.toLowerCase()} load at or under`;
-    note += ` ${listOf(limited.map((item) => item.name))} use${limited.length === 1 ? 's' : ''} ${loads.join(' / ')} kg — ${source} your program's.`;
+    note += ` ${listOf(limited.map((item) => `${item.name} ${item.to} kg`))} — ${source} your program's.`;
+  }
+  if (pickOwn.length > 0) {
+    note += ` ${listOf(pickOwn)}: no ${setup.chip.toLowerCase()} dumbbell is this light — pick your load.`;
   }
   const forExcluded = skipped.filter((item) => item.reason === 'excluded');
   if (forExcluded.length > 0) {
@@ -411,7 +416,7 @@ export function adaptWorkout(
     totalSets,
     originalSets,
     note,
-    ...(rebuilt ? { setup: rebuilt } : {}),
+    ...(rebuilt ? { setup: rebuilt, feasibility: program.feasibility } : {}),
   };
 }
 
@@ -672,6 +677,6 @@ export function setupConsequence(option: SetupOption, dayName: string): string {
   if (option.kind === 'none') return `Nothing in ${dayName} works`;
   if (option.kind === 'program') return `${sets} · your gear`;
   if (option.kind === 'same') return `${sets} · same workout`;
-  if (option.kind === 'rebuilt') return `${sets} · rebuilt for this gear`;
+  if (option.kind === 'rebuilt') return `${sets} · ${option.choice === 'bands' ? 'bodyweight moves' : 'rebuilt for this gear'}`;
   return `${option.totalSets} of ${option.baseSets} sets fit`;
 }
