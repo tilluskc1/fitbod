@@ -231,26 +231,26 @@ export default function TodayScreen({
               aria-label={`Workout length, ${adapted.minutes} minutes`}
             >
               <Icon name="schedule" size={16} />
-              {adapted.minutes} min
+              <span className="t7-pill__l">{adapted.minutes} min</span>
               <Icon name="expand_more" size={18} />
             </button>
             {onOpenGym && (
               <button
                 type="button"
-                className="t7-pill"
+                className="t7-pill t7-pill--gym"
                 onClick={onOpenGym}
                 disabled={Boolean(current)}
                 aria-label={`Equipment today, ${setup.chip}`}
               >
                 <Icon name="fitness_center" size={16} />
-                {setup.short}
+                <span className="t7-pill__l">{setup.short}</span>
                 <Icon name="expand_more" size={18} />
               </button>
             )}
             {onOpenSwitch && (
               <button type="button" className="t7-pill" onClick={onOpenSwitch} disabled={Boolean(current)} aria-label="Switch workout">
                 <Icon name="arrow_forward" size={16} />
-                Switch
+                <span className="t7-pill__l">Switch</span>
               </button>
             )}
           </div>

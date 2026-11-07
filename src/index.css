@@ -4365,6 +4365,12 @@ button.aw-exercise__name-btn {
 
 /* ---------- Duration control and sheet (#148) ---------- */
 .t7-controls { display: flex; gap: 8px; }
+/* One line at 360 wide: the gym label gives way first, with an ellipsis; length and Switch keep their size. */
+.t7-controls .t7-pill { white-space: nowrap; flex: 0 0 auto; }
+.t7-controls .t7-pill--gym { flex: 0 1 auto; min-width: 0; }
+.t7-pill__l { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Under 400 wide the leading icons go, so labels stay whole; the chevron still marks a menu. */
+@media (max-width: 399px) { .t7-controls { gap: 6px; } .t7-controls .t7-pill { padding: 0 12px; gap: 4px; } .t7-controls .t7-pill > .ms:first-child { display: none; } }
 .t7-pill {
   min-height: 44px;
   padding: 0 14px;
