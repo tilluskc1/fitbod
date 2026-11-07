@@ -3187,17 +3187,19 @@ body {
   height: 64%;
   object-fit: cover;
   object-position: 50% 45%;
-  opacity: 0.55;
 }
 
 .splash__shade {
   position: absolute;
   inset: 0;
+  /* Full-strength photo: a light ink scrim keeps the brand line readable, and the mint fade
+     starts only where the headline sits. */
   background: linear-gradient(
     180deg,
-    rgba(230, 242, 241, 0.6) 0%,
-    rgba(230, 242, 241, 0.15) 32%,
-    var(--surface) 66%
+    rgba(24, 40, 41, 0.42) 0%,
+    rgba(24, 40, 41, 0) 20%,
+    rgba(230, 242, 241, 0) 46%,
+    var(--surface) 64%
   );
 }
 
@@ -3219,11 +3221,11 @@ body {
   font-size: 11px;
   letter-spacing: 0.16em;
   font-weight: 600;
-  color: var(--accent-text);
+  color: #ffffff;
 }
 
 .splash__brand b {
-  color: var(--on-surface-variant);
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .splash__title {
