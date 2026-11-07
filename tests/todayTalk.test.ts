@@ -453,8 +453,9 @@ test('#216: an Arms day with Chest skipped at the travel gym builds curls and ex
     for (const id of ids) assert.ok(!worksSkipped(exerciseById(id)!, ['Chest']), `${at}: ${id} works the chest`);
     assert.ok(preview.minutes > 0 && preview.minutes <= minutes, `${at}: ${preview.minutes} min`);
     assert.deepEqual(preview.gaps, [], at);
-    // Honest: the asked muscles are trained; the day still has no press (Chest skipped) or pull in this kit.
-    assert.equal(preview.status, 'limited', at);
+    // Every asked muscle is trained, so the day is Ready (#219): the generator's planned-day
+    // requirements (no press or pull) are not what the lifter asked for, and never show.
+    assert.equal(preview.status, 'ready', at);
     assert.equal(program.feasibility?.reason, 'Limited session: no pressing and pulling work is available with these constraints.', at);
     assert.ok(preview.why.every((line) => line.label !== 'Not enough time:'), JSON.stringify(preview.why));
   }

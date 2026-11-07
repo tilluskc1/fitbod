@@ -32,7 +32,7 @@ import
 import  { FULL_BODY_A } from './data/flagship';
 import { cursorFor, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
 import { withoutCustomDay } from './lib/plan';
-import { baseTalk, customDayPreview, talkConstraints } from './lib/todayTalk';
+import { baseTalk, customDayPreview, describedDayStatus, talkConstraints } from './lib/todayTalk';
 import type { TalkState } from './lib/todayTalk';
 import TodayTalk from './components/TodayTalk';
 import {
@@ -387,9 +387,20 @@ export default function App() {
     [adapted, profile, state.history],
   );
 
+  /** (#219) A described day's status and reasons, read as its preview did; null on a planned day. */
+  const described = useMemo(
+    () => (profile ? describedDayStatus(constraints, program, liveProgram, profile) : null),
+    [constraints, program, liveProgram, profile],
+  );
+
   const pendingAdapted = useMemo(
     () => (pending ? adaptFor(pending.constraints) : null),
     [pending, adaptFor],
+  );
+  /** (#219) The review of a described day reads as Today will: its own status, never the generator's requirements. */
+  const pendingDescribed = useMemo(
+    () => (pending && pendingAdapted && profile ? describedDayStatus(pending.constraints, programFor(pending.constraints), pendingAdapted, profile) : null),
+    [pending, pendingAdapted, profile, programFor],
   );
 
   const current = state.current;
@@ -1107,6 +1118,7 @@ export default function App() {
           profile ? liveAdapted(pendingAdapted, profile, state.history) : pendingAdapted
         }
         constraints={pending.constraints}
+        described={pendingDescribed}
         // Before is what Today shows now; after is the change; both by the timer's model (#203).
         before={todayDay}
         after={todayGlance(pendingAdapted, null, false, profile?.goal)}
@@ -1156,6 +1168,7 @@ export default function App() {
             ) : undefined}
             composing={composing}
             canRestore={!describedSession}
+            described={described}
             onWhy={() =>
               setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
             }
@@ -1180,6 +1193,7 @@ export default function App() {
             onViewDay={(dayIndex) => setSheet({ kind: 'day', dayIndex })}
             onOpenLibrary={() => setView('library')}
             onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
+            described={described}
           />
         )}
         {tab === 'progress' && (

@@ -7,7 +7,8 @@ import { plannedLoad } from '../lib/liveProgression';
 import { targetSummary } from '../data/flagship';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
-import FeasibilityNote from '../components/ui/FeasibilityNote';
+import FeasibilityNote, { DescribedNote } from '../components/ui/FeasibilityNote';
+import type { DayStatus } from '../lib/todayTalk';
 
 interface Props {
   /**
@@ -31,6 +32,8 @@ interface Props {
   onEdit: () => void;
   /** Where the Limited note's "More in Equipment" goes. */
   onOpenSettings?: () => void;
+  /** (#219) A described day's status and reasons, as Today shows them; absent on a planned day. */
+  described?: DayStatus | null;
 }
 
 /** The whole saved profile, not only its gear (the Limited note's alternatives read it). */
@@ -90,6 +93,7 @@ export default function AdaptScreen({
   onKeep,
   onEdit,
   onOpenSettings = onEdit,
+  described,
 }: Props) {
   const setup = setupFor(constraints.equipment, profile);
   const kept = adapted.exercises.length;
@@ -146,7 +150,8 @@ export default function AdaptScreen({
             </button>
           </div>
           <p className="review__lede">{summaryLine(adapted, originalSets)}</p>
-          {isFullProfile(profile) && <FeasibilityNote feasibility={adapted.feasibility} profile={profile} onOpenSettings={onOpenSettings} />}
+          {described ? <DescribedNote day={described} />
+            : isFullProfile(profile) && <FeasibilityNote feasibility={adapted.feasibility} profile={profile} onOpenSettings={onOpenSettings} />}
           {notices.map((notice) => (
             <p key={notice.kind} className="constraint-notice" role="status">
               {noticeText(notice)}
