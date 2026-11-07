@@ -7,8 +7,9 @@ import { capabilitiesFor, provides } from '../lib/capabilities';
 import { catalogRowMeta } from '../lib/liveProgression';
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
-import FeasibilityNote from '../components/ui/FeasibilityNote';
+import FeasibilityNote, { DescribedNote } from '../components/ui/FeasibilityNote';
 import type { ProfileChange } from '../lib/preferences';
+import type { DayStatus } from '../lib/todayTalk';
 import type { UpcomingDay } from '../lib/switchDay';
 import { ArrowIcon, ChevronIcon, SettingsIcon } from '../components/ui/Icons';
 
@@ -32,6 +33,8 @@ interface Props {
   onViewDay: (dayIndex: number) => void;
   onOpenLibrary: () => void;
   onReviewChange?: (change: ProfileChange) => void;
+  /** (#219) Today's described day: its own status and reasons, as Today shows them. */
+  described?: DayStatus | null;
 }
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -51,6 +54,7 @@ export default function PlanScreen({
   onViewDay,
   onOpenLibrary,
   onReviewChange,
+  described,
 }: Props) {
   const [tab, setTab] = useState<'week' | 'equipment'>('week');
   const minutes = `${today.approx ? '≈' : ''}${today.minutes}`;
@@ -138,7 +142,8 @@ export default function PlanScreen({
                 <span className="plan-meta">
                   {today.exercises > 0 && `${minutes} min · `}{today.exercises} exercises · {today.sets} sets{today.adjusted ? ' · Adjusted for today' : ''}
                 </span>
-                <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
+                {described ? <DescribedNote day={described} />
+                  : <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />}
                 <span className="plan-foot">
                   Your selected equipment
                   <button className="text-link" onClick={() => onViewDay(0)}>

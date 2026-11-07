@@ -341,24 +341,31 @@ const nouns = (muscles: MuscleGroup[]) => {
 };
 const named = (areas: Area[]) => areas.map((area) => area.toLowerCase()).join(' and ');
 
+/** A described day's status and the lines that explain it: one source for the preview and Today (#219). */
+export interface DayStatus {
+  status: CustomDayPreview['status'];
+  gaps: CustomDayPreview['gaps'];
+  /** One line per kind of gap; empty when every asked muscle has an exercise. */
+  reasons: CustomDayPreview['why'];
+}
+
 /**
- * The preview card, all read from the generated day and the adaptation that Start runs: status
- * from the generator's feasibility plus any muscle of an asked area left without an exercise whose
- * primary muscle it is (#211), minutes by the time model, rest by role.
+ * A described day's status (#219): Not enough equipment when nothing can be built, Limited only
+ * for a muscle of an asked area left without an exercise whose primary muscle it is, named with
+ * its cause (#211), else Ready. The generator's planned-day requirements ("no pressing and
+ * pulling work") do not apply: the lifter asked for areas, not a Push or Pull day.
  */
-export function customDayPreview(
-  talk: TalkState,
+export function describedStatus(
+  day: Pick<TalkState, 'train' | 'skip' | 'equipment' | 'minutes'>,
   program: Program,
   adapted: AdaptedWorkout,
   profile: Profile,
-  plannedFocus: MuscleGroup[],
-): CustomDayPreview {
+): DayStatus {
   const primary = (exerciseId: string) => exerciseById(exerciseId)?.muscles[0];
-  const described = describesDay(talk, plannedFocus);
-  const skipMuscles = musclesOf(talk.skip);
-  const kit = kitProfile(profile, talk.equipment);
+  const skipMuscles = musclesOf(day.skip);
+  const kit = kitProfile(profile, day.equipment);
   const caps = capabilitiesFor(kit);
-  const gaps = (described ? talk.train : []).flatMap((area) => AREA_MUSCLES[area].flatMap((muscle): CustomDayPreview['gaps'] => {
+  const gaps = day.train.flatMap((area) => AREA_MUSCLES[area].flatMap((muscle): CustomDayPreview['gaps'] => {
     if (adapted.exercises.some((exercise) => primary(exercise.exerciseId) === muscle)) return [];
     const possible = EXERCISES.filter((exercise) => exercise.muscles[0] === muscle
       && provides(caps, exercise.needs) && !kit.exclusions.includes(exercise.id));
@@ -376,6 +383,43 @@ export function customDayPreview(
     return [{ area, muscle, cause: adapted.exercises.length >= MAX_EXERCISES[profile.experience] ? 'cap' : 'time' }];
   }));
   const of = (cause: GapCause) => gaps.filter((gap) => gap.cause === cause).map((gap) => gap.muscle);
+  const reasons: DayStatus['reasons'] = [];
+  if (of('gear').length) reasons.push({ label: 'Not possible here:', text: `no ${nouns(of('gear'))} exercise with this gear.` });
+  if (of('skip').length) reasons.push({ label: 'Not possible today:', text: `every ${nouns(of('skip'))} exercise here also works ${named(day.skip)}.` });
+  if (of('time').length) reasons.push({ label: 'Not enough time:', text: `no ${nouns(of('time'))} work fit in ${day.minutes} min.` });
+  if (of('cap').length) reasons.push({ label: `Room for ${MAX_EXERCISES[profile.experience]} exercises:`, text: `no ${nouns(of('cap'))} work today.` });
+  for (const gap of gaps) {
+    if (gap.repeats) reasons.push({ label: `No separate ${MUSCLE_NOUN[gap.muscle]} move:`, text: `${gap.repeats.exercise} repeats ${gap.repeats.of}.` });
+  }
+  const status = adapted.exercises.length === 0 || program.feasibility?.status === 'infeasible' ? 'none'
+    : gaps.length > 0 ? 'limited'
+    : 'ready';
+  return { status, gaps, reasons };
+}
+
+/** Today's described day, read back from its constraints (#219); null on a planned day. */
+export function describedDayStatus(constraints: Constraints, program: Program, adapted: AdaptedWorkout, profile: Profile): DayStatus | null {
+  if (!constraints.focus) return null;
+  const day = { train: areasOf(constraints.focus), skip: areasOf(constraints.skip ?? []), equipment: constraints.equipment, minutes: constraints.minutes };
+  return describedStatus(day, program, adapted, profile);
+}
+
+/**
+ * The preview card, all read from the generated day and the adaptation that Start runs: a
+ * described day's status and reasons from `describedStatus` (#219), a planned day's from the
+ * generator's feasibility; minutes by the time model, rest by role.
+ */
+export function customDayPreview(
+  talk: TalkState,
+  program: Program,
+  adapted: AdaptedWorkout,
+  profile: Profile,
+  plannedFocus: MuscleGroup[],
+): CustomDayPreview {
+  const primary = (exerciseId: string) => exerciseById(exerciseId)?.muscles[0];
+  const described = describesDay(talk, plannedFocus);
+  // Train is never empty on a day built from focus; with nothing to train the planned day is built.
+  const shown = described && talk.train.length > 0 ? describedStatus(talk, program, adapted, profile) : null;
   const why: CustomDayPreview['why'] = [];
   if (talk.skip.length > 0) {
     const allSore = talk.skip.every((area) => talk.sore.includes(area));
@@ -387,13 +431,7 @@ export function customDayPreview(
         : `${talk.skip.map((area) => (talk.sore.includes(area) ? `${area} (sore)` : area)).join(', ')}.`,
     });
   }
-  if (of('gear').length) why.push({ label: 'Not possible here:', text: `no ${nouns(of('gear'))} exercise with this gear.` });
-  if (of('skip').length) why.push({ label: 'Not possible today:', text: `every ${nouns(of('skip'))} exercise here also works ${named(talk.skip)}.` });
-  if (of('time').length) why.push({ label: 'Not enough time:', text: `no ${nouns(of('time'))} work fit in ${talk.minutes} min.` });
-  if (of('cap').length) why.push({ label: `Room for ${MAX_EXERCISES[profile.experience]} exercises:`, text: `no ${nouns(of('cap'))} work today.` });
-  for (const gap of gaps) {
-    if (gap.repeats) why.push({ label: `No separate ${MUSCLE_NOUN[gap.muscle]} move:`, text: `${gap.repeats.exercise} repeats ${gap.repeats.of}.` });
-  }
+  why.push(...(shown?.reasons ?? []));
   why.push({ label: 'Loads:', text: 'from your last sessions; first-timers ask you to pick a weight.' });
   why.push({ label: 'Time:', text: `includes a ${Math.round(warmUpSeconds(talk.minutes) / 60)}-minute warm-up and rest by exercise.` });
 
@@ -402,9 +440,10 @@ export function customDayPreview(
   // One minutes model on every surface (#203): the preview names what Today will.
   const glance = todayGlance(adapted, null, false, profile.goal);
   const lead = leadCompoundId(ids);
-  const status = adapted.exercises.length === 0 || program.feasibility?.status === 'infeasible' ? 'none'
-    : program.feasibility?.status === 'limited' || gaps.length > 0 ? 'limited'
-    : 'ready';
+  const status = shown?.status
+    ?? (adapted.exercises.length === 0 || program.feasibility?.status === 'infeasible' ? 'none'
+      : program.feasibility?.status === 'limited' ? 'limited'
+      : 'ready');
   return {
     title: adapted.name,
     gear: gearLabel(talk.equipment, profile),
@@ -425,7 +464,7 @@ export function customDayPreview(
       };
     }),
     described,
-    gaps,
+    gaps: shown?.gaps ?? [],
     why,
   };
 }

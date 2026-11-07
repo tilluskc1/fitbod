@@ -11,9 +11,10 @@ import { currentWorkout, setupFor, todayGlance } from '../lib/adapt';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
 import Demo from '../components/ui/Demo';
-import FeasibilityNote from '../components/ui/FeasibilityNote';
+import FeasibilityNote, { DescribedNote } from '../components/ui/FeasibilityNote';
 import { missingFamilies } from '../lib/feasibility';
 import type { ProfileChange } from '../lib/preferences';
+import type { DayStatus } from '../lib/todayTalk';
 import Icon from '../components/ui/Icon';
 
 interface Props {
@@ -52,6 +53,8 @@ interface Props {
   composing?: boolean;
   /** (#193) False while a described session runs: it has no planned work to restore into. */
   canRestore?: boolean;
+  /** (#219) A described day's status and reasons, the composer preview's own; absent on a planned day. */
+  described?: DayStatus | null;
 }
 
 function greeting(now: Date): string {
@@ -175,6 +178,7 @@ export default function TodayScreen({
   composer,
   canRestore = true,
   composing = false,
+  described,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -200,8 +204,12 @@ export default function TodayScreen({
 
   // Every day states its feasibility (story contract). The detail and alternatives stay in FeasibilityNote.
   const feasibility = program.feasibility;
-  const chip: { tone: 'ready' | 'limited' | 'none'; label: string; icon: string } =
-    adapted.exercises.length === 0 || feasibility?.status === 'infeasible'
+  // A described day reads as its preview did (#219): Limited only for a gap it names.
+  const chip: { tone: 'ready' | 'limited' | 'none'; label: string; icon: string } = described
+    ? described.status === 'none' ? { tone: 'none', label: 'Not enough equipment', icon: 'remove' }
+      : described.status === 'limited' ? { tone: 'limited', label: 'Limited', icon: 'info' }
+      : { tone: 'ready', label: 'Ready', icon: 'check' }
+    : adapted.exercises.length === 0 || feasibility?.status === 'infeasible'
       ? { tone: 'none', label: 'Not enough equipment', icon: 'remove' }
       : feasibility?.status === 'limited'
         ? {
@@ -303,8 +311,9 @@ export default function TodayScreen({
           </span>
         </section>
 
-        {/* The status describes the saved setup, not an adjusted day or an open session. */}
-        {!current && !adjusted && (
+        {/* A described day names its gaps, open or not (#219); otherwise the status describes the saved setup. */}
+        {described && <DescribedNote day={described} />}
+        {!described && !current && !adjusted && (
           <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
         )}
 
