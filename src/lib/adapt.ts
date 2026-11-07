@@ -202,21 +202,20 @@ export interface DayGlance {
   adjusted: boolean;
 }
 
-/** The one source for every surface that names today's day: Today, Plan and View session. */
+/** The one source for every surface that names today's day: Today, Plan, View session and Coach. */
 export function todayGlance(program: Program, adapted: AdaptedWorkout, current: WorkoutRecord | null, overridden = false): DayGlance {
-  if (current) {
-    const sets = current.exercises.reduce((sum, exercise) => sum + exercise.planned.length, 0);
-    return { name: current.name, exercises: current.exercises.length, sets, minutes: current.durationMin ?? adapted.minutes, approx: false, adjusted: false };
-  }
+  // A running session is judged by its own planned sets and the length it was asked for
+  // (durationMin), so Start does not change the minutes promised a moment before (#200).
+  const day = current ? currentWorkout(adapted, current) : adapted;
   // What the work takes, overrun included; ≈ only when it falls short of the length asked for.
-  const promised = promisedMinutes(program, adapted);
+  const promised = promisedMinutes(program, day);
   return {
-    name: adapted.name,
-    exercises: adapted.exercises.length,
-    sets: adapted.totalSets,
+    name: day.name,
+    exercises: day.exercises.length,
+    sets: day.totalSets,
     minutes: promised,
-    approx: promised < adapted.minutes,
-    adjusted: overridden,
+    approx: promised < day.minutes,
+    adjusted: overridden && !current,
   };
 }
 

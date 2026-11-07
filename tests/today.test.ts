@@ -34,7 +34,8 @@ test('Today shows the accepted active targets instead of a recomputed program', 
       onOpenSettings: noop, onOpenExercise: noop,
     }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-    assert.match(text, /20 min · 6 sets/);
+    // The promised ≈19 it showed before Start, not the 20 asked for (#200).
+    assert.match(text, /The workout ≈19 min · 6 sets/);
     // Uniform reps read compactly ("2 × 9"), so the row fits at 360 px (#97).
     assert.match(text, /2 × 9 @ 15 kg each/);
     assert.doesNotMatch(text, /11 sets|3 × 9|3 sets · 9 · 9 · 9/);
