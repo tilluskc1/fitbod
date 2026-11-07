@@ -301,12 +301,11 @@ export function adaptWorkout(
     .sort((a, b) => role(a.exercise) - role(b.exercise) || b.index - a.index)
     .map((entry) => entry.exercise);
 
-  // 2. Trim sets in that order, keeping at least two working sets on a lift
-  //    and one on a hold.
-  for (const exercise of trimOrder) {
-    if (seconds() <= budget) break;
-    const floor = exercise.holdSeconds ? 1 : 2;
-    while (exercise.sets > floor && seconds() > budget) exercise.sets -= 1;
+  // 2. Over the length: every movement goes to its floor (two working sets on a lift, one on a
+  //    hold), and step 4 hands sets back evenly. Trimming one movement at a time left the lead at
+  //    five sets with everything else at two (#203).
+  if (seconds() > budget) {
+    for (const exercise of exercises) exercise.sets = Math.min(exercise.sets, exercise.holdSeconds ? 1 : 2);
   }
 
   // 3. Still over: drop whole movements in the same order, never the last one.
@@ -316,16 +315,19 @@ export function adaptWorkout(
     active[0].sets = 0;
   }
 
-  // 4. Refill: undo the trim in reverse order (lead first), a set at a time while the day still
-  //    fits, up to each movement's own sets. A dropped movement stays dropped (#203).
-  for (const exercise of [...trimOrder].reverse()) {
-    if (exercise.sets === 0) continue;
-    while (exercise.sets < exercise.originalSets) {
+  // 4. Refill: round-robin in reverse trim order (lead, compounds, isolation), one set per
+  //    movement per pass while the day still fits, up to each movement's own sets. No movement
+  //    passes the lead's count (#133), and a dropped movement stays dropped (#203).
+  const leadExercise = exercises.find((exercise) => exercise.exerciseId === leadId);
+  const refill = [...trimOrder].reverse().filter((exercise) => exercise.sets > 0);
+  for (let added = true; added; ) {
+    added = false;
+    for (const exercise of refill) {
+      const cap = !leadExercise || exercise === leadExercise ? exercise.originalSets : Math.min(exercise.originalSets, leadExercise.sets);
+      if (exercise.sets >= cap) continue;
       exercise.sets += 1;
-      if (seconds() > budget) {
-        exercise.sets -= 1;
-        break;
-      }
+      if (seconds() > budget) exercise.sets -= 1;
+      else added = true;
     }
   }
 

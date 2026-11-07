@@ -245,14 +245,19 @@ test('#203: a trimmed day fits its length, cannot take one more set back, and ke
               if (adapted.exercises.length === 0) continue;
               const work = adapted.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.sets }));
               if (seconds(work, profile.goal, minutes) > minutes * 60) problems.push(`over: ${where}`);
+              const lead = leadCompoundId(program.exercises.map((exercise) => exercise.exerciseId));
+              const leadSets = adapted.exercises.find((exercise) => exercise.exerciseId === lead)?.sets;
+              if (lead && leadSets === undefined) problems.push(`lead dropped: ${where}`);
               adapted.exercises.forEach((exercise, index) => {
                 if (exercise.sets > exercise.originalSets) problems.push(`above its program: ${where} ${exercise.exerciseId}`);
-                if (exercise.sets === exercise.originalSets) return;
+                const isLead = exercise.exerciseId === lead;
+                // #133: the lead keeps the most sets, so a later movement stops at the lead's count.
+                if (!isLead && leadSets !== undefined && exercise.sets > leadSets) problems.push(`above the lead: ${where} ${exercise.exerciseId}`);
+                const cap = isLead || leadSets === undefined ? exercise.originalSets : Math.min(exercise.originalSets, leadSets);
+                if (exercise.sets >= cap) return;
                 const more = work.map((item, k) => (k === index ? { ...item, sets: item.sets + 1 } : item));
                 if (seconds(more, profile.goal, minutes) <= minutes * 60) problems.push(`room for a set: ${where} ${exercise.exerciseId}`);
               });
-              const lead = leadCompoundId(program.exercises.map((exercise) => exercise.exerciseId));
-              if (lead && !adapted.exercises.some((exercise) => exercise.exerciseId === lead)) problems.push(`lead dropped: ${where}`);
             }
           }
         }
@@ -260,4 +265,22 @@ test('#203: a trimmed day fits its length, cannot take one more set back, and ke
     }
   }
   assert.deepEqual(problems.slice(0, 10), [], `${problems.length} problems`);
+});
+
+test('#203: the refill keeps the lead on top and the day even (#133)', () => {
+  const sets = (goal: string, saved: number, minutes: number) => {
+    const profile = profileFor(KITS.gym, 4, saved, goal);
+    const program = slotProgram(profile, planSlots(buildPlan(profile))[1], []);
+    const adapted = adaptWorkout(program, { ...defaultConstraints(profile), minutes }, [], profile.goal);
+    assert.equal(adapted.name, 'Lower A');
+    return Object.fromEntries(adapted.exercises.map((exercise) => [exercise.exerciseId, exercise.sets]));
+  };
+  // A lead-first refill stopped at the lead's first miss and let cheaper movements pass it.
+  const strength15 = sets('Get Stronger', 60, 15);
+  assert.ok(strength15['back-squat'] >= strength15['deadlift'], JSON.stringify(strength15));
+  const muscle30 = sets('Build Muscle', 60, 30);
+  assert.ok(muscle30['back-squat'] >= muscle30['leg-curl'], JSON.stringify(muscle30));
+  // ...and filled the lead to 5 sets with every other movement left at 2.
+  const muscle45 = Object.values(sets('Build Muscle', 60, 45));
+  assert.ok(Math.max(...muscle45) - Math.min(...muscle45) <= 2, JSON.stringify(muscle45));
 });
