@@ -4,6 +4,7 @@ import {
   type Constraints,
   type EquipmentChoice,
 } from './adapt.ts';
+import { ownedLoads } from './progression.ts';
 import type { Profile } from '../types.ts';
 
 /**
@@ -225,7 +226,7 @@ export function withCeiling(notices: ConstraintNotice[], adapted: AdaptedWorkout
  * no gear get bodyweight. Never assumes a dumbbell rack exists.
  */
 export function defaultConstraints(profile: Profile): Constraints {
-  const saved = profile.loads.Dumbbell ?? [];
+  const saved = ownedLoads(profile).Dumbbell ?? [];
   return saved.length > 0
     ? {
         minutes: profile.sessionMinutes ?? 35,
@@ -253,11 +254,11 @@ export function noticeText(notice: ConstraintNotice): string {
   return `You asked for ${notice.asked} — sessions run ${MIN_MINUTES}–${MAX_MINUTES} min, so this shows ${notice.applied}. Start only if that works for you.`;
 }
 
-/** The sentence shown in the text box, rebuilt whenever another control moves. */
-export function constraintSentence(current: Constraints): string {
+/** The sentence shown in the text box, rebuilt whenever another control moves. `gym`: the saved kit is a gym. */
+export function constraintSentence(current: Constraints, gym = false): string {
   const gear =
     current.equipment === 'home'
-      ? 'dumbbells'
+      ? gym ? 'my gym' : 'dumbbells'
       : current.equipment === 'hotel'
         ? 'a travel gym'
         : current.equipment === 'bands'

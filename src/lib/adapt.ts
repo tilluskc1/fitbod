@@ -4,7 +4,7 @@ import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } fr
 import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
-import { isCompound, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
+import { isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
 import { estimatedSeconds } from './generator.ts';
 import { sessionRests } from './sessionTime.ts';
 import { liveExercises } from './liveProgression.ts';
@@ -70,11 +70,8 @@ export const EQUIPMENT_OPTIONS: Record<EquipmentChoice, EquipmentOption> = {
   },
 };
 
-/** A saved kit with a barbell and machines or cables is a gym, not a home setup (#180). */
-export function isGymKit(profile: Pick<Profile, 'equipment'>): boolean {
-  return profile.equipment.includes('Barbell')
-    && (profile.equipment.includes('Machine') || profile.equipment.includes('Cable'));
-}
+// Lives beside ownedLoads in progression.ts (no import cycle); re-exported for existing callers.
+export { isGymKit };
 
 /**
  * The option as the user should read it. The saved setup ('home') is the user's own gear, so a

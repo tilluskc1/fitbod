@@ -40,7 +40,7 @@ import {
   goHeavierFloor,
 } from './lib/liveProgression';
 import { sessionRests } from './lib/sessionTime';
-import { leadCompoundId, leadSlotIds } from './lib/progression';
+import { leadCompoundId, leadSlotIds, ownedLoads } from './lib/progression';
 import
  {
   applyCancel,
@@ -305,7 +305,14 @@ export default function App() {
 
   /* ---------- derived ---------- */
 
-  const profile = state.profile;
+  /**
+   * The profile every screen reads: its loads are the ones the user owns, so a gym kit's stale
+   * stored rack is never a cap or a pick (#194). Settings edits the stored profile itself.
+   */
+  const profile = useMemo(
+    () => state.profile && { ...state.profile, loads: ownedLoads(state.profile) },
+    [state.profile],
+  );
   const unit = unitOf(profile);
   const today = useMemo(() => new Date(now), [now]);
   const override = useMemo(() => activeOverride(state, today), [state, today]);
@@ -320,7 +327,7 @@ export default function App() {
       minutes: override.minutes,
       equipment:
         override.choice ?? (override.equipment.includes('Dumbbell') ? 'home' : 'bodyweight'),
-      loads: profile && profile.loads.Dumbbell?.length ? profile.loads.Dumbbell : undefined,
+      loads: profile?.loads.Dumbbell?.length ? profile.loads.Dumbbell : undefined,
     };
   }, [override, profile]);
 
@@ -980,7 +987,7 @@ export default function App() {
         history={state.history}
         now={now}
         loadOptions={loadOptions(constraints.equipment, constraints.loads)}
-        profileLoads={state.profile?.loads}
+        profileLoads={profile?.loads}
         calibrationLoads={confirmedLoads(constraints.equipment, constraints.loads)}
         experience={state.profile?.experience}
         skippedCalibrations={calibrationSkips}
@@ -1030,7 +1037,7 @@ export default function App() {
         onFeedback={saveFeedback}
         onRetryFeedback={attemptSave}
         progression={recapLines}
-        highlight={recapHighlight(recap, state.history, recapLines, unit, state.profile ?? undefined)}
+        highlight={recapHighlight(recap, state.history, recapLines, unit, profile)}
         onViewHistory={() => {
           setView('tabs');
           setTab('progress');
@@ -1055,7 +1062,7 @@ export default function App() {
         constraints={pending.constraints}
         notices={pendingNotices}
         unit={unit}
-        loads={state.profile?.loads}
+        loads={profile?.loads}
         history={state.history}
         onStart={() => acceptAdaptation(pending)}
         onEdit={() => {
@@ -1118,7 +1125,7 @@ export default function App() {
           <ProgressScreen
             history={state.history}
             unit={unit}
-            loads={state.profile?.loads}
+            loads={profile?.loads}
             onExport={exportData}
             onCorrect={correctSet}
             onDelete={deleteWorkout}
@@ -1256,9 +1263,9 @@ export default function App() {
         </Sheet>
       )}
 
-      {sheet.kind === 'settings' && (
+      {sheet.kind === 'settings' && state.profile && (
         <SettingsSheet
-          profile={profile}
+          profile={state.profile}
           onChange={patchProfile}
           onExport={exportData}
           onRestore={restoreFile}
@@ -1323,7 +1330,7 @@ export default function App() {
               planned={exercise.planned}
               history={state.history}
               unit={unit}
-              loads={state.profile?.loads}
+              loads={profile?.loads}
               reason={targetNotes[exercise.exerciseId]}
               onClose={closeSheet}
             />
@@ -1337,7 +1344,7 @@ export default function App() {
           exercises={todayExercises}
           unit={unit}
           history={state.history}
-          loads={state.profile?.loads}
+          loads={profile?.loads}
           // The tab bar's start: the one validated path (startSession).
           onStart={sheet.kind === 'preview' && !current ? () => { closeSheet(); startWorkout(); } : undefined}
           onClose={closeSheet}
