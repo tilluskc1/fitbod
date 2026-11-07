@@ -369,7 +369,7 @@ test('confirming the first weight fills every unlogged set and leaves logged one
   assert.deepEqual(s.exercises[0].performed.map((p) => p.weight), [8, 12, 12, 12]);
 });
 
-test('logging a set pre-fills the next unweighted set only', () => {
+test('logging a set pre-fills later unweighted sets and never overwrites a chosen weight', () => {
   let s = unweighted(3);
   s = updatePerformedSet(s, 0, 0, { weight: 15 }, LATER);
   s = updatePerformedSet(s, 0, 2, { weight: 20 }, LATER);
@@ -393,4 +393,22 @@ test('confirm then logging every set records one load for progression', () => {
   const done = completeSession(s, { early: false, now: FINISH });
   assert.deepEqual(done.exercises[0].performed.map((p) => p.weight), [12, 12, 12, 12]);
   assert.equal(new Set(done.exercises[0].performed.map((p) => p.weight)).size, 1);
+});
+
+// #182: set 1 logged at 5 kg × 12 against a 6-rep target; the rest of the sets follow, edits stay.
+test('a changed rep count and load carry to every later untouched set; planned never changes', () => {
+  let s = unweighted(5);
+  const plannedReps = s.exercises[0].planned[0].reps;
+  s = updatePerformedSet(s, 0, 0, { weight: 5, reps: 12 }, LATER);
+  s = updatePerformedSet(s, 0, 3, { reps: 8 }, LATER); // the user already set set 4 by hand
+  s = logSet(s, 0, 0, LATER);
+  const performed = s.exercises[0].performed;
+  assert.deepEqual(performed.map((p) => p.weight), [5, 5, 5, 5, 5]);
+  assert.deepEqual(performed.map((p) => p.reps), [12, 12, 12, 8, 12]);
+  assert.ok(s.exercises[0].planned.every((p) => p.reps === plannedReps), 'the prescription is untouched');
+  // Logging at the planned reps carries nothing new.
+  let t = unweighted(3);
+  t = updatePerformedSet(t, 0, 0, { weight: 10 }, LATER);
+  t = logSet(t, 0, 0, LATER);
+  assert.deepEqual(t.exercises[0].performed.map((p) => p.reps), t.exercises[0].planned.map((p) => p.reps));
 });

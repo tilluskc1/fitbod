@@ -121,12 +121,19 @@ export function logSet(
   if (session.exercises[exerciseIndex]?.performed[setIndex]?.done) return session;
   let updated = updatePerformedSet(session, exerciseIndex, setIndex, { done: true }, now);
   if (updated === session) return session;
-  // Carry the load just logged into the next unweighted set; never overwrites a chosen weight.
-  const weight = updated.exercises[exerciseIndex].performed[setIndex].weight;
-  const next = updated.exercises[exerciseIndex].performed.findIndex((set, i) => i > setIndex && !set.done);
-  if (weight > 0 && next !== -1 && updated.exercises[exerciseIndex].performed[next].weight === 0) {
-    updated = updatePerformedSet(updated, exerciseIndex, next, { weight }, now);
-  }
+  // Carry what was just logged into the sets still to come (#182): the load into every later set with
+  // no load yet, and a changed rep count into every later set still at its planned reps. A later set the
+  // user already edited keeps its own value; `planned` is never touched.
+  const exercise = updated.exercises[exerciseIndex];
+  const logged = exercise.performed[setIndex];
+  const repsChanged = logged.reps !== exercise.planned[setIndex]?.reps;
+  exercise.performed.forEach((set, i) => {
+    if (i <= setIndex || set.done) return;
+    const patch: { weight?: number; reps?: number } = {};
+    if (logged.weight > 0 && set.weight === 0) patch.weight = logged.weight;
+    if (repsChanged && logged.reps > 0 && set.reps === exercise.planned[i]?.reps) patch.reps = logged.reps;
+    if (patch.weight !== undefined || patch.reps !== undefined) updated = updatePerformedSet(updated, exerciseIndex, i, patch, now);
+  });
   return startRest(updated, now, seconds);
 }
 

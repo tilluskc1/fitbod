@@ -237,7 +237,8 @@ test('after Skip a loaded set cannot be logged at 0; bodyweight and timed sets s
 // #103: no edit or correction turns a loaded set into a logged set at weight 0.
 test('editing or correcting a logged loaded set cannot store weight 0', async () => {
   const start = liveSession([]);
-  const logged = logSet(updatePerformedSet(start, 0, 0, { weight: 15 }, at(1)), 0, 0, at(1));
+  // Logging carries the load to every later set (#182); clear set 3 so the no-load case still exists.
+  const logged = updatePerformedSet(logSet(updatePerformedSet(start, 0, 0, { weight: 15 }, at(1)), 0, 0, at(1)), 0, 2, { weight: 0 }, at(1));
   const set = logged.exercises[0].performed[0];
   const zeroed = saveDraft(applyDraft(openDraft(0, 0, set), { weight: 0 }), set);
   assert.equal(updatePerformedSet(logged, 0, 0, zeroed, at(2)), logged, 'Save set at 0 writes nothing');
