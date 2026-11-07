@@ -155,6 +155,8 @@ function buildAlternatives(
   coverage: CoverageResult[],
   selectedCount: number,
   targetCount: number,
+  /** Focus muscles no exercise in this kit can train (#174). */
+  openMuscles: MuscleGroup[] = [],
 ): Alternative[] {
   const caps = capabilitiesFor(profile);
   const excluded = new Set(profile.exclusions);
@@ -167,7 +169,7 @@ function buildAlternatives(
   const countGap = selectedCount < targetCount;
 
   // Nothing to suggest when the day is already complete and full.
-  if (missing.length === 0 && !countGap) return [];
+  if (missing.length === 0 && !countGap && openMuscles.length === 0) return [];
 
   const relevant = EXERCISES.filter((exercise) => isRelevantToDay(exercise, day));
 
@@ -212,7 +214,9 @@ function buildAlternatives(
         ? unlocked.filter((exercise) =>
             missing.some((requirement) => matchesRequirement(exercise, requirement)),
           )
-        : unlocked;
+        : !countGap && openMuscles.length > 0
+          ? unlocked.filter((exercise) => openMuscles.includes(exercise.muscles[0]))
+          : unlocked;
     if (forGap.length === 0) continue;
     offeredCaps.add(cap);
     const example = forGap[0];
@@ -272,6 +276,7 @@ export function evaluateFeasibility(
     coverage,
     availableCount,
     targetCount,
+    open,
   );
 
   if (availableCount === 0) {
@@ -300,6 +305,19 @@ export function evaluateFeasibility(
     return {
       status: 'limited',
       reason: `Limited session: ${availableCount} of ${targetCount} exercises are possible without repeating movement patterns.${openNote}`,
+      targetCount,
+      selectedCount: availableCount,
+      coverage,
+      alternatives,
+    };
+  }
+
+  // Full for the time, but a focus muscle has no exercise this kit can do at all: say so, and offer the
+  // gear that fixes it, instead of "covering biceps curls" on the strength of a row's secondary work (#174).
+  if (open.length > 0) {
+    return {
+      status: 'limited',
+      reason: `Limited session: ${availableCount} exercises fit.${openNote}`,
       targetCount,
       selectedCount: availableCount,
       coverage,

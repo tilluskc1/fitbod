@@ -15,6 +15,7 @@ import {
   requirementsForDay,
 } from './feasibility.ts';
 import { isCompound, pickLead, prescribeExercise } from './progression.ts';
+import { REST_SECONDS, exerciseSeconds, restSecondsFor, sessionSeconds, warmUpSeconds } from './sessionTime.ts';
 
 const SPLITS: Record<number, PlanDay[]> = {
   2: [
@@ -71,19 +72,19 @@ export function buildPlan(profile: Profile): PlanDay[] {
   return SPLITS[days];
 }
 
-/** Time a set takes: 35 s of work plus the 75 s default rest. */
-const SET_SECONDS = 35 + 75;
-/** Setting up and moving to the next exercise. */
-const EXERCISE_SECONDS = 60;
 export const MIN_EXERCISES = 3;
 /** Past this, extra exercises mostly add fatigue, not results. */
 export const MAX_EXERCISES = { Beginner: 6, Intermediate: 8, Advanced: 8 } as const;
 /** Thinned to fit a short session, an exercise keeps at least this many sets; the lead keeps 3. */
 const MIN_SETS = 2;
 
-/** Minutes a day of these set counts takes, by the same per-set time the fit uses. */
-export function estimatedSeconds(sets: number[]): number {
-  return sets.reduce((sum, count) => sum + count * SET_SECONDS + EXERCISE_SECONDS, 0);
+/**
+ * Seconds a day of these set counts takes, warm-up included, by the same rest the
+ * timer uses (#132). `rests[i]` is exercise i's rest; see `sessionTime.ts`.
+ */
+export function estimatedSeconds(sets: number[], rests: number[], sessionMinutes?: number): number {
+  return sessionSeconds(sets.map((count, index) => ({ sets: count, rest: rests[index] ?? REST_SECONDS.isolation })),
+    warmUpSeconds(sessionMinutes));
 }
 
 function seededShuffle<T>(items: T[], seed: number): T[] {
@@ -152,7 +153,11 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
   // Keep that order as the tiebreaker, but prefer compound movements
   // when filling slots so an accessory cannot consume the last slot for a
   // primary muscle and leave the session short.
-  const compoundFirst = [...shuffled].sort((a, b) => b.muscles.length - a.muscles.length);
+  // A main movement pattern also outranks an accessory one, so a home Pull day takes a pullover
+  // (its only vertical pull) before a rear-delt fly (#174).
+  const MAIN_PATTERNS = new Set(['horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull', 'squat', 'lunge', 'hinge', 'hip_extension']);
+  const mainPattern = (exercise: Exercise) => (MAIN_PATTERNS.has(exercise.pattern) ? 0 : 1);
+  const compoundFirst = [...shuffled].sort((a, b) => b.muscles.length - a.muscles.length || mainPattern(a) - mainPattern(b));
   const picked: Exercise[] = [];
   const patternCounts = new Map<string, number>();
   const primaryMuscleCounts = new Map<MuscleGroup, number>();
@@ -285,48 +290,75 @@ export function generateWorkout(
   const firstOfMovement = new Set(leadFirst.filter((exercise, index) => isCompound(exercise)
     && leadFirst.findIndex((item) => isCompound(item) && item.pattern === exercise.pattern) === index));
   const tier = (exercise: Exercise) => (exercise === lead ? 0 : firstOfMovement.has(exercise) ? 1 : 2);
-  picked.sort((a, b) => tier(a) - tier(b));
+  // Within a tier the day's first focus outlasts the rest when time runs short: a Pull day keeps
+  // its second back movement before a curl (#155 under the honest time model, #132).
+  const focusRank = (exercise: Exercise) => {
+    const index = day.focus.indexOf(exercise.muscles[0]);
+    return index < 0 ? day.focus.length : index;
+  };
+  picked.sort((a, b) => tier(a) - tier(b) || focusRank(a) - focusRank(b));
   const prescriptions = picked.map((exercise) =>
     prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined));
   const sets = prescriptions.map((prescription) => prescription.sets);
+  const rests = picked.map((exercise) => restSecondsFor(exercise, exercise === lead, profile.goal, profile.sessionMinutes ?? 35));
+  const seconds = () => estimatedSeconds(sets, rests, profile.sessionMinutes ?? 35);
+  /** One more 3-set isolation exercise: the unit "room for another exercise" is measured in. */
+  const anotherExercise = exerciseSeconds(3, REST_SECONDS.isolation);
 
   let targetCount = fixed ?? picked.length;
   if (fixed === undefined) {
     const budget = (profile.sessionMinutes ?? 35) * 60;
     const all = picked.length;
     // Cut from the end, never the lead nor a day requirement's only cover, while the day runs long.
-    for (let index = picked.length - 1; index > 0 && picked.length > MIN_EXERCISES && estimatedSeconds(sets) > budget; index -= 1) {
+    for (let index = picked.length - 1; index > 0 && picked.length > MIN_EXERCISES && seconds() > budget; index -= 1) {
       if (covering.has(picked[index])) continue;
       picked.splice(index, 1);
       sets.splice(index, 1);
+      rests.splice(index, 1);
       prescriptions.splice(index, 1);
     }
     const kept = picked.length;
-    const room = budget - estimatedSeconds(sets);
+    const room = budget - seconds();
     // A count gap is only reported when gear or exclusions caused it: the same
     // day with everything allowed shows how many the caps can actually hold.
     // Preferences stay: a 'more' pick reorders the fill, and that is the user's choice, not a gap.
     const open = { ...profile, equipment: [...EQUIPMENT_OPTIONS], support: [...SUPPORT_OPTIONS], exclusions: [] };
     const capacity = selectExercises(open, day, dayIndex, max).picked.length;
     targetCount = kept < all ? kept
-      : Math.min(capacity, kept + Math.max(0, Math.floor(room / estimatedSeconds([3]))));
+      : Math.min(capacity, kept + Math.max(0, Math.floor(room / anotherExercise)));
     const exhausted = kept === all;
-    // Too long even at the floor: thin the last exercises first, down to 2 sets (the lead to 3).
-    for (let index = kept - 1; index >= 0 && estimatedSeconds(sets) > budget; ) {
-      const least = index === 0 && lead ? 3 : MIN_SETS;
+    // Too long even at the floor: thin the last exercises first, down to 2 sets (the lead to 3;
+    // under 30 minutes the lead may go to 2 so a four-movement day still fits, #132).
+    const leadFloor = (profile.sessionMinutes ?? 35) < 30 ? MIN_SETS : 3;
+    for (let index = kept - 1; index >= 0 && seconds() > budget; ) {
+      const least = index === 0 && lead ? leadFloor : MIN_SETS;
       if (sets[index] > least) sets[index] -= 1;
       else index -= 1;
     }
     // No exercise left to add and at least one more exercise's worth of time:
-    // the 3-set work behind the lead gets a fourth set, in priority order, while it fits.
-    if (exhausted && room >= estimatedSeconds([3])) {
-      for (let index = lead ? 1 : 0; index < kept; index += 1) {
-        if (sets[index] < 4 && estimatedSeconds(sets) + SET_SECONDS <= budget) sets[index] += 1;
+    // 3-set work gets a fourth set in priority order while it fits, the lead first, so a
+    // later compound never ends up with more sets than the lead (#133). A 5-set lead is already past 4.
+    if (exhausted && room >= anotherExercise) {
+      for (let index = 0; index < kept; index += 1) {
+        if (sets[index] < 4 && seconds() + exerciseSeconds(sets[index] + 1, rests[index]) - exerciseSeconds(sets[index], rests[index]) <= budget) sets[index] += 1;
       }
     }
   }
 
-  const exercises: WorkoutExercise[] = picked.map((exercise, index) => {
+  // Trimming used the priority above; the session itself runs lead, compounds, isolation, core (#133).
+  const showTier = (exercise: Exercise) => (exercise === lead ? 0
+    : isCompound(exercise) ? 1
+    : CORE_PATTERNS.has(exercise.pattern) ? 3 : 2);
+  // Among compounds, heavy barbell lifts come while you are fresh and single-leg work last (#174).
+  const heaviness = (exercise: Exercise) => (exercise.pattern === 'lunge' ? 3
+    : exercise.equipment !== 'Barbell' ? 2
+    : exercise.pattern === 'squat' || exercise.pattern === 'hinge' ? 0 : 1);
+  const order = picked.map((_, index) => index)
+    .sort((a, b) => showTier(picked[a]) - showTier(picked[b])
+      || (showTier(picked[a]) === 1 ? heaviness(picked[a]) - heaviness(picked[b]) : 0) || a - b);
+
+  const exercises: WorkoutExercise[] = order.map((index) => {
+    const exercise = picked[index];
     const prescription = prescriptions[index];
     const planned = Array.from({ length: sets[index] }, () => ({
       weight: prescription.weight,

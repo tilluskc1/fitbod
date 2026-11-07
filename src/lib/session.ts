@@ -104,7 +104,8 @@ export function restRemaining(session: WorkoutRecord, nowMs: number): number {
   const restPausedNow = session.restPausedAt
     ? Math.max(0, nowMs - Date.parse(session.restPausedAt))
     : 0;
-  const elapsed = (nowMs - started - pausedNow - (session.restPausedMs ?? 0) - restPausedNow) / 1000;
+  // A clock tick older than the log stamp must not read as negative time: the countdown starts at the rest.
+  const elapsed = Math.max(0, (nowMs - started - pausedNow - (session.restPausedMs ?? 0) - restPausedNow) / 1000);
   return Math.max(0, Math.round((session.restSeconds ?? 75) - elapsed));
 }
 

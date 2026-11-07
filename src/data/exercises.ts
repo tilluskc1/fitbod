@@ -86,6 +86,14 @@ export const EXERCISES: Exercise[] = [
   { id: 'leg-extension', name: 'Leg Extension', muscles: ['Quads'], equipment: 'Machine', pattern: 'knee_extension', needs: ['machine'], instructions: 'Extend your knees fully against the pad, pause, then lower with control.' },
   { id: 'goblet-squat', name: 'Goblet Squat', muscles: ['Quads', 'Glutes', 'Core'], equipment: 'Dumbbell', pattern: 'squat', secondaryPatterns: [], needs: ['dumbbell'], instructions: 'Hold one dumbbell at your chest and squat between your hips, keeping your chest tall. The same movement works with a kettlebell.' },
   { id: 'kettlebell-goblet-squat', name: 'Kettlebell Goblet Squat', muscles: ['Quads', 'Glutes', 'Core'], equipment: 'Kettlebell', pattern: 'squat', secondaryPatterns: [], needs: ['kettlebell'], instructions: 'Hold a kettlebell at your chest and squat between your hips, keeping your chest tall.' },
+  { id: 'dumbbell-romanian-deadlift', name: 'Dumbbell Romanian Deadlift', muscles: ['Hamstrings', 'Glutes', 'Back'], equipment: 'Dumbbell', pattern: 'hinge', secondaryPatterns: [], needs: ['dumbbell'], instructions: 'Hold a dumbbell in each hand in front of your thighs. Push your hips back with soft knees and a flat back until you feel your hamstrings stretch, then drive your hips forward to stand.' },
+  { id: 'dumbbell-calf-raise', name: 'Standing Dumbbell Calf Raise', muscles: ['Calves'], equipment: 'Dumbbell', pattern: 'calf_raise', secondaryPatterns: [], needs: ['dumbbell'], instructions: 'Stand tall with a dumbbell in each hand. Rise onto the balls of your feet as high as you can, pause, then lower your heels slowly.' },
+  { id: 'dumbbell-pullover', name: 'Dumbbell Pullover', muscles: ['Back', 'Chest'], equipment: 'Dumbbell', pattern: 'vertical_pull', secondaryPatterns: [], needs: ['dumbbell', 'bench'], instructions: 'Lie across a bench holding one dumbbell over your chest with both hands. With a slight bend in your elbows, lower it behind your head until you feel your lats stretch, then pull it back over your chest.' },
+  { id: 'kettlebell-swing', name: 'Kettlebell Swing', muscles: ['Glutes', 'Hamstrings', 'Back'], equipment: 'Kettlebell', pattern: 'hinge', secondaryPatterns: [], needs: ['kettlebell'], instructions: 'Hinge and hike the kettlebell back between your legs, then snap your hips forward so it floats to chest height. Let it fall back into the next hinge; the arms only guide it.' },
+  { id: 'kettlebell-row', name: 'Kettlebell Row', muscles: ['Back', 'Biceps'], equipment: 'Kettlebell', pattern: 'horizontal_pull', secondaryPatterns: ['elbow_flexion'], needs: ['kettlebell'], instructions: 'Hinge forward with a flat back, one hand braced on your thigh. Row the kettlebell to your hip, squeeze your shoulder blade, then lower until your arm is straight.' },
+  { id: 'kettlebell-press', name: 'Kettlebell Overhead Press', muscles: ['Shoulders', 'Triceps'], equipment: 'Kettlebell', pattern: 'vertical_push', secondaryPatterns: ['elbow_extension'], needs: ['kettlebell'], instructions: 'Hold the kettlebell at your shoulder in the rack position. Brace your glutes and press it straight overhead, then lower it back to your shoulder under control.' },
+  { id: 'bodyweight-squat', name: 'Bodyweight Squat', muscles: ['Quads', 'Glutes'], equipment: 'Bodyweight', pattern: 'squat', secondaryPatterns: [], needs: [], instructions: 'Stand with feet shoulder-width apart. Sit your hips back and down until your thighs are at least parallel, keeping your chest tall, then stand up.' },
+  { id: 'bodyweight-lunge', name: 'Bodyweight Lunge', muscles: ['Quads', 'Glutes'], equipment: 'Bodyweight', pattern: 'lunge', secondaryPatterns: [], needs: [], instructions: 'Step forward and lower until both knees are bent to about 90 degrees, front knee over the foot. Push through the front heel to step into the next lunge.' },
 
   // Hamstrings
   { id: 'romanian-deadlift', name: 'Romanian Deadlift', muscles: ['Hamstrings', 'Glutes', 'Back'], equipment: 'Barbell', pattern: 'hinge', secondaryPatterns: [], needs: ['barbell'], instructions: 'With a slight knee bend, hinge at the hips and lower the bar along your legs, then drive your hips forward to stand.' },
@@ -117,10 +125,13 @@ export const EXERCISES: Exercise[] = [
  */
 export const INCOMPATIBLE_GROUPS: string[][] = [
   ['push-up', 'diamond-push-up'],
-  ['arnold-press', 'dumbbell-shoulder-press', 'overhead-press'],
   ['dumbbell-floor-press', 'dumbbell-bench-press'],
   ['dumbbell-overhead-triceps-extension', 'overhead-triceps-extension'],
-  ['deadlift', 'romanian-deadlift'],
+  ['deadlift', 'romanian-deadlift', 'dumbbell-romanian-deadlift'],
+  ['dumbbell-row', 'kettlebell-row'],
+  ['arnold-press', 'dumbbell-shoulder-press', 'overhead-press', 'kettlebell-press'],
+  ['goblet-squat', 'kettlebell-goblet-squat', 'bodyweight-squat'],
+  ['walking-lunge', 'bodyweight-lunge'],
 ];
 
 export function areIncompatible(a: string, b: string): boolean {

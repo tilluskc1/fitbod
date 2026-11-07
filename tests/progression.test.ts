@@ -131,6 +131,19 @@ test('rep ranges follow the movement class instead of one global number', () => 
   assert.deepEqual(repRangeFor(meta('cable-fly')), { min: 10, max: 15 });
   assert.deepEqual(repRangeFor(meta('standing-calf-raise')), { min: 12, max: 20 });
   assert.deepEqual(repRangeFor(meta('rear-delt-fly')), { min: 12, max: 20 });
+  // #133: range from role, not muscle-tag count.
+  assert.deepEqual(repRangeFor(meta('push-up')), { min: 10, max: 20 });
+  assert.deepEqual(repRangeFor(meta('glute-bridge')), { min: 10, max: 20 });
+  assert.deepEqual(repRangeFor(meta('pull-up')), { min: 6, max: 10 });
+  assert.deepEqual(repRangeFor(meta('dip')), { min: 6, max: 10 });
+  assert.deepEqual(repRangeFor(meta('nordic-curl')), { min: 3, max: 6 });
+  assert.deepEqual(repRangeFor(meta('face-pull')), { min: 12, max: 20 });
+  // #174: a non-lead deadlift stays low-rep; a swing is ballistic; a pullover is moderate-rep lat work.
+  assert.deepEqual(repRangeFor(meta('deadlift')), { min: 4, max: 6 });
+  assert.deepEqual(repRangeFor(meta('kettlebell-swing')), { min: 12, max: 20 });
+  assert.deepEqual(repRangeFor(meta('dumbbell-pullover')), { min: 8, max: 12 });
+  assert.deepEqual(repRangeFor(meta('bodyweight-squat')), { min: 10, max: 20 });
+  assert.deepEqual(repRangeFor(meta('plank')), repRangeFor({ ...meta('plank'), equipment: 'Dumbbell' }));
   // One source: outside the lead the role's range is the movement's own.
   for (const exercise of EXERCISES.filter((item) => !programExercise(item.id))) {
     assert.deepEqual(roleTarget(exercise, makeProfile()).range, repRangeFor(exercise), exercise.id);
@@ -238,12 +251,12 @@ test('sets logged across repeated segments all contribute', () => {
 });
 
 test('a swap replacement that completes the whole slot still earns its step', () => {
-  // The full 3-set slot was completed under push-ups; bodyweight caps as hold.
+  // The full 3-set slot was completed under push-ups at the top of 10–20; bodyweight caps as hold.
   const history = [
     slotRecord('w1', '2026-01-05T10:00:00.000Z', 'push-up', [
       {
-        planned: sets(0, 10, 3),
-        performed: sets(0, 10, 3).map((set) => ({ ...set, done: true })),
+        planned: sets(0, 20, 3),
+        performed: sets(0, 20, 3).map((set) => ({ ...set, done: true })),
         originalPlannedSets: 3,
       },
     ]),
@@ -251,7 +264,7 @@ test('a swap replacement that completes the whole slot still earns its step', ()
 
   const prescription = prescribeExercise(meta('push-up'), makeProfile(), history);
   assert.equal(prescription.basis, 'hold');
-  assert.equal(prescription.reps, 10);
+  assert.equal(prescription.reps, 20);
 });
 
 test('an unfinished exercise repeats its load instead of progressing', () => {
@@ -300,17 +313,17 @@ function earlyFinish(exerciseId: string, planned: { weight: number; reps: number
 }
 
 test('an early finish repeats the target instead of lowering it to the logged set (#104)', () => {
-  // Bodyweight: Push-Up 4 × 8, one set of 7, finish early.
-  const pushUp = prescribeExercise(meta('push-up'), makeProfile(), earlyFinish('push-up', sets(0, 8), { weight: 0, reps: 7 }));
+  // Bodyweight: Push-Up 4 × 12, one set of 9, finish early.
+  const pushUp = prescribeExercise(meta('push-up'), makeProfile(), earlyFinish('push-up', sets(0, 12), { weight: 0, reps: 9 }));
   assert.equal(pushUp.basis, 'repeat');
-  assert.deepEqual([pushUp.weight, pushUp.reps], [0, 8]);
+  assert.deepEqual([pushUp.weight, pushUp.reps], [0, 12]);
 
   // Loaded: Bench 60 × 8, one lighter set of 6, finish early.
   const bench = prescribeExercise(meta('barbell-bench-press'), makeProfile(), earlyFinish('barbell-bench-press', sets(60, 8), { weight: 57.5, reps: 6 }));
   assert.equal(bench.basis, 'repeat');
   assert.deepEqual([bench.weight, bench.reps], [60, 8]);
   assert.match(describePrescription(bench, 'kg'), /^Repeat \d+ × 8 @ 60 kg: .+ was cut short\./);
-  assert.match(describePrescription(pushUp, 'kg'), /^Repeat \d+ × 8: .+ was cut short\./);
+  assert.match(describePrescription(pushUp, 'kg'), /^Repeat \d+ × 12: .+ was cut short\./);
 });
 
 test('an early finish never earns a step from one heavier or longer set (#104)', () => {
@@ -424,16 +437,17 @@ test('bodyweight movements hold at the top of the range instead of inventing loa
       id: 'w1',
       date: '2026-01-05T10:00:00.000Z',
       exerciseId: 'push-up',
-      planned: sets(0, 10),
-      performed: sets(0, 10),
+      planned: sets(0, 20),
+      performed: sets(0, 20),
     }),
   ];
 
+  // Push-ups climb 10–20 (#133) and hold at 20.
   const prescription = prescribeExercise(meta('push-up'), makeProfile(), history);
   assert.equal(prescription.increment, 0);
   assert.equal(prescription.basis, 'hold');
   assert.equal(prescription.weight, 0);
-  assert.equal(prescription.reps, 10);
+  assert.equal(prescription.reps, 20);
   // Behind an intermediate's heavy lead, other compounds take three sets (#97).
   assert.equal(roleTarget(meta('push-up'), makeProfile()).sets, 3);
   assert.equal(roleTarget(meta('push-up'), makeProfile({ goal: 'General Fitness' })).sets, 4);

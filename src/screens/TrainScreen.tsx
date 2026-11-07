@@ -10,6 +10,7 @@ import { needsCalibration, plannedLoad } from '../lib/liveProgression';
 import { nearestLoad, suggestedFirstLoad } from '../lib/firstLoad';
 import { availableLoads } from '../lib/progression';
 import { calibrationInputValue, loadLimitMessage, loadValue, typedLoad, unitLabel } from '../lib/units';
+import { restLabel } from '../lib/sessionTime';
 import { MAX_REPS } from '../lib/validate';
 import type { Experience, PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
@@ -35,6 +36,8 @@ interface Props {
   unit: Unit;
   /** One factual reason per exercise for today's computed target. */
   targetNotes?: Record<string, string>;
+  /** Rest after a set, per exercise in session order, by role (#132). */
+  rests?: number[];
   onMinimize: () => void;
   onFinish: () => void;
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => void;
@@ -183,6 +186,7 @@ export default function TrainScreen({
   experience,
   unit,
   targetNotes,
+  rests = [],
   onMinimize,
   onFinish,
   onUpdateSet,
@@ -542,6 +546,7 @@ export default function TrainScreen({
             </h2>
             <p className="lg-ex__meta">
               Exercise {index + 1} of {session.exercises.length} · Target <b>{shortTarget(exercise)}</b>
+              {rests[index] ? <> · Rest {restLabel(rests[index])}</> : null}
             </p>
           </div>
           {/* The same menu the row opens: instructions, history, replace, remove for today. */}

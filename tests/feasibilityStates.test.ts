@@ -16,11 +16,14 @@ const base: Profile = {
   equipment: ['Dumbbell'], support: [], exclusions: [], loads: { Dumbbell: [10, 15, 18] }, unit: 'kg',
 };
 const dumbbells = { ...base, daysPerWeek: 3 };
+// Dumbbells now have a calf raise (#174); a kettlebell-only Legs day still has no calf work.
+const kettlebell: Profile = { ...base, daysPerWeek: 3, equipment: ['Kettlebell'], loads: {} };
 const bodyweight = { ...base, equipment: [], loads: {} };
 const barbell: Profile = { ...base, equipment: ['Barbell'], loads: {} };
 const fullGear: Profile = { ...base, equipment: ['Dumbbell', 'Barbell', 'Cable', 'Machine'], support: ['Bench', 'Rack', 'Pull-up bar'] };
 // Every curl excluded: Pull loses its biceps exercises (3 of 5), and Allow offers each curl back.
-const noCurls = { ...dumbbells, exclusions: EXERCISES.filter((e) => e.pattern === 'elbow_flexion').map((e) => e.id) };
+// 45 min: at honest rest (#132) a 35-min Pull only has room for the 4 exercises still possible, so no gap shows.
+const noCurls = { ...dumbbells, sessionMinutes: 45, exclusions: EXERCISES.filter((e) => e.pattern === 'elbow_flexion').map((e) => e.id) };
 
 const programFor = (who: Profile, name: string) => {
   const slot = planSlots(buildPlan(who)).find((item) => item.name.startsWith(name));
@@ -31,7 +34,7 @@ const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' 
 const noop = () => {};
 
 test('slotProgram carries the slot feasibility without padding the session', () => {
-  const legs = programFor(dumbbells, 'Legs');
+  const legs = programFor(kettlebell, 'Legs');
   assert.equal(legs.feasibility?.status, 'limited');
   assert.ok(legs.feasibility?.coverage.some((item) => item.id === 'calf' && !item.satisfied));
   assert.ok(legs.feasibility?.alternatives.some((item) => item.label === 'Add Machine'));
@@ -70,7 +73,7 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
     const { default: Today } = await load('/src/screens/TodayScreen.tsx');
     const { default: Plan } = await load('/src/screens/PlanScreen.tsx');
 
-    const limited = screens(Today, Plan, dumbbells, 'Legs');
+    const limited = screens(Today, Plan, kettlebell, 'Legs');
     for (const html of [limited.today, limited.plan]) {
       assert.match(plain(html), /Limited session · no calf work/);
       assert.match(html, /<button[^>]*>Add Machine<\/button>/);
@@ -89,7 +92,7 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
 
     const curls = screens(Today, Plan, noCurls, 'Pull');
     assert.match(curls.today, /<button[^>]*>Allow [^<]+<\/button>/);
-    assert.match(plain(curls.today), /Limited session · 4 of 5 exercises 4 of 5 exercises are possible [^.]+\. No biceps exercise is possible with these constraints\./, 'reason under the line');
+    assert.match(plain(curls.today), /Limited session · 4 of 6 exercises 4 of 6 exercises are possible [^.]+\. No biceps exercise is possible with these constraints\./, 'reason under the line');
 
     // Five alternatives: three chips, the rest behind the equipment settings.
     const push = screens(Today, Plan, barbell, 'Push');
