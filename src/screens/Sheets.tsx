@@ -7,6 +7,8 @@ import { plannedLoad } from '../lib/liveProgression';
 import type { WorkoutRecord } from '../types';
 import {
   EQUIPMENT_OPTIONS as SETUPS,
+  isGymKit,
+  setupFor,
   type Constraints,
   type EquipmentChoice,
 } from '../lib/adapt';
@@ -35,6 +37,8 @@ interface AdjustProps {
   constraints: Constraints;
   originalMinutes: number;
   unit: Unit;
+  /** The saved kit: a gym kit is named "Your gym" and never shows a stored rack (#192). */
+  profile?: Pick<Profile, 'equipment'> | null;
   onClose: () => void;
   onPreview: (next: Constraints, notices: ConstraintNotice[]) => void;
 }
@@ -44,7 +48,7 @@ interface AdjustProps {
  * details below all write to the same object, so no control can drift from
 the others.
  */
-export function AdjustSheet({ constraints, originalMinutes, unit, onClose, onPreview }: AdjustProps) {
+export function AdjustSheet({ constraints, originalMinutes, unit, profile, onClose, onPreview }: AdjustProps) {
   const [current, setCurrent] = useState(constraints);
   const [text, setText] = useState(constraintSentence(constraints));
   const [notices, setNotices] = useState<ConstraintNotice[]>([]);
@@ -173,7 +177,7 @@ export function AdjustSheet({ constraints, originalMinutes, unit, onClose, onPre
               <span>Equipment</span>
             </div>
             {(Object.keys(SETUPS) as EquipmentChoice[]).map((key) => {
-              const option = SETUPS[key];
+              const option = setupFor(key, profile);
               return (
                 <button
                   key={key}
@@ -187,7 +191,7 @@ export function AdjustSheet({ constraints, originalMinutes, unit, onClose, onPre
                   <span>
                     <span className="equipment-choice__name">{option.label}</span>
                     <span className="equipment-choice__detail">
-                      {key === 'home' && current.loads?.length
+                      {key === 'home' && current.loads?.length && !(profile && isGymKit(profile))
                         ? `Yours: ${current.loads.map((load) => formatWeight(load, unit)).join(', ')}`
                         : option.detail}
                     </span>

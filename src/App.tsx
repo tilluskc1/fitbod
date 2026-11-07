@@ -1229,6 +1229,7 @@ export default function App() {
           constraints={pending?.constraints ?? constraints}
           originalMinutes={program.minutes}
           unit={unit}
+          profile={profile}
           onClose={() => {
             setPending(null);
             setPendingNotices([]);
