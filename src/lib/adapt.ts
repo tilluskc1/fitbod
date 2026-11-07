@@ -139,19 +139,8 @@ function listOf(names: string[]): string {
 }
 
 /**
- * Sets that fit the available minutes, derived from the program's own density
- * (11 sets in 35 minutes). 20 minutes therefore fits 6 sets, 30 fits 9, and 35
- * leaves the program untouched.
- */
-export function setBudget(program: Program, minutes: number): number {
-  const total = program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
-  if (total === 0) return 0;
-  return clamp(Math.round((total * minutes) / program.minutes), 1, total);
-}
-
-/**
- * Inverse of setBudget: what the work that survived the constraints takes.
- * Two sets left of an 35-minute program is not a 35-minute session.
+ * The program's own sets-per-minute ratio, for the length label of a request above the program
+ * (#141). Never a figure the app promises: those come from `workMinutes` (#203).
  */
 export function estimatedMinutes(program: Program, sets: number): number {
   const total = program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
@@ -170,26 +159,6 @@ export function workMinutes(exercises: { exerciseId: string; sets: number }[], g
   return Math.max(1, Math.round(estimatedSeconds(live.map((exercise) => exercise.sets), rests, sessionMinutes) / 60));
 }
 
-/**
- * The duration a screen may promise. The requested length, unless the work
- * cannot come close to filling it: four sets of push-ups are not a 45-minute
- * session, whatever length was asked for.
- */
-export function promisedMinutes(program: Program, adapted: Pick<AdaptedWorkout, 'minutes' | 'totalSets' | 'exercises'>): number {
-  if (adapted.totalSets === 0) return 0;
-  const total = program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
-  const byDensity = adapted.totalSets < total ? estimatedMinutes(program, adapted.totalSets) : adapted.minutes;
-  const byWork = workMinutes(adapted.exercises);
-  return byWork < adapted.minutes * 0.5 ? Math.min(byDensity, byWork) : byDensity;
-}
-
-/** The same rule for a program before any adjustment (Plan). */
-export function promisedProgramMinutes(program: Program): number {
-  const sets = program.exercises.map((exercise) => exercise.sets);
-  const totalSets = sets.reduce((sum, count) => sum + count, 0);
-  return promisedMinutes(program, { minutes: program.minutes, totalSets, exercises: program.exercises.map((exercise) => ({ ...exercise })) as AdaptedExercise[] });
-}
-
 /** Today's day at a glance: the running session, else today's adapted day (#189). */
 export interface DayGlance {
   name: string;
@@ -203,7 +172,8 @@ export interface DayGlance {
 }
 
 /**
- * The one source for every surface that names today's day: Today, Plan, View session and Coach.
+ * The one source for every surface that names a day's minutes: Today, Plan (today and later days),
+ * View session, Coach, the switch and gym sheets and the review (#203).
  * Minutes are the work's own time, with the rests the timer will run for this goal and length.
  * A running session is priced from itself alone (its exercises, planned sets and the length it
  * was started at), so Start, a later settings change or a new slot cannot move it (#200).
@@ -219,16 +189,21 @@ export function todayGlance(adapted: AdaptedWorkout, current: WorkoutRecord | nu
     exercises: work.length,
     sets: work.reduce((sum, exercise) => sum + exercise.sets, 0),
     minutes,
-    // ≈ when the work cannot come close to the length asked for (as promisedMinutes); unknown length, no ≈.
+    // ≈ when the work cannot come close to the length asked for; unknown length, no ≈.
     approx: asked !== undefined && minutes < asked * 0.5,
     adjusted: overridden && !current,
   };
 }
 
 export function adaptWorkout(
-  program: Program = FULL_BODY_A,
-  constraints: Constraints = DEFAULT_CONSTRAINTS,
-  excluded: string[] = [],
+  program: Program,
+  constraints: Constraints,
+  excluded: string[],
+  /**
+   * Required, even when unknown (undefined): the goal sets the lead's rest, so trimming fits the
+   * length by the timer's own clock and a Get Stronger day is never trimmed with short rests (#203).
+   */
+  goal: Goal | undefined,
 ): AdaptedWorkout {
   const minutes = clamp(Math.round(constraints.minutes), 10, 120);
   const setup = EQUIPMENT_OPTIONS[constraints.equipment] ?? EQUIPMENT_OPTIONS.home;
@@ -301,8 +276,14 @@ export function adaptWorkout(
     if (reps !== undefined) heir.targetReps = Array.from({ length: lead.sets }, () => reps);
   }
 
-  let total = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
-  const budget = setBudget(program, minutes);
+  // A length under the program's trims until the rest timer's model fits it (#203); at or over it,
+  // the day stays as built (the generator already fitted it to its own length).
+  const budget = minutes < program.minutes ? minutes * 60 : Infinity;
+  const seconds = () => {
+    const live = exercises.filter((exercise) => exercise.sets > 0);
+    const rests = sessionRests(live.map((exercise) => exercise.exerciseId), goal, minutes);
+    return estimatedSeconds(live.map((exercise) => exercise.sets), rests, minutes);
+  };
 
   // Trim order: isolation first, then other compounds, the lead compound last;
   // within a role, the later movement in the session goes first.
@@ -317,31 +298,41 @@ export function adaptWorkout(
     .sort((a, b) => role(a.exercise) - role(b.exercise) || b.index - a.index)
     .map((entry) => entry.exercise);
 
-  // 2. Trim sets in that order, keeping at least two working sets on a lift
-  //    and one on a hold.
-  for (const exercise of trimOrder) {
-    if (total <= budget) break;
-    const floor = exercise.holdSeconds ? 1 : 2;
-    while (exercise.sets > floor && total > budget) {
-      exercise.sets -= 1;
-      total -= 1;
-    }
+  // 2. Over the length: every movement goes to its floor (two working sets on a lift, one on a
+  //    hold), and step 4 hands sets back evenly. Trimming one movement at a time left the lead at
+  //    five sets with everything else at two (#203).
+  if (seconds() > budget) {
+    for (const exercise of exercises) exercise.sets = Math.min(exercise.sets, exercise.holdSeconds ? 1 : 2);
   }
 
   // 3. Still over: drop whole movements in the same order, never the last one.
-  while (total > budget) {
+  while (seconds() > budget) {
     const active = trimOrder.filter((exercise) => exercise.sets > 0);
     if (active.length <= 1) break;
-    const first = active[0];
-    total -= first.sets;
-    first.sets = 0;
+    active[0].sets = 0;
+  }
+
+  // 4. Refill: round-robin in reverse trim order (lead, compounds, isolation), one set per
+  //    movement per pass while the day still fits, up to each movement's own sets. No movement
+  //    passes the lead's count (#133), and a dropped movement stays dropped (#203).
+  const leadExercise = exercises.find((exercise) => exercise.exerciseId === leadId);
+  const refill = [...trimOrder].reverse().filter((exercise) => exercise.sets > 0);
+  for (let added = true; added; ) {
+    added = false;
+    for (const exercise of refill) {
+      const cap = !leadExercise || exercise === leadExercise ? exercise.originalSets : Math.min(exercise.originalSets, leadExercise.sets);
+      if (exercise.sets >= cap) continue;
+      exercise.sets += 1;
+      if (seconds() > budget) exercise.sets -= 1;
+      else added = true;
+    }
   }
 
   for (const exercise of exercises) {
     exercise.targetReps = exercise.targetReps?.slice(0, exercise.sets);
   }
 
-  // 4. Anything reduced to nothing was dropped to fit the time, so the review
+  // 5. Anything reduced to nothing was dropped to fit the time, so the review
   //    screen can say what went and why.
   const kept = exercises.filter((exercise) => exercise.sets > 0);
   for (const exercise of exercises) {
@@ -415,7 +406,8 @@ export function adaptWorkout(
     programId: program.id,
     name: program.name,
     minutes: appliedMinutes,
-    cappedMinutes: capped ? { asked: minutes, applied: appliedMinutes } : null,
+    // The ceiling notice names what the capped day takes by the timer's model, as every other figure does.
+    cappedMinutes: capped ? { asked: minutes, applied: workMinutes(kept, goal, appliedMinutes) } : null,
     originalMinutes: program.minutes,
     exercises: kept,
     skipped,
@@ -602,12 +594,13 @@ export function lengthOptions(
   defaultMinutes: number,
   /** The day rebuilt at a longer length, so more time can add work (#17). Absent: longer only keeps the day. */
   programAt?: (minutes: number) => Program,
+  goal?: Goal,
 ): LengthOption[] {
-  const base = adaptWorkout(program, { ...constraints, minutes: defaultMinutes }, exclusions);
+  const base = adaptWorkout(program, { ...constraints, minutes: defaultMinutes }, exclusions, goal);
   const kept = new Set(base.exercises.map((exercise) => exercise.exerciseId));
   return LENGTH_CHOICES.map((minutes) => {
     const source = programAt && minutes > defaultMinutes ? programAt(minutes) : program;
-    const adapted = adaptWorkout(source, { ...constraints, minutes }, exclusions);
+    const adapted = adaptWorkout(source, { ...constraints, minutes }, exclusions, goal);
     const now = new Set(adapted.exercises.map((exercise) => exercise.exerciseId));
     const dropped = base.exercises.filter((exercise) => kept.has(exercise.exerciseId) && !now.has(exercise.exerciseId)).map((exercise) => exercise.name);
     const added = adapted.exercises.filter((exercise) => !kept.has(exercise.exerciseId)).map((exercise) => exercise.name);
@@ -647,28 +640,33 @@ export interface SetupOption {
   totalSets: number;
   /** Sets the saved home setup holds at today's length. */
   baseSets: number;
+  /** The day's minutes with this setup, by the timer's model (#203). */
+  minutes: number;
+  approx: boolean;
   kind: 'program' | 'same' | 'fewer' | 'none';
 }
 
 /** What each setup leaves of today's workout, at today's length, against the saved home setup. */
-export function setupOptions(program: Program, constraints: Constraints, exclusions: string[]): SetupOption[] {
-  const base = adaptWorkout(program, { ...constraints, equipment: 'home' }, exclusions);
+export function setupOptions(program: Program, constraints: Constraints, exclusions: string[], goal?: Goal): SetupOption[] {
+  const base = adaptWorkout(program, { ...constraints, equipment: 'home' }, exclusions, goal);
   return SETUP_CHOICES.map((choice) => {
-    const adapted = adaptWorkout(program, { ...constraints, equipment: choice }, exclusions);
+    const adapted = adaptWorkout(program, { ...constraints, equipment: choice }, exclusions, goal);
     const kind: SetupOption['kind'] =
       adapted.totalSets === 0 ? 'none'
       : choice === 'home' ? 'program'
       : adapted.totalSets === base.totalSets ? 'same'
       : 'fewer';
-    return { choice, totalSets: adapted.totalSets, baseSets: base.totalSets, kind };
+    const { minutes, approx } = todayGlance(adapted, null, false, goal);
+    return { choice, totalSets: adapted.totalSets, baseSets: base.totalSets, minutes, approx, kind };
   });
 }
 
 /** What one setup does, in a few words. */
 export function setupConsequence(option: SetupOption, dayName: string): string {
   const sets = `${option.totalSets} ${option.totalSets === 1 ? 'set' : 'sets'}`;
+  const minutes = `${option.approx ? '≈' : ''}${option.minutes} min`;
   if (option.kind === 'none') return `Nothing in ${dayName} works`;
-  if (option.kind === 'program') return `${sets} · your gear`;
-  if (option.kind === 'same') return `${sets} · same workout`;
-  return `${option.totalSets} of ${option.baseSets} sets fit`;
+  if (option.kind === 'program') return `${sets} · ${minutes} · your gear`;
+  if (option.kind === 'same') return `${sets} · ${minutes} · same workout`;
+  return `${option.totalSets} of ${option.baseSets} sets fit · ${minutes}`;
 }

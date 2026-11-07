@@ -11,7 +11,7 @@ import { createSession, logSet, swapPendingExercise, updatePerformedSet } from '
 const profile = { goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
   equipment: ['Dumbbell', 'Barbell', 'Machine', 'Cable', 'Kettlebell'], support: ['Bench'],
   exclusions: [], loads: {}, name: 'Targets', unit: 'kg' };
-const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' });
+const adapted = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' }, [], undefined);
 const session = () => createSession({ id: 'accepted', name: adapted.name, dayIndex: 0,
   durationMin: 20, exercises: toWorkoutExercises(adapted), now: '2026-10-31T10:00:00.000Z' });
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');

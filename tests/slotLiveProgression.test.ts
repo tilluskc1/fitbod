@@ -22,7 +22,7 @@ const profile: Profile = {
 function today(state: AppState) {
   const slot = currentSlot(state);
   assert.ok(slot);
-  const adapted = adaptWorkout(slotProgram(profile, slot, state.history), { minutes: 60, equipment: 'home', loads: RACK }, []);
+  const adapted = adaptWorkout(slotProgram(profile, slot, state.history), { minutes: 60, equipment: 'home', loads: RACK }, [], undefined);
   return { slot, adapted, shown: liveAdapted(adapted, profile, state.history), stored: liveExercises(adapted, profile, state.history) };
 }
 

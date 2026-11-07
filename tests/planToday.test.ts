@@ -74,17 +74,19 @@ function agree(seen: Awaited<ReturnType<typeof surfaces>>, minutes: string, exer
 
 test('a today-only 30 min day: Today, Plan header, Up next and View session show the same honest minutes', async () => {
   const { slot, program } = firstDay(gym);
-  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
+  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal);
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: true, equipment: 'home' });
-  // 12 of 23 sets take 32 minutes by the timer's own rests: the overrun shows, it is not clamped to the 30 asked for (#200).
-  agree(seen, '32', '6', '12');
-  assert.match(seen.plan, /UP NEXT .*? 32 min · 6 exercises · 12 sets · Adjusted for today/);
+  // #203: trimming now fits 30 min by the timer's own rests: 10 sets in 28 minutes. The 2 minutes
+  // left would fit a Face Pull set but not a third lead set, and no movement passes the lead (#133).
+  // The old sets-per-minute trim kept 12 sets that ran 32 (#200 showed that overrun).
+  agree(seen, '28', '5', '10');
+  assert.match(seen.plan, /UP NEXT .*? 28 min · 5 exercises · 10 sets · Adjusted for today/);
   assert.equal(seen.header[3], 'Full gym', 'a length-only change keeps the saved setup word');
 });
 
 test('a bodyweight day whose work cannot fill the hour reads ≈ everywhere', async () => {
   const { slot, program } = firstDay(bodyweight);
-  const adapted = adaptWorkout(program, defaultConstraints(bodyweight), []);
+  const adapted = adaptWorkout(program, defaultConstraints(bodyweight), [], bodyweight.goal);
   const seen = await surfaces({ who: bodyweight, program, focus: slot.focus, adapted, current: null, overridden: false, equipment: 'bodyweight' });
   agree(seen, '≈15', '1', '4');
   assert.doesNotMatch(seen.plan, /Adjusted for today/);
@@ -92,19 +94,19 @@ test('a bodyweight day whose work cannot fill the hour reads ≈ everywhere', as
 
 test('a running session: every surface shows the session, and it is not labelled adjusted', async () => {
   const { slot, program } = firstDay(gym);
-  const started = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
+  const started = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal);
   const current = createSession({ id: 's1', name: started.name, dayIndex: 0, exercises: liveExercises(started, gym, []), now: '2026-11-07T09:00:00Z', durationMin: started.minutes });
   // Today's override still applies, but the open session is what runs.
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted: started, current, overridden: true, equipment: 'home' });
-  // #200: the promised 32 stays after Start; it does not fall back to the 30 asked for.
-  agree(seen, '32', '6', '12');
+  // #200: the promised figure stays after Start (28 since #203 trims by the timer).
+  agree(seen, '28', '5', '10');
   assert.equal(seen.today.adjusted, false);
   assert.doesNotMatch(seen.plan, /Adjusted for today/);
 });
 
 test('no override and no session: Plan numbers are the saved day, as before', async () => {
   const { slot, program } = firstDay(gym);
-  const adapted = adaptWorkout(program, defaultConstraints(gym), []);
+  const adapted = adaptWorkout(program, defaultConstraints(gym), [], gym.goal);
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: false, equipment: 'home' });
   // 23 sets take 58 minutes with the timer's rests; ≈ only marks work far short of the hour (#200).
   agree(seen, '58', '7', '23');
@@ -114,14 +116,14 @@ test('no override and no session: Plan numbers are the saved day, as before', as
 
 test('a today-only setup names that setup in the Plan header', async () => {
   const { slot, program } = firstDay(gym);
-  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), equipment: 'hotel' }, []);
+  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), equipment: 'hotel' }, [], gym.goal);
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: true, equipment: 'hotel' });
   assert.equal(seen.header[3], 'Travel');
 });
 
 test('todayGlance: adjusted only while no session runs', () => {
   const { program } = firstDay(gym);
-  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
+  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal);
   const current = createSession({ id: 's1', name: adapted.name, dayIndex: 0, exercises: liveExercises(adapted, gym, []), now: '2026-11-07T09:00:00Z', durationMin: 30 });
   assert.equal(todayGlance(adapted, null, true).adjusted, true);
   assert.equal(todayGlance(adapted, current, true).adjusted, false);
@@ -137,7 +139,7 @@ const pick = (seen: { minutes: number; approx: boolean }) => [seen.minutes, seen
 
 test('a bodyweight day keeps ≈15 on every surface after Start, Coach included', async () => {
   const { slot, program } = firstDay(bodyweight);
-  const adapted = adaptWorkout(program, defaultConstraints(bodyweight), []);
+  const adapted = adaptWorkout(program, defaultConstraints(bodyweight), [], bodyweight.goal);
   const day = { who: bodyweight, program, focus: slot.focus, adapted, overridden: false, equipment: 'bodyweight' as const };
   agree(await surfaces({ ...day, current: null }), '≈15', '1', '4');
   agree(await surfaces({ ...day, current: start(bodyweight, adapted) }), '≈15', '1', '4');
@@ -146,14 +148,14 @@ test('a bodyweight day keeps ≈15 on every surface after Start, Coach included'
 test('todayGlance: the same minutes and ≈ before and after Start', () => {
   for (const [who, minutes] of [[gym, 30], [gym, 60], [bodyweight, 60], [gym, 15], [{ ...gym, goal: 'Get Stronger' } as Profile, 30]] as const) {
     const { program } = firstDay(who);
-    const adapted = adaptWorkout(program, { ...defaultConstraints(who), minutes }, []);
+    const adapted = adaptWorkout(program, { ...defaultConstraints(who), minutes }, [], who.goal);
     assert.deepEqual(pick(glance(adapted, start(who, adapted), who)), pick(glance(adapted, null, who)), `${who.goal} ${who.equipment.length ? 'gym' : 'bodyweight'} at ${minutes}`);
   }
 });
 
 test('todayGlance: each set added mid-session adds time; minutes never fall back to the asked length', () => {
   const { program } = firstDay(gym);
-  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
+  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal);
   let current = start(gym, adapted);
   let previous = glance(adapted, current).minutes;
   const seen = [previous];
@@ -172,7 +174,7 @@ test('todayGlance: each set added mid-session adds time; minutes never fall back
 
 test('todayGlance: a skip keeps the planned minutes; a swap reprices only the work it changes', () => {
   const { program } = firstDay(gym);
-  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
+  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal);
   const current = start(gym, adapted);
   const promised = glance(adapted, current).minutes;
   assert.equal(glance(adapted, skipExercise(current, 1)).minutes, promised, 'a skip leaves the planned sets in place');
@@ -182,7 +184,7 @@ test('todayGlance: a skip keeps the planned minutes; a swap reprices only the wo
   const lead = exerciseById(logged.exercises[0].exerciseId)!;
   const replacement = exerciseById('dumbbell-bench-press')!;
   const swapped = swapPendingExercise(logged, 0, swapCandidateFor(replacement, gym, [], logged, true));
-  assert.equal(swapped.exercises.reduce((sum, exercise) => sum + exercise.planned.length, 0), 12, 'no set gained or lost');
+  assert.equal(swapped.exercises.reduce((sum, exercise) => sum + exercise.planned.length, 0), 10, 'no set gained or lost');
   // The honest figure is the time model of the session as it now stands: the split adds one
   // set-up (90 s) and drops one rest between the lead's sets.
   const expected = workMinutes(swapped.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.planned.length })), gym.goal, 30);
@@ -192,18 +194,18 @@ test('todayGlance: a skip keeps the planned minutes; a swap reprices only the wo
 
 test('todayGlance: nothing outside the running session moves its minutes', () => {
   const { program } = firstDay(gym);
-  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
+  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal);
   const current = start(gym, adapted);
   const before = pick(glance(adapted, current));
   // A settings or slot change mid-session rebuilds today's day; the session is unchanged.
-  const other = adaptWorkout(firstDay(bodyweight).program, defaultConstraints(bodyweight), []);
+  const other = adaptWorkout(firstDay(bodyweight).program, defaultConstraints(bodyweight), [], bodyweight.goal);
   assert.deepEqual(pick(glance(other, current)), before);
-  assert.deepEqual(pick(glance(adaptWorkout(program, defaultConstraints(gym), []), current)), before);
+  assert.deepEqual(pick(glance(adaptWorkout(program, defaultConstraints(gym), [], gym.goal), current)), before);
 });
 
 test('todayGlance: a stored session reads sensibly with or without its asked length', () => {
   const { program } = firstDay(bodyweight);
-  const adapted = adaptWorkout(program, defaultConstraints(bodyweight), []);
+  const adapted = adaptWorkout(program, defaultConstraints(bodyweight), [], bodyweight.goal);
   // Sessions saved before #200 hold the asked length, which is still what is written.
   assert.deepEqual(pick(glance(adapted, start(bodyweight, adapted, 60), bodyweight)), [15, true]);
   // A record without durationMin: rests as the timer runs them (full), and no ≈ since the asked length is unknown.

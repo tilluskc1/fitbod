@@ -15,9 +15,11 @@ test('the review names a gym profile\'s saved setup "Your gym"', async () => {
   try {
     const { default: AdaptScreen } = await server.ssrLoadModule('/src/screens/AdaptScreen.tsx');
     const constraints = { minutes: 20, equipment: 'home' as const };
-    const adapted = adaptWorkout(FULL_BODY_A, constraints);
+    const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
     const render = (equipment: string[]) => renderToStaticMarkup(createElement(AdaptScreen, {
       originalSets: adapted.originalSets, adapted, constraints, notices: [],
+      // Required since #203: what Today shows now, and the change.
+      before: { minutes: 30 }, after: { minutes: 20, approx: false },
       profile: { equipment }, onStart: () => {}, onKeep: () => {}, onEdit: () => {},
     }));
     const gym = render(['Barbell', 'Dumbbell', 'Machine', 'Cable']);

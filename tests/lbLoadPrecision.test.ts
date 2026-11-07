@@ -24,7 +24,7 @@ const profile: Profile = {
   name: 'K', goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
   equipment: ['Dumbbell'], support: [], exclusions: [], loads: { Dumbbell: RACK }, unit: 'lb',
 };
-const adapted = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home', loads: RACK });
+const adapted = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home', loads: RACK }, [], undefined);
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const base = () => liveExercises(adapted, profile, []);
 const id = base()[0].exerciseId;
@@ -213,7 +213,7 @@ test('an app-prescribed barbell step reads the same on target, rows, Log button 
     // AdaptScreen: a held typed load reads as typed.
     const adaptedTyped = liveAdapted(adapted, { ...profile, unit: 'lb' }, historyAt(toKg(42.3, 'lb'), 9));
     const review = plain(renderToStaticMarkup(createElement(Adapt, { originalSets: 11, adapted: adaptedTyped,
-      constraints: { minutes: 35, equipment: 'home' }, notices: [], unit: 'lb', loads: profile.loads,
+      constraints: { minutes: 35, equipment: 'home' }, before: { minutes: 33 }, after: { minutes: 33, approx: false }, notices: [], unit: 'lb', loads: profile.loads,
       history: historyAt(toKg(42.3, 'lb'), 9), onStart() {}, onKeep() {}, onEdit() {} })));
     assert.match(review, /42\.3 lb each/, 'Adapt review');
     assert.doesNotMatch(review, /42\.5/);

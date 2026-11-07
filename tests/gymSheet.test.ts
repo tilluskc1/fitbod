@@ -16,7 +16,9 @@ test('#149: each setup shows what still fits against the saved gear', () => {
   assert.deepEqual(options.map((option) => option.choice), ['home', 'hotel', 'bodyweight', 'bands']);
   const home = options[0];
   assert.equal(home.kind, 'program');
-  assert.match(setupConsequence(home, 'Push'), /^\d+ sets · your gear$/);
+  // #203: the preview names the day's minutes by the timer's model, not the asked 45.
+  assert.match(setupConsequence(home, 'Push'), /^\d+ sets · \d+ min · your gear$/);
+  assert.ok(home.minutes > 0 && home.minutes <= 45, `${home.minutes} min`);
   const bodyweight = options[2];
   assert.equal(bodyweight.kind, 'none');
   assert.equal(setupConsequence(bodyweight, 'Push'), 'Nothing in Push works');

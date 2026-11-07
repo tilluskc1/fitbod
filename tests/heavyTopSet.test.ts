@@ -140,7 +140,7 @@ test('the slot program, live numbers and generator agree on the lead target', ()
   const entry = program.exercises.find((exercise) => exercise.exerciseId === lead);
   assert.deepEqual(entry?.repRange, [4, 6]);
   assert.equal(entry?.sets, 5);
-  const live = liveAdapted(adaptWorkout(program, DEFAULT_CONSTRAINTS), profile, []);
+  const live = liveAdapted(adaptWorkout(program, DEFAULT_CONSTRAINTS, [], profile.goal), profile, []);
   const shown = live.exercises.find((exercise) => exercise.exerciseId === lead);
   assert.equal(shown?.targetReps?.[0], 6);
 });
@@ -235,7 +235,7 @@ test('when today\'s setup drops the lead, the next compound takes its five sets'
   assert.ok(lead);
   const heir = leadCompoundId(ids.filter((id) => id !== lead));
   assert.ok(heir);
-  const adapted = adaptWorkout(program, DEFAULT_CONSTRAINTS, [lead]);
+  const adapted = adaptWorkout(program, DEFAULT_CONSTRAINTS, [lead], profile.goal);
   const promoted = adapted.exercises.find((exercise) => exercise.exerciseId === heir);
   assert.equal(promoted?.sets, 5);
   assert.equal(promoted?.originalSets, 5);

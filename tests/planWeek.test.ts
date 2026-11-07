@@ -16,13 +16,13 @@ const gym = { name: 'K', goal: 'Build Muscle', experience: 'Intermediate', daysP
 test('Plan lists every day of the week after the one up next, and names a gym kit', async () => {
   const slots = planSlots(buildPlan(gym));
   const program = slotProgram(gym, slots[0], []);
-  const upcoming = slots.slice(1).map((day) => ({ id: day.id, name: day.name, focus: day.focus, exercises: 6, sets: 20, minutes: 58, status: 'ok' as const }));
+  const upcoming = slots.slice(1).map((day) => ({ id: day.id, name: day.name, focus: day.focus, exercises: 6, sets: 20, minutes: 58, approx: false, status: 'ok' as const }));
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: Plan } = await server.ssrLoadModule('/src/screens/PlanScreen.tsx');
     const noop = () => {};
     const html = renderToStaticMarkup(createElement(Plan, { profile: gym, upcoming, focus: slots[0].focus, program,
-      today: todayGlance(adaptWorkout(program, defaultConstraints(gym), []), null), slotLabel: 'Slot 1 of 4', history: [], unit: 'kg',
+      today: todayGlance(adaptWorkout(program, defaultConstraints(gym), [], gym.goal), null), slotLabel: 'Slot 1 of 4', history: [], unit: 'kg',
       now: new Date('2026-11-07T10:00:00Z'), onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     assert.match(text, /UP NEXT · SLOT 1 OF 4 Upper A Chest · Back · Shoulders · Biceps · Triceps/);

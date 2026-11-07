@@ -1,4 +1,4 @@
-import type { AdaptedWorkout } from '../lib/adapt';
+import type { AdaptedWorkout, DayGlance } from '../lib/adapt';
 import { setupFor } from '../lib/adapt';
 import type { Constraints } from '../lib/adapt';
 import { noticeText, type ConstraintNotice } from '../lib/constraints';
@@ -14,6 +14,9 @@ interface Props {
   originalSets: number;
   adapted: AdaptedWorkout;
   constraints: Constraints;
+  /** The day as programmed and as changed, by the timer's model: the minutes this screen names (#203). */
+  before: Pick<DayGlance, 'minutes'>;
+  after: Pick<DayGlance, 'minutes' | 'approx'>;
   notices: ConstraintNotice[];
   unit?: Unit;
   /** With the logged history these keep a held typed load reading as typed. */
@@ -62,6 +65,8 @@ export default function AdaptScreen({
   originalSets,
   adapted,
   constraints,
+  before,
+  after,
   notices,
   unit = 'kg',
   loads = {},
@@ -73,11 +78,13 @@ export default function AdaptScreen({
   const setup = setupFor(constraints.equipment, profile);
   const kept = adapted.exercises.length;
   const setDelta = adapted.totalSets - originalSets;
-  const minDelta = adapted.minutes - adapted.originalMinutes;
+  // The chip and title name the asked length; the time cell and Start name what the work takes.
+  const minDelta = after.minutes - before.minutes;
+  const afterMinutes = `${after.approx ? '≈' : ''}${after.minutes}`;
   const title =
     adapted.minutes === adapted.originalMinutes
       ? `${adapted.name} today`
-      : `${adapted.name}, ${adapted.minutes}-minute version`;
+      : `${adapted.name}, set to ${adapted.minutes} min`;
 
   return (
     <div className="screen flow-screen">
@@ -142,14 +149,14 @@ export default function AdaptScreen({
               <div className="diff-cell__values">
                 {minDelta !== 0 && (
                   <>
-                    <span className="diff-cell__before">{adapted.originalMinutes} min</span>
+                    <span className="diff-cell__before">{before.minutes} min</span>
                     <span className="diff-cell__arrow" aria-hidden="true">
                       →
                     </span>
                   </>
                 )}
                 <span className="diff-cell__after">
-                  {adapted.minutes} <span className="diff-cell__unit">min</span>
+                  {afterMinutes} <span className="diff-cell__unit">min</span>
                 </span>
               </div>
             </div>
@@ -246,9 +253,9 @@ export default function AdaptScreen({
               : 'Today only. Your program is unchanged.'}
           </p>
           <button className="pill-primary" onClick={onStart} disabled={kept === 0}>
-            {adapted.minutes === adapted.originalMinutes
+            {kept === 0 || minDelta === 0
               ? 'Start workout'
-              : `Start ${adapted.minutes}-min workout`}
+              : `Start ${afterMinutes}-min workout`}
             <Icon name="arrow_forward" size={20} />
           </button>
           <div className="review-footer__row">

@@ -141,7 +141,7 @@ test('live Today path: a Library save reorders the current slot through slotProg
   const today = (state: AppState) => {
     const slot = currentSlot(state);
     assert.ok(slot && state.profile);
-    const adapted = adaptWorkout(slotProgram(state.profile, slot, state.history), defaultConstraints(state.profile), state.profile.exclusions);
+    const adapted = adaptWorkout(slotProgram(state.profile, slot, state.history), defaultConstraints(state.profile), state.profile.exclusions, undefined);
     const status = generateWorkout(state.profile, slot, slot.index, state.history).feasibility.status;
     return { ids: adapted.exercises.map((item) => item.exerciseId), status };
   };

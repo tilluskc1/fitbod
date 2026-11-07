@@ -14,7 +14,7 @@ const profile: Profile = {
 };
 
 function finishPressAndReload(minutes: number) {
-  const adapted = adaptWorkout(FULL_BODY_A, { minutes, equipment: 'home' });
+  const adapted = adaptWorkout(FULL_BODY_A, { minutes, equipment: 'home' }, [], undefined);
   let current = createSession({ id: 'progression-session', name: adapted.name,
     dayIndex: 0, durationMin: minutes, exercises: toWorkoutExercises(adapted),
     now: '2026-10-31T12:00:00.000Z' });

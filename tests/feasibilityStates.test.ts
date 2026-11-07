@@ -60,7 +60,7 @@ async function withServer<T>(run: (load: (path: string) => Promise<Record<string
 
 function screens(Today: unknown, Plan: unknown, who: Profile, name: string) {
   const program = programFor(who, name);
-  const adapted = adaptWorkout(program, defaultConstraints(who), who.exclusions);
+  const adapted = adaptWorkout(program, defaultConstraints(who), who.exclusions, who.goal);
   const now = new Date('2026-11-04T10:00:00.000Z');
   const today = renderToStaticMarkup(createElement(Today as never, { profile: who, program, adapted,
     equipment: 'home', adjusted: false, history: [], current: null, now, onPreview: noop, onAdjust: noop,
