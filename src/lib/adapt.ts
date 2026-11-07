@@ -187,6 +187,36 @@ export function promisedProgramMinutes(program: Program): number {
   return promisedMinutes(program, { minutes: program.minutes, totalSets, exercises: program.exercises.map((exercise) => ({ ...exercise })) as AdaptedExercise[] });
 }
 
+/** Today's day at a glance: the running session, else today's adapted day (#189). */
+export interface DayGlance {
+  name: string;
+  exercises: number;
+  sets: number;
+  minutes: number;
+  /** The work cannot fill the asked length; screens prefix the minutes with ≈. */
+  approx: boolean;
+  /** A today-only change applies and no session has started ("Adjusted for today"). */
+  adjusted: boolean;
+}
+
+/** The one source for every surface that names today's day: Today, Plan and View session. */
+export function todayGlance(program: Program, adapted: AdaptedWorkout, current: WorkoutRecord | null, overridden = false): DayGlance {
+  if (current) {
+    const sets = current.exercises.reduce((sum, exercise) => sum + exercise.planned.length, 0);
+    return { name: current.name, exercises: current.exercises.length, sets, minutes: current.durationMin ?? adapted.minutes, approx: false, adjusted: false };
+  }
+  // What the work takes, overrun included; ≈ only when it falls short of the length asked for.
+  const promised = promisedMinutes(program, adapted);
+  return {
+    name: adapted.name,
+    exercises: adapted.exercises.length,
+    sets: adapted.totalSets,
+    minutes: promised,
+    approx: promised < adapted.minutes,
+    adjusted: overridden,
+  };
+}
+
 export function adaptWorkout(
   program: Program = FULL_BODY_A,
   constraints: Constraints = DEFAULT_CONSTRAINTS,

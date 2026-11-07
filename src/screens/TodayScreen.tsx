@@ -6,7 +6,7 @@ import { toDisplay, unitLabel, unitOf } from '../lib/units';
 import { exerciseMeta, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
-import { currentWorkout, promisedMinutes, setupFor } from '../lib/adapt';
+import { currentWorkout, setupFor, todayGlance } from '../lib/adapt';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
 import Demo from '../components/ui/Demo';
@@ -173,8 +173,7 @@ export default function TodayScreen({
   const targetDays = profile.daysPerWeek;
   const setup = setupFor(equipment, profile);
   // Equipment or exclusions can leave far less work than the requested time.
-  const estimated = !current ? promisedMinutes(program, adapted) : adapted.minutes;
-  const minutes = current ? (current.durationMin ?? adapted.minutes) : estimated;
+  const { minutes, approx } = todayGlance(program, proposedWorkout, current);
   // A day with nothing to do has no duration to promise.
   const timed = Boolean(current) || adapted.exercises.length > 0;
   const first = adapted.exercises[0];
@@ -276,7 +275,7 @@ export default function TodayScreen({
             {timed && (
               <>
                 <Icon name="timer" size={16} />
-                {estimated < adapted.minutes && !current ? '≈' : ''}
+                {approx ? '≈' : ''}
                 {minutes} min <span aria-hidden="true">·</span>{' '}
               </>
             )}
@@ -304,7 +303,7 @@ export default function TodayScreen({
           <div className="list-head">
             <h2>The workout</h2>
             <span>
-              {timed && `${estimated < adapted.minutes && !current ? '≈' : ''}${minutes} min · `}
+              {timed && `${approx ? '≈' : ''}${minutes} min · `}
               {adapted.totalSets} {adapted.totalSets === 1 ? 'set' : 'sets'}
             </span>
           </div>

@@ -557,6 +557,7 @@ export function ExerciseActionsSheet({
 export function DaySheet({
   name,
   minutes,
+  approx = false,
   exercises,
   unit,
   history = [],
@@ -566,6 +567,8 @@ export function DaySheet({
 }: {
   name: string;
   minutes: number;
+  /** The work falls short of the length asked for: "≈15 min", as Plan and Today show it. */
+  approx?: boolean;
   exercises: WorkoutExercise[];
   unit: Unit;
   history?: WorkoutRecord[];
@@ -577,7 +580,7 @@ export function DaySheet({
   return (
     <Sheet title={name} onClose={onClose}>
       <p className="sheet-copy">
-        {minutes} min estimated · {exercises.length}{' '}
+        {approx ? '≈' : ''}{minutes} min · {exercises.length}{' '}
         {exercises.length === 1 ? 'exercise' : 'exercises'} ·{' '}
         {exercises.reduce((sum, exercise) => sum + exercise.planned.length, 0)} sets
       </p>

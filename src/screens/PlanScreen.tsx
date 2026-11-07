@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, EXERCISES, SUPPORT_OPTIONS } from '../data/exercises';
-import { programSetCount } from '../data/flagship';
-import { isGymKit, promisedProgramMinutes } from '../lib/adapt';
+import { isGymKit, setupFor, type DayGlance, type EquipmentChoice } from '../lib/adapt';
+import { defaultConstraints } from '../lib/constraints';
 import type { Program } from '../data/flagship';
 import { capabilitiesFor, provides } from '../lib/capabilities';
 import { catalogRowMeta } from '../lib/liveProgression';
@@ -30,6 +30,10 @@ interface Props {
   focus?: string[];
   /** The slot the sequence is up to: the day this week actually runs. */
   program: Program;
+  /** That day as View session shows it: the running session, else today's adjusted day (#189). */
+  today: DayGlance;
+  /** Today's setup; a today-only one names itself in the header. */
+  equipment?: EquipmentChoice;
   slotLabel?: string;
   history: WorkoutRecord[];
   unit: Unit;
@@ -47,6 +51,8 @@ export default function PlanScreen({
   upcoming = [],
   focus = [],
   program,
+  today,
+  equipment,
   slotLabel,
   history,
   unit,
@@ -57,9 +63,9 @@ export default function PlanScreen({
   onReviewChange,
 }: Props) {
   const [tab, setTab] = useState<'week' | 'equipment'>('week');
-  const promised = promisedProgramMinutes(program);
-  const minutes = promised < program.minutes ? `≈${promised}` : `${program.minutes}`;
-  const sessionSets = programSetCount(program);
+  const minutes = `${today.approx ? '≈' : ''}${today.minutes}`;
+  const savedSetup = profile.equipment.length === 0 ? 'Bodyweight' : isGymKit(profile) ? 'Full gym' : 'Home';
+  const setup = equipment && equipment !== defaultConstraints(profile).equipment ? setupFor(equipment, profile).short : savedSetup;
   const dayIds = program.exercises.map((exercise) => exercise.exerciseId);
   const daySets = Object.fromEntries(program.exercises.map((exercise) => [exercise.exerciseId, exercise.sets]));
 
@@ -100,8 +106,8 @@ export default function PlanScreen({
         </button>
       </header>
       <p className="page-sub">
-        {program.exercises.length} exercises · {sessionSets} sets · {program.exercises.length > 0 && `${minutes} minutes · `}
-        {profile.equipment.length === 0 ? 'Bodyweight' : isGymKit(profile) ? 'Full gym' : 'Home'}
+        {today.exercises} exercises · {today.sets} sets · {today.exercises > 0 && `${minutes} minutes · `}
+        {setup}
       </p>
 
       <div className="segmented" role="tablist" aria-label="Plan views">
@@ -137,10 +143,10 @@ export default function PlanScreen({
                 <span className="plan-kicker">
                   UP NEXT{slotLabel ? ` · ${slotLabel.toUpperCase()}` : ''}
                 </span>
-                <strong className="plan-name">{program.name}</strong>
+                <strong className="plan-name">{today.name}</strong>
                 {focus.length > 0 && <span className="plan-focus">{focus.join(' · ')}</span>}
                 <span className="plan-meta">
-                  {program.exercises.length > 0 && `${minutes} min · `}{program.exercises.length} exercises · {sessionSets} sets
+                  {today.exercises > 0 && `${minutes} min · `}{today.exercises} exercises · {today.sets} sets{today.adjusted ? ' · Adjusted for today' : ''}
                 </span>
                 <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
                 <span className="plan-foot">
