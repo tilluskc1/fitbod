@@ -72,7 +72,7 @@ import
 import
  { EXERCISES, exerciseById } from './data/exercises';
 import
- { capabilitiesFor, provides } from './lib/capabilities';
+ { rankedReplacements } from './lib/replacements';
 import
  type {
   AppState,
@@ -1312,14 +1312,12 @@ export default function App() {
           const exercise = current.exercises[sheet.exerciseIndex];
           if (!exercise) return null;
           const meta = exerciseById(exercise.exerciseId);
-          const caps = capabilitiesFor(profile);
-          const options = EXERCISES.filter(
-            (candidate) =>
-              candidate.id !== exercise.exerciseId &&
-              (!meta || candidate.pattern === meta.pattern) &&
-              provides(caps, candidate.needs) &&
-              !profile.exclusions.includes(candidate.id),
-          ).map((candidate) => ({
+          // The rest of today's workout: never offer a duplicate, an incompatible pair, or a third of a pattern (#177).
+          const inDay = current.exercises
+            .filter((_, index) => index !== sheet.exerciseIndex)
+            .map((item) => exerciseById(item.exerciseId))
+            .filter((item): item is NonNullable<typeof item> => item !== undefined);
+          const options = (meta ? rankedReplacements(meta, profile, inDay, 6) : []).map((candidate) => ({
             id: candidate.id,
             name: candidate.name,
             meta: `${candidate.equipment} · ${candidate.muscles.slice(0, 2).join(', ')}`,

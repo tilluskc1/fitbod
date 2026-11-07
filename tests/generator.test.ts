@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { EXERCISES, INCOMPATIBLE_GROUPS } from '../src/data/exercises.ts';
 import { capabilitiesFor, provides } from '../src/lib/capabilities.ts';
@@ -356,4 +357,33 @@ test('ranked replacements skip what is already in the day or incompatible with i
   assert.ok(!withPress.some((item) => item.id === 'dumbbell-shoulder-press'));
   const others = rankedReplacements(arnold, profile, [meta('lateral-raise')]);
   assert.ok(!others.some((item) => item.id === 'lateral-raise'), 'already picked');
+});
+
+// #177: the logger's Replace list is this ranking, against the rest of today's workout.
+test('ranked replacements respect the day: no duplicate, no incompatible pair, no third of a pattern', () => {
+  const profile = makeProfile({ experience: 'Intermediate', equipment: ['Dumbbell'], support: ['Bench'] });
+  const incline = meta('incline-dumbbell-press');
+  // Home Push: incline is being replaced; bench press and shoulder press stay.
+  const day = [meta('dumbbell-bench-press'), meta('dumbbell-shoulder-press'), meta('lateral-raise')];
+  const ids = rankedReplacements(incline, profile, day, 6).map((item) => item.id);
+  assert.ok(!ids.includes('dumbbell-bench-press'), 'already in the day');
+  assert.ok(!ids.includes('dumbbell-floor-press'), 'incompatible with the bench press in the day');
+  assert.ok(ids.length > 0, 'still offers something');
+
+  // Gym pull day: two rows stay, the pull-up is replaced. A third row is never offered; a pulldown is.
+  const gym = makeProfile({ equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable'], support: ['Bench', 'Rack', 'Pull-up bar', 'Ab wheel'] });
+  const rows = [meta('barbell-row'), meta('seated-cable-row')];
+  const forPullUp = rankedReplacements(meta('pull-up'), gym, rows, 10);
+  assert.ok(forPullUp.some((item) => item.id === 'lat-pulldown'), forPullUp.map((item) => item.id).join(', '));
+  for (const item of forPullUp) assert.notEqual(item.pattern, 'horizontal_pull', item.id);
+  // One move per core pattern: with a plank in the day the ab wheel is out, a leg raise is fine.
+  const forTwist = rankedReplacements(meta('russian-twist'), gym, [meta('plank')], 10).map((item) => item.id);
+  assert.ok(!forTwist.includes('ab-wheel'), forTwist.join(', '));
+  assert.ok(forTwist.includes('hanging-leg-raise'), forTwist.join(', '));
+});
+
+test('the logger Replace sheet lists rankedReplacements against today\'s other exercises', () => {
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /rankedReplacements\(meta, profile, inDay, 6\)/);
+  assert.match(app, /index !== sheet\.exerciseIndex/);
 });
