@@ -1,5 +1,5 @@
 import type { AdaptedWorkout } from '../lib/adapt';
-import { EQUIPMENT_OPTIONS } from '../lib/adapt';
+import { setupFor } from '../lib/adapt';
 import type { Constraints } from '../lib/adapt';
 import { noticeText, type ConstraintNotice } from '../lib/constraints';
 import type { Profile, Unit, WorkoutRecord } from '../types.ts';
@@ -9,6 +9,8 @@ import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 
 interface Props {
+  /** Saved gear, so a gym kit's own setup reads "Your gym" (#206). */
+  profile?: Pick<Profile, 'equipment'> | null;
   originalSets: number;
   adapted: AdaptedWorkout;
   constraints: Constraints;
@@ -56,6 +58,7 @@ function summaryLine(adapted: AdaptedWorkout, originalSets: number): string {
 }
 
 export default function AdaptScreen({
+  profile,
   originalSets,
   adapted,
   constraints,
@@ -67,7 +70,7 @@ export default function AdaptScreen({
   onKeep,
   onEdit,
 }: Props) {
-  const setup = EQUIPMENT_OPTIONS[constraints.equipment];
+  const setup = setupFor(constraints.equipment, profile);
   const kept = adapted.exercises.length;
   const setDelta = adapted.totalSets - originalSets;
   const minDelta = adapted.minutes - adapted.originalMinutes;
