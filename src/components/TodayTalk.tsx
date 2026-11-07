@@ -1,12 +1,12 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Profile } from '../types';
 import type { EquipmentChoice } from '../lib/adapt';
 import { AREAS } from '../lib/areas';
 import type { Area } from '../lib/areas';
 import { noticeText } from '../lib/constraints';
 import { restLabel } from '../lib/sessionTime';
-import { gearLabel, talkFromText, toggleSkip, toggleTrain } from '../lib/todayTalk';
-import type { CustomDayPreview, TalkState } from '../lib/todayTalk';
+import { NO_TAPS, composeTalk, gearLabel, tapSkip, tapTrain, tapsAfterEdit } from '../lib/todayTalk';
+import type { CustomDayPreview, TalkState, Taps } from '../lib/todayTalk';
 import Icon from './ui/Icon';
 
 interface Props {
@@ -18,6 +18,8 @@ interface Props {
   /** The day these chips build, from the same engine Start runs. */
   preview: (talk: TalkState) => CustomDayPreview | null;
   onStart: (talk: TalkState) => void;
+  /** Open or previewing: the screen's other primary steps aside. */
+  onActive?: (active: boolean) => void;
 }
 
 const EXAMPLES: { label: string; say: string }[] = [
@@ -42,17 +44,35 @@ const words = (areas: Area[]) => {
  * generator makes from them, and Start runs exactly that day. Voice is the keyboard's own
  * dictation into the text box: nothing here listens.
  */
-export default function TodayTalk({ profile, plannedName, base, preview, onStart }: Props) {
+export default function TodayTalk({ profile, plannedName, base, preview, onStart, onActive }: Props) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
-  const [talk, setTalk] = useState<TalkState>(base);
+  // Chip taps sit on top of the text, so typing more never undoes them (see `tapsAfterEdit`).
+  const [taps, setTaps] = useState<Taps>(NO_TAPS);
+  // "It's only soreness": the lifter's answer to the pain stop, kept while the note still says pain.
+  const [soreOnly, setSoreOnly] = useState(false);
   const [built, setBuilt] = useState<{ talk: TalkState; day: CustomDayPreview } | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const said = composeTalk(base, text, taps);
+  const talk = soreOnly ? { ...said, pain: false } : said;
+
+  useEffect(() => {
+    onActive?.(open || built !== null);
+    return () => onActive?.(false);
+  }, [open, built, onActive]);
+  // Gear or time changed in another sheet: that newer choice shows through the chips.
+  const baseKey = `${base.equipment}:${base.minutes}`;
+  const [seenBase, setSeenBase] = useState(baseKey);
+  if (seenBase !== baseKey) {
+    setSeenBase(baseKey);
+    setTaps({ areas: taps.areas });
+  }
 
   const say = (value: string) => {
+    setTaps(tapsAfterEdit(taps, text, value));
     setText(value);
-    setTalk(talkFromText(value, base));
+    if (!composeTalk(base, value, NO_TAPS).pain) setSoreOnly(false);
   };
   const build = () => {
     const day = preview(talk);
@@ -92,10 +112,7 @@ export default function TodayTalk({ profile, plannedName, base, preview, onStart
           <p><b>{day.exercises.length}</b><small>exercises</small></p>
         </div>
         <div className="tt-why">
-          {day.skipped.length > 0 && <p><b>Skipped:</b> {day.skipped.join(', ')}, because you said sore.</p>}
-          {day.missing.length > 0 && <p><b>Not possible here:</b> no {words(day.missing)} exercise with this gear.</p>}
-          <p><b>Loads:</b> from your last sessions; first-timers ask you to pick a weight.</p>
-          <p><b>Time:</b> includes a {day.warmUpMinutes}-minute warm-up and rest by exercise.</p>
+          {day.why.map((line) => <p key={line.label}><b>{line.label}</b> {line.text}</p>)}
         </div>
         <ul className="tt-list">
           {day.exercises.map((exercise) => (
@@ -108,10 +125,12 @@ export default function TodayTalk({ profile, plannedName, base, preview, onStart
             </li>
           ))}
         </ul>
-        <div className="tt-week">
-          <b>{plannedName} moves to your next session</b>
-          <span>Your weekly plan keeps every day; nothing is lost.</span>
-        </div>
+        {day.described && (
+          <div className="tt-week">
+            <b>{plannedName} moves to your next session</b>
+            <span>Your weekly plan keeps every day; nothing is lost.</span>
+          </div>
+        )}
         <button type="button" className="pill-primary" onClick={() => onStart(built.talk)} disabled={day.exercises.length === 0}>
           Start this workout
         </button>
@@ -158,7 +177,7 @@ export default function TodayTalk({ profile, plannedName, base, preview, onStart
               <div className="tt-chips">
                 {gears.map((choice) => (
                   <button key={choice} type="button" className="tt-chip" aria-pressed={talk.equipment === choice}
-                    onClick={() => setTalk({ ...talk, equipment: choice })}>{gearLabel(choice, profile)}</button>
+                    onClick={() => setTaps({ ...taps, equipment: choice })}>{gearLabel(choice, profile)}</button>
                 ))}
               </div>
             </div>
@@ -167,7 +186,7 @@ export default function TodayTalk({ profile, plannedName, base, preview, onStart
               <div className="tt-chips">
                 {AREAS.map((area) => (
                   <button key={area} type="button" className="tt-chip" aria-pressed={talk.train.includes(area)}
-                    onClick={() => setTalk(toggleTrain(talk, area))}>{area}</button>
+                    onClick={() => setTaps(tapTrain(talk, taps, area))}>{area}</button>
                 ))}
               </div>
             </div>
@@ -176,7 +195,7 @@ export default function TodayTalk({ profile, plannedName, base, preview, onStart
               <div className="tt-chips">
                 {AREAS.map((area) => (
                   <button key={area} type="button" className="tt-chip tt-chip--skip" aria-pressed={talk.skip.includes(area)}
-                    onClick={() => setTalk(toggleSkip(talk, area))}>{area}</button>
+                    onClick={() => setTaps(tapSkip(talk, taps, area))}>{area}</button>
                 ))}
               </div>
             </div>
@@ -185,7 +204,7 @@ export default function TodayTalk({ profile, plannedName, base, preview, onStart
               <div className="tt-chips">
                 {times.map((minutes) => (
                   <button key={minutes} type="button" className="tt-chip" aria-pressed={talk.minutes === minutes}
-                    onClick={() => setTalk({ ...talk, minutes })}>{minutesLabel(minutes)}</button>
+                    onClick={() => setTaps({ ...taps, minutes })}>{minutesLabel(minutes)}</button>
                 ))}
               </div>
             </div>
@@ -194,6 +213,7 @@ export default function TodayTalk({ profile, plannedName, base, preview, onStart
           {talk.pain ? (
             <p className="tt-stop" role="alert">
               <b>You mentioned pain.</b> I can work around soreness, not pain. Skip today or check with someone who can look at it. If it's only soreness, edit your note.
+              <button type="button" className="secondary" onClick={() => setSoreOnly(true)}>It's only soreness</button>
             </p>
           ) : talk.train.length === 0 ? (
             <p className="tt-warn">Pick at least one area to train.</p>

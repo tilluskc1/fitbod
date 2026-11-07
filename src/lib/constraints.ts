@@ -5,8 +5,6 @@ import {
   type EquipmentChoice,
 } from './adapt.ts';
 import type { Profile } from '../types.ts';
-import { AREAS } from './areas.ts';
-import type { Area } from './areas.ts';
 
 /**
  * One constraint state, three ways to change it.
@@ -32,12 +30,6 @@ export interface ParsedConstraints {
   unsupportedEquipment?: string;
   /** Two halves of the sentence that cannot both be true. */
   contradiction?: string;
-  /** Areas the sentence asks to train today (#193). Never one it also skips. */
-  train?: Area[];
-  /** Areas the sentence says are sore or to leave out (#193); the Skip chips. */
-  avoid?: Area[];
-  /** The sentence mentions pain or an injury: nothing is built around it (#193). */
-  pain?: true;
 }
 
 export interface ConstraintParser {
@@ -50,51 +42,6 @@ function snapMinutes(value: number): number {
 
 /** Equipment families the user can name that the program does not cover yet. */
 const UNSUPPORTED_EQUIPMENT = ['kettlebell', 'barbell', 'machine', 'cable'] as const;
-
-/** Words for each area; "upper body" and "lower body" name several (#193). */
-const AREA_WORDS: { word: string; areas: Area[] }[] = [
-  { word: 'chest|pecs?', areas: ['Chest'] },
-  { word: 'back|lats?', areas: ['Back'] },
-  { word: 'shoulders?|delts?', areas: ['Shoulders'] },
-  { word: 'arms?|biceps?|triceps?', areas: ['Arms'] },
-  { word: 'legs?|quads?|hamstrings?|glutes?|calf|calves', areas: ['Legs'] },
-  { word: 'abs|core|abdominals?', areas: ['Core'] },
-  { word: 'upper body', areas: ['Chest', 'Back', 'Shoulders', 'Arms'] },
-  { word: 'lower body', areas: ['Legs'] },
-];
-const SORE = 'sore|tired|fried|wrecked|dead|aching|achy|stiff';
-const LEAVE = 'sore|tired|skip|skipping|no|not|avoid|avoiding|rest|resting';
-const PAIN = /\b(?:pain|painful|hurts?|hurting|injur(?:ed|y|ies)|tweaked|pulled|strained)\b/i;
-
-/**
- * Areas named per clause (#193). "<area> … sore" or "sore/skip/no <area>" skips it; any other
- * mention trains it. A clause ends at punctuation or "but", so "tired, legs" never skips legs.
- */
-function readAreas(text: string): { train: Area[]; skip: Area[] } {
-  const train = new Set<Area>();
-  const skip = new Set<Area>();
-  for (const clause of text.toLowerCase().split(/[,.;:!?\n]+|\bbut\b/)) {
-    for (const { word, areas } of AREA_WORDS) {
-      if (!new RegExp(`\\b(?:${word})\\b`).test(clause)) continue;
-      const sore = new RegExp(`\\b(?:${word})(?:\\s+[\\w']+){0,2}?\\s+(?:${SORE})\\b`).test(clause)
-        || new RegExp(`\\b(?:${LEAVE})\\s+(?:[\\w']+\\s+)?(?:${word})\\b`).test(clause);
-      for (const area of areas) (sore ? skip : train).add(area);
-    }
-  }
-  return {
-    train: AREAS.filter((area) => train.has(area) && !skip.has(area)),
-    skip: AREAS.filter((area) => skip.has(area)),
-  };
-}
-
-/** Hours said in words or digits, in minutes; undefined when the sentence names none. */
-function hoursIn(text: string): number | undefined {
-  if (/\bhalf an? hour\b/i.test(text)) return 30;
-  const digits = /(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b/i.exec(text);
-  if (digits) return Math.round(Number(digits[1]) * 60);
-  if (/\b(?:an?|one)\s+(?:hour|hr)\b/i.test(text)) return /\band a half\b/i.test(text) ? 90 : 60;
-  return undefined;
-}
 
 /** Local keyword parser. Deterministic and offline. */
 export const keywordParser: ConstraintParser = {
@@ -116,11 +63,9 @@ export const keywordParser: ConstraintParser = {
     if (weights.length > 0) result.loads = [...new Set(weights)].sort((a, b) => a - b);
 
     const withUnit = /(\d{1,3})\s*(?:-|\s)?\s*(?:minutes?|mins?)\b/i.exec(withoutLoads);
-    const hours = withUnit ? undefined : hoursIn(withoutLoads);
     // Standalone token only: a slice of a longer number is not a session length.
-    const bare = withUnit || hours !== undefined ? null : /(?:^|[^\d.,])(\d{1,3})(?![\d.,])/.exec(withoutLoads);
+    const bare = withUnit ? null : /(?:^|[^\d.,])(\d{1,3})(?![\d.,])/.exec(withoutLoads);
     const match = withUnit ?? bare;
-    if (hours !== undefined) result.minutes = hours;
     if (match) {
       const value = Number(match[1]);
       // Raw: range and rounding are the contract's job, so the UI can show
@@ -134,24 +79,18 @@ export const keywordParser: ConstraintParser = {
       result.contradiction = 'dumbbells and no dumbbells';
     }
 
-    if (/hotel|\btravel/i.test(text)) {
+    if (/hotel|travel(?:l)?ing/i.test(text)) {
       result.equipment = 'hotel';
     } else if (/band/i.test(text)) {
       result.equipment = 'bands';
     } else if (/(?:body ?weight|nothing|empty room|no (?:equipment|gear))/i.test(text) || deniesGear) {
       result.equipment = 'bodyweight';
-    } else if (/dumbbell|weights|home|garage|\bgym\b/i.test(text)) {
-      // "Gym" is the lifter's own saved setup; a travel or hotel gym is caught above (#193).
+    } else if (/dumbbell|weights|home|garage/i.test(text)) {
       result.equipment = 'home';
     } else {
       const named = UNSUPPORTED_EQUIPMENT.find((family) => new RegExp(`\\b${family}s?\\b`, 'i').test(text));
       if (named) result.unsupportedEquipment = named;
     }
-
-    const areas = readAreas(text);
-    if (areas.train.length > 0) result.train = areas.train;
-    if (areas.skip.length > 0) result.avoid = areas.skip;
-    if (PAIN.test(text)) result.pain = true;
 
     return result;
   },

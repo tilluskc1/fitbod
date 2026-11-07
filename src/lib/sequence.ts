@@ -2,11 +2,11 @@ import type { AppState, MuscleGroup, PlanDay, Profile, SlotSkip, WorkoutRecord }
 import type { Program, ProgramExercise } from '../data/flagship.ts';
 import type { EquipmentChoice } from './adapt.ts';
 import { detailOf, loadModeOf, programExercise } from '../data/flagship.ts';
-import { exerciseById } from '../data/exercises.ts';
+import { EXERCISES, exerciseById } from '../data/exercises.ts';
 import { buildPlan, generateWorkout } from './generator.ts';
 import { leadCompoundId, REP_RANGES, roleTarget } from './progression.ts';
 import { MAX_WEIGHT } from './validate.ts';
-import { customDayName } from './areas.ts';
+import { customDayName, worksSkipped } from './areas.ts';
 
 /**
  * The program sequence.
@@ -162,9 +162,21 @@ export function todayProgram(
 ): Program {
   const saved = profile.sessionMinutes ?? 35;
   // A day the lifter described (#193) is generated like any other, from its own focus, at today's length.
-  const focus = today.focus?.filter((muscle) => !today.skip?.includes(muscle)) ?? [];
+  const skip = today.skip ?? [];
+  const focus = today.focus?.filter((muscle) => !skip.includes(muscle)) ?? [];
   const custom = focus.length > 0;
   const slot = custom ? { ...plannedSlot, id: `${plannedSlot.id}-today`, name: customDayName(focus), focus } : plannedSlot;
+  // A skipped muscle group stays out of the whole day, not just its focus: nothing that works it
+  // is picked (see `worksSkipped`). Those are no exclusions of the lifter's, so none is offered back.
+  const spared = custom ? EXERCISES.filter((exercise) => worksSkipped(exercise, skip)).map((exercise) => exercise.id) : [];
+  if (spared.length > 0) {
+    const program = todayProgram({ ...profile, exclusions: [...profile.exclusions, ...spared] }, plannedSlot, history, { ...today, skip: [], focus });
+    const feasibility = program.feasibility && {
+      ...program.feasibility,
+      alternatives: program.feasibility.alternatives.filter((alt) => !(alt.exerciseId && spared.includes(alt.exerciseId))),
+    };
+    return { ...program, feasibility };
+  }
   if (!today.equipment || today.equipment === 'home') {
     const minutes = custom ? today.minutes ?? saved : today.minutes && today.minutes > saved ? today.minutes : saved;
     return slotProgram(minutes === saved ? profile : { ...profile, sessionMinutes: minutes }, slot, history);

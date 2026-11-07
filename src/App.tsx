@@ -212,6 +212,8 @@ export default function App() {
   const [replacePrompt, setReplacePrompt] = useState<Constraints | null>(null);
   /** First-weight steps skipped in this tab; in memory only, never stored. */
   const [calibrationSkips, setCalibrationSkips] = useState<string[]>([]);
+  /** (#193) The Today composer is open or previewing; it clears this when it closes or unmounts. */
+  const [composing, setComposing] = useState(false);
 
   const appliedProposalRef = useRef<string | null>(null);
   const proposalRevisionRef = useRef(0);
@@ -709,26 +711,32 @@ export default function App() {
 
   /** (#193) The day the chips build, from the same adaptation Start runs. */
   const talkPreview = (talk: TalkState) => {
-    const next = talkConstraints(talk, constraints.loads);
+    if (!profile || !slot) return null;
+    const next = talkConstraints(talk, constraints.loads, slot.focus);
     const adaptedDay = adaptFor(next);
-    return profile ? customDayPreview(talk, programFor(next), liveAdapted(adaptedDay, profile, state.history), profile) : null;
+    return customDayPreview(talk, programFor(next), liveAdapted(adaptedDay, profile, state.history), profile, slot.focus);
   };
 
-  /** (#193) Approve a described day: save it as today's override and start exactly what the preview showed. */
+  /**
+   * (#193) Approve the chips: save today's override and start exactly what the preview showed.
+   * Chips equal to the planned day change only its gear and time, so that session moves the plan.
+   */
   const startTalk = (talk: TalkState) => {
-    const next = talkConstraints(talk, constraints.loads);
-    if (!next.focus || !startSession(next)) return;
+    if (!profile || !slot) return;
+    const next = talkConstraints(talk, constraints.loads, slot.focus);
+    if (!startSession(next)) return;
     const choice: EquipmentChoice = next.equipment;
+    const plain = !next.focus && choice === 'home' && next.minutes === (profile.sessionMinutes ?? 35);
     setState((currentState) => ({
       ...currentState,
-      todayOverride: {
+      todayOverride: plain ? null : {
         date: dayKey(new Date()),
         minutes: next.minutes,
         equipment: choice === 'home' || choice === 'hotel' ? ['Dumbbell'] : [],
         support: [],
         appliedAt: new Date().toISOString(),
         choice,
-        focus: next.focus,
+        ...(next.focus ? { focus: next.focus } : {}),
         ...(next.skip ? { skip: next.skip } : {}),
       },
     }));
@@ -754,7 +762,11 @@ export default function App() {
     setNotice(`${option.name} is up. Skipped ${option.skips.join(', ')}; a skip earns no progression.`);
   };
 
+  /** A described session (#193) has no planned work to restore into; it is finished or discarded instead. */
+  const describedSession = Boolean(current && current.slotSeq === undefined);
+
   const restoreOriginal = () => {
+    if (describedSession) return;
     setState((currentState) => {
       const original = adaptWorkout(
         homeProgram,
@@ -1157,8 +1169,10 @@ export default function App() {
             onOpenSwitch={slot ? () => setSheet({ kind: 'switch' }) : undefined}
             alternativeDay={alternativeDay}
             composer={slot && talkBase ? (
-              <TodayTalk profile={profile} plannedName={slot.name} base={talkBase} preview={talkPreview} onStart={startTalk} />
+              <TodayTalk profile={profile} plannedName={slot.name} base={talkBase} preview={talkPreview} onStart={startTalk} onActive={setComposing} />
             ) : undefined}
+            composing={composing}
+            canRestore={!describedSession}
             onWhy={() =>
               setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
             }

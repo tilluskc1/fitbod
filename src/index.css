@@ -4540,5 +4540,6 @@ button.aw-exercise__name-btn {
 .tt-week { background: var(--sky); color: var(--on-sky); border-radius: var(--radius-card); padding: 16px 18px; display: grid; gap: 4px; font-size: 14px; }
 .tt-week b { font-size: 15px; }
 @media (prefers-reduced-motion: reduce) { .tt-chev { transition: none; } }
-/* While the composer is open or previewing, its button is the screen's one primary: the dock steps aside. */
-.flow-screen:has(.tt-body, .tt-pv-title) .flow-dock { display: none; }
+/* (#193) While the composer is open or previewing, its button is the screen's one primary. */
+.flow-dock[hidden] { display: none; }
+.tt-stop .secondary { margin-top: 10px; min-height: 44px; background: var(--card); }

@@ -48,6 +48,10 @@ interface Props {
   alternativeDay?: string;
   /** (#193) "Tell me about today", shown above the workout card while no session is open. */
   composer?: ReactNode;
+  /** (#193) The composer is open or previewing: its button is the screen's one primary, so the dock steps aside. */
+  composing?: boolean;
+  /** (#193) False while a described session runs: it has no planned work to restore into. */
+  canRestore?: boolean;
 }
 
 function greeting(now: Date): string {
@@ -169,6 +173,8 @@ export default function TodayScreen({
   onOpenSwitch,
   alternativeDay,
   composer,
+  canRestore = true,
+  composing = false,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -421,7 +427,7 @@ export default function TodayScreen({
             </div>
           </div>
           <div className="coach-card__actions">
-            {adjusted && (
+            {adjusted && canRestore && (
               <button className="text-action text-action--lime" onClick={onRestore}>
                 <Icon name="undo" size={16} />
                 Restore original
@@ -497,7 +503,7 @@ export default function TodayScreen({
         )}
       </div>
 
-      <div className="flow-dock">
+      <div className="flow-dock" hidden={composing && !current}>
         <button className="text-action" onClick={onAdjust}>
           <Icon name="tune" size={16} />
           Short on time or gear?
