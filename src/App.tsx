@@ -29,8 +29,8 @@ import
  { defaultConstraints, withCeiling } from './lib/constraints';
 import
  type { ConstraintNotice } from './lib/constraints';
-import  { FULL_BODY_A, programSetCount } from './data/flagship';
-import { cursorFor, planRevisionOf, planSlots, revisePlan, skipCurrentSlot, slotAt, slotProgram, updateProfile } from './lib/sequence';
+import  { FULL_BODY_A } from './data/flagship';
+import { cursorFor, planRevisionOf, planSlots, revisePlan, skipCurrentSlot, slotAt, slotProgramAt, updateProfile } from './lib/sequence';
 import {
   liveAdapted,
   liveExercises,
@@ -352,7 +352,7 @@ export default function App() {
   /** The slot's day built for a length; longer than the saved length adds work (#17). */
   const programAt = useCallback(
     (minutes?: number) => (profile && slot
-      ? slotProgram(minutes ? { ...profile, sessionMinutes: minutes } : profile, slot, state.history)
+      ? slotProgramAt(profile, slot, state.history, minutes)
       : FULL_BODY_A),
     [profile, slot, state.history],
   );
@@ -361,8 +361,8 @@ export default function App() {
   const program = useMemo(() => programAt(longerToday), [programAt, longerToday]);
   const defaultProgram = useMemo(() => programAt(), [programAt]);
   const adapted = useMemo(
-    () => adaptWorkout(program, constraints, exclusions),
-    [program, constraints, exclusions],
+    () => adaptWorkout(program, constraints, exclusions, profile?.goal),
+    [program, constraints, exclusions, profile?.goal],
   );
 
   /**
@@ -375,8 +375,8 @@ export default function App() {
   );
 
   const pendingAdapted = useMemo(
-    () => (pending ? adaptWorkout(program, pending.constraints, exclusions) : null),
-    [pending, program, exclusions],
+    () => (pending ? adaptWorkout(program, pending.constraints, exclusions, profile?.goal) : null),
+    [pending, program, exclusions, profile?.goal],
   );
 
   const current = state.current;
@@ -469,7 +469,7 @@ export default function App() {
    * so the preview, the review and the logger can never disagree.
    */
   const startSession = (next: Constraints): boolean => {
-    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
+    const workout = adaptWorkout(program, next, profile?.exclusions ?? [], profile?.goal);
     if (workout.exercises.length === 0) {
       setNotice('No movement in this workout can be done with that setup.');
       return false;
@@ -506,7 +506,7 @@ export default function App() {
     const next = replacePrompt;
     setReplacePrompt(null);
     if (!next) return;
-    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
+    const workout = adaptWorkout(program, next, profile?.exclusions ?? [], profile?.goal);
     if (workout.exercises.length > 0) beginSession(workout);
   };
 
@@ -556,7 +556,7 @@ export default function App() {
     };
     // An open session keeps its completed sets: the adaptation replaces only
     // the pending prescriptions, so adjusting mid-workout never discards work.
-    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
+    const workout = adaptWorkout(program, next, profile?.exclusions ?? [], profile?.goal);
     if (current) {
       if (workout.exercises.length === 0) {
         setNotice('No movement in this workout can be done with that setup.');
@@ -660,7 +660,7 @@ export default function App() {
     if (!profile || !slot || adapted.exercises.length > 0) return undefined;
     const fits = planSlots(state.plan)
       .filter((other) => other.id !== slot.id)
-      .map((other) => ({ name: other.name, sets: adaptWorkout(slotProgram(profile, other, state.history), constraints, profile.exclusions ?? []).totalSets }))
+      .map((other) => ({ name: other.name, sets: adaptWorkout(slotProgramAt(profile, other, state.history, constraints.minutes), constraints, profile.exclusions ?? [], profile.goal).totalSets }))
       .filter((other) => other.sets > 0);
     const chip = SETUPS[constraints.equipment].chip.toLowerCase();
     return fits.length
@@ -689,6 +689,7 @@ export default function App() {
         program,
         currentState.profile ? defaultConstraints(currentState.profile) : DEFAULT_CONSTRAINTS,
         currentState.profile?.exclusions ?? [],
+        currentState.profile?.goal,
       );
       return {
         ...currentState,
@@ -1038,13 +1039,13 @@ export default function App() {
       />
     ) : view === 'adapt' && pendingAdapted && pending ? (
       <AdaptScreen
-        originalSets={programSetCount(program)}
+        originalSets={todayDay.sets}
         adapted={
           profile ? liveAdapted(pendingAdapted, profile, state.history) : pendingAdapted
         }
         constraints={pending.constraints}
-        // The program as saved, then as changed, both by the timer's model (#203).
-        before={todayGlance(adaptWorkout(program, { ...(profile ? defaultConstraints(profile) : DEFAULT_CONSTRAINTS), minutes: program.minutes }, exclusions), null, false, profile?.goal)}
+        // Before is what Today shows now; after is the change; both by the timer's model (#203).
+        before={todayDay}
         after={todayGlance(pendingAdapted, null, false, profile?.goal)}
         notices={pendingNotices}
         unit={unit}
@@ -1190,7 +1191,7 @@ export default function App() {
 
       {sheet.kind === 'length' && profile && (
         <DurationSheet
-          options={lengthOptions(defaultProgram, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35, (minutes) => programAt(minutes))}
+          options={lengthOptions(defaultProgram, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35, (minutes) => programAt(minutes), profile.goal)}
           current={constraints.minutes}
           onClose={closeSheet}
           onPick={pickLength}
@@ -1230,7 +1231,7 @@ export default function App() {
           }}
           onPreview={(next, notices) => {
             setPending(createProposal(next, proposalBase()));
-            setPendingNotices(withCeiling(notices, adaptWorkout(program, next, profile?.exclusions ?? [])));
+            setPendingNotices(withCeiling(notices, adaptWorkout(program, next, profile?.exclusions ?? [], profile?.goal)));
             setSheet({ kind: 'none' });
             setView('adapt');
           }}
@@ -1381,7 +1382,7 @@ export default function App() {
       {replacePrompt && current && (
         <DiscardSessionSheet
           currentName={current.name}
-          nextName={adaptWorkout(program, replacePrompt, profile?.exclusions ?? []).name}
+          nextName={adaptWorkout(program, replacePrompt, profile?.exclusions ?? [], profile?.goal).name}
           onDiscard={discardAndBegin}
           onKeep={() => setReplacePrompt(null)}
           onClose={() => setReplacePrompt(null)}

@@ -81,7 +81,7 @@ export default function AdaptScreen({
   const title =
     adapted.minutes === adapted.originalMinutes
       ? `${adapted.name} today`
-      : `${adapted.name}, ${adapted.minutes}-minute version`;
+      : `${adapted.name}, set to ${adapted.minutes} min`;
 
   return (
     <div className="screen flow-screen">

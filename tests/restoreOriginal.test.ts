@@ -32,7 +32,7 @@ test('Undo restores original pending work while retaining the later logged actua
   assert.equal(restored.date, active.date);
   assert.equal(restored.restStartedAt, active.restStartedAt);
   assert.deepEqual(done(restored), done(active));
-  assert.equal(sessionProgress(active).total, 6);
+  assert.equal(sessionProgress(active).total, 7, '20 min keeps 7 sets by the timer (#203)');
   assert.deepEqual(adaptation.restorePendingWorkout(restored, original), restored);
 });
 

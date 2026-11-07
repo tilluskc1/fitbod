@@ -52,5 +52,5 @@ test('#17: Today builds the day at a longer today-only length and the length she
   const { readFileSync } = await import('node:fs');
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   assert.match(app, /override\.minutes > \(profile\.sessionMinutes \?\? 35\) \? override\.minutes : undefined/);
-  assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programAt\(minutes\)\)/);
+  assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programAt\(minutes\), profile\.goal\)/);
 });

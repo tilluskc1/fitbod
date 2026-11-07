@@ -76,9 +76,10 @@ test('a today-only 30 min day: Today, Plan header, Up next and View session show
   const { slot, program } = firstDay(gym);
   const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: true, equipment: 'home' });
-  // 12 of 23 sets take 32 minutes by the timer's own rests: the overrun shows, it is not clamped to the 30 asked for (#200).
-  agree(seen, '32', '6', '12');
-  assert.match(seen.plan, /UP NEXT .*? 32 min · 6 exercises · 12 sets · Adjusted for today/);
+  // #203: trimming now fits 30 min by the timer's own rests: 10 sets in 28 minutes. The old
+  // sets-per-minute trim kept 12 sets that ran 32 (#200 showed that overrun instead of hiding it).
+  agree(seen, '28', '5', '10');
+  assert.match(seen.plan, /UP NEXT .*? 28 min · 5 exercises · 10 sets · Adjusted for today/);
   assert.equal(seen.header[3], 'Full gym', 'a length-only change keeps the saved setup word');
 });
 
@@ -96,8 +97,8 @@ test('a running session: every surface shows the session, and it is not labelled
   const current = createSession({ id: 's1', name: started.name, dayIndex: 0, exercises: liveExercises(started, gym, []), now: '2026-11-07T09:00:00Z', durationMin: started.minutes });
   // Today's override still applies, but the open session is what runs.
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted: started, current, overridden: true, equipment: 'home' });
-  // #200: the promised 32 stays after Start; it does not fall back to the 30 asked for.
-  agree(seen, '32', '6', '12');
+  // #200: the promised figure stays after Start (28 since #203 trims by the timer).
+  agree(seen, '28', '5', '10');
   assert.equal(seen.today.adjusted, false);
   assert.doesNotMatch(seen.plan, /Adjusted for today/);
 });
@@ -182,7 +183,7 @@ test('todayGlance: a skip keeps the planned minutes; a swap reprices only the wo
   const lead = exerciseById(logged.exercises[0].exerciseId)!;
   const replacement = exerciseById('dumbbell-bench-press')!;
   const swapped = swapPendingExercise(logged, 0, swapCandidateFor(replacement, gym, [], logged, true));
-  assert.equal(swapped.exercises.reduce((sum, exercise) => sum + exercise.planned.length, 0), 12, 'no set gained or lost');
+  assert.equal(swapped.exercises.reduce((sum, exercise) => sum + exercise.planned.length, 0), 10, 'no set gained or lost');
   // The honest figure is the time model of the session as it now stands: the split adds one
   // set-up (90 s) and drops one rest between the lead's sets.
   const expected = workMinutes(swapped.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.planned.length })), gym.goal, 30);

@@ -105,7 +105,7 @@ test('accepted cross-tab pending-work adoption invalidates old previews but igno
         (update: (open: typeof sheet) => typeof sheet) => { sheet = update(sheet); }, proposalRevisionRef);
       onStorage({ key: scenario === 'wrong-key' ? 'unrelated' : STORAGE_KEY });
       const accepted = scenario === 'accepted';
-      assert.equal(sessionProgress(state.current).total, accepted ? 11 : 6, scenario);
+      assert.equal(sessionProgress(state.current).total, accepted ? 11 : 7, scenario); // 20 min: 7 sets by the timer (#203)
       assert.equal(decideProposalApproval(oldPreview, context(), null), accepted ? 'stale' : 'accept', scenario);
       assert.equal(proposalRevisionRef.current, accepted ? 1 : 0, scenario);
       assert.equal(adoptingRef.current, accepted, scenario);

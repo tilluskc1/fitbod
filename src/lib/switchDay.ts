@@ -2,7 +2,7 @@ import type { AppState, Profile, WorkoutRecord } from '../types.ts';
 import { adaptWorkout, todayGlance } from './adapt.ts';
 import type { Constraints } from './adapt.ts';
 import { defaultConstraints } from './constraints.ts';
-import { currentSlot, cursorFor, planSlots, skipCurrentSlot, slotProgram } from './sequence.ts';
+import { currentSlot, cursorFor, planSlots, skipCurrentSlot, slotProgram, slotProgramAt } from './sequence.ts';
 import type { PlanSlot } from './sequence.ts';
 
 export interface SwitchOption {
@@ -36,8 +36,9 @@ export function switchOptions(
   const start = slots.findIndex((slot) => slot.id === here.id);
   return slots.map((_, step) => {
     const slot = slots[(start + step) % slots.length];
-    const program = slotProgram(profile, slot, history);
-    const adapted = adaptWorkout(program, constraints, profile.exclusions ?? []);
+    // Built at today's length, as Today builds it, so the sheet and Today agree (#203).
+    const program = slotProgramAt(profile, slot, history, constraints.minutes);
+    const adapted = adaptWorkout(program, constraints, profile.exclusions ?? [], profile.goal);
     const status: SwitchOption['status'] =
       adapted.totalSets === 0 || program.feasibility?.status === 'infeasible' ? 'none'
       : program.feasibility?.status === 'limited' ? 'limited'
@@ -68,7 +69,7 @@ export function upcomingDays(profile: Profile, plan: AppState['plan'], slot: Pla
   const slots = planSlots(plan);
   return slots.map((_, k) => slots[(slot.index + k) % slots.length]).slice(1).map((day) => {
     const built = slotProgram(profile, day, history);
-    const glance = todayGlance(adaptWorkout(built, defaultConstraints(profile), profile.exclusions ?? []), null, false, profile.goal);
+    const glance = todayGlance(adaptWorkout(built, defaultConstraints(profile), profile.exclusions ?? [], profile.goal), null, false, profile.goal);
     return {
       id: day.id,
       name: day.name,

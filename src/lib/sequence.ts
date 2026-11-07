@@ -133,6 +133,11 @@ export function slotProgram(
   };
 }
 
+/** The slot's day for a length chosen today: a longer one rebuilds the day there (#17); a shorter one is trimmed by adapt. */
+export function slotProgramAt(profile: Profile, slot: PlanSlot, history: WorkoutRecord[], minutes?: number): Program {
+  return slotProgram(minutes !== undefined && minutes > (profile.sessionMinutes ?? 35) ? { ...profile, sessionMinutes: minutes } : profile, slot, history);
+}
+
 /**
  * Move past a finished slot. The cursor only ever moves forward, and only for a
  * session recorded under the plan that is still current, so a repeated finish,

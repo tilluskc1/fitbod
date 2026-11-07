@@ -34,8 +34,8 @@ test('Today shows the accepted active targets instead of a recomputed program', 
       onOpenSettings: noop, onOpenExercise: noop,
     }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-    // The session's own time with the timer's short rests, not the 20 asked for (#200).
-    assert.match(text, /The workout 16 min · 6 sets/);
+    // The session's own time with the timer's short rests (#200); 20 min trims to 7 sets by the timer (#203).
+    assert.match(text, /The workout 18 min · 7 sets/);
     // Uniform reps read compactly ("2 × 9"), so the row fits at 360 px (#97).
     assert.match(text, /2 × 9 @ 15 kg each/);
     assert.doesNotMatch(text, /11 sets|3 × 9|3 sets · 9 · 9 · 9/);
