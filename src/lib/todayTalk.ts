@@ -83,6 +83,8 @@ const RUN = new RegExp(`\\b${LIST}`, 'g');
 const EXCEPT = new RegExp(`\\b(?:everything|anything|all)\\s+(?:but|except(?:\\s+for)?|other than|apart from|besides)\\s+(${LIST})`, 'g');
 /** "Legs are fine": neither trained nor skipped. */
 const FINE = /^\s+(?:(?:is|are|feel|feels|feeling|seem|seems)\s+)?(?:fine|ok|okay|good|great|alright|fresh)\b/;
+/** "Everything is sore", "whole body is tired": every area is skipped. */
+const ALL_SORE = /\b(?:everything|(?<!\b(?:is|are|feel|feels)\s)all|(?:my\s+)?(?:whole|full)\s+body)(?:['’]s|\s+(?:is|are|feels?))?\s+(?:sore|tired|fried|wrecked|dead|aching|achy|stiff)\b/;
 const NOT_BEFORE = '(?<!\\b(?:not|no|never)\\s)';
 const SORE_BEFORE_RE = new RegExp(`${NOT_BEFORE}\\b(?:${SORE_BEFORE})\\s+$`);
 const LEAVE_BEFORE_RE = new RegExp(`${NOT_BEFORE}\\b(?:${LEAVE_BEFORE})\\s+$`);
@@ -101,6 +103,7 @@ function readAreas(text: string): { train: Area[]; skip: Area[]; sore: Area[] } 
   const train = new Set<Area>();
   const skip = new Set<Area>();
   const sore = new Set<Area>();
+  if (ALL_SORE.test(text.toLowerCase())) return { train: [], skip: [...AREAS], sore: [...AREAS] };
   const said = text.toLowerCase().replace(EXCEPT, (_match, list: string) => {
     const except = areasIn(list);
     for (const area of AREAS) if (!except.includes(area)) train.add(area);
@@ -112,10 +115,14 @@ function readAreas(text: string): { train: Area[]; skip: Area[]; sore: Area[] } 
       // "chest, legs are sore" is two mentions, not a list: only an and/or makes one.
       const pieces = /\b(?:and|or)\b/.test(run[0]) ? [{ text: run[0], at }]
         : [...run[0].matchAll(new RegExp(ONE, 'g'))].map((one) => ({ text: one[0], at: at + (one.index ?? 0) }));
-      for (const piece of pieces) {
+      for (const whole of pieces) {
+        // "Fine/ok" covers only the areas it follows: "no legs, arms and chest ok" still skips legs.
+        const fine = FINE.test(clause.slice(whole.at + whole.text.length));
+        const cut = whole.text.lastIndexOf(',');
+        if (fine && cut < 0) continue;
+        const piece = fine ? { text: whole.text.slice(0, cut), at: whole.at } : whole;
         const before = clause.slice(0, piece.at);
-        const after = clause.slice(piece.at + piece.text.length);
-        if (FINE.test(after)) continue;
+        const after = fine ? '' : clause.slice(piece.at + piece.text.length);
         const named = SORE_AFTER_RE.exec(after);
         const isSore = Boolean(named && !NEGATED.test(named[1])) || SORE_BEFORE_RE.test(before);
         const left = LEAVE_BEFORE_RE.test(before);

@@ -146,6 +146,23 @@ test('#193: "everything but legs" trains the other five; "but" elsewhere still s
   assert.deepEqual(pick(talkParse('chest but my back is sore')), { train: ['Chest'], avoid: ['Back'], sore: ['Back'] });
 });
 
+test('#193: "fine/ok" covers only the areas it follows, never a skip said earlier in the list', () => {
+  assert.deepEqual(pick(talkParse('no legs, arms and chest ok')), { avoid: ['Legs'] });
+  assert.deepEqual(pick(talkParse('skip legs, chest and arms are fine')), { avoid: ['Legs'] });
+  assert.deepEqual(pick(talkParse('sore legs, back and core are fine, chest')), { train: ['Chest'], avoid: ['Legs'], sore: ['Legs'] });
+  assert.deepEqual(pick(talkParse('legs and arms are fine')), {});
+});
+
+test('#193: "everything is sore" skips every area, so there is nothing to build', () => {
+  for (const text of ['everything is sore', 'all sore', 'whole body is sore', "everything's tired", 'my whole body feels wrecked']) {
+    assert.deepEqual(talkParse(text).avoid, AREAS, text);
+  }
+  assert.deepEqual(pick(talkParse('my legs are all sore, chest')), { train: ['Chest'], avoid: ['Legs'], sore: ['Legs'] });
+  const talk = talkFromText('everything is sore', base);
+  assert.deepEqual(talk.train, []);
+  assert.equal(talkConstraints(talk, undefined, lower.focus).focus, undefined, 'no focus: Build stays disabled');
+});
+
 test('#193: "back after a break" and "<area> is fine" train nothing', () => {
   assert.deepEqual(pick(talkParse('back after a break, chest')), { train: ['Chest'] });
   assert.deepEqual(pick(talkParse('legs are fine, chest')), { train: ['Chest'] });
