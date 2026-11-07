@@ -1,11 +1,12 @@
 import {
+  DEFAULT_CONSTRAINTS,
   EQUIPMENT_OPTIONS,
   type AdaptedWorkout,
   type Constraints,
   type EquipmentChoice,
 } from './adapt.ts';
 import { ownedLoads } from './progression.ts';
-import type { Profile } from '../types.ts';
+import type { Profile, TodayOverride } from '../types.ts';
 
 /**
  * One constraint state, three ways to change it.
@@ -237,6 +238,25 @@ export function defaultConstraints(profile: Profile): Constraints {
         minutes: profile.sessionMinutes ?? 35,
         equipment: profile.equipment.length > 0 || profile.support.length > 0 ? 'home' : 'bodyweight',
       };
+}
+
+/** The profile every screen reads: its loads are the ones the user owns, never a gym kit's stale rack (#194). */
+export function ownedProfile(profile: Profile | null): Profile | null {
+  return profile && { ...profile, loads: ownedLoads(profile) };
+}
+
+/**
+ * Today's constraint state: the approved adaptation, the saved equipment
+ * and session length, or the home default before onboarding finishes.
+ */
+export function todayConstraints(profile: Profile | null, override: TodayOverride | null): Constraints {
+  if (!override) return profile ? defaultConstraints(profile) : DEFAULT_CONSTRAINTS;
+  const owned = profile ? ownedLoads(profile).Dumbbell ?? [] : [];
+  return {
+    minutes: override.minutes,
+    equipment: override.choice ?? (override.equipment.includes('Dumbbell') ? 'home' : 'bodyweight'),
+    loads: owned.length ? owned : undefined,
+  };
 }
 
 /** One factual line per adjustment, for the adjust sheet and the review screen. */

@@ -26,7 +26,7 @@ import
 import
  type { Proposal, ProposalContext } from './lib/proposal';
 import
- { defaultConstraints, withCeiling } from './lib/constraints';
+ { defaultConstraints, ownedProfile, todayConstraints, withCeiling } from './lib/constraints';
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A, programSetCount } from './data/flagship';
@@ -40,7 +40,7 @@ import {
   goHeavierFloor,
 } from './lib/liveProgression';
 import { sessionRests } from './lib/sessionTime';
-import { leadCompoundId, leadSlotIds, ownedLoads } from './lib/progression';
+import { leadCompoundId, leadSlotIds } from './lib/progression';
 import
  {
   applyCancel,
@@ -305,31 +305,13 @@ export default function App() {
 
   /* ---------- derived ---------- */
 
-  /**
-   * The profile every screen reads: its loads are the ones the user owns, so a gym kit's stale
-   * stored rack is never a cap or a pick (#194). Settings edits the stored profile itself.
-   */
-  const profile = useMemo(
-    () => state.profile && { ...state.profile, loads: ownedLoads(state.profile) },
-    [state.profile],
-  );
+  /** Every screen reads the owned loads (#194); Settings edits the stored profile itself. */
+  const profile = useMemo(() => ownedProfile(state.profile), [state.profile]);
   const unit = unitOf(profile);
   const today = useMemo(() => new Date(now), [now]);
   const override = useMemo(() => activeOverride(state, today), [state, today]);
 
-  /**
-   * Today's constraint state: the approved adaptation, the saved equipment
-   * and session length, or the home default before onboarding finishes.
-   */
-  const constraints: Constraints = useMemo(() => {
-    if (!override) return profile ? defaultConstraints(profile) : DEFAULT_CONSTRAINTS;
-    return {
-      minutes: override.minutes,
-      equipment:
-        override.choice ?? (override.equipment.includes('Dumbbell') ? 'home' : 'bodyweight'),
-      loads: profile?.loads.Dumbbell?.length ? profile.loads.Dumbbell : undefined,
-    };
-  }, [override, profile]);
+  const constraints: Constraints = useMemo(() => todayConstraints(profile, override), [override, profile]);
 
   const exclusions = profile?.exclusions ?? NO_EXCLUSIONS;
   /** The slot the sequence is up to: the real A/B/C day, not a repeated fixture. */

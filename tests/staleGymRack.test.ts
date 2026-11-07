@@ -6,12 +6,10 @@ import { createServer } from 'vite';
 import { exerciseById } from '../src/data/exercises.ts';
 import { FULL_BODY_A } from '../src/data/flagship.ts';
 import { adaptWorkout, confirmedLoads, loadOptions } from '../src/lib/adapt.ts';
-import { constraintSentence, defaultConstraints, keywordParser, resolveConstraints } from '../src/lib/constraints.ts';
-import { liveExercises } from '../src/lib/liveProgression.ts';
+import { constraintSentence, defaultConstraints, keywordParser, ownedProfile, resolveConstraints, todayConstraints } from '../src/lib/constraints.ts';
 import { ownedLoads, prescribeExercise } from '../src/lib/progression.ts';
-import { createSession } from '../src/lib/session.ts';
 import { parseLoads } from '../src/lib/units.ts';
-import type { Profile, WorkoutRecord } from '../src/types.ts';
+import type { Profile, TodayOverride, WorkoutRecord } from '../src/types.ts';
 
 // #194: a gym profile saved before #180 still holds a 10 lb dumbbell rack.
 const lb = (value: number) => parseLoads(String(value), 'lb')[0];
@@ -40,25 +38,28 @@ test('a stale rack never caps a gym day: a 20 kg dumbbell prescription stays 20 
   assert.match(adaptWorkout(program, defaultConstraints(home), []).note, /confirmed loads/);
 });
 
-test('the logger gets no one-tap pick or first-load suggestion from a stale gym rack', async () => {
-  // The inputs App builds: constraints from the owned loads, TrainScreen's rack from the same.
-  const constraints = defaultConstraints(gym);
-  assert.equal(constraints.loads, undefined);
-  const picks = loadOptions(constraints.equipment, constraints.loads);
-  assert.deepEqual(picks, []);
-  assert.deepEqual(confirmedLoads(constraints.equipment, constraints.loads), []);
-  const adapted = adaptWorkout(FULL_BODY_A, constraints, []);
-  const session = createSession({ id: 's0', name: adapted.name, dayIndex: 0, durationMin: 35,
-    exercises: liveExercises(adapted, gym, []), now: '2026-11-05T10:00:00.000Z' });
+test('today\'s constraints and the profile App hands every screen carry no stale gym rack, with or without an override', () => {
+  assert.deepEqual(ownedProfile(gym)?.loads, {});
+  assert.deepEqual(ownedProfile(home)?.loads, home.loads);
+  assert.equal(ownedProfile(null), null);
+  const override = (choice?: TodayOverride['choice']): TodayOverride => ({
+    date: '2026-11-05', minutes: 25, equipment: ['Dumbbell'], support: [], appliedAt: '2026-11-05T09:00:00.000Z', choice });
+  for (const today of [null, override('home'), override()]) {
+    // App passes the owned profile; the helper must hold with the stored one too.
+    for (const profile of [gym, ownedProfile(gym)]) {
+      const constraints = todayConstraints(profile, today);
+      assert.equal(constraints.loads, undefined, `override: ${today?.choice ?? today}`);
+      assert.deepEqual(loadOptions(constraints.equipment, constraints.loads), [], 'no one-tap pick');
+      assert.deepEqual(confirmedLoads(constraints.equipment, constraints.loads), [], 'no first-load suggestion');
+    }
+    assert.deepEqual(todayConstraints(home, today).loads, [lb(10)], 'a home rack is still a pick');
+  }
+});
+
+test('the Adjust sheet names a gym kit\'s setup, not dumbbells', async () => {
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
-    const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const { AdjustSheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
-    const html = renderToStaticMarkup(createElement(Train, { session, history: [], now: Date.parse('2026-11-05T10:01:00.000Z'),
-      loadOptions: picks, profileLoads: ownedLoads(gym), calibrationLoads: picks, experience: 'Beginner', unit: 'lb',
-      onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop, onToggleRestPause: noop, onExtendRest: noop, onReturn: noop }));
-    assert.doesNotMatch(html, /aria-label="10, suggested"/, 'no stored 10 lb pick');
-    assert.match(html, /<input[^>]*aria-label="Enter dumbbell load \(lb each\)"/, 'the first load is typed');
     const adjust = (profile: Profile) => renderToStaticMarkup(createElement(AdjustSheet, {
       constraints: defaultConstraints(profile), originalMinutes: 35, unit: 'lb', profile, onClose: noop, onPreview: noop }));
     assert.match(adjust(gym), /value="I only have 35 minutes and my gym"/);
