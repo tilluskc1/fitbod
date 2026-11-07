@@ -79,12 +79,15 @@ const ONE = `${DET}(?:${AREA_WORDS.map(({ word }) => `(?:${word})`).join('|')})\
 /** A list of areas: "legs", "legs and arms", "chest, back and shoulders". Commas only before the and/or. */
 const LIST = `${ONE}(?:\\s*,\\s*${ONE})*(?:\\s*,?\\s+(?:and|or)\\s+${ONE})*`;
 const RUN = new RegExp(`\\b${LIST}`, 'g');
-/** "Everything but legs", "anything except chest": all six areas minus those. */
-const EXCEPT = new RegExp(`\\b(?:everything|anything|all)\\s+(?:but|except(?:\\s+for)?|other than|apart from|besides)\\s+(${LIST})`, 'g');
+/**
+ * "Everything but legs", "anything except chest": all six areas minus those. With a sore word
+ * after it ("everything but legs is sore") it is the other way round: those train, the rest skip.
+ */
+const EXCEPT = new RegExp(`\\b(?:everything|anything|all)\\s+(?:but|except(?:\\s+for)?|other than|apart from|besides)\\s+(${LIST})((?:\\s+(?:is|are|feels?))?\\s+(?:sore|tired|fried|wrecked|dead|aching|achy|stiff)\\b)?`, 'g');
 /** "Legs are fine": neither trained nor skipped. */
 const FINE = /^\s+(?:(?:is|are|feel|feels|feeling|seem|seems)\s+)?(?:fine|ok|okay|good|great|alright|fresh)\b/;
 /** "Everything is sore", "whole body is tired": every area is skipped. */
-const ALL_SORE = /\b(?:everything|(?<!\b(?:is|are|feel|feels)\s)all|(?:my\s+)?(?:whole|full)\s+body)(?:['’]s|\s+(?:is|are|feels?))?\s+(?:sore|tired|fried|wrecked|dead|aching|achy|stiff)\b/;
+const ALL_SORE = /(?<!\bnot\s)\b(?:everything|(?<!\b(?:is|are|feel|feels)\s)all|(?:my\s+)?(?:whole|full)\s+body)(?:['’]s|\s+(?:is|are|feels?))?\s+(?:sore|tired|fried|wrecked|dead|aching|achy|stiff)\b/;
 const NOT_BEFORE = '(?<!\\b(?:not|no|never)\\s)';
 const SORE_BEFORE_RE = new RegExp(`${NOT_BEFORE}\\b(?:${SORE_BEFORE})\\s+$`);
 const LEAVE_BEFORE_RE = new RegExp(`${NOT_BEFORE}\\b(?:${LEAVE_BEFORE})\\s+$`);
@@ -104,9 +107,12 @@ function readAreas(text: string): { train: Area[]; skip: Area[]; sore: Area[] } 
   const skip = new Set<Area>();
   const sore = new Set<Area>();
   if (ALL_SORE.test(text.toLowerCase())) return { train: [], skip: [...AREAS], sore: [...AREAS] };
-  const said = text.toLowerCase().replace(EXCEPT, (_match, list: string) => {
+  const said = text.toLowerCase().replace(EXCEPT, (_match, list: string, soreRest?: string) => {
     const except = areasIn(list);
-    for (const area of AREAS) if (!except.includes(area)) train.add(area);
+    for (const area of AREAS) {
+      if (except.includes(area) === Boolean(soreRest)) train.add(area);
+      else if (soreRest) { skip.add(area); sore.add(area); }
+    }
     return ' ';
   });
   for (const clause of said.split(/[.;:!?\n]+|\bbut\b/)) {

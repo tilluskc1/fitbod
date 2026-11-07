@@ -163,6 +163,14 @@ test('#193: "everything is sore" skips every area, so there is nothing to build'
   assert.equal(talkConstraints(talk, undefined, lower.focus).focus, undefined, 'no focus: Build stays disabled');
 });
 
+test('#193: "everything but legs is sore" trains legs and skips the rest; a denied all-sore skips nothing', () => {
+  const five = (out: Area) => AREAS.filter((area) => area !== out);
+  assert.deepEqual(pick(talkParse('everything but legs is sore')), { train: ['Legs'], avoid: five('Legs'), sore: five('Legs') });
+  assert.deepEqual(pick(talkParse('everything except chest is tired')), { train: ['Chest'], avoid: five('Chest'), sore: five('Chest') });
+  assert.deepEqual(pick(talkParse('not everything is sore, legs')), { train: ['Legs'] });
+  assert.deepEqual(pick(talkParse('everything but legs')), { train: five('Legs') }, 'without a sore word it still trains the rest');
+});
+
 test('#193: "back after a break" and "<area> is fine" train nothing', () => {
   assert.deepEqual(pick(talkParse('back after a break, chest')), { train: ['Chest'] });
   assert.deepEqual(pick(talkParse('legs are fine, chest')), { train: ['Chest'] });
