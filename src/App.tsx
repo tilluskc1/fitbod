@@ -36,6 +36,7 @@ import {
   recapHighlight,
   targetReason,
 } from './lib/liveProgression';
+import { sessionRests } from './lib/sessionTime';
 import { leadCompoundId, leadSlotIds } from './lib/progression';
 import
  {
@@ -700,7 +701,9 @@ export default function App() {
       const exercise = session?.exercises[exerciseIndex];
       // A tap rendered against another exercise, or on work the user set aside, records nothing.
       if (!session || exercise?.exerciseId !== exerciseId || exercise.skipped) return currentState;
-      const logged = logSet(session, exerciseIndex, setIndex, stamp);
+      // Rest by the exercise's role in the day, the same seconds the minutes were fitted with (#132).
+      const rest = sessionRests(session.exercises.map((item) => item.exerciseId), currentState.profile?.goal, session.durationMin)[exerciseIndex];
+      const logged = logSet(session, exerciseIndex, setIndex, stamp, rest);
       return logged === session ? currentState : { ...currentState, current: logged };
     });
   };
@@ -927,6 +930,7 @@ export default function App() {
         skippedCalibrations={calibrationSkips}
         onSkipCalibration={(key) => setCalibrationSkips((keys) => [...keys, key])}
         targetNotes={targetNotes}
+        rests={current ? sessionRests(current.exercises.map((item) => item.exerciseId), profile?.goal, current.durationMin) : []}
         unit={unit}
         onMinimize={() => {
           setView('tabs');

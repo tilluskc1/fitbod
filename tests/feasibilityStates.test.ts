@@ -20,7 +20,8 @@ const bodyweight = { ...base, equipment: [], loads: {} };
 const barbell: Profile = { ...base, equipment: ['Barbell'], loads: {} };
 const fullGear: Profile = { ...base, equipment: ['Dumbbell', 'Barbell', 'Cable', 'Machine'], support: ['Bench', 'Rack', 'Pull-up bar'] };
 // Every curl excluded: Pull loses its biceps exercises (3 of 5), and Allow offers each curl back.
-const noCurls = { ...dumbbells, exclusions: EXERCISES.filter((e) => e.pattern === 'elbow_flexion').map((e) => e.id) };
+// 45 min: at honest rest (#132) a 35-min Pull only has room for the 4 exercises still possible, so no gap shows.
+const noCurls = { ...dumbbells, sessionMinutes: 45, exclusions: EXERCISES.filter((e) => e.pattern === 'elbow_flexion').map((e) => e.id) };
 
 const programFor = (who: Profile, name: string) => {
   const slot = planSlots(buildPlan(who)).find((item) => item.name.startsWith(name));
@@ -89,7 +90,7 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
 
     const curls = screens(Today, Plan, noCurls, 'Pull');
     assert.match(curls.today, /<button[^>]*>Allow [^<]+<\/button>/);
-    assert.match(plain(curls.today), /Limited session · 4 of 5 exercises 4 of 5 exercises are possible [^.]+\. No biceps exercise is possible with these constraints\./, 'reason under the line');
+    assert.match(plain(curls.today), /Limited session · 4 of 6 exercises 4 of 6 exercises are possible [^.]+\. No biceps exercise is possible with these constraints\./, 'reason under the line');
 
     // Five alternatives: three chips, the rest behind the equipment settings.
     const push = screens(Today, Plan, barbell, 'Push');

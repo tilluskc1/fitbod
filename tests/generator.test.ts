@@ -112,7 +112,7 @@ test('full equipment produces a full, coverage-complete Push session', () => {
   const profile = makeProfile({
     equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'],
     support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'],
-    sessionMinutes: 45, // long enough for every exercise the Push caps allow (#89)
+    sessionMinutes: 60, // long enough for every exercise the Push caps allow at honest rest (#89, #132)
   });
   const plan = buildPlan(profile);
   const push = generateWorkout(profile, plan[0], 0);
@@ -132,7 +132,7 @@ test('a common home kit still fills a full Push session', () => {
   const profile = makeProfile({
     equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable'],
     support: ['Bench', 'Rack', 'Pull-up bar'],
-    sessionMinutes: 45, // long enough for every exercise the Push caps allow (#89)
+    sessionMinutes: 60, // long enough for every exercise the Push caps allow at honest rest (#89, #132)
   });
   const plan = buildPlan(profile);
   const push = generateWorkout(profile, plan[0], 0);
@@ -231,8 +231,8 @@ test('every exercise declares a pattern and complete needs', () => {
 
 // #67: a Push day must be filled by slots, not left short by the per-muscle caps.
 test('beginner dumbbells + bench: Push is a full Ready day with one triceps-primary and at most two shoulder-primary', () => {
-  // 40 min: the five-exercise Beginner day this case was written against (#89).
-  const profile = makeProfile({ experience: 'Beginner', equipment: ['Dumbbell'], support: ['Bench'], sessionMinutes: 40 });
+  // 45 min: the five-exercise Beginner day this case was written against (#89), at honest rest (#132).
+  const profile = makeProfile({ experience: 'Beginner', equipment: ['Dumbbell'], support: ['Bench'], sessionMinutes: 45 });
   const push = generateWorkout(profile, buildPlan(profile)[0], 0);
   const primaries = push.exercises.map((exercise) => meta(exercise.exerciseId).muscles[0]);
 

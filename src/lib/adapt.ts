@@ -6,6 +6,7 @@ import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
 import { isCompound, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
 import { estimatedSeconds } from './generator.ts';
+import { sessionRests } from './sessionTime.ts';
 import { liveExercises } from './liveProgression.ts';
 
 /**
@@ -144,11 +145,12 @@ export function estimatedMinutes(program: Program, sets: number): number {
   return Math.max(1, Math.round((program.minutes * sets) / total));
 }
 
-/** Minutes these set counts take, by the generator's own per-set time. */
-export function workMinutes(sets: number[]): number {
-  const live = sets.filter((count) => count > 0);
+/** Minutes these exercises take, warm-up included, by the generator's own time model (#132). */
+export function workMinutes(exercises: { exerciseId: string; sets: number }[]): number {
+  const live = exercises.filter((exercise) => exercise.sets > 0);
   if (live.length === 0) return 0;
-  return Math.max(1, Math.round(estimatedSeconds(live) / 60));
+  const rests = sessionRests(live.map((exercise) => exercise.exerciseId));
+  return Math.max(1, Math.round(estimatedSeconds(live.map((exercise) => exercise.sets), rests) / 60));
 }
 
 /**
@@ -160,7 +162,7 @@ export function promisedMinutes(program: Program, adapted: Pick<AdaptedWorkout, 
   if (adapted.totalSets === 0) return 0;
   const total = program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
   const byDensity = adapted.totalSets < total ? estimatedMinutes(program, adapted.totalSets) : adapted.minutes;
-  const byWork = workMinutes(adapted.exercises.map((exercise) => exercise.sets));
+  const byWork = workMinutes(adapted.exercises);
   return byWork < adapted.minutes * 0.5 ? Math.min(byDensity, byWork) : byDensity;
 }
 

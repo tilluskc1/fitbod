@@ -32,9 +32,10 @@ test('UI7-02: a day that fills the requested length still shows that length', ()
 });
 
 test('UI7-03: a short session trims isolation before a later compound', () => {
-  const program = push({ ...base, equipment: ['Dumbbell'], support: ['Bench'] } as Profile);
+  // 60 min: an Intermediate day with a later compound and isolation behind it (#132 honest rest).
+  const program = push({ ...base, equipment: ['Dumbbell'], support: ['Bench'], sessionMinutes: 60 } as Profile);
   const ids = program.exercises.map((exercise) => exercise.exerciseId);
-  assert.ok(ids.includes('dumbbell-bench-press') && ids.includes('lateral-raise'));
+  assert.ok(ids.includes('dumbbell-bench-press') && ids.includes('lateral-raise'), ids.join(', '));
   for (const minutes of [15, 20]) {
     const adapted = adaptWorkout(program, { minutes, equipment: 'home' }, []);
     const kept = adapted.exercises.map((exercise) => exercise.exerciseId);
