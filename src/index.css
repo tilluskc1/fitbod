@@ -4415,3 +4415,5 @@ button.aw-exercise__name-btn {
 .len-opt__c { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; text-wrap: balance; }
 .len-opt__c--none { color: var(--danger); }
 .len-opt .ms { color: var(--accent-text); }
+.len-opt__c--limited { color: var(--amber); }
+.len-opt__c--ready { color: var(--accent-text); }
