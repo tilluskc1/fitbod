@@ -318,7 +318,7 @@ test('a "more" preference still wins over focus order', () => {
   const cases: [number, number, string][] = [
     [6, 5, 'hip-thrust'], // Legs B
     [3, 0, 'diamond-push-up'], // Push
-    [4, 0, 'deadlift'], // Upper A
+    [4, 1, 'deadlift'], // Lower A, where a beginner otherwise gets the Romanian deadlift (#191: not Upper A, it is not back work)
   ];
   for (const [daysPerWeek, dayIndex, id] of cases) {
     const profile = makeProfile({ ...kit, daysPerWeek, preferences: { [id]: 'more' } });
