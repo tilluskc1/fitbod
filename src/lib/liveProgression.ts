@@ -78,7 +78,19 @@ function numbersFor(
     };
   }
   const prescription = prescribeExercise(definition, profile, history, lead);
+  // Ready to go heavier with no next load the app can name (#165): the set waits for the
+  // lifter's own pick instead of repeating last time's load as if it were the target.
+  if (prescription.basis === 'go-heavier') return { weight: 0, reps: prescription.reps };
   return { weight: prescription.weight, reps: prescription.reps };
+}
+
+/**
+ * The load a "go heavier" target starts above (#165): last time's working load,
+ * or null when the exercise's next target is not a go-heavier step.
+ */
+export function goHeavierFloor(exerciseId: string, profile: Profile, history: WorkoutRecord[], lead = false): number | null {
+  const prescription = livePrescription(exerciseId, profile, history, lead);
+  return prescription?.basis === 'go-heavier' ? prescription.weight : null;
 }
 
 /**
@@ -291,7 +303,10 @@ export function progressionLines(
       original: programExercise(exerciseId) ? `${required} × ${min}–${max}` : programTarget(exerciseId, presentedSets),
       adapted: `${presentedSets} ${presentedSets === 1 ? 'set' : 'sets'}`,
       performed,
-      next: `${setText(exerciseId, prescription.reps)} @ ${loadText(prescription.weight, exerciseId, unit, nextLoad(prescription.weight))}`,
+      // #165: no named load for a go-heavier step; the next one up is the lifter's pick.
+      next: prescription.basis === 'go-heavier'
+        ? `${setText(exerciseId, prescription.reps)} @ your next ${definition.equipment.toLowerCase()} up`
+        : `${setText(exerciseId, prescription.reps)} @ ${loadText(prescription.weight, exerciseId, unit, nextLoad(prescription.weight))}`,
       reason: describePrescription(prescription, unit),
       earnedLoad:
         prescription.basis === 'load-increase' && prescription.last?.workoutId === workout.id
