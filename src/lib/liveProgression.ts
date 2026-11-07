@@ -298,7 +298,8 @@ export function progressionLines(
       };
     }
 
-    const prescription = prescribeExercise(definition, profile, history, lead.includes(exerciseId), true, segments.at(-1)?.setup);
+    // The next session runs on the saved setup: a today-only setup never carries over (#188).
+    const prescription = prescribeExercise(definition, profile, history, lead.includes(exerciseId));
     const nextLoad = plannedLoad(profile.loads, history, exerciseId, unit);
     const { min, max } = prescription.range;
     return {

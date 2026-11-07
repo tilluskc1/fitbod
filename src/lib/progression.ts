@@ -10,7 +10,7 @@ import type {
   WorkoutRecord,
 } from '../types.ts';
 import { loadLimitText, loadValue, unitLabel } from './units.ts';
-import { MAX_REPS, MAX_WEIGHT } from './validate.ts';
+import { MAX_WEIGHT } from './validate.ts';
 import { exerciseInWorkout } from './plan.ts';
 import { HOTEL_DUMBBELLS, programExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
@@ -360,9 +360,11 @@ function setupRack(setup: SetupChoice, equipment: Equipment): number[] | undefin
 
 /**
  * `lead`: this is the day's first compound (see `leadCompoundId`). `setup`: where the work
- * runs (#188); its own history drives it, and a travel rack is the only rack. On that rack a
- * load is the closest one at or under the target (none: the lifter picks), and a lift that
- * would go past its heaviest load progresses by one rep at that load instead.
+ * runs (#188). The saved setup reads only its own history. A today-only setup takes the higher
+ * (load, then reps) of what its own history and the saved setup's prescribe, so neither a stale
+ * trip nor a home week holds it back. A travel rack is then the only rack: a load is the closest
+ * one at or under the target (none: the lifter picks), and a lift that would go past its
+ * heaviest load climbs one rep at a time at that load, up to the range top, and holds there.
  */
 export function prescribeExercise(
   exercise: Exercise,
@@ -373,14 +375,20 @@ export function prescribeExercise(
   setup: SetupChoice = 'home',
 ): Prescription {
   const rack = setupRack(setup, exercise.equipment);
-  const prescription = prescribeOn(exercise, profile, history, lead, dayHasLead, setup, rack ?? availableLoads(profile, exercise.equipment));
-  if (!rack) return prescription;
-  const done = prescription.last?.done ?? [];
-  if ((prescription.basis === 'go-heavier' || prescription.basis === 'hold') && done.length > 0) {
-    const reps = Math.min(MAX_REPS, Math.min(...done.map((set) => set.reps)) + 1);
-    return withRack({ ...prescription, basis: 'rack-top', reps }, rack);
-  }
-  return withRack(prescription, rack);
+  const from = (source: SetupChoice) => {
+    const prescription = prescribeOn(exercise, profile, history, lead, dayHasLead, source, rack ?? availableLoads(profile, exercise.equipment));
+    if (!rack) return prescription;
+    const done = prescription.last?.done ?? [];
+    if ((prescription.basis === 'go-heavier' || prescription.basis === 'hold') && done.length > 0) {
+      const reps = Math.min(prescription.range.max, Math.min(...done.map((set) => set.reps)) + 1);
+      return withRack({ ...prescription, basis: 'rack-top', reps }, rack);
+    }
+    return withRack(prescription, rack);
+  };
+  const own = from(setup);
+  if (setup === 'home') return own;
+  const home = from('home');
+  return home.weight > own.weight || (home.weight === own.weight && home.reps > own.reps) ? home : own;
 }
 
 function withRack(prescription: Prescription, rack: number[]): Prescription {
@@ -533,7 +541,9 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
         ? `${when} was not logged. Repeating the same prescription.`
         : `Repeat ${prescription.sets} × ${prescription.reps}${weight > 0 ? ` @ ${logged(weight)}` : ''}: ${when} was cut short. Finish every set to earn the next step.`;
     case 'rack-top':
-      return `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. ${logged(weight)} is this rack's heaviest: one more rep.`;
+      return lowestReps >= prescription.reps
+        ? `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. Top travel dumbbell: hold at ${prescription.reps} reps.`
+        : `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. ${logged(weight)} is this rack's heaviest: one more rep.`;
     case 'hold':
       if (equipment === 'Bodyweight') {
         return `Bodyweight movement at the top of the rep range (${range.max}). Add external load manually to keep progressing.`;
@@ -572,7 +582,9 @@ export function coachLine(prescription: Prescription, unit: Unit): string {
     case 'mixed-load':
       return `One load for every set: ${today}.`;
     case 'rack-top':
-      return `This rack's heaviest — one more rep: ${today}.`;
+      return last.done.length && Math.min(...last.done.map((set) => set.reps)) >= reps
+        ? `Top travel dumbbell: hold at ${reps} reps.`
+        : `This rack's heaviest — one more rep: ${today}.`;
     case 'hold':
       if (equipment === 'Bodyweight') return `Top of the range — own ${today}.`;
       return available.length === 0 ? `Top of the app's load limit — own ${today}.` : `Top of your rack — own ${today}.`;

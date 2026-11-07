@@ -5,8 +5,8 @@ import { adaptWorkout, restorePendingWorkout, confirmedLoads, EQUIPMENT_OPTIONS,
 import { switchOptions } from '../src/lib/switchDay.ts';
 import type { EquipmentChoice } from '../src/lib/adapt.ts';
 import { buildPlan } from '../src/lib/generator.ts';
-import { liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
-import { prescribeExercise } from '../src/lib/progression.ts';
+import { liveAdapted, liveExercises, progressionLines } from '../src/lib/liveProgression.ts';
+import { describePrescription, prescribeExercise } from '../src/lib/progression.ts';
 import { FULL_BODY_A, NEEDS_LOAD_REASON } from '../src/data/flagship.ts';
 import { completeSession, createSession, updatePerformedSet } from '../src/lib/session.ts';
 import { EMPTY_STATE, serializeExport } from '../src/lib/storage.ts';
@@ -115,14 +115,15 @@ const rx = (history: WorkoutRecord[], setup?: EquipmentChoice) => {
   return { weight: prescription.weight, reps: prescription.reps, basis: prescription.basis };
 };
 
-test('#188: a go-heavier target above the travel rack plans its top at one more rep, never a 0 kg pick', () => {
+test('#188: a go-heavier target above the travel rack plans its top, never a 0 kg pick', () => {
   const home = workout('w-1', '2026-11-01T10:00:00.000Z', 40, 40, 'goblet-squat', 'Goblet Squat', 30);
+  const top = prescribeExercise(goblet, gym, [home], true).range.max;
   const before = rx([home]);
   assert.equal(before.basis, 'go-heavier');
   const { adapted } = day('hotel', 60, [home]);
   const planned = liveExercises(adapted, gym, [home]).find((exercise) => exercise.exerciseId === 'goblet-squat')!;
   assert.deepEqual(planned.planned.map((set) => set.weight), planned.planned.map(() => 25));
-  assert.ok(planned.planned.every((set) => set.reps === 31), JSON.stringify(planned.planned));
+  assert.ok(planned.planned.every((set) => set.reps === top), 'reps stay inside the range: ' + JSON.stringify(planned.planned));
   assert.equal(planned.setup, 'hotel', 'the session records the setup its sets ran on');
   const travel = travelSession('t-1', '2026-11-02T10:00:00.000Z', [home]);
   assert.deepEqual(rx([home, travel]), before, 'a travel session never changes the home prescription');
@@ -310,6 +311,76 @@ test('#188: a rebuilt day says it was rebuilt, never "same as your program"', as
     }));
     assert.match(review, /Limited session/);
     assert.match(review, /calves/);
+  } finally {
+    await server.close();
+  }
+});
+
+const labelled = (record: WorkoutRecord, setup: EquipmentChoice) =>
+  ({ ...record, exercises: record.exercises.map((exercise) => ({ ...exercise, setup })) });
+
+test('#188: a today-only setup takes the higher of its own and the home prescription', () => {
+  const history = [
+    labelled(workout('t-old', '2026-10-01T10:00:00.000Z', 15), 'hotel'),
+    workout('h-1', '2026-10-05T10:00:00.000Z', 30),
+    workout('h-2', '2026-10-09T10:00:00.000Z', 35),
+    workout('h-3', '2026-10-13T10:00:00.000Z', 40),
+  ];
+  assert.equal(rx(history, 'hotel').weight, 25, 'stale 15 kg travel history loses to home 40 capped to the rack');
+  const pushUp = exerciseById('push-up')!;
+  const reps = (setup?: EquipmentChoice) => prescribeExercise(pushUp, gym, pushHistory, false, true, setup).reps;
+  const pushHistory = [
+    labelled(workout('b-old', '2026-10-01T10:00:00.000Z', 0, 0, 'push-up', 'Push-Up', 6), 'bodyweight'),
+    workout('h-push', '2026-10-10T10:00:00.000Z', 0, 0, 'push-up', 'Push-Up', 14),
+  ];
+  assert.ok(reps('bodyweight') >= reps('home'), `bodyweight ${reps('bodyweight')} vs home ${reps('home')}`);
+  assert.equal(reps('home'), prescribeExercise(pushUp, gym, [pushHistory[1]], false).reps, 'home reads only home');
+});
+
+test('#188: at the top travel dumbbell reps climb to the range top, then hold and say so', () => {
+  let history = [workout('h', '2026-10-01T10:00:00.000Z', 40, 40, 'goblet-squat', 'Goblet Squat', 6)];
+  const max = prescribeExercise(goblet, gym, history, true).range.max;
+  const steps: { weight: number; reps: number }[] = [];
+  for (let k = 0; k < 12; k += 1) {
+    const next = prescribeExercise(goblet, gym, history, true, true, 'hotel');
+    steps.push({ weight: next.weight, reps: next.reps });
+    history = [...history, labelled(workout(`t-${k}`, `2026-10-${String(k + 2).padStart(2, '0')}T10:00:00.000Z`, next.weight, next.weight, 'goblet-squat', 'Goblet Squat', next.reps), 'hotel')];
+  }
+  assert.ok(steps.every((step) => step.weight === 25 && step.reps <= max), JSON.stringify(steps));
+  assert.equal(steps.at(-1)?.reps, max);
+  const held = prescribeExercise(goblet, gym, history, true, true, 'hotel');
+  assert.equal(held.reps, max);
+  assert.match(describePrescription(held, 'kg'), new RegExp(`Top travel dumbbell: hold at ${max} reps`));
+});
+
+test('#188: the recap\'s next target is the saved setup\'s', () => {
+  const home = workout('h-1', '2026-11-01T10:00:00.000Z', 20);
+  const travel = labelled(workout('t-1', '2026-11-02T10:00:00.000Z', 18, 18, 'goblet-squat', 'Goblet Squat', 9), 'hotel');
+  const history = [home, travel];
+  const homeNext = prescribeExercise(goblet, gym, history, true);
+  assert.notEqual(homeNext.weight, prescribeExercise(goblet, gym, history, true, true, 'hotel').weight);
+  const line = progressionLines(travel, gym, history, 'kg').find((item) => item.exerciseId === 'goblet-squat')!;
+  assert.match(line.next, new RegExp(`@ ${homeNext.weight} kg`));
+});
+
+test('#188: after a switch the finish summary describes each exercise once, by all its sets', async () => {
+  const { createServer } = await import('vite');
+  const { createElement } = await import('react');
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const set = (weight: number, done: boolean) => ({ weight, reps: 8, done, completedAt: done ? '2026-11-07T10:01:00.000Z' : null });
+  const session = createSession({ id: 's-switch', name: 'Legs', dayIndex: legs.index, now: '2026-11-07T10:00:00.000Z', exercises: [
+    { exerciseId: 'goblet-squat', name: 'Goblet Squat', originalPlannedSets: 5, planned: [0, 1].map(() => ({ weight: 40, reps: 8 })), performed: [set(40, true), set(40, true)] },
+    { exerciseId: 'goblet-squat', name: 'Goblet Squat', originalPlannedSets: 5, setup: 'hotel', skipped: true, planned: [0, 1, 2].map(() => ({ weight: 25, reps: 8 })), performed: [0, 1, 2].map(() => set(25, false)) },
+  ] });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
+    const noop = () => {};
+    const html = renderToStaticMarkup(createElement(Train, { session, history: [], now: Date.parse('2026-11-07T10:02:00.000Z'),
+      loadOptions: [], calibrationLoads: [], unit: 'kg', onMinimize: noop, onFinish: noop,
+      onUpdateSet: noop, onLogSet: noop, onToggleRestPause: noop, onExtendRest: noop, onReturn: noop }));
+    assert.match(html, /All remaining work is skipped/);
+    assert.doesNotMatch(html, /This session carried/, 'both segments together carried all 5 sets');
   } finally {
     await server.close();
   }
