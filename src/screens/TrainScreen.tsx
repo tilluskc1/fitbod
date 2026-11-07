@@ -43,7 +43,9 @@ interface Props {
   onLogSet: (exerciseIndex: number, setIndex: number, exerciseId: string) => void;
   onToggleRestPause: () => void;
   onExtendRest: () => void;
-  onOpenActions: (exerciseIndex: number, mode?: 'instructions') => void;
+  onOpenActions: (exerciseIndex: number, mode?: 'instructions' | 'history') => void;
+  /** (#151) Opens Replace for the remaining sets straight from the quick-action row. */
+  onReplace?: (exerciseIndex: number) => void;
   onReturn: (exerciseIndex: number) => void;
 }
 
@@ -189,6 +191,7 @@ export default function TrainScreen({
   onToggleRestPause,
   onExtendRest,
   onOpenActions,
+  onReplace,
   onReturn,
 }: Props) {
   /** A logged set's edit; the record is untouched until Save set. */
@@ -547,6 +550,21 @@ export default function TrainScreen({
             <MoreIcon size={18} />
           </button>
         </section>
+
+        {/* (#151) One-tap shortcuts into the same actions the menu holds. */}
+        <div className="lg-acts" role="group" aria-label={`Actions for ${exercise.name}`}>
+          <button type="button" className="lg-act" onClick={() => onOpenActions(index, 'instructions')} aria-haspopup="dialog">
+            <Icon name="play_arrow" size={16} />How-to
+          </button>
+          <button type="button" className="lg-act" onClick={() => onOpenActions(index, 'history')} aria-haspopup="dialog">
+            <Icon name="monitoring" size={16} />History
+          </button>
+          {onReplace && (
+            <button type="button" className="lg-act" onClick={() => onReplace(index)} aria-haspopup="dialog">
+              <Icon name="tune" size={16} />Replace
+            </button>
+          )}
+        </div>
 
         {coach && <p className="lg-coach">{coach}</p>}
 

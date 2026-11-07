@@ -4417,3 +4417,20 @@ button.aw-exercise__name-btn {
 .len-opt .ms { color: var(--accent-text); }
 .len-opt__c--limited { color: var(--amber); }
 .len-opt__c--ready { color: var(--accent-text); }
+
+/* ---------- Logger quick actions (#151) ---------- */
+.lg-acts { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; }
+.lg-acts::-webkit-scrollbar { display: none; }
+.lg-act {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--card);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.lg-act .ms { color: var(--muted); }

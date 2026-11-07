@@ -351,7 +351,7 @@ export function ExerciseActionsSheet({
   exerciseIndex: number;
   exerciseCount: number;
   /** The logger's thumbnail opens straight to the demo. */
-  initialMode?: 'menu' | 'instructions';
+  initialMode?: 'menu' | 'instructions' | 'history';
   planned: { weight: number; reps: number }[];
   pending: number;
   done: number;

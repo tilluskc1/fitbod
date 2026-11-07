@@ -136,7 +136,7 @@ type SheetState =
   | { kind: 'gym' }
   | { kind: 'switch' }
   | { kind: 'settings' }
-  | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' }
+  | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' | 'history' }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
   | { kind: 'why'; exerciseId: string; exerciseIndex: number }
@@ -951,6 +951,7 @@ export default function App() {
               : currentState,
           )
         }
+        onReplace={(exerciseIndex) => setSheet({ kind: 'swap', exerciseIndex })}
         onOpenActions={(exerciseIndex, mode) =>
           setSheet({
             kind: 'actions',
