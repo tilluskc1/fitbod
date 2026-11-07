@@ -1448,6 +1448,12 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 22px;
+  /* A long step still scrolls on a small phone, but no scrollbar is drawn (like .screen). */
+  scrollbar-width: none;
+}
+
+.onboarding::-webkit-scrollbar {
+  display: none;
 }
 
 .onboarding-top {

@@ -8,6 +8,7 @@ import
  {
   adaptWorkout,
   confirmedLoads,
+  isGymKit,
   lengthOptions,
   setupOptions,
   EQUIPMENT_OPTIONS as SETUPS,
@@ -337,10 +338,17 @@ export default function App() {
    * value feeds Today, the review, the logger and the sheets, so no screen can
    * describe work the next one will not ask for.
    */
-  const program = useMemo(
-    () => (profile && slot ? slotProgram(profile, slot, state.history) : FULL_BODY_A),
+  /** The slot's day built for a length; longer than the saved length adds work (#17). */
+  const programAt = useCallback(
+    (minutes?: number) => (profile && slot
+      ? slotProgram(minutes ? { ...profile, sessionMinutes: minutes } : profile, slot, state.history)
+      : FULL_BODY_A),
     [profile, slot, state.history],
   );
+  // A today-only length above the saved one rebuilds the day at that length; a shorter one trims it.
+  const longerToday = override && profile && override.minutes > (profile.sessionMinutes ?? 35) ? override.minutes : undefined;
+  const program = useMemo(() => programAt(longerToday), [programAt, longerToday]);
+  const defaultProgram = useMemo(() => programAt(), [programAt]);
   const adapted = useMemo(
     () => adaptWorkout(program, constraints, exclusions),
     [program, constraints, exclusions],
@@ -1149,7 +1157,7 @@ export default function App() {
 
       {sheet.kind === 'length' && profile && (
         <DurationSheet
-          options={lengthOptions(program, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35)}
+          options={lengthOptions(defaultProgram, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35, (minutes) => programAt(minutes))}
           current={constraints.minutes}
           onClose={closeSheet}
           onPick={pickLength}
@@ -1161,7 +1169,8 @@ export default function App() {
           options={setupOptions(program, constraints, profile.exclusions ?? [])}
           current={constraints.equipment}
           dayName={program.name}
-          savedGear={[...profile.equipment, ...profile.support].join(', ') || 'none'}
+          savedGear={isGymKit(profile) ? 'full gym' : [...profile.equipment, ...profile.support].join(', ') || 'none'}
+          gymKit={isGymKit(profile)}
           onPick={pickSetup}
           onEditSaved={() => setSheet({ kind: 'settings' })}
           onClose={closeSheet}
