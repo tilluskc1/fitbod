@@ -6,7 +6,7 @@ import { ArrowIcon, DumbbellIcon, EditIcon, GoalIcon, ClockIcon } from '../compo
 interface Props {
   profile: Profile;
   history: WorkoutRecord[];
-  program: { name: string; minutes: number };
+  program: { name: string; minutes: number; approx?: boolean };
   onWhy: () => void;
   onEdit: (section: 'equipment' | 'minutes' | 'goal' | 'units') => void;
 }
@@ -139,7 +139,7 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
               <div className="context-row" style={{ borderBottom: 0 }}>
                 <span>Next session</span>
                 <span>
-                  {program.name} · {program.minutes} min
+                  {program.name} · {program.approx ? '≈' : ''}{program.minutes} min
                 </span>
               </div>
             </div>

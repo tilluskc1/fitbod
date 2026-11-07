@@ -394,8 +394,8 @@ export default function App() {
       (profile ? liveExercises(liveProgram, profile, state.history) : toWorkoutExercises(adapted)),
     [current, adapted, liveProgram, profile, state.history],
   );
-  /** The name, counts and minutes of that same day, for Plan and View session alike (#189). */
-  const todayDay = useMemo(() => todayGlance(program, adapted, current, Boolean(override)), [program, adapted, current, override]);
+  /** The name, counts and minutes of that same day, for Plan, View session and Coach alike (#189, #200). */
+  const todayDay = useMemo(() => todayGlance(adapted, current, Boolean(override), profile?.goal), [adapted, current, override, profile?.goal]);
 
   /** The one-line reason behind each computed target, keyed by exercise. */
   const targetNotes = useMemo(() => {
@@ -1125,7 +1125,7 @@ export default function App() {
           <CoachScreen
             profile={profile}
             history={state.history}
-            program={{ name: current?.name ?? adapted.name, minutes: current?.durationMin ?? adapted.minutes }}
+            program={todayDay}
             onWhy={() =>
               setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
             }

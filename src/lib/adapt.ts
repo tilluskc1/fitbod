@@ -1,7 +1,7 @@
 import type { Program, ProgramExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } from '../data/flagship.ts';
-import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import type { Exercise, Goal, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
 import { isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
@@ -159,12 +159,15 @@ export function estimatedMinutes(program: Program, sets: number): number {
   return Math.max(1, Math.round((program.minutes * sets) / total));
 }
 
-/** Minutes these exercises take, warm-up included, by the generator's own time model (#132). */
-export function workMinutes(exercises: { exerciseId: string; sets: number }[]): number {
+/**
+ * Minutes these exercises take, warm-up included, by the generator's own time model (#132).
+ * With a goal and session length, rests and warm-up are the ones the timer runs.
+ */
+export function workMinutes(exercises: { exerciseId: string; sets: number }[], goal?: Goal, sessionMinutes?: number): number {
   const live = exercises.filter((exercise) => exercise.sets > 0);
   if (live.length === 0) return 0;
-  const rests = sessionRests(live.map((exercise) => exercise.exerciseId));
-  return Math.max(1, Math.round(estimatedSeconds(live.map((exercise) => exercise.sets), rests) / 60));
+  const rests = sessionRests(live.map((exercise) => exercise.exerciseId), goal, sessionMinutes);
+  return Math.max(1, Math.round(estimatedSeconds(live.map((exercise) => exercise.sets), rests, sessionMinutes) / 60));
 }
 
 /**
@@ -199,21 +202,26 @@ export interface DayGlance {
   adjusted: boolean;
 }
 
-/** The one source for every surface that names today's day: Today, Plan and View session. */
-export function todayGlance(program: Program, adapted: AdaptedWorkout, current: WorkoutRecord | null, overridden = false): DayGlance {
-  if (current) {
-    const sets = current.exercises.reduce((sum, exercise) => sum + exercise.planned.length, 0);
-    return { name: current.name, exercises: current.exercises.length, sets, minutes: current.durationMin ?? adapted.minutes, approx: false, adjusted: false };
-  }
-  // What the work takes, overrun included; ≈ only when it falls short of the length asked for.
-  const promised = promisedMinutes(program, adapted);
+/**
+ * The one source for every surface that names today's day: Today, Plan, View session and Coach.
+ * Minutes are the work's own time, with the rests the timer will run for this goal and length.
+ * A running session is priced from itself alone (its exercises, planned sets and the length it
+ * was started at), so Start, a later settings change or a new slot cannot move it (#200).
+ */
+export function todayGlance(adapted: AdaptedWorkout, current: WorkoutRecord | null, overridden = false, goal?: Goal): DayGlance {
+  const asked = current ? current.durationMin : adapted.minutes;
+  const work = current
+    ? current.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.planned.length }))
+    : adapted.exercises;
+  const minutes = workMinutes(work, goal, asked);
   return {
-    name: adapted.name,
-    exercises: adapted.exercises.length,
-    sets: adapted.totalSets,
-    minutes: promised,
-    approx: promised < adapted.minutes,
-    adjusted: overridden,
+    name: current?.name ?? adapted.name,
+    exercises: work.length,
+    sets: work.reduce((sum, exercise) => sum + exercise.sets, 0),
+    minutes,
+    // ≈ when the work cannot come close to the length asked for (as promisedMinutes); unknown length, no ≈.
+    approx: asked !== undefined && minutes < asked * 0.5,
+    adjusted: overridden && !current,
   };
 }
 
