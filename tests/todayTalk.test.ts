@@ -9,7 +9,8 @@ import { keywordParser, resolveConstraints } from '../src/lib/constraints.ts';
 import { buildPlan } from '../src/lib/generator.ts';
 import { liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
 import { activeOverride, dayKey } from '../src/lib/plan.ts';
-import { cursorFor, planSlots, slotLinkFor, todayProgram } from '../src/lib/sequence.ts';
+import { cursorFor, planSlots, slotLinkFor, todayProgram, withSkipped } from '../src/lib/sequence.ts';
+import { rankedReplacements } from '../src/lib/replacements.ts';
 import { applyFinish, createSession } from '../src/lib/session.ts';
 import { serializeExport } from '../src/lib/storage.ts';
 import { parseState } from '../src/lib/validate.ts';
@@ -125,6 +126,59 @@ test('#193: resolveConstraints carries a custom day through other edits', () => 
   assert.deepEqual(resolveConstraints({ minutes: 45, equipment: 'home' }, { minutes: 30 }).constraints, { minutes: 30, equipment: 'home' });
 });
 
+test('#193: a sore or skip word covers a whole list of areas, before or after it', () => {
+  assert.deepEqual(pick(talkParse('legs and arms are sore')), { avoid: ['Arms', 'Legs'], sore: ['Arms', 'Legs'] });
+  assert.deepEqual(pick(talkParse('sore legs and arms')), { avoid: ['Arms', 'Legs'], sore: ['Arms', 'Legs'] });
+  assert.deepEqual(pick(talkParse('skip legs and arms')), { avoid: ['Arms', 'Legs'] });
+  assert.deepEqual(pick(talkParse('no shoulders or arms, chest')), { train: ['Chest'], avoid: ['Shoulders', 'Arms'] });
+  assert.deepEqual(pick(talkParse('skip legs, arms and chest')), { avoid: ['Chest', 'Arms', 'Legs'] });
+  assert.deepEqual(pick(talkParse('my chest, back and shoulders are tired')), { avoid: ['Chest', 'Back', 'Shoulders'], sore: ['Chest', 'Back', 'Shoulders'] });
+  // A comma alone is not a list: the sore word stays with its own area.
+  assert.deepEqual(pick(talkParse('I want chest, legs are sore')), { train: ['Chest'], avoid: ['Legs'], sore: ['Legs'] });
+  assert.deepEqual(pick(talkParse('Shoulders are tired, legs and abs')), { train: ['Legs', 'Core'], avoid: ['Shoulders'], sore: ['Shoulders'] });
+});
+
+test('#193: "everything but legs" trains the other five; "but" elsewhere still splits', () => {
+  assert.deepEqual(pick(talkParse('everything but legs')), { train: ['Chest', 'Back', 'Shoulders', 'Arms', 'Core'] });
+  assert.deepEqual(pick(talkParse('anything except chest')), { train: ['Back', 'Shoulders', 'Arms', 'Legs', 'Core'] });
+  assert.deepEqual(pick(talkParse('all but legs and core, 45 min')), { minutes: 45, train: ['Chest', 'Back', 'Shoulders', 'Arms'] });
+  assert.deepEqual(pick(talkParse('everything other than arms')), { train: ['Chest', 'Back', 'Shoulders', 'Legs', 'Core'] });
+  assert.deepEqual(pick(talkParse('chest but my back is sore')), { train: ['Chest'], avoid: ['Back'], sore: ['Back'] });
+});
+
+test('#193: "back after a break" and "<area> is fine" train nothing', () => {
+  assert.deepEqual(pick(talkParse('back after a break, chest')), { train: ['Chest'] });
+  assert.deepEqual(pick(talkParse('legs are fine, chest')), { train: ['Chest'] });
+  assert.deepEqual(pick(talkParse('shoulders feel ok')), {});
+  assert.deepEqual(pick(talkParse('legs fine, back good, arms')), { train: ['Arms'] });
+});
+
+test('#193: in-session swaps on a described day respect the same skip rule', () => {
+  const skipped: MuscleGroup[] = ['Back'];
+  const profile = withSkipped(gym, skipped);
+  for (const id of ['leg-curl', 'hip-thrust', 'glute-bridge', 'back-squat']) {
+    const offered = rankedReplacements(exerciseById(id)!, profile, [], 10).map((e) => e.id);
+    for (const other of offered) assert.ok(!worksSkipped(exerciseById(other)!, skipped), `${id} offers ${other}`);
+  }
+  const plain = rankedReplacements(exerciseById('leg-curl')!, gym, [], 10).map((e) => e.id);
+  assert.ok(plain.some((other) => worksSkipped(exerciseById(other)!, skipped)), 'without the skip a hinge is offered');
+  assert.deepEqual(withSkipped(gym, []), gym);
+});
+
+test('#193: a longer time on the planned day builds the longer day, as the length sheet does', async () => {
+  const { readFileSync } = await import('node:fs');
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /next\.equipment === 'home' && !next\.focus && next\.minutes === constraints\.minutes \? homeProgram : programFor\(next\)/);
+  const home: Profile = { ...gym, daysPerWeek: 3, equipment: ['Dumbbell'], support: ['Bench'], sessionMinutes: 35 };
+  const slot = planSlots(buildPlan(home))[0];
+  const talk = { ...baseTalk({ minutes: 35, equipment: 'home' }, slot.focus), minutes: 60 };
+  const next = talkConstraints(talk, undefined, slot.focus);
+  assert.equal(next.focus, undefined);
+  const longer = adaptWorkout(todayProgram(home, slot, [], next), next, []);
+  const saved = adaptWorkout(todayProgram(home, slot, [], { minutes: 35 }), next, []);
+  assert.ok(longer.totalSets > saved.totalSets, `${longer.totalSets} vs ${saved.totalSets}`);
+});
+
 /* ---------- chips ---------- */
 
 test('#193: text fills the chips and the chips stay editable', () => {
@@ -157,7 +211,9 @@ test('#193: chip taps made before typing survive typing; text sets only what it 
   assert.equal(talk.equipment, 'hotel');
   assert.deepEqual(talk.skip, ['Shoulders'], 'an unchanged reading keeps the Skip tap');
   talk = type('chest and abs please, 45 min, shoulders are fine');
-  assert.deepEqual([talk.train, talk.skip], [['Chest', 'Shoulders', 'Core'], []], 'naming shoulders now wins over the tap');
+  assert.deepEqual(talk.skip, ['Shoulders'], '"shoulders are fine" names them for neither, so the tap stays');
+  talk = type('chest and abs please, 45 min, shoulders too');
+  assert.deepEqual([talk.train, talk.skip], [['Chest', 'Shoulders', 'Core'], []], 'naming shoulders to train wins over the tap');
   // A new base (gear or time changed in another sheet) shows through where nothing overrides it.
   const moved = composeTalk({ ...base, equipment: 'bodyweight', minutes: 20 }, 'chest', NO_TAPS);
   assert.deepEqual([moved.equipment, moved.minutes], ['bodyweight', 20]);
@@ -269,9 +325,11 @@ test('#193: "back" as an adverb trains nothing', () => {
   assert.deepEqual(talkParse('my back, at the gym').train, ['Back']);
 });
 
-test('#193: "sore arms, chest and back" keeps presses and rows, and drops arm work', () => {
+test('#193: "arms are sore, chest and back" keeps presses and rows, and drops arm work', () => {
   const upper = planSlots(plan)[0];
-  const { adapted, preview } = build('sore arms, chest and back', gym, upper);
+  // "sore arms, chest and back" is one list, all sore; this says only the arms are.
+  assert.deepEqual(talkParse('sore arms, chest and back').avoid, ['Chest', 'Back', 'Arms']);
+  const { adapted, preview } = build('arms are sore, chest and back', gym, upper);
   const ids = adapted.exercises.map((e) => e.exerciseId);
   assert.ok(ids.some((id) => exerciseById(id)!.pattern === 'horizontal_push'), ids.join());
   assert.ok(ids.some((id) => ['horizontal_pull', 'vertical_pull'].includes(exerciseById(id)!.pattern)), ids.join());

@@ -149,6 +149,15 @@ export function kitProfile(profile: Profile, equipment: EquipmentChoice = 'home'
 }
 
 /**
+ * The profile with everything that works a skipped muscle group left out (#193), the same rule
+ * a described day is built with and its in-session swaps are offered by (see `worksSkipped`).
+ */
+export function withSkipped(profile: Profile, skip: MuscleGroup[]): Profile {
+  const spared = EXERCISES.filter((exercise) => worksSkipped(exercise, skip) && !profile.exclusions.includes(exercise.id));
+  return spared.length === 0 ? profile : { ...profile, exclusions: [...profile.exclusions, ...spared.map((exercise) => exercise.id)] };
+}
+
+/**
  * Today's program for the slot (#188). The saved setup keeps the saved day, rebuilt only when
  * today is longer (#17); a shorter day is trimmed later by `adaptWorkout`. Another setup
  * rebuilds the day from that setup's kit at today's length, so it gets that kit's best work
@@ -168,9 +177,9 @@ export function todayProgram(
   const slot = custom ? { ...plannedSlot, id: `${plannedSlot.id}-today`, name: customDayName(focus), focus } : plannedSlot;
   // A skipped muscle group stays out of the whole day, not just its focus: nothing that works it
   // is picked (see `worksSkipped`). Those are no exclusions of the lifter's, so none is offered back.
-  const spared = custom ? EXERCISES.filter((exercise) => worksSkipped(exercise, skip)).map((exercise) => exercise.id) : [];
+  const spared = custom ? withSkipped(profile, skip).exclusions.slice(profile.exclusions.length) : [];
   if (spared.length > 0) {
-    const program = todayProgram({ ...profile, exclusions: [...profile.exclusions, ...spared] }, plannedSlot, history, { ...today, skip: [], focus });
+    const program = todayProgram(withSkipped(profile, skip), plannedSlot, history, { ...today, skip: [], focus });
     const feasibility = program.feasibility && {
       ...program.feasibility,
       alternatives: program.feasibility.alternatives.filter((alt) => !(alt.exerciseId && spared.includes(alt.exerciseId))),

@@ -46,7 +46,7 @@ export interface TalkParse extends ParsedConstraints {
 const AREA_WORDS: { word: string; areas: Area[] }[] = [
   { word: 'chest|pecs?', areas: ['Chest'] },
   // "Back" the muscle, not the adverb: "back at the gym", "get back", "came back" train nothing.
-  { word: `(?<!\\b(?:get|got|getting|came|come|coming|go|going|went|be|been|i'm|im|we're)\\s)back(?!\\s+(?:at|home|to|in|into|from|on)\\b)|lats?`, areas: ['Back'] },
+  { word: `(?<!\\b(?:get|got|getting|came|come|coming|go|going|went|be|been|i'm|im|we're)\\s)back(?!\\s+(?:at|home|to|in|into|from|on|after)\\b)|lats?`, areas: ['Back'] },
   { word: 'shoulders?|delts?', areas: ['Shoulders'] },
   { word: 'arms?|biceps?|triceps?', areas: ['Arms'] },
   { word: 'legs?|quads?|hamstrings?|glutes?|calf|calves', areas: ['Legs'] },
@@ -74,26 +74,55 @@ const NO_PAIN = new RegExp([
 /** "No gym today", "not at home": a negated place selects nothing. */
 const NO_PLACE = /\b(?:no|not|without|skip(?:ping)?|instead of)\s+(?:(?:at|to|the|a|my)\s+)*(?:gym|hotel|travel|home|garage)\b/gi;
 
+/** One area, maybe after "my"/"the". */
+const ONE = `${DET}(?:${AREA_WORDS.map(({ word }) => `(?:${word})`).join('|')})\\b`;
+/** A list of areas: "legs", "legs and arms", "chest, back and shoulders". Commas only before the and/or. */
+const LIST = `${ONE}(?:\\s*,\\s*${ONE})*(?:\\s*,?\\s+(?:and|or)\\s+${ONE})*`;
+const RUN = new RegExp(`\\b${LIST}`, 'g');
+/** "Everything but legs", "anything except chest": all six areas minus those. */
+const EXCEPT = new RegExp(`\\b(?:everything|anything|all)\\s+(?:but|except(?:\\s+for)?|other than|apart from|besides)\\s+(${LIST})`, 'g');
+/** "Legs are fine": neither trained nor skipped. */
+const FINE = /^\s+(?:(?:is|are|feel|feels|feeling|seem|seems)\s+)?(?:fine|ok|okay|good|great|alright|fresh)\b/;
+const NOT_BEFORE = '(?<!\\b(?:not|no|never)\\s)';
+const SORE_BEFORE_RE = new RegExp(`${NOT_BEFORE}\\b(?:${SORE_BEFORE})\\s+$`);
+const LEAVE_BEFORE_RE = new RegExp(`${NOT_BEFORE}\\b(?:${LEAVE_BEFORE})\\s+$`);
+const SORE_AFTER_RE = new RegExp(`^((?:\\s+[\\w'’]+){0,2}?)\\s+(?:${SORE_AFTER})\\b`);
+
+const areasIn = (text: string): Area[] =>
+  AREA_WORDS.filter(({ word }) => new RegExp(`\\b(?:${word})\\b`).test(text)).flatMap(({ areas }) => areas);
+
 /**
- * Areas named per clause. "<area> … sore" or "sore/skip/no <area>" skips it, unless negated
- * ("legs not sore", "not sore legs"); any other mention trains it. A clause ends at punctuation
- * or "but", so "tired, legs" never skips legs.
+ * Areas named, list by list. A sore or skip word before or after a list ("legs and arms are
+ * sore", "skip legs, arms and chest") covers the whole list, unless negated ("legs not sore");
+ * "<area> is fine" names it for neither; any other mention trains it. A comma alone is no list,
+ * and a sentence ends at . ; : ! ? or "but", so "tired, legs" never skips legs.
  */
 function readAreas(text: string): { train: Area[]; skip: Area[]; sore: Area[] } {
   const train = new Set<Area>();
   const skip = new Set<Area>();
   const sore = new Set<Area>();
-  for (const clause of text.toLowerCase().split(/[,.;:!?\n]+|\bbut\b/)) {
-    for (const { word, areas } of AREA_WORDS) {
-      if (!new RegExp(`\\b(?:${word})\\b`).test(clause)) continue;
-      const after = new RegExp(`\\b(?:${word})((?:\\s+[\\w'’]+){0,2}?)\\s+(?:${SORE_AFTER})\\b`).exec(clause);
-      const notBefore = '(?<!\\b(?:not|no|never)\\s)';
-      const soreAfter = Boolean(after && !NEGATED.test(after[1]));
-      const soreBefore = new RegExp(`${notBefore}\\b(?:${SORE_BEFORE})\\s+${DET}(?:${word})\\b`).test(clause);
-      const left = new RegExp(`${notBefore}\\b(?:${LEAVE_BEFORE})\\s+${DET}(?:${word})\\b`).test(clause);
-      for (const area of areas) {
-        if (soreAfter || soreBefore) sore.add(area);
-        (soreAfter || soreBefore || left ? skip : train).add(area);
+  const said = text.toLowerCase().replace(EXCEPT, (_match, list: string) => {
+    const except = areasIn(list);
+    for (const area of AREAS) if (!except.includes(area)) train.add(area);
+    return ' ';
+  });
+  for (const clause of said.split(/[.;:!?\n]+|\bbut\b/)) {
+    for (const run of clause.matchAll(RUN)) {
+      const at = run.index ?? 0;
+      // "chest, legs are sore" is two mentions, not a list: only an and/or makes one.
+      const pieces = /\b(?:and|or)\b/.test(run[0]) ? [{ text: run[0], at }]
+        : [...run[0].matchAll(new RegExp(ONE, 'g'))].map((one) => ({ text: one[0], at: at + (one.index ?? 0) }));
+      for (const piece of pieces) {
+        const before = clause.slice(0, piece.at);
+        const after = clause.slice(piece.at + piece.text.length);
+        if (FINE.test(after)) continue;
+        const named = SORE_AFTER_RE.exec(after);
+        const isSore = Boolean(named && !NEGATED.test(named[1])) || SORE_BEFORE_RE.test(before);
+        const left = LEAVE_BEFORE_RE.test(before);
+        for (const area of areasIn(piece.text)) {
+          if (isSore) sore.add(area);
+          (isSore || left ? skip : train).add(area);
+        }
       }
     }
   }

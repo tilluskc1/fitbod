@@ -30,7 +30,7 @@ import
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A, programSetCount } from './data/flagship';
-import { cursorFor, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, slotProgram, todayProgram, updateProfile } from './lib/sequence';
+import { cursorFor, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, slotProgram, todayProgram, updateProfile, withSkipped } from './lib/sequence';
 import { withoutCustomDay } from './lib/plan';
 import { baseTalk, customDayPreview, talkConstraints } from './lib/todayTalk';
 import type { TalkState } from './lib/todayTalk';
@@ -394,8 +394,9 @@ export default function App() {
   );
   /** A proposed adaptation: another setup or a described day is rebuilt, the saved one adapts the saved day. */
   const adaptFor = useCallback(
-    (next: Constraints) => adaptWorkout(next.equipment === 'home' && !next.focus ? homeProgram : programFor(next), next, exclusions),
-    [homeProgram, programFor, exclusions],
+    // The saved day at another length is the length sheet's rebuild (#193: the composer's time chip).
+    (next: Constraints) => adaptWorkout(next.equipment === 'home' && !next.focus && next.minutes === constraints.minutes ? homeProgram : programFor(next), next, exclusions),
+    [homeProgram, programFor, exclusions, constraints.minutes],
   );
   const adapted = useMemo(
     () => adaptWorkout(program, constraints, exclusions),
@@ -1451,7 +1452,9 @@ export default function App() {
             .filter((_, index) => index !== sheet.exerciseIndex)
             .map((item) => exerciseById(item.exerciseId))
             .filter((item): item is NonNullable<typeof item> => item !== undefined);
-          const options = (meta ? rankedReplacements(meta, profile, inDay, 6) : []).map((candidate) => ({
+          // A described day's swaps keep its skip (#193): nothing that works a skipped area.
+          const swapProfile = describedSession && state.todayOverride?.skip ? withSkipped(profile, state.todayOverride.skip) : profile;
+          const options = (meta ? rankedReplacements(meta, swapProfile, inDay, 6) : []).map((candidate) => ({
             id: candidate.id,
             name: candidate.name,
             meta: `${candidate.equipment} · ${candidate.muscles.slice(0, 2).join(', ')}`,
