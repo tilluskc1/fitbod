@@ -258,6 +258,11 @@ export interface AppState {
   programCursor?: { revision: number; seq: number } | null;
   /** Explicit skips, kept apart from history: a skip is not a workout. */
   slotSkips?: SlotSkip[];
+  /**
+   * (#225) When this browser last handed a backup file to the Share sheet or a
+   * download. Absent until the first one; a restore never sets it.
+   */
+  lastBackupAt?: string;
 }
 
 export interface SlotSkip {

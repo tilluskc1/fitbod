@@ -773,6 +773,8 @@ interface SettingsProps {
   profile: Profile;
   onChange: (patch: Partial<Profile>) => void;
   onExport: () => void;
+  /** (#225) Share the backup file, or download it where sharing files is unsupported. */
+  onBackup: () => void;
   onRestore: (file: File | undefined) => void;
   onClose: () => void;
   storageNote: string;
@@ -782,6 +784,7 @@ export function SettingsSheet({
   profile,
   onChange,
   onExport,
+  onBackup,
   onRestore,
   onClose,
   storageNote,
@@ -947,6 +950,9 @@ export function SettingsSheet({
             Data
           </h3>
           <div className="settings-card">
+            <button className="settings-row settings-row--action" onClick={onBackup}>
+              Back up now
+            </button>
             <button className="settings-row settings-row--action" onClick={onExport}>
               Export JSON backup
             </button>
@@ -968,7 +974,7 @@ export function SettingsSheet({
             <LockIcon />
             <div>
               <strong>This browser is the only copy.</strong>
-              <p>There is no account or cloud sync. Export before clearing site data or changing devices.</p>
+              <p>There is no account or cloud sync. Back up now saves a copy outside this browser, through the Share sheet or a download. Do it weekly and before clearing site data or changing devices.</p>
             </div>
           </div>
           {install && (

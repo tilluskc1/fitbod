@@ -59,6 +59,10 @@ interface Props {
    * (#220) While a described session runs, the session's own; absent once its day has passed.
    */
   described?: DayStatus | null;
+  /** (#225) The backup reminder line (`backupReminder`), or null when no backup is due. */
+  backup?: string | null;
+  /** (#225) Back up now: the same action as Settings. */
+  onBackup?: () => void;
 }
 
 function greeting(now: Date): string {
@@ -183,6 +187,8 @@ export default function TodayScreen({
   canRestore = true,
   composing = false,
   described,
+  backup,
+  onBackup,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -326,6 +332,14 @@ export default function TodayScreen({
         {described && <DescribedNote day={described} />}
         {!described && !current && !adjusted && (
           <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
+        )}
+
+        {/* (#225) Not mid-session: a backup taken now would miss the open session. */}
+        {backup && onBackup && !current && (
+          <div className="feasibility backup-note" role="note">
+            <p className="feasibility__line">{backup}</p>
+            <button className="feasibility__alt" onClick={onBackup}>Back up now</button>
+          </div>
         )}
 
         {!current && composer}
