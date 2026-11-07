@@ -324,8 +324,6 @@ export function generateWorkout(
     // Preferences stay: a 'more' pick reorders the fill, and that is the user's choice, not a gap.
     const open = { ...profile, equipment: [...EQUIPMENT_OPTIONS], support: [...SUPPORT_OPTIONS], exclusions: [] };
     const capacity = selectExercises(open, day, dayIndex, max).picked.length;
-    targetCount = kept < all ? kept
-      : Math.min(capacity, kept + Math.max(0, Math.floor(room / anotherExercise)));
     const exhausted = kept === all;
     // Too long even at the floor: thin the last exercises first, down to 2 sets (the lead to 3;
     // under 30 minutes the lead may go to 2 so a four-movement day still fits, #132).
@@ -343,6 +341,12 @@ export function generateWorkout(
         if (sets[index] < 4 && seconds() + exerciseSeconds(sets[index] + 1, rests[index]) - exerciseSeconds(sets[index], rests[index]) <= budget) sets[index] += 1;
       }
     }
+    // The target is what the saved gear covers (#67): more gear could add exercises, but a day that
+    // still fills the time is not short. Only when the gear cannot fill half the session is the
+    // count a real gap, named against what the caps could hold with everything allowed.
+    const thin = exhausted && seconds() < budget * 0.5;
+    targetCount = kept < all || !thin ? kept
+      : Math.min(capacity, kept + Math.max(0, Math.floor(room / anotherExercise)));
   }
 
   // Trimming used the priority above; the session itself runs lead, compounds, isolation, core (#133).
