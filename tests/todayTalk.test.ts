@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { exerciseById } from '../src/data/exercises.ts';
+import { EXERCISES, areIncompatible, exerciseById } from '../src/data/exercises.ts';
+import { capabilitiesFor, provides } from '../src/lib/capabilities.ts';
 import { adaptWorkout, todayGlance } from '../src/lib/adapt.ts';
 import type { EquipmentChoice } from '../src/lib/adapt.ts';
-import { AREAS, musclesOf, worksSkipped } from '../src/lib/areas.ts';
+import { AREAS, AREA_MUSCLES, musclesOf, worksSkipped } from '../src/lib/areas.ts';
 import type { Area } from '../src/lib/areas.ts';
 import { keywordParser, resolveConstraints } from '../src/lib/constraints.ts';
 import { buildPlan } from '../src/lib/generator.ts';
 import { liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
 import { activeOverride, dayKey } from '../src/lib/plan.ts';
-import { cursorFor, planSlots, slotLinkFor, todayProgram, withSkipped } from '../src/lib/sequence.ts';
+import { cursorFor, kitProfile, planSlots, slotLinkFor, todayProgram, withSkipped } from '../src/lib/sequence.ts';
 import { rankedReplacements } from '../src/lib/replacements.ts';
 import { applyFinish, createSession } from '../src/lib/session.ts';
 import { serializeExport } from '../src/lib/storage.ts';
@@ -367,36 +368,75 @@ test('#193: "arms are sore, chest and back" keeps presses and rows, and drops ar
 const SETUPS: EquipmentChoice[] = ['home', 'hotel', 'bodyweight'];
 const subsets = (items: Area[]) => items.reduce<Area[][]>((all, item) => all.concat(all.map((set) => [...set, item])), [[]]);
 
-test('#193: sweep — no described day works a skipped area, and every asked area is trained or named', () => {
-  const pairs = subsets(AREAS).filter((set) => set.length >= 1 && set.length <= 2);
+/** "No hamstring work": a muscle as the why lines name it (#211). */
+const MUSCLE_WORD: Record<MuscleGroup, string> = {
+  Chest: 'chest', Back: 'back', Shoulders: 'shoulder', Biceps: 'biceps', Triceps: 'triceps',
+  Quads: 'quad', Hamstrings: 'hamstring', Glutes: 'glute', Calves: 'calf', Core: 'core',
+};
+
+test('#211: sweep — every muscle of an asked area is trained or named, no skipped area trained, no day over its length', () => {
+  const trainSets = subsets(AREAS).filter((set) => set.length > 0);
   let checked = 0;
   for (const setup of SETUPS) {
+    const kit = kitProfile(gym, setup);
+    const caps = capabilitiesFor(kit);
     for (const minutes of [30, 45, 60]) {
-      for (const train of pairs) {
+      for (const train of trainSets) {
         for (const skip of [[], ...AREAS.filter((area) => !train.includes(area)).map((area) => [area])] as Area[][]) {
           const talk: TalkState = { equipment: setup, minutes, train, skip, sore: skip, pain: false, notices: [] };
           const constraints = talkConstraints(talk, undefined, lower.focus);
           if (!constraints.focus) continue;
           const program = todayProgram(gym, lower, [], constraints);
-          const adapted = adaptWorkout(program, constraints, [], gym.goal);
-          const preview = customDayPreview(talk, program, adapted, gym, lower.focus);
+          const live = liveAdapted(adaptWorkout(program, constraints, [], gym.goal), gym, []);
+          const preview = customDayPreview(talk, program, live, gym, lower.focus);
+          const at = `${setup} ${minutes} ${train}/${skip}: ${live.exercises.map((e) => e.exerciseId)}`;
           const skipped = musclesOf(skip);
-          for (const exercise of adapted.exercises) {
-            assert.ok(!worksSkipped(exerciseById(exercise.exerciseId)!, skipped), `${setup} ${minutes} ${train}/${skip}: ${exercise.exerciseId}`);
+          for (const exercise of live.exercises) {
+            assert.ok(!worksSkipped(exerciseById(exercise.exerciseId)!, skipped), `${at} works a skipped area`);
           }
+          const why = preview.why.map((line) => `${line.label} ${line.text}`).join(' ');
           for (const area of train) {
-            const trained = adapted.exercises.some((e) => musclesOf([area]).includes(primaryOf(e.exerciseId)));
-            const named = preview.gaps.some((gap) => gap.area === area);
-            assert.ok(trained !== named, `${setup} ${minutes} ${train}/${skip}: ${area} trained=${trained} named=${named}`);
+            for (const muscle of AREA_MUSCLES[area]) {
+              const trained = live.exercises.some((e) => primaryOf(e.exerciseId) === muscle);
+              const gap = preview.gaps.find((item) => item.muscle === muscle);
+              assert.ok(trained !== Boolean(gap), `${at}: ${muscle} trained=${trained} named=${Boolean(gap)}`);
+              if (!gap) continue;
+              assert.equal(gap.area, area);
+              assert.notEqual(preview.status, 'ready', `${at}: ${muscle} uncovered reads Ready`);
+              if (live.exercises.length > 0) assert.equal(preview.status, 'limited', at);
+              assert.ok(new RegExp(`\\b${MUSCLE_WORD[muscle]}\\b`).test(why), `${at}: why never names ${muscle}: ${why}`);
+              // The cause is the real one: the kit has no such exercise (or only a twin of one in the day),
+              // the skip rules out every one, or time.
+              const possible = EXERCISES.filter((exercise) => exercise.muscles[0] === muscle && provides(caps, exercise.needs)
+                && !live.exercises.some((e) => areIncompatible(e.exerciseId, exercise.id)));
+              const cause = possible.length === 0 ? 'gear' : possible.every((exercise) => worksSkipped(exercise, skipped)) ? 'skip' : 'time';
+              assert.equal(gap.cause, cause, `${at}: ${muscle}`);
+              // Covering comes before a second exercise for an asked muscle: time leaves a muscle out
+              // only when no asked muscle has two exercises.
+              if (cause === 'time') {
+                const asked = musclesOf(train);
+                const doubled = asked.filter((item) => live.exercises.filter((e) => primaryOf(e.exerciseId) === item).length > 1);
+                assert.deepEqual(doubled, [], `${at}: ${muscle} left out for time beside a second ${doubled}`);
+              }
+            }
           }
-          if (preview.gaps.length > 0) assert.equal(preview.status === 'ready', false, `${setup} ${minutes} ${train}: gaps read Ready`);
-          assert.ok(preview.minutes <= minutes, `${setup} ${minutes} ${train}: ${preview.minutes} min`);
+          assert.ok(preview.minutes <= minutes, `${at}: ${preview.minutes} min`);
           checked += 1;
         }
       }
     }
   }
-  assert.ok(checked > 900, `${checked} days checked`);
+  assert.equal(checked, 2232);
+});
+
+test('#211: "back is sore, legs, 45 min" at a full gym trains hamstrings, not a second quad move', () => {
+  const { live, preview } = build('back is sore, legs, 45 min');
+  const ids = live.exercises.map((e) => e.exerciseId);
+  for (const muscle of LEGS) assert.ok(ids.some((id) => primaryOf(id) === muscle), `${muscle}: ${ids.join()}`);
+  for (const id of ids) assert.ok(!worksSkipped(exerciseById(id)!, ['Back']), id);
+  assert.equal(preview.status, 'ready');
+  assert.deepEqual(preview.gaps, []);
+  assert.ok(preview.minutes <= 45, `${preview.minutes} min`);
 });
 
 test('#193: an asked area with no exercise reads Limited and names the cause', () => {
@@ -419,14 +459,14 @@ test('#193: an asked area with no exercise reads Limited and names the cause', (
   // Gear: bodyweight has no back exercise without a bar.
   const { preview: gear, adapted } = build('bodyweight, back and core, 30 min');
   assert.ok(adapted.exercises.every((e) => primaryOf(e.exerciseId) === 'Core'), 'nothing pads the gap');
-  assert.deepEqual(gear.gaps, [{ area: 'Back', cause: 'gear' }]);
+  assert.deepEqual(gear.gaps, [{ area: 'Back', muscle: 'Back', cause: 'gear' }]);
   assert.deepEqual(gear.why.find((line) => line.label === 'Not possible here:'), { label: 'Not possible here:', text: 'no back exercise with this gear.' });
   assert.equal(gear.status, 'limited');
   // Skip: sore arms leave a home chest with nothing that spares them.
   const home: Profile = { ...gym, equipment: ['Dumbbell'], support: [] };
   const arms = build('arms sore, chest', home);
   if (arms.preview.gaps.some((gap) => gap.area === 'Chest')) {
-    assert.deepEqual(arms.preview.gaps, [{ area: 'Chest', cause: 'skip' }]);
+    assert.deepEqual(arms.preview.gaps, [{ area: 'Chest', muscle: 'Chest', cause: 'skip' }]);
     assert.ok(arms.preview.why.some((line) => line.label === 'Not possible today:'));
   }
 });

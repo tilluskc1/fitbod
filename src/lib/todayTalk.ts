@@ -1,11 +1,11 @@
 import type { Program } from '../data/flagship.ts';
-import { EXERCISES, exerciseById } from '../data/exercises.ts';
+import { EXERCISES, areIncompatible, exerciseById } from '../data/exercises.ts';
 import { capabilitiesFor, provides } from './capabilities.ts';
 import { kitProfile } from './sequence.ts';
 import type { MuscleGroup, Profile } from '../types.ts';
 import { isGymKit, setupFor, todayGlance } from './adapt.ts';
 import type { AdaptedWorkout, Constraints, EquipmentChoice } from './adapt.ts';
-import { AREAS, AREA_MUSCLES, AREA_NOUN, areasOf, musclesOf, worksSkipped } from './areas.ts';
+import { AREAS, AREA_MUSCLES, MUSCLE_NOUN, areasOf, musclesOf, worksSkipped } from './areas.ts';
 import type { Area } from './areas.ts';
 import { keywordParser, resolveConstraints } from './constraints.ts';
 import type { ConstraintNotice, ParsedConstraints } from './constraints.ts';
@@ -327,22 +327,22 @@ export interface CustomDayPreview {
   exercises: PreviewExercise[];
   /** A day of its own (moves nothing in the plan), not the planned day with new gear or time. */
   described: boolean;
-  /** Asked areas with no exercise in the day, and why. */
-  gaps: { area: Area; cause: GapCause }[];
+  /** Muscles of the asked areas with no exercise of their own in the day, and why (#211). */
+  gaps: { area: Area; muscle: MuscleGroup; cause: GapCause }[];
   /** The why box, line by line: a bold label and its sentence. */
   why: { label: string; text: string }[];
 }
 
-const nouns = (areas: Area[]) => {
-  const list = areas.map((area) => AREA_NOUN[area]);
+const nouns = (muscles: MuscleGroup[]) => {
+  const list = muscles.map((muscle) => MUSCLE_NOUN[muscle]);
   return list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} or ${list[list.length - 1]}`;
 };
 const named = (areas: Area[]) => areas.map((area) => area.toLowerCase()).join(' and ');
 
 /**
  * The preview card, all read from the generated day and the adaptation that Start runs: status
- * from the generator's feasibility plus any asked area left without an exercise, minutes by the
- * time model, rest by role.
+ * from the generator's feasibility plus any muscle of an asked area left without an exercise whose
+ * primary muscle it is (#211), minutes by the time model, rest by role.
  */
 export function customDayPreview(
   talk: TalkState,
@@ -356,16 +356,18 @@ export function customDayPreview(
   const skipMuscles = musclesOf(talk.skip);
   const kit = kitProfile(profile, talk.equipment);
   const caps = capabilitiesFor(kit);
-  const gaps = (described ? talk.train : []).flatMap((area) => {
-    if (adapted.exercises.some((exercise) => AREA_MUSCLES[area].includes(primary(exercise.exerciseId) as MuscleGroup))) return [];
-    const possible = EXERCISES.filter((exercise) => AREA_MUSCLES[area].includes(exercise.muscles[0])
-      && provides(caps, exercise.needs) && !kit.exclusions.includes(exercise.id));
+  const gaps = (described ? talk.train : []).flatMap((area) => AREA_MUSCLES[area].flatMap((muscle) => {
+    if (adapted.exercises.some((exercise) => primary(exercise.exerciseId) === muscle)) return [];
+    // A twin of an exercise already in the day (Diamond Push-Up beside Push-Up) cannot join it.
+    const possible = EXERCISES.filter((exercise) => exercise.muscles[0] === muscle
+      && provides(caps, exercise.needs) && !kit.exclusions.includes(exercise.id)
+      && !adapted.exercises.some((item) => areIncompatible(item.exerciseId, exercise.id)));
     const cause: GapCause = possible.length === 0 ? 'gear'
       : possible.every((exercise) => worksSkipped(exercise, skipMuscles)) ? 'skip'
       : 'time';
-    return [{ area, cause }];
-  });
-  const of = (cause: GapCause) => gaps.filter((gap) => gap.cause === cause).map((gap) => gap.area);
+    return [{ area, muscle, cause }];
+  }));
+  const of = (cause: GapCause) => gaps.filter((gap) => gap.cause === cause).map((gap) => gap.muscle);
   const why: CustomDayPreview['why'] = [];
   if (talk.skip.length > 0) {
     const allSore = talk.skip.every((area) => talk.sore.includes(area));
