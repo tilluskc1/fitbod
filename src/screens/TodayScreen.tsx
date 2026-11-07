@@ -6,7 +6,7 @@ import { toDisplay, unitLabel, unitOf } from '../lib/units';
 import { exerciseMeta, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
-import { currentWorkout, EQUIPMENT_OPTIONS, promisedMinutes } from '../lib/adapt';
+import { currentWorkout, promisedMinutes, setupFor } from '../lib/adapt';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
 import Demo from '../components/ui/Demo';
@@ -171,7 +171,7 @@ export default function TodayScreen({
   const name = profile.name?.trim() || 'Athlete';
   const week = workoutsThisWeek(history, now);
   const targetDays = profile.daysPerWeek;
-  const setup = EQUIPMENT_OPTIONS[equipment];
+  const setup = setupFor(equipment, profile);
   // Equipment or exclusions can leave far less work than the requested time.
   const estimated = !current ? promisedMinutes(program, adapted) : adapted.minutes;
   const minutes = current ? (current.durationMin ?? adapted.minutes) : estimated;

@@ -43,11 +43,12 @@ export const EQUIPMENT_OPTIONS: Record<EquipmentChoice, EquipmentOption> = {
     loads: HOME_DUMBBELLS,
     allowsLoads: true,
   },
+  // Stored as 'hotel'; shown as a travel gym so it is not mistaken for the user's own gym (#180).
   hotel: {
-    label: 'Hotel gym',
-    chip: 'Hotel gym',
-    short: 'Hotel gym',
-    detail: 'Example rack: up to 25 kg',
+    label: 'Travel gym',
+    chip: 'Travel gym',
+    short: 'Travel',
+    detail: 'Small hotel or travel gym: dumbbells up to 25 kg',
     loads: HOTEL_DUMBBELLS,
     allowsLoads: true,
   },
@@ -68,6 +69,22 @@ export const EQUIPMENT_OPTIONS: Record<EquipmentChoice, EquipmentOption> = {
     allowsLoads: false,
   },
 };
+
+/** A saved kit with a barbell and machines or cables is a gym, not a home setup (#180). */
+export function isGymKit(profile: Pick<Profile, 'equipment'>): boolean {
+  return profile.equipment.includes('Barbell')
+    && (profile.equipment.includes('Machine') || profile.equipment.includes('Cable'));
+}
+
+/**
+ * The option as the user should read it. The saved setup ('home') is the user's own gear, so a
+ * full-gym kit is named "Your gym" instead of "Home setup". The stored choice stays 'home'.
+ */
+export function setupFor(choice: EquipmentChoice, profile?: Pick<Profile, 'equipment'> | null): EquipmentOption {
+  const base = EQUIPMENT_OPTIONS[choice];
+  if (choice !== 'home' || !profile || !isGymKit(profile)) return base;
+  return { ...base, label: 'Your gym', chip: 'Your gym', short: 'Gym', detail: 'Your gym: enter weights as you lift' };
+}
 
 export interface Constraints {
   minutes: number;
@@ -534,31 +551,38 @@ export interface LengthOption {
   totalSets: number;
   /** Exercises the default length keeps that this length drops. */
   dropped: string[];
-  kind: 'program' | 'same' | 'fewer' | 'none';
+  /** Exercises a longer length adds to the default day (#17). */
+  added?: string[];
+  kind: 'program' | 'same' | 'fewer' | 'more' | 'none';
 }
 
 /**
  * What each length does to today's workout, against the user's default length.
- * Longer never adds work: the program already holds what fits.
+ * Longer rebuilds the day at that length when `programAt` is given (#17); shorter trims it.
  */
 export function lengthOptions(
   program: Program,
   constraints: Constraints,
   exclusions: string[],
   defaultMinutes: number,
+  /** The day rebuilt at a longer length, so more time can add work (#17). Absent: longer only keeps the day. */
+  programAt?: (minutes: number) => Program,
 ): LengthOption[] {
   const base = adaptWorkout(program, { ...constraints, minutes: defaultMinutes }, exclusions);
   const kept = new Set(base.exercises.map((exercise) => exercise.exerciseId));
   return LENGTH_CHOICES.map((minutes) => {
-    const adapted = adaptWorkout(program, { ...constraints, minutes }, exclusions);
+    const source = programAt && minutes > defaultMinutes ? programAt(minutes) : program;
+    const adapted = adaptWorkout(source, { ...constraints, minutes }, exclusions);
     const now = new Set(adapted.exercises.map((exercise) => exercise.exerciseId));
     const dropped = base.exercises.filter((exercise) => kept.has(exercise.exerciseId) && !now.has(exercise.exerciseId)).map((exercise) => exercise.name);
+    const added = adapted.exercises.filter((exercise) => !kept.has(exercise.exerciseId)).map((exercise) => exercise.name);
     const kind: LengthOption['kind'] =
       adapted.totalSets === 0 ? 'none'
       : minutes === defaultMinutes ? 'program'
+      : adapted.totalSets > base.totalSets ? 'more'
       : adapted.totalSets === base.totalSets ? 'same'
       : 'fewer';
-    return { minutes, totalSets: adapted.totalSets, dropped, kind };
+    return { minutes, totalSets: adapted.totalSets, dropped, added, kind };
   });
 }
 
@@ -573,6 +597,9 @@ export function consequence(option: LengthOption): string {
   if (option.kind === 'none') return 'Nothing fits this setup';
   if (option.kind === 'program') return `${sets} · your program`;
   if (option.kind === 'same') return `${sets} · nothing added`;
+  if (option.kind === 'more') {
+    return option.added?.length ? `${sets} · adds ${lengthList(option.added)}` : `${sets} · more sets, same exercises`;
+  }
   return option.dropped.length ? `${sets} · ${lengthList(option.dropped)} out` : `${sets} · fewer sets, same exercises`;
 }
 

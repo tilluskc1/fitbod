@@ -72,11 +72,13 @@ test('with a listed rack, the first-load step still takes a typed weight and con
   assert.match(html, /<button class="pill-primary"[^>]*>Confirm<\/button>/);
 });
 
-test('onboarding and Settings say to leave the rack blank at a gym', async () => {
+test('a gym user is never asked for an owned rack: onboarding hides it, Settings says leave it blank (#180)', async () => {
   const { readFileSync } = await import('node:fs');
-  for (const file of ['../src/components/Onboarding.tsx', '../src/screens/Sheets.tsx']) {
-    assert.match(readFileSync(new URL(file, import.meta.url), 'utf8'), /Leave (this )?blank( at a gym)?[.;]/i, file);
-  }
+  const onboarding = readFileSync(new URL('../src/components/Onboarding.tsx', import.meta.url), 'utf8');
+  assert.match(onboarding, /place === 'home' && equipment\.includes\('Dumbbell'\) \?/, 'owned-dumbbell field only at home');
+  assert.match(onboarding, /loads: place === 'home'/, 'a gym onboarding saves no rack');
+  assert.match(onboarding, /setEquipment\(\[\.\.\.EQUIPMENT_OPTIONS\]\)/, 'a gym starts with every primary item');
+  assert.match(readFileSync(new URL('../src/screens/Sheets.tsx', import.meta.url), 'utf8'), /Leave (this )?blank( at a gym)?[.;]/i);
 });
 
 test("the set editor's rack buttons and typed field are pills, like the rest of the logger", async () => {
@@ -95,4 +97,17 @@ test("the rack's top typed in the other unit is still the top of the rack, not a
   const kgRack: Profile = { ...profile, unit: 'kg', loads: { Dumbbell: [9] } };
   assert.equal(prescribeExercise(press, kgRack, pressedAt(lb(20), range.max)).basis, 'hold');
   assert.equal(prescribeExercise(press, kgRack, pressedAt(lb(25), range.max)).basis, 'go-heavier');
+});
+
+test('a full-gym kit reads as "Gym" on Today, never "Home" (#180)', async () => {
+  const { isGymKit, setupFor } = await import('../src/lib/adapt.ts');
+  const gym = { equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'] } as Parameters<typeof isGymKit>[0];
+  const home = { equipment: ['Dumbbell'] } as Parameters<typeof isGymKit>[0];
+  assert.equal(isGymKit(gym), true);
+  assert.equal(isGymKit(home), false);
+  assert.equal(setupFor('home', gym).short, 'Gym');
+  assert.equal(setupFor('home', gym).chip, 'Your gym');
+  assert.equal(setupFor('home', home).short, 'Home');
+  assert.equal(setupFor('hotel', gym).short, 'Travel', 'only the saved setup is renamed');
+  assert.equal(setupFor('hotel', gym).label, 'Travel gym', 'the today-only travel option is never called a plain gym');
 });

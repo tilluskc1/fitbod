@@ -32,6 +32,20 @@ export default function Onboarding({ onComplete }: Props) {
   const [equipment, setEquipment] = useState<Equipment[]>(['Dumbbell']);
   const [support, setSupport] = useState<SupportEquipment[]>(DEFAULT_SUPPORT);
   const [loadsText, setLoadsText] = useState('');
+  // Where they train sets the starting gear (#180). It is not stored: the saved gear says it.
+  const [place, setPlace] = useState<'gym' | 'home' | null>(null);
+  const choosePlace = (next: 'gym' | 'home') => {
+    setPlace(next);
+    if (next === 'gym') {
+      // A gym has the full floor; the user unticks anything theirs lacks. No owned-dumbbell list.
+      setEquipment([...EQUIPMENT_OPTIONS]);
+      setSupport([...SUPPORT_OPTIONS]);
+      setLoadsText('');
+    } else {
+      setEquipment(['Dumbbell']);
+      setSupport(DEFAULT_SUPPORT);
+    }
+  };
 
   const toggleEquipment = (item: Equipment) => {
     setEquipment((current) =>
@@ -59,7 +73,7 @@ export default function Onboarding({ onComplete }: Props) {
       equipment,
       support,
       exclusions: [],
-      loads: equipment.includes('Dumbbell') && loads.length > 0 ? { Dumbbell: loads } : {},
+      loads: place === 'home' && equipment.includes('Dumbbell') && loads.length > 0 ? { Dumbbell: loads } : {},
       name: name.trim() || 'Athlete',
       unit,
       sessionMinutes: sessionMinutes ?? 35,
@@ -194,10 +208,26 @@ export default function Onboarding({ onComplete }: Props) {
 
       {step === 3 && (
         <section className="onboarding-step">
-          <h1>What equipment do you have?</h1>
-          <p className="muted">Only gear you pick is used. Nothing else is assumed.</p>
+          <h1>Where do you train?</h1>
+          <div className="chip-wrap" role="group" aria-label="Where do you train?">
+            <button className={`chip ${place === 'gym' ? 'on' : ''}`} aria-pressed={place === 'gym'} onClick={() => choosePlace('gym')}>
+              At a gym
+            </button>
+            <button className={`chip ${place === 'home' ? 'on' : ''}`} aria-pressed={place === 'home'} onClick={() => choosePlace('home')}>
+              At home
+            </button>
+          </div>
+          {place === null && <p className="data-note" role="status">Pick one to set up your gear.</p>}
+          {place === 'gym' && (
+            <p className="muted">Everything a gym has is selected. Untick anything yours is missing.</p>
+          )}
+          {place === 'home' && (
+            <p className="muted">Pick what you have at home. Only gear you pick is used.</p>
+          )}
 
-          <span className="setup-label">Primary equipment</span>
+          {place !== null && (
+          <>
+          <span className="setup-label">Equipment</span>
           <div className="chip-wrap">
             {EQUIPMENT_OPTIONS.map((item) => (
               <button
@@ -211,10 +241,10 @@ export default function Onboarding({ onComplete }: Props) {
             ))}
           </div>
 
-          {equipment.includes('Dumbbell') ? (
+          {place === 'home' && equipment.includes('Dumbbell') ? (
             <>
               <label className="setup-label" htmlFor="onboarding-loads">
-                Dumbbell loads you own ({unit}, per hand)
+                Your dumbbells ({unit}, each hand) · optional
               </label>
               <input
                 id="onboarding-loads"
@@ -224,13 +254,13 @@ export default function Onboarding({ onComplete }: Props) {
                 onChange={(event) => setLoadsText(event.target.value)}
                 placeholder={unit === 'lb' ? 'e.g. 10, 15, 20' : 'e.g. 5, 7.5'}
               />
-              <p className="muted">Training at a gym? Leave this blank. At home, list the pairs you own; you can still type any other weight.</p>
+              <p className="muted">List the pairs you have, or skip it; you can type any weight while you train.</p>
               {loadsTooHeavy && <p className="error-text" role="alert">{loadLimitText(unit)}</p>}
             </>
           ) : null}
 
-          <span className="setup-label">Support equipment</span>
-          <p className="muted">Dumbbells never imply a bench, and barbells never imply a rack.</p>
+          <span className="setup-label">Benches, racks and bars</span>
+          {place === 'home' && <p className="muted">Dumbbells never imply a bench, and barbells never imply a rack.</p>}
           <div className="chip-wrap">
             {SUPPORT_OPTIONS.map((item) => (
               <button
@@ -246,6 +276,8 @@ export default function Onboarding({ onComplete }: Props) {
           <p className="muted">
             You can change this later. Bodyweight work is always available.
           </p>
+          </>
+          )}
         </section>
       )}
 
@@ -264,7 +296,7 @@ export default function Onboarding({ onComplete }: Props) {
             Continue
           </button>
         ) : (
-          <button className="primary" disabled={loadsTooHeavy} onClick={finish}>
+          <button className="primary" disabled={loadsTooHeavy || place === null} onClick={finish}>
             Build my plan
           </button>
         )}

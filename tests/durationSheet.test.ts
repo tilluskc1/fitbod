@@ -34,3 +34,23 @@ test('#148: a setup with no possible work says so on every option', () => {
     assert.equal(consequence(option), 'Nothing fits this setup');
   }
 });
+
+// #17: a longer length rebuilds the day at that length, so more time adds real work.
+test('#17: with the day rebuilt per length, 60 and 90 min add work and say what they add', () => {
+  const at = (minutes: number) => slotProgram({ ...profile, sessionMinutes: minutes }, planSlots(plan)[0], []);
+  const options = lengthOptions(program, { minutes: 45, equipment: 'home' }, [], 45, at);
+  const byMin = Object.fromEntries(options.map((option) => [option.minutes, option]));
+  assert.equal(byMin[60].kind, 'more');
+  assert.ok(byMin[60].totalSets > byMin[45].totalSets, `${byMin[60].totalSets} vs ${byMin[45].totalSets}`);
+  assert.match(consequence(byMin[60]), /^\d+ sets · (adds .+|more sets, same exercises)$/);
+  assert.ok(byMin[90].totalSets >= byMin[60].totalSets);
+  // Shorter still trims the saved day.
+  assert.ok(byMin[30].totalSets < byMin[45].totalSets);
+});
+
+test('#17: Today builds the day at a longer today-only length and the length sheet gets the rebuild', async () => {
+  const { readFileSync } = await import('node:fs');
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /override\.minutes > \(profile\.sessionMinutes \?\? 35\) \? override\.minutes : undefined/);
+  assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programAt\(minutes\)\)/);
+});

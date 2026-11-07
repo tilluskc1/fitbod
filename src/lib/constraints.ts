@@ -105,7 +105,7 @@ export interface Preset {
 
 export const PRESETS: Preset[] = [
   { id: '20min', label: '20 minutes', icon: 'schedule', patch: { minutes: 20 } },
-  { id: 'hotel', label: 'Hotel gym', icon: 'apartment', patch: { equipment: 'hotel' } },
+  { id: 'hotel', label: 'Travel gym', icon: 'apartment', patch: { equipment: 'hotel' } },
   { id: 'bodyweight', label: 'Bodyweight', icon: 'accessibility_new', patch: { equipment: 'bodyweight' } },
 ];
 
@@ -259,7 +259,7 @@ export function constraintSentence(current: Constraints): string {
     current.equipment === 'home'
       ? 'dumbbells'
       : current.equipment === 'hotel'
-        ? 'a hotel gym'
+        ? 'a travel gym'
         : current.equipment === 'bands'
           ? 'resistance bands'
           : 'only bodyweight';
