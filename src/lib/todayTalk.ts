@@ -1,13 +1,14 @@
 import type { Program } from '../data/flagship.ts';
 import { EXERCISES, areIncompatible, exerciseById } from '../data/exercises.ts';
 import { capabilitiesFor, provides } from './capabilities.ts';
-import { kitProfile } from './sequence.ts';
-import type { Exercise, MuscleGroup, Profile } from '../types.ts';
+import { isDescribedSession, kitProfile } from './sequence.ts';
+import type { Exercise, MuscleGroup, Profile, TodayOverride, WorkoutRecord } from '../types.ts';
 import { isGymKit, setupFor, todayGlance } from './adapt.ts';
 import type { AdaptedWorkout, Constraints, EquipmentChoice } from './adapt.ts';
 import { AREAS, AREA_MUSCLES, MUSCLE_NOUN, areasOf, musclesOf, worksSkipped } from './areas.ts';
 import type { Area } from './areas.ts';
-import { keywordParser, resolveConstraints } from './constraints.ts';
+import { keywordParser, resolveConstraints, todayConstraints } from './constraints.ts';
+import { dayKey } from './plan.ts';
 import type { ConstraintNotice, ParsedConstraints } from './constraints.ts';
 import { MAX_EXERCISES } from './generator.ts';
 import { leadCompoundId } from './progression.ts';
@@ -341,6 +342,9 @@ const nouns = (muscles: MuscleGroup[]) => {
 };
 const named = (areas: Area[]) => areas.map((area) => area.toLowerCase()).join(' and ');
 
+/** The exercises a status reads: a generated day's, or a running session's (#220). */
+type DayExercises = { exercises: readonly { exerciseId: string; name: string }[] };
+
 /** A described day's status and the lines that explain it: one source for the preview and Today (#219). */
 export interface DayStatus {
   status: CustomDayPreview['status'];
@@ -357,8 +361,8 @@ export interface DayStatus {
  */
 export function describedStatus(
   day: Pick<TalkState, 'train' | 'skip' | 'equipment' | 'minutes'>,
-  program: Program,
-  adapted: AdaptedWorkout,
+  program: Pick<Program, 'feasibility'>,
+  adapted: DayExercises,
   profile: Profile,
 ): DayStatus {
   const primary = (exerciseId: string) => exerciseById(exerciseId)?.muscles[0];
@@ -398,10 +402,22 @@ export function describedStatus(
 }
 
 /** Today's described day, read back from its constraints (#219); null on a planned day. */
-export function describedDayStatus(constraints: Constraints, program: Program, adapted: AdaptedWorkout, profile: Profile): DayStatus | null {
+export function describedDayStatus(constraints: Constraints, program: Pick<Program, 'feasibility'>, adapted: DayExercises, profile: Profile): DayStatus | null {
   if (!constraints.focus) return null;
   const day = { train: areasOf(constraints.focus), skip: areasOf(constraints.skip ?? []), equipment: constraints.equipment, minutes: constraints.minutes };
   return describedStatus(day, program, adapted, profile);
+}
+
+/**
+ * (#220) A running described session's status: the session's own exercises and planned sets,
+ * judged against what was asked (the override's focus and skip). The ask is today-only; once the
+ * override is not the session's day's (midnight passed), nothing honest is left to judge against,
+ * so null: no chip and no note, never the planned day's status. Null for a planned session.
+ */
+export function describedSessionStatus(session: WorkoutRecord, override: TodayOverride | null, profile: Profile): DayStatus | null {
+  if (!isDescribedSession(session) || !override?.focus || override.date !== dayKey(new Date(session.date))) return null;
+  // A running session has its exercises: no generator verdict applies to it.
+  return describedDayStatus(todayConstraints(profile, override), {}, session, profile);
 }
 
 /**

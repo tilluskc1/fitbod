@@ -30,9 +30,9 @@ import
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A } from './data/flagship';
-import { cursorFor, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
+import { cursorFor, isDescribedSession, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
 import { withoutCustomDay } from './lib/plan';
-import { baseTalk, customDayPreview, describedDayStatus, talkConstraints } from './lib/todayTalk';
+import { baseTalk, customDayPreview, describedDayStatus, describedSessionStatus, talkConstraints } from './lib/todayTalk';
 import type { TalkState } from './lib/todayTalk';
 import TodayTalk from './components/TodayTalk';
 import {
@@ -387,10 +387,16 @@ export default function App() {
     [adapted, profile, state.history],
   );
 
-  /** (#219) A described day's status and reasons, read as its preview did; null on a planned day. */
+  const current = state.current;
+  /**
+   * (#219) A described day's status and reasons, read as its preview did; null on a planned day.
+   * (#220) While a described session runs, the session's own, until its day's override expires.
+   */
   const described = useMemo(
-    () => (profile ? describedDayStatus(constraints, program, liveProgram, profile) : null),
-    [constraints, program, liveProgram, profile],
+    () => (!profile ? null
+      : current && isDescribedSession(current) ? describedSessionStatus(current, override, profile)
+      : describedDayStatus(constraints, program, liveProgram, profile)),
+    [constraints, program, liveProgram, profile, current, override],
   );
 
   const pendingAdapted = useMemo(
@@ -403,7 +409,6 @@ export default function App() {
     [pending, pendingAdapted, profile, programFor],
   );
 
-  const current = state.current;
   /**
    * The workout Today is showing, expressed as the logger's model: the live
    * session when one exists, otherwise today's adapted program. Sheets read
@@ -753,7 +758,7 @@ export default function App() {
   };
 
   /** A described session (#193) has no planned work to restore into; it is finished or discarded instead. */
-  const describedSession = Boolean(current && current.slotSeq === undefined);
+  const describedSession = Boolean(current && isDescribedSession(current));
 
   const restoreOriginal = () => {
     if (describedSession) return;
