@@ -58,3 +58,10 @@ test('#17: Today builds the day at a longer today-only length and the length she
   // #203 passes the goal so each length is trimmed by the timer's model.
   assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programFor\(\{ \.\.\.constraints, minutes \}\), profile\.goal\)/);
 });
+
+test('back to the saved length or setup restores for a no-gear profile too (savedSetup, #188/#193)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /minutes === fallback && \(constraints\.equipment === 'home' \|\| constraints\.equipment === savedSetup\(profile\)\)/);
+  assert.match(app, /\(choice === 'home' \|\| choice === savedSetup\(profile\)\) && constraints\.minutes === \(profile\.sessionMinutes \?\? 35\)/);
+});

@@ -613,7 +613,8 @@ export default function App() {
       setNotice(`${minutes} min is now your default length.`);
       return;
     }
-    if (minutes === fallback && constraints.equipment === 'home' && !constraints.focus) {
+    // The saved setup is savedSetup(profile): 'bodyweight' for a no-gear profile, else 'home'.
+    if (minutes === fallback && (constraints.equipment === 'home' || constraints.equipment === savedSetup(profile)) && !constraints.focus) {
       restoreOriginal();
       setNotice('Back to your program.');
       return;
@@ -642,7 +643,7 @@ export default function App() {
   /** (#149) Today's equipment. Today only; the saved setup at the default length restores the original. */
   const pickSetup = (choice: EquipmentChoice) => {
     if (!profile || current) return;
-    if (choice === 'home' && constraints.minutes === (profile.sessionMinutes ?? 35) && !constraints.focus) {
+    if ((choice === 'home' || choice === savedSetup(profile)) && constraints.minutes === (profile.sessionMinutes ?? 35) && !constraints.focus) {
       restoreOriginal();
       setNotice('Back to your gear.');
       return;
