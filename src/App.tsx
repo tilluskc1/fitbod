@@ -9,6 +9,7 @@ import
   adaptWorkout,
   confirmedLoads,
   isGymKit,
+  promisedProgramMinutes,
   lengthOptions,
   setupOptions,
   EQUIPMENT_OPTIONS as SETUPS,
@@ -334,6 +335,23 @@ export default function App() {
     const slots = planSlots(state.plan);
     return slot && slots.length > 1 ? slots[(slot.index + 1) % slots.length]?.name : undefined;
   }, [slot, state.plan]);
+  /** Plan: the rest of the week after the day up next, each built as it will run (#186). */
+  const upcoming = useMemo(() => {
+    if (!profile || !slot) return [];
+    const slots = planSlots(state.plan);
+    return slots.map((_, k) => slots[(slot.index + k) % slots.length]).slice(1).map((day) => {
+      const built = slotProgram(profile, day, state.history);
+      return {
+        id: day.id,
+        name: day.name,
+        focus: day.focus,
+        exercises: built.exercises.length,
+        sets: programSetCount(built),
+        minutes: promisedProgramMinutes(built),
+        status: built.feasibility?.status,
+      };
+    });
+  }, [profile, slot, state.plan, state.history]);
   const slotLabel = useMemo(() => {
     const slots = planSlots(state.plan);
     return slot && slots.length > 1 ? `Slot ${slot.index + 1} of ${slots.length}` : undefined;
@@ -1083,6 +1101,8 @@ export default function App() {
         )}
         {tab === 'plan' && (            <PlanScreen
             profile={profile}
+            upcoming={upcoming}
+            focus={slot?.focus}
             program={program}
             slotLabel={slotLabel}
             history={state.history}

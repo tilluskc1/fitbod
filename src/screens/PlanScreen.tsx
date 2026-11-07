@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, EXERCISES, SUPPORT_OPTIONS } from '../data/exercises';
 import { programSetCount } from '../data/flagship';
-import { promisedProgramMinutes } from '../lib/adapt';
+import { isGymKit, promisedProgramMinutes } from '../lib/adapt';
 import type { Program } from '../data/flagship';
 import { capabilitiesFor, provides } from '../lib/capabilities';
 import { catalogRowMeta } from '../lib/liveProgression';
@@ -11,8 +11,23 @@ import FeasibilityNote from '../components/ui/FeasibilityNote';
 import type { ProfileChange } from '../lib/preferences';
 import { ArrowIcon, ChevronIcon, SettingsIcon } from '../components/ui/Icons';
 
+/** A later day of the plan, in the order it runs after the one up next (#186). */
+export interface UpcomingDay {
+  id: string;
+  name: string;
+  focus: string[];
+  exercises: number;
+  sets: number;
+  minutes: number;
+  status?: 'ok' | 'limited' | 'infeasible';
+}
+
 interface Props {
   profile: Profile;
+  /** The rest of the week after the day up next, in order. */
+  upcoming?: UpcomingDay[];
+  /** Muscles the day up next trains. */
+  focus?: string[];
   /** The slot the sequence is up to: the day this week actually runs. */
   program: Program;
   slotLabel?: string;
@@ -29,6 +44,8 @@ const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 export default function PlanScreen({
   profile,
+  upcoming = [],
+  focus = [],
   program,
   slotLabel,
   history,
@@ -84,7 +101,7 @@ export default function PlanScreen({
       </header>
       <p className="page-sub">
         {program.exercises.length} exercises · {sessionSets} sets · {program.exercises.length > 0 && `${minutes} minutes · `}
-        {profile.equipment.length === 0 ? 'Bodyweight' : profile.equipment.length >= 3 ? 'Full gym' : 'Home'}
+        {profile.equipment.length === 0 ? 'Bodyweight' : isGymKit(profile) ? 'Full gym' : 'Home'}
       </p>
 
       <div className="segmented" role="tablist" aria-label="Plan views">
@@ -121,6 +138,7 @@ export default function PlanScreen({
                   UP NEXT{slotLabel ? ` · ${slotLabel.toUpperCase()}` : ''}
                 </span>
                 <strong className="plan-name">{program.name}</strong>
+                {focus.length > 0 && <span className="plan-focus">{focus.join(' · ')}</span>}
                 <span className="plan-meta">
                   {program.exercises.length > 0 && `${minutes} min · `}{program.exercises.length} exercises · {sessionSets} sets
                 </span>
@@ -134,13 +152,30 @@ export default function PlanScreen({
                 </span>
               </div>
             </div>
+            {upcoming.map((day, index) => (
+              <div className="plan-item plan-item--later" key={day.id}>
+                <span className="plan-index">{String(index + 2).padStart(2, '0')}</span>
+                <div>
+                  <span className="plan-kicker">{index === 0 ? 'THEN' : 'AFTER THAT'}</span>
+                  <strong className="plan-name">{day.name}</strong>
+                  <span className="plan-focus">{day.focus.join(' · ')}</span>
+                  <span className="plan-meta">
+                    {day.status === 'infeasible' ? 'Not possible with your equipment'
+                      : `${day.minutes} min · ${day.exercises} exercises · ${day.sets} sets${day.status === 'limited' ? ' · Limited' : ''}`}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {upcoming.length > 0 && (
+              <p className="data-note plan-loop">Then the plan starts again from {program.name}. Days move only when you finish or skip one.</p>
+            )}
           </div>
         </>
       ) : (
         <>
           <div className="equipment-card">
             <div className="between">
-              <span className="equipment-name">Home</span>
+              <span className="equipment-name">{profile.equipment.length === 0 ? 'Bodyweight' : isGymKit(profile) ? 'Your gym' : 'Home'}</span>
               <button className="text-link" onClick={onOpenSettings}>
                 Edit
               </button>
