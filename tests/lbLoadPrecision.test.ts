@@ -36,10 +36,11 @@ function sessionAt(weight: number, planned: number) {
     exercises: [{ ...ex, planned: sets.map((s) => ({ weight: planned, reps: s.reps })), performed: sets }] });
 }
 
-function historyAt(weight: number): WorkoutRecord[] {
+/** Three logged sets; 10 reps tops the 8–10 range, 9 leaves a rep to add (a held load). */
+function historyAt(weight: number, reps = 10): WorkoutRecord[] {
   let session = sessionAt(weight, 18); // the app planned 18 kg; the weight differs only when typed
   for (let i = 0; i < 3; i += 1) {
-    session = logSet(updatePerformedSet(session, 0, i, { weight, reps: 10 }), 0, i, `2026-11-02T10:0${i + 1}:00.000Z`);
+    session = logSet(updatePerformedSet(session, 0, i, { weight, reps }), 0, i, `2026-11-02T10:0${i + 1}:00.000Z`);
   }
   return applyFinish({ ...EMPTY_STATE, profile, current: session }, session.id,
     { early: true, now: '2026-11-02T10:30:00.000Z' }).history;
@@ -111,25 +112,43 @@ test('a held typed load reads as typed on target, header, chip, Today row and re
     for (const unit of ['lb', 'kg'] as const) {
       const who = { ...profile, unit };
       const typed = unit === 'lb' ? toKg(42.3, 'lb') : 42.3;
-      const history = historyAt(typed);
+      // 9 of 8–10 reps, so the next prescription repeats the typed load (rep-increase).
+      // At 10 reps above the rack it would be a go-heavier step with no named load (#165).
+      const history = historyAt(typed, 9);
       const exact = `42.3 ${unit}`;
-      // Held target: the next prescription repeats the typed load (rep-increase).
       const held = liveExercises(adapted, who, history)[0];
       assert.equal(held.planned[0].weight, typed, 'held load');
       const session = createSession({ id: 'n', name: 'A', dayIndex: 0, now: '2026-11-04T10:00:00.000Z', exercises: [held] });
       const trainHtml = renderToStaticMarkup(createElement(TrainScreen, { now: Date.parse('2026-11-04T10:01:00.000Z'),
         loadOptions: RACK, profileLoads: who.loads, unit, history, session, onMinimize() {}, onFinish() {}, onUpdateSet() {},
         onLogSet() {}, onToggleRestPause() {}, onExtendRest() {}, onReturn() {} }));
-      assert.match(plain(trainHtml), new RegExp(`Previous ${unit} each Reps Log 1 42\\.3 × 10 `), `${unit} previous`);
+      assert.match(plain(trainHtml), new RegExp(`Previous ${unit} each Reps Log 1 42\\.3 × 9 `), `${unit} previous`);
       assert.deepEqual(weights(trainHtml), ['42.3', '42.3', '42.3'], `${unit} target rows`);
       const today = plain(renderToStaticMarkup(createElement(Today, { profile: who, program: FULL_BODY_A,
         adapted: liveAdapted(adapted, who, history), equipment: 'home', adjusted: false, history, current: null,
         now: new Date('2026-11-04T10:00:00.000Z'), onPreview() {}, onAdjust() {}, onWhy() {}, onRestore() {},
         onOpenSettings() {}, onOpenExercise() {} })));
       assert.match(today, new RegExp(`@ ${exact.replace('.', '\\.')} each`), `${unit} Today row`);
-      // Logged above the listed rack at the top of the range: the next one up is the lifter's to name (#129).
-      assert.match(today, /Ready to go heavier: use your next dumbbell up\./, `${unit} Today coach`);
+      assert.match(today, new RegExp(`Add a rep: ${exact.replace('.', '\\.')} for 10\\.`), `${unit} Today coach`);
       assert.doesNotMatch(today, /42\.5/, `${unit} Today shows no 42.5`);
+      // Logged above the listed rack at the top of the range: the next one up is the lifter's to name (#129),
+      // and no surface repeats last time's load as the target (#165).
+      const topped = historyAt(typed, 10);
+      const heavier = plain(renderToStaticMarkup(createElement(Today, { profile: who, program: FULL_BODY_A,
+        adapted: liveAdapted(adapted, who, topped), equipment: 'home', adjusted: false, history: topped, current: null,
+        now: new Date('2026-11-04T10:00:00.000Z'), onPreview() {}, onAdjust() {}, onWhy() {}, onRestore() {},
+        onOpenSettings() {}, onOpenExercise() {} })));
+      assert.match(heavier, /Ready to go heavier: use your next dumbbell up\./, `${unit} Today go-heavier coach`);
+      assert.doesNotMatch(heavier, new RegExp(`target [^A-Z]*@ ${exact.replace('.', '\\.')} each`), `${unit} Today target is not last time's load`);
+      assert.equal(liveExercises(adapted, who, topped)[0].planned[0].weight, 0, `${unit} go-heavier sets wait for the lifter's pick`);
+      assert.equal(progressionLines(topped[0], who, topped, unit)[0].next, '8 reps @ your next dumbbell up', `${unit} recap Next`);
+      const raise = createSession({ id: 'g', name: 'A', dayIndex: 0, now: '2026-11-04T10:00:00.000Z', exercises: [liveExercises(adapted, who, topped)[0]] });
+      const logger = plain(renderToStaticMarkup(createElement(TrainScreen, { now: Date.parse('2026-11-04T10:01:00.000Z'),
+        loadOptions: RACK, calibrationLoads: RACK, experience: 'Beginner', goHeavier: { [id]: typed }, profileLoads: who.loads, unit,
+        history: topped, session: raise, onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {},
+        onExtendRest() {}, onReturn() {} })));
+      assert.match(logger, new RegExp(`Ready to go heavier\\. Pick your next dumbbell up from ${exact.replace('.', '\\.')} each, for 8 reps\\.`), `${unit} logger asks for the next load`);
+      assert.doesNotMatch(logger, /Suggested:/, `${unit} no invented suggestion`);
       const sheet = plain(renderToStaticMarkup(createElement(ExerciseActionsSheet, { exerciseId: id, exerciseName: 'x', planned: held.planned,
         history, unit, ...actionProps(who), onClose() {} })));
       assert.match(sheet, new RegExp(`Exercise 1 of 1 · 3 sets · .*@ ${exact.replace('.', '\\.')} each`), `${unit} sheet target`);
@@ -192,10 +211,10 @@ test('an app-prescribed barbell step reads the same on target, rows, Log button 
     // A deliberately typed off-rack value stays exact (planned differs from performed).
     assert.equal(plannedLoad(bar.loads, record(typed, 40), 'barbell-row', 'lb')(typed), '42.3');
     // AdaptScreen: a held typed load reads as typed.
-    const adaptedTyped = liveAdapted(adapted, { ...profile, unit: 'lb' }, historyAt(toKg(42.3, 'lb')));
+    const adaptedTyped = liveAdapted(adapted, { ...profile, unit: 'lb' }, historyAt(toKg(42.3, 'lb'), 9));
     const review = plain(renderToStaticMarkup(createElement(Adapt, { originalSets: 11, adapted: adaptedTyped,
       constraints: { minutes: 35, equipment: 'home' }, notices: [], unit: 'lb', loads: profile.loads,
-      history: historyAt(toKg(42.3, 'lb')), onStart() {}, onKeep() {}, onEdit() {} })));
+      history: historyAt(toKg(42.3, 'lb'), 9), onStart() {}, onKeep() {}, onEdit() {} })));
     assert.match(review, /42\.3 lb each/, 'Adapt review');
     assert.doesNotMatch(review, /42\.5/);
     void held;

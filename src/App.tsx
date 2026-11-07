@@ -35,6 +35,7 @@ import {
   progressionLines,
   recapHighlight,
   targetReason,
+  goHeavierFloor,
 } from './lib/liveProgression';
 import { leadCompoundId, leadSlotIds } from './lib/progression';
 import
@@ -383,6 +384,17 @@ export default function App() {
     }
     return notes;
   }, [liveProgram, profile, state.history, unit]);
+  // #165: exercises whose next target is "your next one up", keyed to the load it starts above.
+  const goHeavier = useMemo(() => {
+    const floors: Record<string, number> = {};
+    if (!profile || !current) return floors;
+    const lead = leadCompoundId(current.exercises.map((exercise) => exercise.exerciseId));
+    for (const exercise of current.exercises) {
+      const floor = goHeavierFloor(exercise.exerciseId, profile, state.history, exercise.exerciseId === lead);
+      if (floor !== null) floors[exercise.exerciseId] = floor;
+    }
+    return floors;
+  }, [profile, current, state.history]);
   const recap = recapId ? state.history.find((workout) => workout.id === recapId) ?? null : null;
 
   const storageNote =
@@ -927,6 +939,7 @@ export default function App() {
         skippedCalibrations={calibrationSkips}
         onSkipCalibration={(key) => setCalibrationSkips((keys) => [...keys, key])}
         targetNotes={targetNotes}
+        goHeavier={goHeavier}
         unit={unit}
         onMinimize={() => {
           setView('tabs');

@@ -35,6 +35,8 @@ interface Props {
   unit: Unit;
   /** One factual reason per exercise for today's computed target. */
   targetNotes?: Record<string, string>;
+  /** #165: exercises ready to go heavier, keyed to last time's load (the floor for the next pick). */
+  goHeavier?: Record<string, number>;
   onMinimize: () => void;
   onFinish: () => void;
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => void;
@@ -183,6 +185,7 @@ export default function TrainScreen({
   experience,
   unit,
   targetNotes,
+  goHeavier = {},
   onMinimize,
   onFinish,
   onUpdateSet,
@@ -380,15 +383,23 @@ export default function TrainScreen({
   // Untouched (undefined), the step holds the suggested load; a cleared field (0) holds none.
   const touched = calibration?.key === calibrationKey ? calibration.weight : undefined;
   const canPickCalibration = equipment === 'Dumbbell' && calibrationLoads.length > 0;
+  // Ready to go heavier (#165): the same weight step, from last time's load instead of a table guess.
+  const floor = goHeavier[exercise.exerciseId];
+  const raising = floor !== undefined && exercise.performed[0]?.weight === 0
+    && !exercise.performed.some((set) => set.done);
   const calibrating = (canPickCalibration || canEnterWeight)
-    && !skippedCalibrations.includes(calibrationKey) && needsCalibration(exercise, history);
+    && !skippedCalibrations.includes(calibrationKey) && (needsCalibration(exercise, history) || raising);
   const choose = (weight: number) => setCalibration({ key: calibrationKey, weight });
-  const quickLoads = calibrating ? (canPickCalibration ? calibrationLoads : []) : canPickWeight ? loadOptions : [];
+  const quickLoads = calibrating
+    ? (canPickCalibration ? calibrationLoads.filter((load) => !raising || load > floor) : [])
+    : canPickWeight ? loadOptions : [];
   const definition = exerciseById(exercise.exerciseId);
-  const table = calibrating && experience && definition ? suggestedFirstLoad(definition, experience, unit) : 0;
+  const table = calibrating && !raising && experience && definition ? suggestedFirstLoad(definition, experience, unit) : 0;
   const suggested = table > 0 ? (quickLoads.length > 0 ? nearestLoad(quickLoads, table) : table) : null;
   const held = touched === undefined ? suggested : touched > 0 ? touched : null;
-  const coach = calibrating
+  const coach = calibrating && raising
+    ? `Ready to go heavier. Pick your next ${equipment.toLowerCase()} up from ${calibrationInputValue(floor, unit)} ${weightLabel}, for ${exercise.planned[0]?.reps ?? 0} reps.`
+    : calibrating
     ? `First time on this one. Pick a weight you could lift for ${exercise.planned[0]?.reps ?? 10} reps with 2–3 to spare.`
     : targetNotes?.[exercise.exerciseId];
 
