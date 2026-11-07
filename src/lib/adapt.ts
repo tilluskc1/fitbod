@@ -173,26 +173,6 @@ export function workMinutes(exercises: { exerciseId: string; sets: number }[], g
   return Math.max(1, Math.round(estimatedSeconds(live.map((exercise) => exercise.sets), rests, sessionMinutes) / 60));
 }
 
-/**
- * The duration a screen may promise. The requested length, unless the work
- * cannot come close to filling it: four sets of push-ups are not a 45-minute
- * session, whatever length was asked for.
- */
-export function promisedMinutes(program: Program, adapted: Pick<AdaptedWorkout, 'minutes' | 'totalSets' | 'exercises'>): number {
-  if (adapted.totalSets === 0) return 0;
-  const total = program.exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
-  const byDensity = adapted.totalSets < total ? estimatedMinutes(program, adapted.totalSets) : adapted.minutes;
-  const byWork = workMinutes(adapted.exercises);
-  return byWork < adapted.minutes * 0.5 ? Math.min(byDensity, byWork) : byDensity;
-}
-
-/** The same rule for a program before any adjustment (Plan). */
-export function promisedProgramMinutes(program: Program): number {
-  const sets = program.exercises.map((exercise) => exercise.sets);
-  const totalSets = sets.reduce((sum, count) => sum + count, 0);
-  return promisedMinutes(program, { minutes: program.minutes, totalSets, exercises: program.exercises.map((exercise) => ({ ...exercise })) as AdaptedExercise[] });
-}
-
 /** Today's day at a glance: the running session, else today's adapted day (#189). */
 export interface DayGlance {
   name: string;
@@ -206,7 +186,8 @@ export interface DayGlance {
 }
 
 /**
- * The one source for every surface that names today's day: Today, Plan, View session and Coach.
+ * The one source for every surface that names a day's minutes: Today, Plan (today and later days),
+ * View session, Coach, the switch and gym sheets and the review (#203).
  * Minutes are the work's own time, with the rests the timer will run for this goal and length.
  * A running session is priced from itself alone (its exercises, planned sets and the length it
  * was started at), so Start, a later settings change or a new slot cannot move it (#200).
@@ -222,7 +203,7 @@ export function todayGlance(adapted: AdaptedWorkout, current: WorkoutRecord | nu
     exercises: work.length,
     sets: work.reduce((sum, exercise) => sum + exercise.sets, 0),
     minutes,
-    // ≈ when the work cannot come close to the length asked for (as promisedMinutes); unknown length, no ≈.
+    // ≈ when the work cannot come close to the length asked for; unknown length, no ≈.
     approx: asked !== undefined && minutes < asked * 0.5,
     adjusted: overridden && !current,
   };
@@ -650,11 +631,14 @@ export interface SetupOption {
   totalSets: number;
   /** Sets the saved home setup holds at today's length. */
   baseSets: number;
+  /** The day's minutes with this setup, by the timer's model (#203). */
+  minutes: number;
+  approx: boolean;
   kind: 'program' | 'same' | 'fewer' | 'none';
 }
 
 /** What each setup leaves of today's workout, at today's length, against the saved home setup. */
-export function setupOptions(program: Program, constraints: Constraints, exclusions: string[]): SetupOption[] {
+export function setupOptions(program: Program, constraints: Constraints, exclusions: string[], goal?: Goal): SetupOption[] {
   const base = adaptWorkout(program, { ...constraints, equipment: 'home' }, exclusions);
   return SETUP_CHOICES.map((choice) => {
     const adapted = adaptWorkout(program, { ...constraints, equipment: choice }, exclusions);
@@ -663,15 +647,17 @@ export function setupOptions(program: Program, constraints: Constraints, exclusi
       : choice === 'home' ? 'program'
       : adapted.totalSets === base.totalSets ? 'same'
       : 'fewer';
-    return { choice, totalSets: adapted.totalSets, baseSets: base.totalSets, kind };
+    const { minutes, approx } = todayGlance(adapted, null, false, goal);
+    return { choice, totalSets: adapted.totalSets, baseSets: base.totalSets, minutes, approx, kind };
   });
 }
 
 /** What one setup does, in a few words. */
 export function setupConsequence(option: SetupOption, dayName: string): string {
   const sets = `${option.totalSets} ${option.totalSets === 1 ? 'set' : 'sets'}`;
+  const minutes = `${option.approx ? '≈' : ''}${option.minutes} min`;
   if (option.kind === 'none') return `Nothing in ${dayName} works`;
-  if (option.kind === 'program') return `${sets} · your gear`;
-  if (option.kind === 'same') return `${sets} · same workout`;
-  return `${option.totalSets} of ${option.baseSets} sets fit`;
+  if (option.kind === 'program') return `${sets} · ${minutes} · your gear`;
+  if (option.kind === 'same') return `${sets} · ${minutes} · same workout`;
+  return `${option.totalSets} of ${option.baseSets} sets fit · ${minutes}`;
 }

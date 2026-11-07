@@ -15,13 +15,16 @@ test('review explains an empty adapted workout and disables Start', async () => 
       originalSets: adapted.originalSets,
       adapted,
       constraints: { minutes: 20, equipment: 'bands' },
+      before: { minutes: 33 },
+      after: { minutes: 0, approx: false },
       notices: [],
       onStart: () => {},
       onKeep: () => {},
       onEdit: () => {},
     }));
     assert.match(html, /No movement in this workout can be done with resistance bands/);
-    assert.match(html, /<button[^>]*disabled=""[^>]*>Start 20-min workout/);
+    // #203: Start names what the work takes; an empty day takes nothing, so it names no minutes.
+    assert.match(html, /<button[^>]*disabled=""[^>]*>Start workout/);
   } finally {
     await server.close();
   }

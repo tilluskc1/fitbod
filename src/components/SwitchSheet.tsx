@@ -29,6 +29,7 @@ export default function SwitchSheet({ options, onPick, onClose }: Props) {
               <span className="len-opt__name">{option.name}{option.offset === 0 ? ' · next' : ''}</span>
               <span className={`len-opt__c len-opt__c--${option.status}`}>
                 {STATUS[option.status]} · {option.totalSets} {option.totalSets === 1 ? 'set' : 'sets'}
+                {option.totalSets > 0 ? ` · ${option.approx ? '≈' : ''}${option.minutes} min` : ''}
                 {option.offset > 0 ? ` · skips ${listOf(option.skips)}` : ''}
               </span>
             </span>

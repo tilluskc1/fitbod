@@ -9,18 +9,8 @@ import type { Profile, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import FeasibilityNote from '../components/ui/FeasibilityNote';
 import type { ProfileChange } from '../lib/preferences';
+import type { UpcomingDay } from '../lib/switchDay';
 import { ArrowIcon, ChevronIcon, SettingsIcon } from '../components/ui/Icons';
-
-/** A later day of the plan, in the order it runs after the one up next (#186). */
-export interface UpcomingDay {
-  id: string;
-  name: string;
-  focus: string[];
-  exercises: number;
-  sets: number;
-  minutes: number;
-  status?: 'ok' | 'limited' | 'infeasible';
-}
 
 interface Props {
   profile: Profile;
@@ -167,7 +157,7 @@ export default function PlanScreen({
                   <span className="plan-focus">{day.focus.join(' · ')}</span>
                   <span className="plan-meta">
                     {day.status === 'infeasible' ? 'Not possible with your equipment'
-                      : `${day.minutes} min · ${day.exercises} exercises · ${day.sets} sets${day.status === 'limited' ? ' · Limited' : ''}`}
+                      : `${day.approx ? '≈' : ''}${day.minutes} min · ${day.exercises} exercises · ${day.sets} sets${day.status === 'limited' ? ' · Limited' : ''}`}
                   </span>
                 </div>
               </div>

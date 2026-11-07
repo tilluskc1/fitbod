@@ -1,7 +1,9 @@
 import type { AppState, Profile, WorkoutRecord } from '../types.ts';
-import { adaptWorkout } from './adapt.ts';
+import { adaptWorkout, todayGlance } from './adapt.ts';
 import type { Constraints } from './adapt.ts';
+import { defaultConstraints } from './constraints.ts';
 import { currentSlot, cursorFor, planSlots, skipCurrentSlot, slotProgram } from './sequence.ts';
+import type { PlanSlot } from './sequence.ts';
 
 export interface SwitchOption {
   slotId: string;
@@ -11,6 +13,9 @@ export interface SwitchOption {
   /** Days skipped on the way, in order. */
   skips: string[];
   totalSets: number;
+  /** The day's minutes under today's constraints, by the timer's model (#203). */
+  minutes: number;
+  approx: boolean;
   status: 'ready' | 'limited' | 'none';
 }
 
@@ -38,7 +43,42 @@ export function switchOptions(
       : program.feasibility?.status === 'limited' ? 'limited'
       : 'ready';
     const skips = Array.from({ length: step }, (_, k) => slots[(start + k) % slots.length].name);
-    return { slotId: slot.id, name: slot.name, offset: step, skips, totalSets: adapted.totalSets, status };
+    const { minutes, approx } = todayGlance(adapted, null, false, profile.goal);
+    return { slotId: slot.id, name: slot.name, offset: step, skips, totalSets: adapted.totalSets, minutes, approx, status };
+  });
+}
+
+/** A later day of the plan, as Plan lists it. */
+export interface UpcomingDay {
+  id: string;
+  name: string;
+  focus: string[];
+  exercises: number;
+  sets: number;
+  minutes: number;
+  approx: boolean;
+  status?: 'ok' | 'limited' | 'infeasible';
+}
+
+/**
+ * Plan: the rest of the week after `slot`, each day built and priced as it will run on its own day,
+ * with the saved setup and length, so it reads what Today will read once it is up next (#186, #203).
+ */
+export function upcomingDays(profile: Profile, plan: AppState['plan'], slot: PlanSlot, history: WorkoutRecord[]): UpcomingDay[] {
+  const slots = planSlots(plan);
+  return slots.map((_, k) => slots[(slot.index + k) % slots.length]).slice(1).map((day) => {
+    const built = slotProgram(profile, day, history);
+    const glance = todayGlance(adaptWorkout(built, defaultConstraints(profile), profile.exclusions ?? []), null, false, profile.goal);
+    return {
+      id: day.id,
+      name: day.name,
+      focus: day.focus,
+      exercises: glance.exercises,
+      sets: glance.sets,
+      minutes: glance.minutes,
+      approx: glance.approx,
+      status: built.feasibility?.status,
+    };
   });
 }
 

@@ -213,7 +213,7 @@ test('an app-prescribed barbell step reads the same on target, rows, Log button 
     // AdaptScreen: a held typed load reads as typed.
     const adaptedTyped = liveAdapted(adapted, { ...profile, unit: 'lb' }, historyAt(toKg(42.3, 'lb'), 9));
     const review = plain(renderToStaticMarkup(createElement(Adapt, { originalSets: 11, adapted: adaptedTyped,
-      constraints: { minutes: 35, equipment: 'home' }, notices: [], unit: 'lb', loads: profile.loads,
+      constraints: { minutes: 35, equipment: 'home' }, before: { minutes: 33 }, after: { minutes: 33, approx: false }, notices: [], unit: 'lb', loads: profile.loads,
       history: historyAt(toKg(42.3, 'lb'), 9), onStart() {}, onKeep() {}, onEdit() {} })));
     assert.match(review, /42\.3 lb each/, 'Adapt review');
     assert.doesNotMatch(review, /42\.5/);

@@ -16,7 +16,7 @@ const gym = { name: 'K', goal: 'Build Muscle', experience: 'Intermediate', daysP
 test('Plan lists every day of the week after the one up next, and names a gym kit', async () => {
   const slots = planSlots(buildPlan(gym));
   const program = slotProgram(gym, slots[0], []);
-  const upcoming = slots.slice(1).map((day) => ({ id: day.id, name: day.name, focus: day.focus, exercises: 6, sets: 20, minutes: 58, status: 'ok' as const }));
+  const upcoming = slots.slice(1).map((day) => ({ id: day.id, name: day.name, focus: day.focus, exercises: 6, sets: 20, minutes: 58, approx: false, status: 'ok' as const }));
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: Plan } = await server.ssrLoadModule('/src/screens/PlanScreen.tsx');

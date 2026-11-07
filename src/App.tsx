@@ -9,7 +9,6 @@ import
   adaptWorkout,
   confirmedLoads,
   isGymKit,
-  promisedProgramMinutes,
   lengthOptions,
   setupOptions,
   EQUIPMENT_OPTIONS as SETUPS,
@@ -111,7 +110,7 @@ import DurationSheet from './components/DurationSheet';
 import type { LengthScope } from './components/DurationSheet';
 import GymSheet from './components/GymSheet';
 import SwitchSheet from './components/SwitchSheet';
-import { skipForward, switchOptions } from './lib/switchDay';
+import { skipForward, switchOptions, upcomingDays } from './lib/switchDay';
 import type { SwitchOption } from './lib/switchDay';
 import
  Onboarding from './components/Onboarding';
@@ -336,23 +335,11 @@ export default function App() {
     const slots = planSlots(state.plan);
     return slot && slots.length > 1 ? slots[(slot.index + 1) % slots.length]?.name : undefined;
   }, [slot, state.plan]);
-  /** Plan: the rest of the week after the day up next, each built as it will run (#186). */
-  const upcoming = useMemo(() => {
-    if (!profile || !slot) return [];
-    const slots = planSlots(state.plan);
-    return slots.map((_, k) => slots[(slot.index + k) % slots.length]).slice(1).map((day) => {
-      const built = slotProgram(profile, day, state.history);
-      return {
-        id: day.id,
-        name: day.name,
-        focus: day.focus,
-        exercises: built.exercises.length,
-        sets: programSetCount(built),
-        minutes: promisedProgramMinutes(built),
-        status: built.feasibility?.status,
-      };
-    });
-  }, [profile, slot, state.plan, state.history]);
+  /** Plan: the rest of the week after the day up next, each priced as Today will price it (#186, #203). */
+  const upcoming = useMemo(
+    () => (profile && slot ? upcomingDays(profile, state.plan, slot, state.history) : []),
+    [profile, slot, state.plan, state.history],
+  );
   const slotLabel = useMemo(() => {
     const slots = planSlots(state.plan);
     return slot && slots.length > 1 ? `Slot ${slot.index + 1} of ${slots.length}` : undefined;
@@ -1056,6 +1043,9 @@ export default function App() {
           profile ? liveAdapted(pendingAdapted, profile, state.history) : pendingAdapted
         }
         constraints={pending.constraints}
+        // The program as saved, then as changed, both by the timer's model (#203).
+        before={todayGlance(adaptWorkout(program, { ...(profile ? defaultConstraints(profile) : DEFAULT_CONSTRAINTS), minutes: program.minutes }, exclusions), null, false, profile?.goal)}
+        after={todayGlance(pendingAdapted, null, false, profile?.goal)}
         notices={pendingNotices}
         unit={unit}
         loads={state.profile?.loads}
@@ -1209,7 +1199,7 @@ export default function App() {
 
       {sheet.kind === 'gym' && profile && (
         <GymSheet
-          options={setupOptions(program, constraints, profile.exclusions ?? [])}
+          options={setupOptions(program, constraints, profile.exclusions ?? [], profile.goal)}
           current={constraints.equipment}
           dayName={program.name}
           savedGear={isGymKit(profile) ? 'full gym' : [...profile.equipment, ...profile.support].join(', ') || 'none'}
