@@ -99,8 +99,9 @@ export function requirementsForDay(day: PlanDay): CoverageRequirement[] {
   if (name.startsWith('legs')) return [SQUAT, HINGE, CALF];
   if (name.startsWith('upper')) return [PRESS, PULL, TRICEPS];
   if (name.startsWith('lower')) return [SQUAT, HINGE, CALF];
+  // Full Body B's focus has no Core, so nothing could ever meet a core requirement there (#196).
   if (name.startsWith('full body')) {
-    return name.endsWith('b') ? [PRESS, PULL, HINGE, CORE] : [PRESS, PULL, SQUAT, HINGE];
+    return name.endsWith('b') ? [PRESS, PULL, HINGE] : [PRESS, PULL, SQUAT, HINGE];
   }
   return deriveFromFocus(day.focus);
 }
