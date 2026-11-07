@@ -37,6 +37,8 @@ interface Props {
   onSkipSlot?: () => void;
   /** Previews a feasibility alternative (allow an excluded exercise) before anything is saved. */
   onReviewChange?: (change: ProfileChange) => void;
+  /** (#148) Opens the duration sheet. Absent in contexts that cannot change today's length. */
+  onOpenLength?: () => void;
 }
 
 function greeting(now: Date): string {
@@ -153,6 +155,7 @@ export default function TodayScreen({
   slotLabel,
   onSkipSlot,
   onReviewChange,
+  onOpenLength,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -211,6 +214,22 @@ export default function TodayScreen({
             {initials(name)}
           </button>
         </header>
+
+        {onOpenLength && (
+          <div className="t7-controls">
+            <button
+              type="button"
+              className="t7-pill"
+              onClick={onOpenLength}
+              disabled={Boolean(current)}
+              aria-label={`Workout length, ${adapted.minutes} minutes`}
+            >
+              <Icon name="schedule" size={16} />
+              {adapted.minutes} min
+              <Icon name="expand_more" size={18} />
+            </button>
+          </div>
+        )}
 
         <section
           className="t7-hero"

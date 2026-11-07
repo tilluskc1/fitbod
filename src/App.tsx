@@ -8,6 +8,7 @@ import
  {
   adaptWorkout,
   confirmedLoads,
+  lengthOptions,
   DEFAULT_CONSTRAINTS,
   loadOptions,
   restorePendingWorkout,
@@ -99,6 +100,8 @@ import
  LibraryScreen from './screens/LibraryScreen';
 import
  AdaptScreen from './screens/AdaptScreen';
+import DurationSheet from './components/DurationSheet';
+import type { LengthScope } from './components/DurationSheet';
 import
  Onboarding from './components/Onboarding';
 import
@@ -123,6 +126,7 @@ type View = 'tabs' | 'train' | 'recap' | 'library' | 'adapt';
 type SheetState =
   | { kind: 'none' }
   | { kind: 'adjust' }
+  | { kind: 'length' }
   | { kind: 'settings' }
   | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' }
   | { kind: 'day'; dayIndex: number }
@@ -538,6 +542,46 @@ export default function App() {
     setSheet({ kind: 'none' });
   };
 
+  /**
+   * (#148) Duration sheet choice. "This workout" sets today's override without
+   * starting a session; picking the default length restores the original.
+   * "Set as default" changes the profile length, as Settings already does.
+   */
+  const pickLength = (minutes: number, scope: LengthScope) => {
+    if (!profile || current) return;
+    const fallback = profile.sessionMinutes ?? 35;
+    if (scope === 'default') {
+      patchProfile({ sessionMinutes: minutes });
+      if (override) restoreOriginal();
+      else setSheet({ kind: 'none' });
+      setNotice(`${minutes} min is now your default length.`);
+      return;
+    }
+    if (minutes === fallback) {
+      restoreOriginal();
+      setNotice('Back to your program.');
+      return;
+    }
+    const choice: EquipmentChoice = constraints.equipment;
+    setState((currentState) => ({
+      ...currentState,
+      todayOverride: {
+        date: dayKey(new Date()),
+        minutes,
+        equipment: choice === 'home' || choice === 'hotel' ? ['Dumbbell'] : [],
+        support: [],
+        appliedAt: new Date().toISOString(),
+        choice,
+      },
+    }));
+    proposalRevisionRef.current += 1;
+    appliedProposalRef.current = null;
+    setPending(null);
+    setPendingNotices([]);
+    setSheet({ kind: 'none' });
+    setNotice('Today only. Your program is unchanged.');
+  };
+
   const restoreOriginal = () => {
     setState((currentState) => {
       const original = adaptWorkout(
@@ -913,6 +957,7 @@ export default function App() {
             now={today}
             onPreview={() => setSheet({ kind: 'preview' })}
             onAdjust={() => setSheet({ kind: 'adjust' })}
+            onOpenLength={() => setSheet({ kind: 'length' })}
             onWhy={() =>
               setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
             }
@@ -1013,6 +1058,15 @@ export default function App() {
       )}
 
       {activeScreen}
+
+      {sheet.kind === 'length' && profile && (
+        <DurationSheet
+          options={lengthOptions(program, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35)}
+          current={constraints.minutes}
+          onClose={closeSheet}
+          onPick={pickLength}
+        />
+      )}
 
       {sheet.kind === 'adjust' && (
         <AdjustSheet

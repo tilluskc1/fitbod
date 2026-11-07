@@ -4362,3 +4362,56 @@ button.aw-exercise__name-btn {
 .t7-lift__foot b { font-size: 52px; font-weight: 300; letter-spacing: -0.04em; line-height: 0.9; }
 .t7-lift__foot b small { font-size: 18px; margin-left: 4px; letter-spacing: 0; }
 .t7-lift__foot p { text-align: right; font-size: 12px; color: var(--muted); max-width: 20ch; }
+
+/* ---------- Duration control and sheet (#148) ---------- */
+.t7-controls { display: flex; gap: 8px; }
+.t7-pill {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--card);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.t7-pill .ms { color: var(--muted); }
+.t7-pill:disabled { opacity: 0.55; }
+.len-scope {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-container-high);
+}
+.len-scope button { min-height: 44px; border-radius: 999px; font-weight: 500; }
+.len-scope button[aria-pressed='true'] { background: var(--btn); color: var(--on-btn); }
+.len-list { margin-top: 10px; }
+.len-opt {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 22px;
+  gap: 12px;
+  align-items: center;
+  min-height: 60px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.len-opt:last-child { border-bottom: 0; }
+.len-opt__badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-container-high);
+  font-weight: 500;
+}
+.len-opt[aria-current='true'] .len-opt__badge { background: var(--primary); color: var(--on-primary); }
+.len-opt__name { display: block; font-size: 16px; font-weight: 500; }
+.len-opt__c { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; text-wrap: balance; }
+.len-opt__c--none { color: var(--danger); }
+.len-opt .ms { color: var(--accent-text); }

@@ -481,3 +481,54 @@ export function restorePendingWorkout(
   exercises.push(...completed.filter((exercise) => !kept.has(exercise)));
   return { ...session, durationMin: original.minutes, exercises };
 }
+
+/** Lengths the Today duration sheet offers (#148). */
+export const LENGTH_CHOICES = [15, 20, 30, 45, 60, 90] as const;
+
+export interface LengthOption {
+  minutes: number;
+  totalSets: number;
+  /** Exercises the default length keeps that this length drops. */
+  dropped: string[];
+  kind: 'program' | 'same' | 'fewer' | 'none';
+}
+
+/**
+ * What each length does to today's workout, against the user's default length.
+ * Longer never adds work: the program already holds what fits.
+ */
+export function lengthOptions(
+  program: Program,
+  constraints: Constraints,
+  exclusions: string[],
+  defaultMinutes: number,
+): LengthOption[] {
+  const base = adaptWorkout(program, { ...constraints, minutes: defaultMinutes }, exclusions);
+  const kept = new Set(base.exercises.map((exercise) => exercise.exerciseId));
+  return LENGTH_CHOICES.map((minutes) => {
+    const adapted = adaptWorkout(program, { ...constraints, minutes }, exclusions);
+    const now = new Set(adapted.exercises.map((exercise) => exercise.exerciseId));
+    const dropped = base.exercises.filter((exercise) => kept.has(exercise.exerciseId) && !now.has(exercise.exerciseId)).map((exercise) => exercise.name);
+    const kind: LengthOption['kind'] =
+      adapted.totalSets === 0 ? 'none'
+      : minutes === defaultMinutes ? 'program'
+      : adapted.totalSets === base.totalSets ? 'same'
+      : 'fewer';
+    return { minutes, totalSets: adapted.totalSets, dropped, kind };
+  });
+}
+
+function lengthList(names: string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** What one option does, in a few words. */
+export function consequence(option: LengthOption): string {
+  const sets = `${option.totalSets} ${option.totalSets === 1 ? 'set' : 'sets'}`;
+  if (option.kind === 'none') return 'Nothing fits this setup';
+  if (option.kind === 'program') return `${sets} · your program`;
+  if (option.kind === 'same') return `${sets} · nothing added`;
+  return option.dropped.length ? `${sets} · ${lengthList(option.dropped)} out` : `${sets} · fewer sets, same exercises`;
+}
+
