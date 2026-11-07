@@ -1,5 +1,7 @@
 import type { Program } from '../data/flagship.ts';
-import { exerciseById } from '../data/exercises.ts';
+import { EXERCISES, exerciseById } from '../data/exercises.ts';
+import { capabilitiesFor, provides } from './capabilities.ts';
+import { kitProfile } from './sequence.ts';
 import type { MuscleGroup, Profile } from '../types.ts';
 import { isGymKit, promisedMinutes, setupFor } from './adapt.ts';
 import type { AdaptedWorkout, Constraints, EquipmentChoice } from './adapt.ts';
@@ -121,11 +123,15 @@ export function customDayPreview(
   talk: TalkState,
   program: Program,
   adapted: AdaptedWorkout,
-  profile: Pick<Profile, 'equipment' | 'goal'>,
+  profile: Profile,
 ): CustomDayPreview {
   const primary = (exerciseId: string) => exerciseById(exerciseId)?.muscles[0];
-  const missing = talk.train.filter((area) =>
-    !program.exercises.some((exercise) => AREA_MUSCLES[area].includes(primary(exercise.exerciseId) as MuscleGroup)));
+  // Gear gaps only: an area today's kit has no exercise for at all. One the time left out is
+  // visible in the list, and is not called impossible (#67).
+  const kit = kitProfile(profile, talk.equipment);
+  const caps = capabilitiesFor(kit);
+  const missing = talk.train.filter((area) => !EXERCISES.some((exercise) =>
+    AREA_MUSCLES[area].includes(exercise.muscles[0]) && provides(caps, exercise.needs) && !kit.exclusions.includes(exercise.id)));
   const ids = adapted.exercises.map((exercise) => exercise.exerciseId);
   const rests = sessionRests(ids, profile.goal, adapted.minutes);
   const lead = leadCompoundId(ids);

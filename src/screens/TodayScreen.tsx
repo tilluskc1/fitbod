@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
@@ -45,6 +46,8 @@ interface Props {
   onOpenSwitch?: () => void;
   /** (#149) On a day nothing fits, another day in the split that does, in one sentence. */
   alternativeDay?: string;
+  /** (#193) "Tell me about today", shown above the workout card while no session is open. */
+  composer?: ReactNode;
 }
 
 function greeting(now: Date): string {
@@ -165,6 +168,7 @@ export default function TodayScreen({
   onOpenGym,
   onOpenSwitch,
   alternativeDay,
+  composer,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -299,6 +303,7 @@ export default function TodayScreen({
           <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
         )}
 
+        {!current && composer}
 
         <section className="t7-card t7-workout" aria-label="The workout">
           <div className="list-head">

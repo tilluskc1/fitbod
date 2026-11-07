@@ -143,6 +143,11 @@ const SETUP_KIT: Record<Exclude<EquipmentChoice, 'home'>, Pick<Profile, 'equipme
   bands: { equipment: [], support: [] },
 };
 
+/** The profile as today's setup sees it: the saved kit, or that setup's own (#188, #193). */
+export function kitProfile(profile: Profile, equipment: EquipmentChoice = 'home'): Profile {
+  return equipment === 'home' ? profile : { ...profile, ...SETUP_KIT[equipment] };
+}
+
 /**
  * Today's program for the slot (#188). The saved setup keeps the saved day, rebuilt only when
  * today is longer (#17); a shorter day is trimmed later by `adaptWorkout`. Another setup

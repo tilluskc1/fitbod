@@ -150,12 +150,18 @@ test('#193: "Full gym, legs sore, chest and abs, 45 min" builds Chest + Core wit
 
 test('#193: an area the gear cannot train reads Limited and is named, never padded', () => {
   const { preview, adapted } = build('bodyweight, back and core, 30 min');
-  assert.ok(adapted.exercises.every((e) => exerciseById(e.exerciseId)!.muscles[0] !== 'Chest'));
-  if (!adapted.exercises.some((e) => exerciseById(e.exerciseId)!.muscles[0] === 'Back')) {
-    assert.deepEqual(preview.missing, ['Back']);
-    assert.equal(preview.status, 'limited');
-  }
+  assert.ok(adapted.exercises.every((e) => exerciseById(e.exerciseId)!.muscles[0] !== 'Back'), 'no back work without a bar');
+  assert.ok(adapted.exercises.every((e) => exerciseById(e.exerciseId)!.muscles[0] === 'Core'), 'nothing pads the gap');
+  assert.deepEqual(preview.missing, ['Back']);
+  assert.equal(preview.status, 'limited');
   assert.equal(preview.gear, 'Bodyweight');
+});
+
+test('#193: an area the time leaves out is not called impossible', () => {
+  const { preview, adapted } = build('Hotel gym, 30 min, upper body please.');
+  assert.equal(preview.gear, 'Travel gym');
+  assert.deepEqual(preview.missing, [], 'a travel gym can train every upper-body area');
+  assert.ok(promisedMinutes(build('Hotel gym, 30 min, upper body please.').program, adapted) <= 30);
 });
 
 test('#193: preview and Start launch exactly the same exercises', () => {

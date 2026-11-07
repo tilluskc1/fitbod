@@ -30,7 +30,11 @@ import
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A, programSetCount } from './data/flagship';
-import { cursorFor, planRevisionOf, planSlots, revisePlan, skipCurrentSlot, slotAt, slotProgram, todayProgram, updateProfile } from './lib/sequence';
+import { cursorFor, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, slotProgram, todayProgram, updateProfile } from './lib/sequence';
+import { withoutCustomDay } from './lib/plan';
+import { baseTalk, customDayPreview, talkConstraints } from './lib/todayTalk';
+import type { TalkState } from './lib/todayTalk';
+import TodayTalk from './components/TodayTalk';
 import {
   liveAdapted,
   liveExercises,
@@ -321,8 +325,16 @@ export default function App() {
       equipment:
         override.choice ?? (override.equipment.includes('Dumbbell') ? 'home' : 'bodyweight'),
       loads: profile && profile.loads.Dumbbell?.length ? profile.loads.Dumbbell : undefined,
+      // A described day (#193) rebuilds today from its own focus.
+      ...(override.focus ? { focus: override.focus } : {}),
+      ...(override.skip ? { skip: override.skip } : {}),
     };
   }, [override, profile]);
+  /** Today's gear and time without a described day: what the planned days are rated with. */
+  const plainConstraints = useMemo(() => {
+    const { focus: _focus, skip: _skip, ...plain } = constraints;
+    return plain;
+  }, [constraints]);
 
   const exclusions = profile?.exclusions ?? NO_EXCLUSIONS;
   /** The slot the sequence is up to: the real A/B/C day, not a repeated fixture. */
@@ -373,11 +385,14 @@ export default function App() {
   const program = useMemo(() => programFor(constraints), [programFor, constraints]);
   /** The saved setup's day at today's length: what the saved gear runs and restores to. */
   const homeProgram = useMemo(() => programFor({ minutes: constraints.minutes }), [programFor, constraints.minutes]);
-  /** Today's setup at the saved length: the base the duration sheet compares against. */
-  const defaultProgram = useMemo(() => programFor({ equipment: constraints.equipment }), [programFor, constraints.equipment]);
-  /** A proposed adaptation: another setup is rebuilt from its kit, the saved one adapts the saved day. */
+  /** Today's setup (and described day) at the saved length: the base the duration sheet compares against. */
+  const defaultProgram = useMemo(
+    () => programFor({ equipment: constraints.equipment, focus: constraints.focus, skip: constraints.skip }),
+    [programFor, constraints.equipment, constraints.focus, constraints.skip],
+  );
+  /** A proposed adaptation: another setup or a described day is rebuilt, the saved one adapts the saved day. */
   const adaptFor = useCallback(
-    (next: Constraints) => adaptWorkout(next.equipment === 'home' ? homeProgram : programFor(next), next, exclusions),
+    (next: Constraints) => adaptWorkout(next.equipment === 'home' && !next.focus ? homeProgram : programFor(next), next, exclusions),
     [homeProgram, programFor, exclusions],
   );
   const adapted = useMemo(
@@ -460,18 +475,14 @@ export default function App() {
   };
 
   /** One creation path for every start, so preview and logger can never disagree. */
-  const beginSession = (workout: ReturnType<typeof adaptWorkout>) => {
+  const beginSession = (workout: ReturnType<typeof adaptWorkout>, custom = false) => {
     // The link back to the slot is what makes completion advance once, and
-    // only for the plan it was started under.
-    const revision = planRevisionOf(state);
-    const cursor = state.programCursor;
+    // only for the plan it was started under. A described day (#193) has none.
     const session = createSession({
       id: uid(),
       name: workout.name,
       dayIndex: slot?.index ?? 0,
-      slotId: slot?.id,
-      slotSeq: cursor && cursor.revision === revision ? cursor.seq : 0,
-      planRevision: revision,
+      ...slotLinkFor(state, custom),
       exercises: profile
         ? liveExercises(workout, profile, state.history)
         : toWorkoutExercises(workout),
@@ -497,7 +508,7 @@ export default function App() {
       setReplacePrompt(next);
       return false;
     }
-    beginSession(workout);
+    beginSession(workout, Boolean(next.focus));
     return true;
   };
 
@@ -525,7 +536,7 @@ export default function App() {
     setReplacePrompt(null);
     if (!next) return;
     const workout = adaptFor(next);
-    if (workout.exercises.length > 0) beginSession(workout);
+    if (workout.exercises.length > 0) beginSession(workout, Boolean(next.focus));
   };
 
   /** Fingerprint of everything a preview was built against. */
@@ -571,6 +582,8 @@ export default function App() {
       support: [],
       appliedAt: new Date().toISOString(),
       choice,
+      ...(next.focus ? { focus: next.focus } : {}),
+      ...(next.skip ? { skip: next.skip } : {}),
     };
     // An open session keeps its completed sets: the adaptation replaces only
     // the pending prescriptions, so adjusting mid-workout never discards work.
@@ -602,6 +615,9 @@ export default function App() {
     setSheet({ kind: 'none' });
   };
 
+  /** The described day (#193) a length or gear change keeps. */
+  const describedDay = override?.focus ? { focus: override.focus, ...(override.skip ? { skip: override.skip } : {}) } : {};
+
   /**
    * (#148) Duration sheet choice. "This workout" sets today's override without
    * starting a session; picking the default length restores the original.
@@ -617,7 +633,7 @@ export default function App() {
       setNotice(`${minutes} min is now your default length.`);
       return;
     }
-    if (minutes === fallback) {
+    if (minutes === fallback && constraints.equipment === 'home' && !constraints.focus) {
       restoreOriginal();
       setNotice('Back to your program.');
       return;
@@ -632,6 +648,7 @@ export default function App() {
         support: [],
         appliedAt: new Date().toISOString(),
         choice,
+        ...describedDay,
       },
     }));
     proposalRevisionRef.current += 1;
@@ -645,7 +662,7 @@ export default function App() {
   /** (#149) Today's equipment. Today only; the saved setup at the default length restores the original. */
   const pickSetup = (choice: EquipmentChoice) => {
     if (!profile || current) return;
-    if (choice === 'home' && constraints.minutes === (profile.sessionMinutes ?? 35)) {
+    if (choice === 'home' && constraints.minutes === (profile.sessionMinutes ?? 35) && !constraints.focus) {
       restoreOriginal();
       setNotice('Back to your gear.');
       return;
@@ -659,6 +676,7 @@ export default function App() {
         support: [],
         appliedAt: new Date().toISOString(),
         choice,
+        ...describedDay,
       },
     }));
     proposalRevisionRef.current += 1;
@@ -678,13 +696,47 @@ export default function App() {
     if (!profile || !slot || adapted.exercises.length > 0) return undefined;
     const fits = planSlots(state.plan)
       .filter((other) => other.id !== slot.id)
-      .map((other) => ({ name: other.name, sets: adaptWorkout(todayProgram(profile, other, state.history, constraints.equipment === 'home' ? {} : constraints), constraints, profile.exclusions ?? []).totalSets }))
+      .map((other) => ({ name: other.name, sets: adaptWorkout(todayProgram(profile, other, state.history, constraints.equipment === 'home' ? {} : plainConstraints), plainConstraints, profile.exclusions ?? []).totalSets }))
       .filter((other) => other.sets > 0);
     const chip = SETUPS[constraints.equipment].chip.toLowerCase();
     return fits.length
       ? fits.map((other) => `${other.name} works with ${chip}: ${other.sets} sets.`).join(' ') + ' Switch day to train it.'
       : `No day in your split works with ${chip}.`;
   })();
+
+  /** (#193) The composer's chips before anything is said: today's gear and time, the planned day's areas. */
+  const talkBase = useMemo(() => (slot ? baseTalk(constraints, slot.focus) : null), [slot, constraints]);
+
+  /** (#193) The day the chips build, from the same adaptation Start runs. */
+  const talkPreview = (talk: TalkState) => {
+    const next = talkConstraints(talk, constraints.loads);
+    const adaptedDay = adaptFor(next);
+    return profile ? customDayPreview(talk, programFor(next), liveAdapted(adaptedDay, profile, state.history), profile) : null;
+  };
+
+  /** (#193) Approve a described day: save it as today's override and start exactly what the preview showed. */
+  const startTalk = (talk: TalkState) => {
+    const next = talkConstraints(talk, constraints.loads);
+    if (!next.focus || !startSession(next)) return;
+    const choice: EquipmentChoice = next.equipment;
+    setState((currentState) => ({
+      ...currentState,
+      todayOverride: {
+        date: dayKey(new Date()),
+        minutes: next.minutes,
+        equipment: choice === 'home' || choice === 'hotel' ? ['Dumbbell'] : [],
+        support: [],
+        appliedAt: new Date().toISOString(),
+        choice,
+        focus: next.focus,
+        ...(next.skip ? { skip: next.skip } : {}),
+      },
+    }));
+    proposalRevisionRef.current += 1;
+    appliedProposalRef.current = null;
+    setPending(null);
+    setPendingNotices([]);
+  };
 
   /** (#150) Train another day in the split: forward skips through the existing guarded skip, never a catch-up. */
   const pickDay = (option: SwitchOption) => {
@@ -696,7 +748,8 @@ export default function App() {
       setNotice('Finish or discard the open session before switching days.');
       return;
     }
-    setState((currentState) => skipForward(currentState, option.offset, new Date().toISOString()));
+    // A planned day picked here replaces a described one (#193).
+    setState((currentState) => withoutCustomDay(skipForward(currentState, option.offset, new Date().toISOString())));
     setSheet({ kind: 'none' });
     setNotice(`${option.name} is up. Skipped ${option.skips.join(', ')}; a skip earns no progression.`);
   };
@@ -803,7 +856,7 @@ export default function App() {
 
   /** An empty session on Finish: close it and move the plan to the next day, recorded as a skip (#184). */
   const skipFromSession = () => {
-    if (!current || !slot) return;
+    if (!current || !slot || current.slotSeq === undefined) return;
     const offered = cursorFor(state);
     const id = current.id;
     const next = nextSlotName;
@@ -1103,6 +1156,9 @@ export default function App() {
             onOpenGym={() => setSheet({ kind: 'gym' })}
             onOpenSwitch={slot ? () => setSheet({ kind: 'switch' }) : undefined}
             alternativeDay={alternativeDay}
+            composer={slot && talkBase ? (
+              <TodayTalk profile={profile} plannedName={slot.name} base={talkBase} preview={talkPreview} onStart={startTalk} />
+            ) : undefined}
             onWhy={() =>
               setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
             }
@@ -1208,7 +1264,7 @@ export default function App() {
 
       {sheet.kind === 'length' && profile && (
         <DurationSheet
-          options={lengthOptions(defaultProgram, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35, (minutes) => programFor({ minutes, equipment: constraints.equipment }))}
+          options={lengthOptions(defaultProgram, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35, (minutes) => programFor({ ...constraints, minutes }))}
           current={constraints.minutes}
           onClose={closeSheet}
           onPick={pickLength}
@@ -1217,7 +1273,7 @@ export default function App() {
 
       {sheet.kind === 'gym' && profile && (
         <GymSheet
-          options={setupOptions(program, constraints, profile.exclusions ?? [], (choice) => (choice === 'home' ? homeProgram : programFor({ ...constraints, equipment: choice })))}
+          options={setupOptions(program, constraints, profile.exclusions ?? [], (choice) => (choice === 'home' && !constraints.focus ? homeProgram : programFor({ ...constraints, equipment: choice })))}
           current={constraints.equipment}
           dayName={program.name}
           savedGear={isGymKit(profile) ? 'full gym' : [...profile.equipment, ...profile.support].join(', ') || 'none'}
@@ -1230,7 +1286,7 @@ export default function App() {
 
       {sheet.kind === 'switch' && profile && (
         <SwitchSheet
-          options={switchOptions(profile, state, state.history, constraints)}
+          options={switchOptions(profile, state, state.history, plainConstraints)}
           onPick={pickDay}
           onClose={closeSheet}
         />
@@ -1364,8 +1420,9 @@ export default function App() {
           onContinue={closeSheet}
           onDiscard={discardSession}
           onClose={closeSheet}
-          slotName={slot?.name}
-          nextName={nextSlotName}
+          // A described day (#193) has no slot to skip; keeping it leaves the planned day next.
+          slotName={current.slotSeq === undefined ? undefined : slot?.name}
+          nextName={current.slotSeq === undefined ? undefined : nextSlotName}
           onSkip={skipFromSession}
         />
       )}

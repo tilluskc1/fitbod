@@ -49,6 +49,9 @@
   --amber: #8a5300;
   --danger: #a03224;
   --danger-line: #f1c4bc;
+  /* Tinted fills behind danger and amber text (#193): 7.0 and 5.9 : 1. */
+  --danger-fill: #fbe9e5;
+  --amber-fill: #fdf1d8;
   --radius-card: 26px;
   --shadow-phone: 0 30px 80px -30px rgba(30, 60, 58, 0.35);
 
@@ -4465,3 +4468,77 @@ button.aw-exercise__name-btn {
   font-weight: 500;
 }
 .lg-act .ms { color: var(--muted); }
+
+/* ---------- Tell me about today (#193) ----------
+   Composer and preview from the approved mockup (today-talk.html), in the app's tokens. */
+.tt { display: grid; gap: 12px; }
+.tt h2 { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; }
+.tt-badge { display: inline-block; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-text); font-weight: 600; }
+.tt-toggle { padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; text-align: left; font: inherit; }
+.tt-chev { color: var(--muted); transition: transform 0.15s ease; }
+.tt-chev--open { transform: rotate(180deg); }
+.tt-hint { color: var(--muted); font-size: 13px; }
+.tt-body { display: grid; gap: 12px; }
+.tt-say {
+  width: 100%;
+  min-height: 86px;
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-container-high);
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--on-surface);
+}
+.tt-say::placeholder { color: var(--muted); }
+.tt-examples { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.tt-examples::-webkit-scrollbar { display: none; }
+.tt-ex-chip {
+  flex: none;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--surface-container-high);
+  font-size: 13px;
+  color: var(--on-surface-muted);
+}
+.tt-understood { display: grid; gap: 10px; }
+.tt-row { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; align-items: start; }
+.tt-k { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding-top: 14px; }
+.tt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tt-chip {
+  min-height: 44px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: var(--surface-container-high);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--on-surface-muted);
+}
+.tt-chip[aria-pressed='true'] { background: var(--primary); color: var(--on-primary); }
+.tt-chip--skip[aria-pressed='true'] { background: var(--danger-fill); color: var(--danger); }
+.tt-stop, .tt-warn { border-radius: 18px; padding: 12px 14px; font-size: 14px; }
+.tt-stop { background: var(--danger-fill); color: var(--danger); }
+.tt-warn { background: var(--amber-fill); color: var(--amber); }
+.tt-pv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.tt .tt-pv-title { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+.tt-pv-head .t7-state { flex: none; white-space: nowrap; }
+.tt-meta { display: flex; gap: 16px; align-items: flex-end; }
+.tt-meta b { font-size: 38px; font-weight: 200; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.tt-meta small { font-size: 14px; font-weight: 300; color: var(--muted); margin-left: 3px; }
+.tt-why { display: grid; gap: 6px; padding: 12px 14px; border-radius: 18px; background: var(--surface-container-high); font-size: 14px; color: var(--on-surface-muted); }
+.tt-why b { color: var(--on-surface); font-weight: 600; }
+.tt-list { list-style: none; margin: 0; padding: 0; }
+.tt-ex { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.tt-ex:last-child { border-bottom: 0; }
+.tt-ex b { display: block; font-weight: 500; font-size: 15.5px; }
+.tt-ex__meta { display: block; font-size: 13px; color: var(--muted); }
+.tt-ex__sets { font-size: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tt-tag { display: inline-block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--btn); color: var(--on-btn); margin-left: 6px; vertical-align: 2px; }
+.tt-week { background: var(--sky); color: var(--on-sky); border-radius: var(--radius-card); padding: 16px 18px; display: grid; gap: 4px; font-size: 14px; }
+.tt-week b { font-size: 15px; }
+@media (prefers-reduced-motion: reduce) { .tt-chev { transition: none; } }
+/* While the composer is open or previewing, its button is the screen's one primary: the dock steps aside. */
+.flow-screen:has(.tt-body, .tt-pv-title) .flow-dock { display: none; }
