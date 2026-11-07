@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { CloseIcon } from './Icons';
+import { FOCUSABLE, trapTarget } from '../../lib/focusTrap';
 
 interface Props {
   title: string;
@@ -14,7 +15,8 @@ interface Props {
 
 /**
  * Bottom sheet scoped to the phone frame. Escape closes, focus starts on the
- * close control, and the page behind it is inert while open.
+ * close control, Tab and Shift+Tab wrap inside it, and the page behind it is
+ * inert while open. Closing returns focus to the control that opened it.
  */
 export default function Sheet({
   title,
@@ -26,11 +28,25 @@ export default function Sheet({
   headingId = 'sheet-title',
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Mount-only and declared first: remember the control that opened the sheet, before focus moves.
+  // Mount-only and declared first: remember the control that opened the sheet, before focus moves,
+  // and make everything outside the sheet inert. Inert is lifted before focus goes back to the opener.
   useEffect(() => {
     const opener = document.activeElement;
+    const inerted: Element[] = [];
+    for (let node: HTMLElement | null = backdropRef.current; node && node !== document.body; node = node.parentElement) {
+      const parent = node.parentElement;
+      if (!parent) break;
+      for (const sibling of Array.from(parent.children)) {
+        if (sibling === node || sibling.hasAttribute('inert') || sibling.tagName === 'SCRIPT') continue;
+        sibling.setAttribute('inert', '');
+        inerted.push(sibling);
+      }
+    }
     return () => {
+      for (const element of inerted) element.removeAttribute('inert');
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
   }, []);
@@ -44,15 +60,25 @@ export default function Sheet({
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCloseRef.current();
+      if (event.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE));
+      const target = trapTarget(focusable.indexOf(document.activeElement as HTMLElement), focusable.length, event.shiftKey);
+      if (target === null) return;
+      event.preventDefault();
+      focusable[target].focus();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   return (
-    <div className="sheet-backdrop" onClick={onClose} role="presentation">
+    <div className="sheet-backdrop" onClick={onClose} role="presentation" ref={backdropRef}>
       <div
+        ref={dialogRef}
         className={`sheet sheet--${variant}`}
         role="dialog"
         aria-modal="true"
