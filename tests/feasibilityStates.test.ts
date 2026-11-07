@@ -93,7 +93,8 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
     const curls = screens(Today, Plan, noCurls, 'Pull');
     assert.match(curls.today, /<button[^>]*>Allow [^<]+<\/button>/);
     // The day fills its time, but with every curl excluded nothing trains biceps: named, with the fix (#67, #174).
-    assert.match(plain(curls.today), /Limited session · no biceps work 4 exercises fit\. No biceps exercise is possible with these constraints\./, 'reason under the line');
+    // 3, not 4: Pull keeps one core exercise (#190), and no other back exercise fits this kit to take the slot.
+    assert.match(plain(curls.today), /Limited session · no biceps work 3 exercises fit\. No biceps exercise is possible with these constraints\./, 'reason under the line');
 
     // Five alternatives: three chips, the rest behind the equipment settings. A kettlebell cannot fill
     // half of a 60-minute Push, so that day is short (#67); a barbell Push now fills its 35 min and is Ready.
