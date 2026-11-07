@@ -616,6 +616,9 @@ export function FinishSheet({
   onContinue,
   onDiscard,
   onClose,
+  slotName,
+  nextName,
+  onSkip,
 }: {
   done: number;
   total: number;
@@ -623,7 +626,37 @@ export function FinishSheet({
   onContinue: () => void;
   onDiscard: () => void;
   onClose: () => void;
+  /** The day this session is for, and the one after it in the plan (#184). */
+  slotName?: string;
+  nextName?: string;
+  /** Close the empty session and move the plan on to the next day, recorded as a skip. */
+  onSkip?: () => void;
 }) {
+  // Nothing logged: there is nothing to save, so the real choice is whether the plan moves on (#184).
+  if (done === 0) {
+    const day = slotName ?? 'this workout';
+    return (
+      <Sheet title="No sets logged" onClose={onClose}>
+        <p className="sheet-copy">
+          Nothing was recorded, so this can't count as a workout.
+          {nextName ? ` Move on to ${nextName}, or keep ${day} as your next workout?` : ''}
+        </p>
+        <div className="sheet-actions">
+          {onSkip && nextName && (
+            <button className="primary" onClick={onSkip}>
+              Skip to {nextName}
+            </button>
+          )}
+          <button className={onSkip && nextName ? 'secondary' : 'primary'} onClick={onDiscard}>
+            Keep {day} for next time
+          </button>
+          <button className="link-btn" style={{ alignSelf: 'center' }} onClick={onContinue}>
+            Continue workout
+          </button>
+        </div>
+      </Sheet>
+    );
+  }
   return (
     <Sheet title="Finish your session?" onClose={onClose}>
       <h3 style={{ fontSize: 24, letterSpacing: '-0.03em' }}>

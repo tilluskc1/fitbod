@@ -329,6 +329,11 @@ export default function App() {
     () => slotAt(state.plan, state.planRevision, state.programCursor),
     [state.plan, state.planRevision, state.programCursor],
   );
+  /** The plan's day after the one on offer, for "Skip to …" (#184). */
+  const nextSlotName = useMemo(() => {
+    const slots = planSlots(state.plan);
+    return slot && slots.length > 1 ? slots[(slot.index + 1) % slots.length]?.name : undefined;
+  }, [slot, state.plan]);
   const slotLabel = useMemo(() => {
     const slots = planSlots(state.plan);
     return slot && slots.length > 1 ? `Slot ${slot.index + 1} of ${slots.length}` : undefined;
@@ -768,6 +773,19 @@ export default function App() {
           : 'Saved the completed sets. Unfinished work was not recorded.'
         : 'Session saved to history.',
     );
+  };
+
+  /** An empty session on Finish: close it and move the plan to the next day, recorded as a skip (#184). */
+  const skipFromSession = () => {
+    if (!current || !slot) return;
+    const offered = cursorFor(state);
+    const id = current.id;
+    const next = nextSlotName;
+    setState((currentState) => skipCurrentSlot(applyCancel(currentState, id), new Date().toISOString(), offered));
+    setSheet({ kind: 'none' });
+    setView('tabs');
+    setTab('today');
+    setNotice(`${slot.name} skipped${next ? `; ${next} is next` : ''}. A skip is not a workout and earns no progression.`);
   };
 
   const discardSession = () => {
@@ -1313,6 +1331,9 @@ export default function App() {
           onContinue={closeSheet}
           onDiscard={discardSession}
           onClose={closeSheet}
+          slotName={slot?.name}
+          nextName={nextSlotName}
+          onSkip={skipFromSession}
         />
       )}
 
