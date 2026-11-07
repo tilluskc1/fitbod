@@ -105,6 +105,12 @@ function seededShuffle<T>(items: T[], seed: number): T[] {
   return out;
 }
 
+/**
+ * A day to generate. A day the lifter described (#211) gives each of its focus muscles an
+ * exercise of its own before a second one for any, as long as they fit the time.
+ */
+export type DayRequest = PlanDay & { everyMuscle?: boolean };
+
 export interface GeneratedSession {
   exercises: WorkoutExercise[];
   feasibility: ReturnType<typeof evaluateFeasibility>;
@@ -122,7 +128,7 @@ export interface GeneratedSession {
  * shorter and reports itself as limited instead of silently padding with
  * unrelated movements.
  */
-function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, target: number) {
+function selectExercises(profile: Profile, day: DayRequest, dayIndex: number, target: number) {
   const requirements = requirementsForDay(day);
   const caps = capabilitiesFor(profile);
   const exclusions = new Set(profile.exclusions);
@@ -210,10 +216,15 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
       const index = day.focus.indexOf(exercise.muscles[0]);
       return index < 0 ? day.focus.length : index;
     };
+    // A described day covers a movement with an exercise for one of its muscles no pick trains yet
+    // (#211): a Romanian deadlift (Hamstrings) over a deadlift (Back) on a legs day, or beside a row.
+    const offFocus = (exercise: Exercise) => Number(Boolean(day.everyMuscle) && (!day.focus.includes(exercise.muscles[0])
+      || picked.some((item) => item.muscles[0] === exercise.muscles[0])));
     const best = [...candidates].sort(
       (a, b) =>
         Number(b.muscles.length >= 2) - Number(a.muscles.length >= 2) ||
         rank(a) - rank(b) || // "more" and "less" outrank focus order
+        offFocus(a) - offFocus(b) ||
         main(a) - main(b) ||
         focusRank(a) - focusRank(b),
     )[0];
@@ -286,7 +297,7 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
  */
 export function generateWorkout(
   profile: Profile,
-  day: PlanDay,
+  day: DayRequest,
   dayIndex: number,
   history: WorkoutRecord[] = [],
   targetCountOverride?: number,
@@ -343,9 +354,24 @@ export function generateWorkout(
   if (fixed === undefined) {
     const budget = (profile.sessionMinutes ?? 35) * 60;
     const all = picked.length;
+    const leadFloor = (profile.sessionMinutes ?? 35) < 30 ? MIN_SETS : 3;
+    // A described day (#211) keeps one exercise per focus muscle, in focus order, while the lead,
+    // the day's requirements and those exercises fit at their floor sets: the cut below then takes a
+    // second exercise for a muscle before the only one for another. A muscle past that is left for time.
+    const held = new Set(lead ? [lead, ...covering] : covering);
+    if (day.everyMuscle) {
+      const floorSeconds = (items: Exercise[]) => estimatedSeconds(
+        items.map((exercise) => Math.min(sets[picked.indexOf(exercise)], exercise === lead ? leadFloor : MIN_SETS)),
+        items.map((exercise) => rests[picked.indexOf(exercise)]), profile.sessionMinutes ?? 35);
+      for (const muscle of day.focus) {
+        if ([...held].some((exercise) => exercise.muscles[0] === muscle)) continue;
+        const cover = picked.find((exercise) => exercise.muscles[0] === muscle);
+        if (cover && floorSeconds([...held, cover]) <= budget) held.add(cover);
+      }
+    }
     // Cut from the end, never the lead nor a day requirement's only cover, while the day runs long.
     for (let index = picked.length - 1; index > 0 && picked.length > MIN_EXERCISES && seconds() > budget; index -= 1) {
-      if (covering.has(picked[index])) continue;
+      if (held.has(picked[index])) continue;
       picked.splice(index, 1);
       sets.splice(index, 1);
       rests.splice(index, 1);
@@ -361,7 +387,6 @@ export function generateWorkout(
     const exhausted = kept === all;
     // Too long even at the floor: thin the last exercises first, down to 2 sets (the lead to 3;
     // under 30 minutes the lead may go to 2 so a four-movement day still fits, #132).
-    const leadFloor = (profile.sessionMinutes ?? 35) < 30 ? MIN_SETS : 3;
     for (let index = kept - 1; index >= 0 && seconds() > budget; ) {
       const least = index === 0 && lead ? leadFloor : MIN_SETS;
       if (sets[index] > least) sets[index] -= 1;

@@ -34,9 +34,10 @@ export function customDayName(focus: MuscleGroup[]): string {
 
 const ARM_MUSCLES: MuscleGroup[] = ['Biceps', 'Triceps'];
 
-/** "No shoulder work": the area as a noun before "work" or "exercise". */
-export const AREA_NOUN: Record<Area, string> = {
-  Chest: 'chest', Back: 'back', Shoulders: 'shoulder', Arms: 'arm', Legs: 'leg', Core: 'core',
+/** "No hamstring work": a muscle group as a noun before "work" or "exercise" (#211). */
+export const MUSCLE_NOUN: Record<MuscleGroup, string> = {
+  Chest: 'chest', Back: 'back', Shoulders: 'shoulder', Biceps: 'biceps', Triceps: 'triceps',
+  Quads: 'quad', Hamstrings: 'hamstring', Glutes: 'glute', Calves: 'calf', Core: 'core',
 };
 
 /**

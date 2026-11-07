@@ -24,6 +24,8 @@ export interface PlanSlot {
   index: number;
   name: string;
   focus: MuscleGroup[];
+  /** A day the lifter described (#211): each focus muscle gets an exercise of its own first. */
+  everyMuscle?: boolean;
 }
 
 export interface ProgramCursor {
@@ -98,7 +100,7 @@ export function slotProgram(
   history: WorkoutRecord[],
   setup: EquipmentChoice = 'home',
 ): Program {
-  const generated = generateWorkout(profile, { name: slot.name, focus: slot.focus }, slot.index, history, undefined, setup);
+  const generated = generateWorkout(profile, { name: slot.name, focus: slot.focus, everyMuscle: slot.everyMuscle }, slot.index, history, undefined, setup);
   const lead = leadCompoundId(generated.exercises.map((entry) => entry.exerciseId));
   const exercises: ProgramExercise[] = generated.exercises.map((entry) => {
     const catalog = exerciseById(entry.exerciseId);
@@ -183,7 +185,7 @@ export function todayProgram(
   const skip = today.skip ?? [];
   const focus = today.focus?.filter((muscle) => !skip.includes(muscle)) ?? [];
   const custom = focus.length > 0;
-  const slot = custom ? { ...plannedSlot, id: `${plannedSlot.id}-today`, name: customDayName(focus), focus } : plannedSlot;
+  const slot = custom ? { ...plannedSlot, id: `${plannedSlot.id}-today`, name: customDayName(focus), focus, everyMuscle: true } : plannedSlot;
   // A skipped muscle group stays out of the whole day, not just its focus: nothing that works it
   // is picked (see `worksSkipped`). Those are no exclusions of the lifter's, so none is offered back.
   const spared = custom ? withSkipped(profile, skip).exclusions.slice(profile.exclusions.length) : [];
