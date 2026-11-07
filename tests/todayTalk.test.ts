@@ -524,3 +524,11 @@ test('a sore word anywhere in the few words after "everything but" makes the res
   assert.deepEqual(talkParse('everything but legs, 45 min').train, ['Chest', 'Back', 'Shoulders', 'Arms', 'Core']);
   assert.equal(talkParse('everything but legs, 45 min').minutes, 45, 'the words after the list still count');
 });
+
+test('the "everything but" list ends at a comma, so an area after it gets its own sore reading (#193)', async () => {
+  const { talkParse } = await import('../src/lib/todayTalk.ts');
+  assert.deepEqual(talkParse('everything but legs, chest sore').train, ['Legs']);
+  assert.ok(talkParse('everything but legs, chest sore').avoid?.includes('Chest'));
+  assert.deepEqual(talkParse('anything except chest, arms tired').train, ['Chest']);
+  assert.ok(talkParse('anything except chest, arms tired').avoid?.includes('Arms'));
+});

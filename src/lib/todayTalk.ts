@@ -83,8 +83,9 @@ const RUN = new RegExp(`\\b${LIST}`, 'g');
  * "Everything but legs", "anything except chest": all six areas minus those. With a sore word
  * after it ("everything but legs is sore") it is the other way round: those train, the rest skip.
  */
-const EXCEPT = new RegExp(`\\b(?:everything|anything|all)\\s+(?:but|except(?:\\s+for)?|other than|apart from|besides)\\s+(${LIST})((?:\\s*,)?(?:\\s+[\\w'’]+){0,3})`, 'g');
-/** A sore word in the few words after an "everything but" list: "is sore", "is really sore", ", sore". */
+const EXCEPT = new RegExp(`\\b(?:everything|anything|all)\\s+(?:but|except(?:\\s+for)?|other than|apart from|besides)\\s+(${ONE}(?:\\s+(?:and|or)\\s+${ONE})*)((?:\\s*,)?(?:\\s+[\\w'’]+){0,3})`, 'g');
+/** A sore word in the few words after an "everything but" list: "is sore", "is really sore", ", sore".
+ * The excepted list ends at a comma, so "everything but legs, chest sore" excepts legs only. */
 const EXCEPT_SORE = /\b(?:sore|tired|fried|wrecked|dead|aching|achy|stiff)\b/;
 /** "Legs are fine": neither trained nor skipped. */
 const FINE = /^\s+(?:(?:is|are|feel|feels|feeling|seem|seems)\s+)?(?:fine|ok|okay|good|great|alright|fresh)\b/;
