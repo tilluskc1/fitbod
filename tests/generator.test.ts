@@ -46,26 +46,24 @@ function coverageItem(feasibility: { coverage: CoverageResult[] }, id: string): 
   return item;
 }
 
-test('kettlebell-only: Push is honestly limited, Pull is infeasible', () => {
+test('kettlebell-only: Push and Pull are honestly limited and name the gear that fills them (#174)', () => {
   const profile = makeProfile({ equipment: ['Kettlebell'] });
   const plan = buildPlan(profile);
   const push = generateWorkout(profile, plan[0], 0);
   const pull = generateWorkout(profile, plan[1], 1);
 
+  // A kettlebell presses overhead; Push-Up covers the horizontal press.
   assert.equal(push.feasibility.status, 'limited');
-  // Push-Up and Diamond Push-Up are one group, so a kettlebell-only Push holds one of them
-  // and says which focus muscles it could not fill.
-  assert.deepEqual(push.exercises.map((exercise) => exercise.exerciseId), ['push-up']);
-  assert.match(push.feasibility.reason, / No shoulders exercise is possible with these constraints\./);
-  assert.ok(push.exercises.every((exercise) => meta(exercise.exerciseId).equipment === 'Bodyweight'));
+  assert.deepEqual(push.exercises.map((exercise) => exercise.exerciseId), ['kettlebell-press', 'push-up']);
 
-  assert.equal(pull.feasibility.status, 'infeasible');
-  assert.equal(pull.exercises.length, 0);
-  assert.ok(pull.feasibility.alternatives.length > 0);
-  assert.ok(
-    pull.feasibility.alternatives.some((alternative) => alternative.support === 'Pull-up bar'),
-    'offers a pull-up bar as an explicit alternative',
-  );
+  // A kettlebell rows, so Pull is a real day, but nothing here trains biceps directly: it says so
+  // instead of claiming "biceps curls" from the row, and offers gear that adds a curl.
+  assert.equal(pull.feasibility.status, 'limited');
+  assert.equal(pull.exercises[0].exerciseId, 'kettlebell-row');
+  assert.match(pull.feasibility.reason, / No biceps exercise is possible with these constraints\./);
+  assert.doesNotMatch(pull.feasibility.reason, /covering/);
+  assert.ok(pull.feasibility.alternatives.some((alternative) => alternative.support === 'Pull-up bar'),
+    'offers a pull-up bar as an explicit alternative');
 });
 
 test('no feasible exercise: bodyweight-only Pull never starts a core-only workout', () => {

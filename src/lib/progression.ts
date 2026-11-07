@@ -70,7 +70,20 @@ const BODYWEIGHT_RANGE: RepRange = { min: 10, max: 20 };
 /** Bodyweight moves that are hard at any level keep a strength-style range: pull-ups, chin-ups, dips. */
 const HARD_BODYWEIGHT: ReadonlySet<string> = new Set(['pull-up', 'chin-up', 'dip']);
 /** Nordic curls are near-maximal eccentrics: a few clean reps, not a pump set. */
-const RANGE_BY_ID: Readonly<Record<string, RepRange>> = { 'nordic-curl': { min: 3, max: 6 } };
+const RANGE_BY_ID: Readonly<Record<string, RepRange>> = {
+  'nordic-curl': { min: 3, max: 6 },
+  // A swing is ballistic hip power: crisp sets of many reps, never grinding heavy sets (#174).
+  'kettlebell-swing': { min: 12, max: 20 },
+  // A pullover is a lat stretch under a single dumbbell: moderate reps, never a heavy set.
+  'dumbbell-pullover': { min: 8, max: 12 },
+  // A deadlift behind another lead still takes low reps: it is never a pump set (#174).
+  deadlift: { min: 4, max: 6 },
+};
+/** Compounds that never take the heavy lead slot (#174). */
+const NEVER_LEAD: ReadonlySet<string> = new Set(['kettlebell-swing', 'dumbbell-pullover']);
+/** A dumbbell or kettlebell lead: heavy sets are awkward to set up and grip-limited, so a moderate range (#174). */
+const FREE_WEIGHT_LEAD: RepRange = { min: 6, max: 10 };
+const FREE_WEIGHT_STRENGTH_LEAD: RepRange = { min: 5, max: 8 };
 
 /**
  * Fallback steps when no load inventory exists. These are starting points, not
@@ -118,8 +131,8 @@ export function isCompound(exercise: Pick<Exercise, 'pattern' | 'muscles'>): boo
 }
 
 /** The one lead predicate: a loaded compound. Bodyweight never takes the heavy sets (it cannot add load). */
-export function canLead(exercise: Pick<Exercise, 'pattern' | 'muscles' | 'equipment'>): boolean {
-  return isCompound(exercise) && exercise.equipment !== 'Bodyweight';
+export function canLead(exercise: Pick<Exercise, 'pattern' | 'muscles' | 'equipment'> & { id?: string }): boolean {
+  return isCompound(exercise) && exercise.equipment !== 'Bodyweight' && !(exercise.id && NEVER_LEAD.has(exercise.id));
 }
 
 const canLeadId = (id: string): boolean => {
@@ -188,7 +201,12 @@ export function roleTarget(
   lead = lead && canLead(exercise);
   const heavy = profile.experience !== 'Beginner' && (profile.goal === 'Build Muscle' || profile.goal === 'Get Stronger');
   if (lead && heavy) {
-    return { sets: 5, range: profile.goal === 'Get Stronger' ? REP_RANGES.strength : REP_RANGES.lead };
+    const strength = profile.goal === 'Get Stronger';
+    const freeWeight = exercise.equipment === 'Dumbbell' || exercise.equipment === 'Kettlebell';
+    const range = freeWeight
+      ? (strength ? FREE_WEIGHT_STRENGTH_LEAD : FREE_WEIGHT_LEAD)
+      : (strength ? REP_RANGES.strength : REP_RANGES.lead);
+    return { sets: 5, range };
   }
   // Four technique sets: the lead never has fewer sets than the 4-set compounds behind it (#133).
   if (lead && profile.experience === 'Beginner') return { sets: 4, range: REP_RANGES.technique };

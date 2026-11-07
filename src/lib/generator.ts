@@ -153,7 +153,11 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
   // Keep that order as the tiebreaker, but prefer compound movements
   // when filling slots so an accessory cannot consume the last slot for a
   // primary muscle and leave the session short.
-  const compoundFirst = [...shuffled].sort((a, b) => b.muscles.length - a.muscles.length);
+  // A main movement pattern also outranks an accessory one, so a home Pull day takes a pullover
+  // (its only vertical pull) before a rear-delt fly (#174).
+  const MAIN_PATTERNS = new Set(['horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull', 'squat', 'lunge', 'hinge', 'hip_extension']);
+  const mainPattern = (exercise: Exercise) => (MAIN_PATTERNS.has(exercise.pattern) ? 0 : 1);
+  const compoundFirst = [...shuffled].sort((a, b) => b.muscles.length - a.muscles.length || mainPattern(a) - mainPattern(b));
   const picked: Exercise[] = [];
   const patternCounts = new Map<string, number>();
   const primaryMuscleCounts = new Map<MuscleGroup, number>();
@@ -345,8 +349,13 @@ export function generateWorkout(
   const showTier = (exercise: Exercise) => (exercise === lead ? 0
     : isCompound(exercise) ? 1
     : CORE_PATTERNS.has(exercise.pattern) ? 3 : 2);
+  // Among compounds, heavy barbell lifts come while you are fresh and single-leg work last (#174).
+  const heaviness = (exercise: Exercise) => (exercise.pattern === 'lunge' ? 3
+    : exercise.equipment !== 'Barbell' ? 2
+    : exercise.pattern === 'squat' || exercise.pattern === 'hinge' ? 0 : 1);
   const order = picked.map((_, index) => index)
-    .sort((a, b) => showTier(picked[a]) - showTier(picked[b]) || a - b);
+    .sort((a, b) => showTier(picked[a]) - showTier(picked[b])
+      || (showTier(picked[a]) === 1 ? heaviness(picked[a]) - heaviness(picked[b]) : 0) || a - b);
 
   const exercises: WorkoutExercise[] = order.map((index) => {
     const exercise = picked[index];

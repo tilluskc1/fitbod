@@ -138,6 +138,11 @@ test('rep ranges follow the movement class instead of one global number', () => 
   assert.deepEqual(repRangeFor(meta('dip')), { min: 6, max: 10 });
   assert.deepEqual(repRangeFor(meta('nordic-curl')), { min: 3, max: 6 });
   assert.deepEqual(repRangeFor(meta('face-pull')), { min: 12, max: 20 });
+  // #174: a non-lead deadlift stays low-rep; a swing is ballistic; a pullover is moderate-rep lat work.
+  assert.deepEqual(repRangeFor(meta('deadlift')), { min: 4, max: 6 });
+  assert.deepEqual(repRangeFor(meta('kettlebell-swing')), { min: 12, max: 20 });
+  assert.deepEqual(repRangeFor(meta('dumbbell-pullover')), { min: 8, max: 12 });
+  assert.deepEqual(repRangeFor(meta('bodyweight-squat')), { min: 10, max: 20 });
   assert.deepEqual(repRangeFor(meta('plank')), repRangeFor({ ...meta('plank'), equipment: 'Dumbbell' }));
   // One source: outside the lead the role's range is the movement's own.
   for (const exercise of EXERCISES.filter((item) => !programExercise(item.id))) {

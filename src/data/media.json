@@ -376,5 +376,61 @@
       "/exercises/dumbbell-overhead-triceps-extension/1.jpg"
     ],
     "source": "Standing_Dumbbell_Triceps_Extension"
+  },
+  "dumbbell-romanian-deadlift": {
+    "frames": [
+      "/exercises/dumbbell-romanian-deadlift/0.jpg",
+      "/exercises/dumbbell-romanian-deadlift/1.jpg"
+    ],
+    "source": "Stiff-Legged_Dumbbell_Deadlift"
+  },
+  "dumbbell-calf-raise": {
+    "frames": [
+      "/exercises/dumbbell-calf-raise/0.jpg",
+      "/exercises/dumbbell-calf-raise/1.jpg"
+    ],
+    "source": "Standing_Dumbbell_Calf_Raise"
+  },
+  "dumbbell-pullover": {
+    "frames": [
+      "/exercises/dumbbell-pullover/0.jpg",
+      "/exercises/dumbbell-pullover/1.jpg"
+    ],
+    "source": "Bent-Arm_Dumbbell_Pullover"
+  },
+  "kettlebell-swing": {
+    "frames": [
+      "/exercises/kettlebell-swing/0.jpg",
+      "/exercises/kettlebell-swing/1.jpg"
+    ],
+    "source": "One-Arm_Kettlebell_Swings"
+  },
+  "kettlebell-row": {
+    "frames": [
+      "/exercises/kettlebell-row/0.jpg",
+      "/exercises/kettlebell-row/1.jpg"
+    ],
+    "source": "One-Arm_Kettlebell_Row"
+  },
+  "kettlebell-press": {
+    "frames": [
+      "/exercises/kettlebell-press/0.jpg",
+      "/exercises/kettlebell-press/1.jpg"
+    ],
+    "source": "Two-Arm_Kettlebell_Military_Press"
+  },
+  "bodyweight-squat": {
+    "frames": [
+      "/exercises/bodyweight-squat/0.jpg",
+      "/exercises/bodyweight-squat/1.jpg"
+    ],
+    "source": "Bodyweight_Squat"
+  },
+  "bodyweight-lunge": {
+    "frames": [
+      "/exercises/bodyweight-lunge/0.jpg",
+      "/exercises/bodyweight-lunge/1.jpg"
+    ],
+    "source": "Bodyweight_Walking_Lunge"
   }
 }

@@ -75,8 +75,11 @@ test('the first compound is heavy for intermediate and advanced lifters building
   assert.equal(shape('back-squat', profileOf({ experience: 'Advanced' }), true), '5 × 4–6');
   assert.equal(shape('barbell-bench-press', profileOf({ goal: 'Get Stronger' }), true), '5 × 3–5');
   assert.equal(shape('deadlift', profileOf({ goal: 'Get Stronger', experience: 'Advanced' }), true), '5 × 3–5');
-  // A dumbbell lead is a lead too: the role wins over the flagship's 8–10.
-  assert.equal(shape('dumbbell-floor-press', profileOf(), true), '5 × 4–6');
+  // A dumbbell or kettlebell lead keeps five sets in a moderate range: heavy free weights are
+  // awkward to set up and grip-limited (#174). The role still wins over the flagship's 8–10.
+  assert.equal(shape('dumbbell-floor-press', profileOf(), true), '5 × 6–10');
+  assert.equal(shape('goblet-squat', profileOf(), true), '5 × 6–10');
+  assert.equal(shape('kettlebell-goblet-squat', profileOf({ goal: 'Get Stronger' }), true), '5 × 5–8');
 });
 
 test('a beginner leads with 4 × 8–10, technique first, never fewer sets than a later compound (#133)', () => {
@@ -199,7 +202,8 @@ test('a first session starts from the role range: 6 for the lead, 12 for isolati
 
 test('a swap for the lead takes over the lead range, in place or after logged sets', () => {
   const profile = profileOf();
-  const target = def('dumbbell-bench-press');
+  // A machine press keeps the barbell lead's 4–6 (dumbbell leads are 6–10 since #174).
+  const target = def('machine-chest-press');
   assert.equal(swapCandidateFor(target, profile, [], null, true).reps, 6);
   assert.equal(swapCandidateFor(target, profile, [], null).reps, 8);
 

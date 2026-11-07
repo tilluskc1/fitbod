@@ -16,6 +16,8 @@ const base: Profile = {
   equipment: ['Dumbbell'], support: [], exclusions: [], loads: { Dumbbell: [10, 15, 18] }, unit: 'kg',
 };
 const dumbbells = { ...base, daysPerWeek: 3 };
+// Dumbbells now have a calf raise (#174); a kettlebell-only Legs day still has no calf work.
+const kettlebell: Profile = { ...base, daysPerWeek: 3, equipment: ['Kettlebell'], loads: {} };
 const bodyweight = { ...base, equipment: [], loads: {} };
 const barbell: Profile = { ...base, equipment: ['Barbell'], loads: {} };
 const fullGear: Profile = { ...base, equipment: ['Dumbbell', 'Barbell', 'Cable', 'Machine'], support: ['Bench', 'Rack', 'Pull-up bar'] };
@@ -32,7 +34,7 @@ const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' 
 const noop = () => {};
 
 test('slotProgram carries the slot feasibility without padding the session', () => {
-  const legs = programFor(dumbbells, 'Legs');
+  const legs = programFor(kettlebell, 'Legs');
   assert.equal(legs.feasibility?.status, 'limited');
   assert.ok(legs.feasibility?.coverage.some((item) => item.id === 'calf' && !item.satisfied));
   assert.ok(legs.feasibility?.alternatives.some((item) => item.label === 'Add Machine'));
@@ -71,7 +73,7 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
     const { default: Today } = await load('/src/screens/TodayScreen.tsx');
     const { default: Plan } = await load('/src/screens/PlanScreen.tsx');
 
-    const limited = screens(Today, Plan, dumbbells, 'Legs');
+    const limited = screens(Today, Plan, kettlebell, 'Legs');
     for (const html of [limited.today, limited.plan]) {
       assert.match(plain(html), /Limited session · no calf work/);
       assert.match(html, /<button[^>]*>Add Machine<\/button>/);
