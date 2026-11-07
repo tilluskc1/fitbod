@@ -5,10 +5,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { buildPlan } from '../src/lib/generator.ts';
 import { planSlots, slotProgram } from '../src/lib/sequence.ts';
-import { adaptWorkout, todayGlance, type AdaptedWorkout, type EquipmentChoice } from '../src/lib/adapt.ts';
+import { adaptWorkout, swapCandidateFor, todayGlance, workMinutes, type AdaptedWorkout, type EquipmentChoice } from '../src/lib/adapt.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import { liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
-import { createSession } from '../src/lib/session.ts';
+import { addPerformedSet, createSession, logSet, removePerformedSet, skipExercise, swapPendingExercise } from '../src/lib/session.ts';
+import { exerciseById } from '../src/data/exercises.ts';
 import type { Program } from '../src/data/flagship.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
@@ -35,7 +36,7 @@ async function surfaces({ who, program, focus, adapted, current, overridden, equ
     const { default: Coach } = await server.ssrLoadModule('/src/screens/CoachScreen.tsx');
     const live = liveAdapted(adapted, who, []);
     const exercises = current?.exercises ?? liveExercises(live, who, []);
-    const today = todayGlance(program, adapted, current, overridden);
+    const today = todayGlance(adapted, current, overridden, who.goal);
     const now = new Date('2026-11-07T10:00:00Z');
     const sheet = plain(renderToStaticMarkup(createElement(DaySheet, { name: today.name, minutes: today.minutes, approx: today.approx, exercises, unit: 'kg', onClose: noop })));
     const plan = plain(renderToStaticMarkup(createElement(Plan, { profile: who, upcoming: [], focus, program, today, equipment, history: [], unit: 'kg',
@@ -75,9 +76,9 @@ test('a today-only 30 min day: Today, Plan header, Up next and View session show
   const { slot, program } = firstDay(gym);
   const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: true, equipment: 'home' });
-  // 12 of 23 sets take 31 minutes: the overrun shows, it is not clamped to the 30 asked for.
-  agree(seen, '31', '6', '12');
-  assert.match(seen.plan, /UP NEXT .*? 31 min · 6 exercises · 12 sets · Adjusted for today/);
+  // 12 of 23 sets take 32 minutes by the timer's own rests: the overrun shows, it is not clamped to the 30 asked for (#200).
+  agree(seen, '32', '6', '12');
+  assert.match(seen.plan, /UP NEXT .*? 32 min · 6 exercises · 12 sets · Adjusted for today/);
   assert.equal(seen.header[3], 'Full gym', 'a length-only change keeps the saved setup word');
 });
 
@@ -95,8 +96,8 @@ test('a running session: every surface shows the session, and it is not labelled
   const current = createSession({ id: 's1', name: started.name, dayIndex: 0, exercises: liveExercises(started, gym, []), now: '2026-11-07T09:00:00Z', durationMin: started.minutes });
   // Today's override still applies, but the open session is what runs.
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted: started, current, overridden: true, equipment: 'home' });
-  // #200: the promised 31 stays after Start; it does not fall back to the 30 asked for.
-  agree(seen, '31', '6', '12');
+  // #200: the promised 32 stays after Start; it does not fall back to the 30 asked for.
+  agree(seen, '32', '6', '12');
   assert.equal(seen.today.adjusted, false);
   assert.doesNotMatch(seen.plan, /Adjusted for today/);
 });
@@ -105,7 +106,8 @@ test('no override and no session: Plan numbers are the saved day, as before', as
   const { slot, program } = firstDay(gym);
   const adapted = adaptWorkout(program, defaultConstraints(gym), []);
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: false, equipment: 'home' });
-  agree(seen, '60', '7', '23');
+  // 23 sets take 58 minutes with the timer's rests; ≈ only marks work far short of the hour (#200).
+  agree(seen, '58', '7', '23');
   assert.equal(seen.header[3], 'Full gym');
   assert.doesNotMatch(seen.plan, /Adjusted for today/);
 });
@@ -121,14 +123,17 @@ test('todayGlance: adjusted only while no session runs', () => {
   const { program } = firstDay(gym);
   const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
   const current = createSession({ id: 's1', name: adapted.name, dayIndex: 0, exercises: liveExercises(adapted, gym, []), now: '2026-11-07T09:00:00Z', durationMin: 30 });
-  assert.equal(todayGlance(program, adapted, null, true).adjusted, true);
-  assert.equal(todayGlance(program, adapted, current, true).adjusted, false);
-  assert.equal(todayGlance(program, adapted, null, false).adjusted, false);
+  assert.equal(todayGlance(adapted, null, true).adjusted, true);
+  assert.equal(todayGlance(adapted, current, true).adjusted, false);
+  assert.equal(todayGlance(adapted, null, false).adjusted, false);
 });
 
-// #200: Start must not change the minutes a screen promised a moment before.
-const start = (who: Profile, adapted: AdaptedWorkout, durationMin: number | undefined = adapted.minutes) =>
+// #200: Start must not change the minutes a screen promised a moment before, and a running
+// session's minutes come from the session alone: its exercises, their rests and planned sets.
+const start = (who: Profile, adapted: AdaptedWorkout, durationMin = adapted.minutes) =>
   createSession({ id: 's1', name: adapted.name, dayIndex: 0, exercises: liveExercises(adapted, who, []), now: '2026-11-07T09:00:00Z', durationMin });
+const glance = (adapted: AdaptedWorkout, current: WorkoutRecord | null, who: Profile = gym) => todayGlance(adapted, current, false, who.goal);
+const pick = (seen: { minutes: number; approx: boolean }) => [seen.minutes, seen.approx];
 
 test('a bodyweight day keeps ≈15 on every surface after Start, Coach included', async () => {
   const { slot, program } = firstDay(bodyweight);
@@ -139,35 +144,68 @@ test('a bodyweight day keeps ≈15 on every surface after Start, Coach included'
 });
 
 test('todayGlance: the same minutes and ≈ before and after Start', () => {
-  for (const [who, minutes] of [[gym, 30], [gym, 60], [bodyweight, 60], [gym, 15]] as const) {
+  for (const [who, minutes] of [[gym, 30], [gym, 60], [bodyweight, 60], [gym, 15], [{ ...gym, goal: 'Get Stronger' } as Profile, 30]] as const) {
     const { program } = firstDay(who);
     const adapted = adaptWorkout(program, { ...defaultConstraints(who), minutes }, []);
-    const before = todayGlance(program, adapted, null);
-    const after = todayGlance(program, adapted, start(who, adapted));
-    assert.deepEqual([after.minutes, after.approx], [before.minutes, before.approx], `${who.equipment.length ? 'gym' : 'bodyweight'} at ${minutes}`);
+    assert.deepEqual(pick(glance(adapted, start(who, adapted), who)), pick(glance(adapted, null, who)), `${who.goal} ${who.equipment.length ? 'gym' : 'bodyweight'} at ${minutes}`);
   }
 });
 
-test('todayGlance: skipping or swapping mid-session keeps the planned minutes', () => {
+test('todayGlance: each set added mid-session adds time; minutes never fall back to the asked length', () => {
+  const { program } = firstDay(gym);
+  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
+  let current = start(gym, adapted);
+  let previous = glance(adapted, current).minutes;
+  const seen = [previous];
+  // Past the program's own 23 sets too: the old density rule snapped back to 30 there.
+  for (let added = 1; added <= 14; added += 1) {
+    current = addPerformedSet(current, added % current.exercises.length);
+    const minutes = glance(adapted, current).minutes;
+    assert.ok(minutes > previous, `set ${12 + added}: ${minutes} after ${previous} (${seen.join(', ')})`);
+    previous = minutes;
+    seen.push(minutes);
+  }
+  // And back down as sets are removed.
+  current = removePerformedSet(current, 1, 0);
+  assert.ok(glance(adapted, current).minutes < previous);
+});
+
+test('todayGlance: a skip keeps the planned minutes; a swap reprices only the work it changes', () => {
   const { program } = firstDay(gym);
   const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
   const current = start(gym, adapted);
-  const promised = todayGlance(program, adapted, current).minutes;
-  const skipped = { ...current, exercises: current.exercises.map((exercise, index) => index === 1 ? { ...exercise, skipped: true } : exercise) };
-  assert.equal(todayGlance(program, adapted, skipped).minutes, promised, 'a skip leaves the planned sets in place');
-  // A swap carries the pending sets over to the replacement: the set count is unchanged.
-  const [first, ...rest] = current.exercises;
-  const swapped = { ...current, exercises: [{ ...first, exerciseId: 'goblet-squat', name: 'Goblet Squat' }, ...rest] };
-  assert.equal(todayGlance(program, adapted, swapped).minutes, promised, 'a swap keeps the set count');
+  const promised = glance(adapted, current).minutes;
+  assert.equal(glance(adapted, skipExercise(current, 1)).minutes, promised, 'a skip leaves the planned sets in place');
+
+  // A real swap after one done set: the done set stays as its own entry, the rest moves to the replacement.
+  const logged = logSet(current, 0, 0, '2026-11-07T09:05:00Z');
+  const lead = exerciseById(logged.exercises[0].exerciseId)!;
+  const replacement = exerciseById('dumbbell-bench-press')!;
+  const swapped = swapPendingExercise(logged, 0, swapCandidateFor(replacement, gym, [], logged, true));
+  assert.equal(swapped.exercises.reduce((sum, exercise) => sum + exercise.planned.length, 0), 12, 'no set gained or lost');
+  // The honest figure is the time model of the session as it now stands: the split adds one
+  // set-up (90 s) and drops one rest between the lead's sets.
+  const expected = workMinutes(swapped.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.planned.length })), gym.goal, 30);
+  assert.equal(glance(adapted, swapped).minutes, expected, `${lead.id} -> ${replacement.id}`);
+  assert.ok(Math.abs(expected - promised) <= 1, `${promised} -> ${expected}`);
+});
+
+test('todayGlance: nothing outside the running session moves its minutes', () => {
+  const { program } = firstDay(gym);
+  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
+  const current = start(gym, adapted);
+  const before = pick(glance(adapted, current));
+  // A settings or slot change mid-session rebuilds today's day; the session is unchanged.
+  const other = adaptWorkout(firstDay(bodyweight).program, defaultConstraints(bodyweight), []);
+  assert.deepEqual(pick(glance(other, current)), before);
+  assert.deepEqual(pick(glance(adaptWorkout(program, defaultConstraints(gym), []), current)), before);
 });
 
 test('todayGlance: a stored session reads sensibly with or without its asked length', () => {
   const { program } = firstDay(bodyweight);
   const adapted = adaptWorkout(program, defaultConstraints(bodyweight), []);
   // Sessions saved before #200 hold the asked length, which is still what is written.
-  assert.deepEqual(pick(todayGlance(program, adapted, start(bodyweight, adapted, 60))), [15, true]);
-  // An old record without durationMin falls back to today's asked length.
-  assert.deepEqual(pick(todayGlance(program, adapted, start(bodyweight, adapted, undefined))), [15, true]);
+  assert.deepEqual(pick(glance(adapted, start(bodyweight, adapted, 60), bodyweight)), [15, true]);
+  // A record without durationMin: rests as the timer runs them (full), and no ≈ since the asked length is unknown.
+  assert.deepEqual(pick(glance(adapted, { ...start(bodyweight, adapted), durationMin: undefined }, bodyweight)), [15, false]);
 });
-
-const pick = (glance: { minutes: number; approx: boolean }) => [glance.minutes, glance.approx];

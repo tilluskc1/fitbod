@@ -22,7 +22,7 @@ test('Plan lists every day of the week after the one up next, and names a gym ki
     const { default: Plan } = await server.ssrLoadModule('/src/screens/PlanScreen.tsx');
     const noop = () => {};
     const html = renderToStaticMarkup(createElement(Plan, { profile: gym, upcoming, focus: slots[0].focus, program,
-      today: todayGlance(program, adaptWorkout(program, defaultConstraints(gym), []), null), slotLabel: 'Slot 1 of 4', history: [], unit: 'kg',
+      today: todayGlance(adaptWorkout(program, defaultConstraints(gym), []), null), slotLabel: 'Slot 1 of 4', history: [], unit: 'kg',
       now: new Date('2026-11-07T10:00:00Z'), onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     assert.match(text, /UP NEXT · SLOT 1 OF 4 Upper A Chest · Back · Shoulders · Biceps · Triceps/);

@@ -63,7 +63,7 @@ function screens(Today: unknown, Plan: unknown, who: Profile, name: string) {
   const today = renderToStaticMarkup(createElement(Today as never, { profile: who, program, adapted,
     equipment: 'home', adjusted: false, history: [], current: null, now, onPreview: noop, onAdjust: noop,
     onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop }));
-  const plan = renderToStaticMarkup(createElement(Plan as never, { profile: who, program, today: todayGlance(program, adapted, null), history: [],
+  const plan = renderToStaticMarkup(createElement(Plan as never, { profile: who, program, today: todayGlance(adapted, null), history: [],
     unit: 'kg', now, onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop, onReviewChange: noop }));
   return { today, plan, adapted };
 }
@@ -77,7 +77,8 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
     for (const html of [limited.today, limited.plan]) {
       assert.match(plain(html), /Limited session · no calf work/);
       assert.match(html, /<button[^>]*>Add Machine<\/button>/);
-      assert.match(html, /35 min/);
+      // The Limited day still states its time: 11 sets take 33 of the 35 minutes (#200).
+      assert.match(html, /33 min/);
     }
 
     const none = screens(Today, Plan, bodyweight, 'Pull');

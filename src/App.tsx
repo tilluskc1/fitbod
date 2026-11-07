@@ -406,7 +406,7 @@ export default function App() {
     [current, adapted, liveProgram, profile, state.history],
   );
   /** The name, counts and minutes of that same day, for Plan, View session and Coach alike (#189, #200). */
-  const todayDay = useMemo(() => todayGlance(program, adapted, current, Boolean(override)), [program, adapted, current, override]);
+  const todayDay = useMemo(() => todayGlance(adapted, current, Boolean(override), profile?.goal), [adapted, current, override, profile?.goal]);
 
   /** The one-line reason behind each computed target, keyed by exercise. */
   const targetNotes = useMemo(() => {

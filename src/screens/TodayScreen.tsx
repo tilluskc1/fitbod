@@ -173,7 +173,7 @@ export default function TodayScreen({
   const targetDays = profile.daysPerWeek;
   const setup = setupFor(equipment, profile);
   // Equipment or exclusions can leave far less work than the requested time.
-  const { minutes, approx } = todayGlance(program, proposedWorkout, current);
+  const { minutes, approx } = todayGlance(proposedWorkout, current, false, profile.goal);
   // A day with nothing to do has no duration to promise.
   const timed = Boolean(current) || adapted.exercises.length > 0;
   const first = adapted.exercises[0];
