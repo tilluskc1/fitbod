@@ -36,6 +36,8 @@ const session = createSession({ id: 's', name: live.name, dayIndex: slots[0].ind
   exercises: liveExercises(live, gym, []), now: START, durationMin: live.minutes });
 const planned = createSession({ id: 'p', name: slots[0].name, dayIndex: slots[0].index, slotId: slots[0].id, slotSeq: 0, planRevision: 1,
   exercises: liveExercises(live, gym, []), now: START, durationMin: live.minutes });
+const legacy = createSession({ id: 'l', name: slots[0].name, dayIndex: slots[0].index,
+  exercises: liveExercises(live, gym, []), now: START, durationMin: live.minutes });
 const override = (date: string): TodayOverride => ({ date, minutes: 45, equipment: ['Dumbbell'], support: [], appliedAt: START,
   choice: 'home', focus: constraints.focus, skip: constraints.skip });
 const nordic = session.exercises.findIndex((exercise) => exercise.exerciseId === 'nordic-curl');
@@ -45,6 +47,8 @@ test('#220: a described session is the one with no slot link, never judged by na
   assert.equal(isDescribedSession(session), true);
   assert.equal(isDescribedSession(planned), false);
   assert.equal(isDescribedSession({ ...planned, name: 'Legs' }), false);
+  // A record from before slot links (no slotSeq, no planRevision) is a planned session, not a described one.
+  assert.equal(isDescribedSession(legacy), false);
 });
 
 test('#220: a running described session\'s status is its own exercises judged against what was asked', () => {
@@ -67,6 +71,7 @@ test('#220: once the ask has expired (rollover) a described session has no statu
   const { focus: _focus, skip: _skip, ...plain } = override(TODAY);
   assert.equal(describedSessionStatus(session, plain, gym), null);
   assert.equal(describedSessionStatus(planned, override(TODAY), gym), null);
+  assert.equal(describedSessionStatus(legacy, override(TODAY), gym), null);
 });
 
 async function withServer<T>(run: (load: (path: string) => Promise<Record<string, unknown>>) => Promise<T>) {
@@ -118,6 +123,21 @@ test('#220: a planned running session keeps its slot and the generator\'s chip',
     const { default: Today } = await load('/src/screens/TodayScreen.tsx');
     const html = renderToStaticMarkup(createElement(Today as never, { profile: gym, program: shortDay, adapted: live, equipment: 'home',
       adjusted: false, history: [], current: planned, now: new Date(START), described: null, slotLabel: 'Slot 1 of 4', onPreview: noop,
+      onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop }));
+    const hero = plain(heroOf(html));
+    assert.match(hero, /Slot 1 of 4/);
+    assert.doesNotMatch(hero, /Today only/);
+    assert.match(chipOf(html)?.[2] ?? '', /^Limited · \d+ of \d+$/);
+  });
+});
+
+test('#220: a legacy running session (no slot link, no plan revision) still reads as planned', async () => {
+  await withServer(async (load) => {
+    const { default: Today } = await load('/src/screens/TodayScreen.tsx');
+    assert.equal(legacy.slotSeq, undefined);
+    assert.equal(legacy.planRevision, undefined);
+    const html = renderToStaticMarkup(createElement(Today as never, { profile: gym, program: shortDay, adapted: live, equipment: 'home',
+      adjusted: false, history: [], current: legacy, now: new Date(START), described: null, slotLabel: 'Slot 1 of 4', onPreview: noop,
       onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop }));
     const hero = plain(heroOf(html));
     assert.match(hero, /Slot 1 of 4/);

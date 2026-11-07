@@ -232,9 +232,13 @@ export function slotLinkFor(state: AppState, custom: boolean): { slotId?: string
   };
 }
 
-/** A session built from a described day (#193): it carries no slot link (#220: never judged by name). */
-export function isDescribedSession(workout: Pick<WorkoutRecord, 'slotSeq'>): boolean {
-  return workout.slotSeq === undefined;
+/**
+ * A session built from a described day (#193): no slot link, but the plan revision every new session
+ * carries (`slotLinkFor`). A legacy record (from before slot links) has neither and reads as planned.
+ * #220: never judged by name.
+ */
+export function isDescribedSession(workout: Pick<WorkoutRecord, 'slotSeq' | 'planRevision'>): boolean {
+  return workout.slotSeq === undefined && workout.planRevision !== undefined;
 }
 
 /**
