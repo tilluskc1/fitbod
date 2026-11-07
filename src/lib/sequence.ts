@@ -95,8 +95,9 @@ export function slotProgram(
   profile: Profile,
   slot: PlanSlot,
   history: WorkoutRecord[],
+  setup: EquipmentChoice = 'home',
 ): Program {
-  const generated = generateWorkout(profile, { name: slot.name, focus: slot.focus }, slot.index, history);
+  const generated = generateWorkout(profile, { name: slot.name, focus: slot.focus }, slot.index, history, undefined, setup);
   const lead = leadCompoundId(generated.exercises.map((entry) => entry.exerciseId));
   const exercises: ProgramExercise[] = generated.exercises.map((entry) => {
     const catalog = exerciseById(entry.exerciseId);
@@ -158,7 +159,7 @@ export function todayProgram(
     return slotProgram(today.minutes && today.minutes > saved ? { ...profile, sessionMinutes: today.minutes } : profile, slot, history);
   }
   const kit = SETUP_KIT[today.equipment];
-  const program = slotProgram({ ...profile, ...kit, sessionMinutes: today.minutes ?? saved }, slot, history);
+  const program = slotProgram({ ...profile, ...kit, sessionMinutes: today.minutes ?? saved }, slot, history, today.equipment);
   // Gear chips would add to the saved setup, which today's gear does not change: the reason
   // already names what today's setup cannot train, and the gym sheet switches back.
   const feasibility = program.feasibility && {

@@ -23,6 +23,8 @@ interface Props {
   onStart: () => void;
   onKeep: () => void;
   onEdit: () => void;
+  /** Where the Limited note's "More in Equipment" goes. */
+  onOpenSettings?: () => void;
 }
 
 /** A plain description of what changed, derived from the two workouts. */
@@ -74,6 +76,7 @@ export default function AdaptScreen({
   onStart,
   onKeep,
   onEdit,
+  onOpenSettings = onEdit,
 }: Props) {
   const setup = EQUIPMENT_OPTIONS[constraints.equipment];
   const kept = adapted.exercises.length;
@@ -128,7 +131,7 @@ export default function AdaptScreen({
             </button>
           </div>
           <p className="review__lede">{summaryLine(adapted, originalSets)}</p>
-          {profile && <FeasibilityNote feasibility={adapted.feasibility} profile={profile} onOpenSettings={onEdit} />}
+          {profile && <FeasibilityNote feasibility={adapted.feasibility} profile={profile} onOpenSettings={onOpenSettings} />}
           {notices.map((notice) => (
             <p key={notice.kind} className="constraint-notice" role="status">
               {noticeText(notice)}

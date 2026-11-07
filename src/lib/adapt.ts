@@ -1,7 +1,7 @@
 import type { Program, ProgramExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } from '../data/flagship.ts';
-import type { Exercise, Profile, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import type { Exercise, Profile, SetupChoice, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
 import { atOrUnder, isCompound, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
@@ -18,7 +18,7 @@ import { liveExercises } from './liveProgression.ts';
  * the program; the engine's whole job is deciding what to leave out.
  */
 
-export type EquipmentChoice = 'home' | 'hotel' | 'bodyweight' | 'bands';
+export type EquipmentChoice = SetupChoice;
 
 export interface EquipmentOption {
   label: string;
@@ -106,8 +106,6 @@ export interface AdaptedExercise extends ProgramExercise {
   originalSets: number;
   /** Program load before a confirmed rack re-targeted it. */
   originalWeight?: number;
-  /** Today's setup's own rack (a travel gym): live loads come from it, at or under the target (#188). */
-  rackLoads?: number[];
 }
 
 export interface SkippedExercise {
@@ -266,7 +264,6 @@ export function adaptWorkout(
     }
     exercises.push({
       ...exercise,
-      ...(travelRack ? { rackLoads: [...setup.loads] } : {}),
       weight,
       originalWeight: exercise.weight,
       sets: exercise.sets,
@@ -434,6 +431,7 @@ export function toWorkoutExercises(adapted: AdaptedWorkout): WorkoutExercise[] {
       exerciseId: exercise.exerciseId,
       name: exercise.name,
       originalPlannedSets: exercise.originalSets,
+      ...(adapted.setup ? { setup: adapted.setup } : {}),
       planned,
       performed: planned.map((set) => ({
         weight: set.weight,
@@ -457,6 +455,8 @@ export function swapCandidateFor(
   session: WorkoutRecord | null,
   /** The swapped exercise holds the day's lead slot (see `leadSlotIds`). */
   lead = false,
+  /** The setup the swapped sets run on (#188). */
+  setup: EquipmentChoice = 'home',
 ): SwapCandidate {
   const open = session ? latestDoneSet(session, target.id) : null;
   if (open) {
@@ -464,7 +464,7 @@ export function swapCandidateFor(
   }
   const hold = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === target.id)?.holdSeconds;
   if (hold) return { exerciseId: target.id, name: target.name, weight: 0, reps: hold };
-  const prescription = prescribeExercise(target, profile, history, lead);
+  const prescription = prescribeExercise(target, profile, history, lead, true, setup);
   return {
     exerciseId: target.id,
     name: target.name,
@@ -554,7 +554,9 @@ export function restorePendingWorkout(
     });
     const done = group.reduce((sum, exercise) => sum + exercise.performed.length, 0);
     const pending = prescribed.planned.slice(done);
-    const sameVariant = group.find((exercise) => exercise.exerciseId === prescribed.exerciseId);
+    // Pending sets join a segment on the same setup; a gear switch starts a new segment, so
+    // each set keeps the setup it ran on (#188).
+    const sameVariant = group.find((exercise) => exercise.exerciseId === prescribed.exerciseId && exercise.setup === prescribed.setup);
     if (sameVariant) {
       sameVariant.planned.push(...pending.map((set) => ({ ...set })));
       sameVariant.performed.push(...pending.map((set) => ({ ...set, done: false, completedAt: null })));

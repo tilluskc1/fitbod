@@ -4,14 +4,15 @@ import type {
   MovementPattern,
   MuscleGroup,
   Profile,
+  SetupChoice,
   Unit,
   WorkoutExercise,
   WorkoutRecord,
 } from '../types.ts';
 import { loadLimitText, loadValue, unitLabel } from './units.ts';
-import { MAX_WEIGHT } from './validate.ts';
+import { MAX_REPS, MAX_WEIGHT } from './validate.ts';
 import { exerciseInWorkout } from './plan.ts';
-import { programExercise } from '../data/flagship.ts';
+import { HOTEL_DUMBBELLS, programExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
 
 /**
@@ -276,32 +277,27 @@ export interface ExercisePerformance {
 }
 
 /**
- * Planned below the lightest load of the session it follows: the app never plans
- * that by itself, only a setup's rack cap does (#188), so it says nothing about the
- * lifter's own load. Unplanned (0) loads are the lifter's pick and always count.
- */
-function cappedByGear(before: ExercisePerformance, next: ExercisePerformance): boolean {
-  const loads = [...before.done.map((set) => set.weight), before.plannedWeight].filter((kg) => kg > 0);
-  return next.plannedWeight > 0 && loads.length > 0 && next.plannedWeight < Math.min(...loads) - 0.001;
-}
-
-/**
- * The most recent completed session that contains this exercise. Active
- * sessions are ignored: unfinished data must not drive the next prescription,
- * and neither does a session a today-only rack capped (#188).
+ * The most recent completed session that contains this exercise on this setup (#188).
+ * Active sessions are ignored: unfinished data must not drive the next prescription.
+ * Sets without a recorded setup ran on the saved one ('home'). A today-only setup with
+ * no history of its own for this exercise starts from the saved setup's.
  */
 export function lastExercisePerformance(
   history: WorkoutRecord[],
   exerciseId: string,
+  setup: SetupChoice = 'home',
 ): ExercisePerformance | null {
-  const sessions: { time: number; performance: ExercisePerformance }[] = [];
+  let latest: ExercisePerformance | null = null;
+  let latestTime = Number.NEGATIVE_INFINITY;
   for (const workout of history) {
     if (workout.status !== 'completed') continue;
-    const found = exerciseInWorkout(workout, exerciseId);
+    const own = workout.exercises.filter((exercise) => (exercise.setup ?? 'home') === setup);
+    const found = exerciseInWorkout({ ...workout, exercises: own }, exerciseId);
     if (!found) continue;
     const time = new Date(workout.date).getTime();
-    if (Number.isNaN(time)) continue;
-    sessions.push({ time, performance: {
+    if (!(time > latestTime)) continue;
+    latestTime = time;
+    latest = {
       workoutId: workout.id,
       workoutName: workout.name,
       date: workout.date,
@@ -311,18 +307,9 @@ export function lastExercisePerformance(
       plannedWeight: found.firstPlanned?.weight ?? 0,
       plannedReps: found.firstPlanned?.reps ?? 0,
       done: found.done.map((set) => ({ weight: set.weight, reps: set.reps })),
-    } });
+    };
   }
-  // Oldest first (stable, so the first record at one time still wins), skipping capped sessions.
-  sessions.sort((a, b) => a.time - b.time);
-  let latest: ExercisePerformance | null = null;
-  let latestTime = Number.NEGATIVE_INFINITY;
-  for (const { time, performance } of sessions) {
-    if (!(time > latestTime) || (latest && cappedByGear(latest, performance))) continue;
-    latestTime = time;
-    latest = performance;
-  }
-  return latest;
+  return latest ?? (setup === 'home' ? null : lastExercisePerformance(history, exerciseId, 'home'));
 }
 
 export type ProgressionBasis =
@@ -332,7 +319,9 @@ export type ProgressionBasis =
   | 'repeat'
   | 'mixed-load'
   | 'hold'
-  | 'go-heavier';
+  | 'go-heavier'
+  /** Already at or above a today-only rack's heaviest load: its top, one more rep (#188). */
+  | 'rack-top';
 
 export interface Prescription {
   equipment: Equipment;
@@ -347,6 +336,8 @@ export interface Prescription {
   /** Loads the user typed for this exercise (see `typedLoads`): they read exactly as typed. */
   typed: number[];
   last: ExercisePerformance | null;
+  /** The load before a today-only rack lowered it (#188), so the day can say so. */
+  uncapped?: number;
 }
 
 /** Loads the user chose themselves: a done set whose weight differs from what the app planned for it. */
@@ -362,19 +353,55 @@ export function typedLoads(history: WorkoutRecord[], exerciseId: string): number
   );
 }
 
-/** `lead`: this is the day's first compound (see `leadCompoundId`). */
+/** A today-only setup's own rack for this equipment (#188): the travel gym's dumbbells. */
+function setupRack(setup: SetupChoice, equipment: Equipment): number[] | undefined {
+  return setup === 'hotel' && equipment === 'Dumbbell' ? [...HOTEL_DUMBBELLS].sort((a, b) => a - b) : undefined;
+}
+
+/**
+ * `lead`: this is the day's first compound (see `leadCompoundId`). `setup`: where the work
+ * runs (#188); its own history drives it, and a travel rack is the only rack. On that rack a
+ * load is the closest one at or under the target (none: the lifter picks), and a lift that
+ * would go past its heaviest load progresses by one rep at that load instead.
+ */
 export function prescribeExercise(
   exercise: Exercise,
   profile: Profile,
   history: WorkoutRecord[],
   lead = false,
   dayHasLead = true,
+  setup: SetupChoice = 'home',
+): Prescription {
+  const rack = setupRack(setup, exercise.equipment);
+  const prescription = prescribeOn(exercise, profile, history, lead, dayHasLead, setup, rack ?? availableLoads(profile, exercise.equipment));
+  if (!rack) return prescription;
+  const done = prescription.last?.done ?? [];
+  if ((prescription.basis === 'go-heavier' || prescription.basis === 'hold') && done.length > 0) {
+    const reps = Math.min(MAX_REPS, Math.min(...done.map((set) => set.reps)) + 1);
+    return withRack({ ...prescription, basis: 'rack-top', reps }, rack);
+  }
+  return withRack(prescription, rack);
+}
+
+function withRack(prescription: Prescription, rack: number[]): Prescription {
+  if (prescription.weight <= 0) return prescription;
+  const weight = atOrUnder(rack, prescription.weight) ?? 0;
+  return weight === prescription.weight ? prescription : { ...prescription, weight, uncapped: prescription.weight };
+}
+
+function prescribeOn(
+  exercise: Exercise,
+  profile: Profile,
+  history: WorkoutRecord[],
+  lead: boolean,
+  dayHasLead: boolean,
+  setup: SetupChoice,
+  available: number[],
 ): Prescription {
   const catalog = repRangeFor(exercise);
   const { sets, range } = roleTarget(exercise, profile, lead, dayHasLead);
-  const available = availableLoads(profile, exercise.equipment);
   const increment = incrementFor(exercise.equipment, available);
-  const last = lastExercisePerformance(history, exercise.id);
+  const last = lastExercisePerformance(history, exercise.id, setup);
   const base = {
     equipment: exercise.equipment,
     range,
@@ -505,6 +532,8 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
       return last.done.length === 0
         ? `${when} was not logged. Repeating the same prescription.`
         : `Repeat ${prescription.sets} × ${prescription.reps}${weight > 0 ? ` @ ${logged(weight)}` : ''}: ${when} was cut short. Finish every set to earn the next step.`;
+    case 'rack-top':
+      return `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. ${logged(weight)} is this rack's heaviest: one more rep.`;
     case 'hold':
       if (equipment === 'Bodyweight') {
         return `Bodyweight movement at the top of the rep range (${range.max}). Add external load manually to keep progressing.`;
@@ -542,6 +571,8 @@ export function coachLine(prescription: Prescription, unit: Unit): string {
       return `Ready to go heavier: use your next ${equipment.toLowerCase()} up.`;
     case 'mixed-load':
       return `One load for every set: ${today}.`;
+    case 'rack-top':
+      return `This rack's heaviest — one more rep: ${today}.`;
     case 'hold':
       if (equipment === 'Bodyweight') return `Top of the range — own ${today}.`;
       return available.length === 0 ? `Top of the app's load limit — own ${today}.` : `Top of your rack — own ${today}.`;

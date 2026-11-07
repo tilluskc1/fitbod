@@ -419,7 +419,7 @@ export default function App() {
     if (!profile) return notes;
     const lead = leadCompoundId(liveProgram.exercises.map((exercise) => exercise.exerciseId));
     for (const exercise of liveProgram.exercises) {
-      const reason = targetReason(exercise.exerciseId, profile, state.history, unit, exercise.exerciseId === lead);
+      const reason = targetReason(exercise.exerciseId, profile, state.history, unit, exercise.exerciseId === lead, liveProgram.setup);
       if (reason) notes[exercise.exerciseId] = reason;
     }
     return notes;
@@ -430,7 +430,7 @@ export default function App() {
     if (!profile || !current) return floors;
     const lead = leadCompoundId(current.exercises.map((exercise) => exercise.exerciseId));
     for (const exercise of current.exercises) {
-      const floor = goHeavierFloor(exercise.exerciseId, profile, state.history, exercise.exerciseId === lead);
+      const floor = goHeavierFloor(exercise.exerciseId, profile, state.history, exercise.exerciseId === lead, exercise.setup);
       if (floor !== null) floors[exercise.exerciseId] = floor;
     }
     return floors;
@@ -892,7 +892,7 @@ export default function App() {
     // so a swap-back cannot render as bodyweight with a first-time target.
     const swapped = state.current?.exercises[exerciseIndex]?.exerciseId;
     const lead = state.current !== null && swapped !== undefined && leadSlotIds(state.current.exercises).includes(swapped);
-    const candidate = swapCandidateFor(target, profile, state.history, state.current, lead);
+    const candidate = swapCandidateFor(target, profile, state.history, state.current, lead, state.current?.exercises[exerciseIndex]?.setup);
     setState((currentState) =>
       currentState.current
         ? { ...currentState, current: swapPendingExercise(currentState.current, exerciseIndex, candidate) }
@@ -1070,6 +1070,10 @@ export default function App() {
         onEdit={() => {
           setView('tabs');
           setSheet({ kind: 'adjust' });
+        }}
+        onOpenSettings={() => {
+          setView('tabs');
+          setSheet({ kind: 'settings' });
         }}
         onKeep={() => {
           setPending(null);

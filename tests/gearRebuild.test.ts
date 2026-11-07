@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { exerciseById } from '../src/data/exercises.ts';
-import { adaptWorkout, confirmedLoads, EQUIPMENT_OPTIONS, lengthOptions, loadOptions, promisedMinutes, promisedProgramMinutes, setupConsequence, setupOptions } from '../src/lib/adapt.ts';
+import { adaptWorkout, restorePendingWorkout, confirmedLoads, EQUIPMENT_OPTIONS, lengthOptions, loadOptions, promisedMinutes, promisedProgramMinutes, setupConsequence, setupOptions } from '../src/lib/adapt.ts';
 import { switchOptions } from '../src/lib/switchDay.ts';
 import type { EquipmentChoice } from '../src/lib/adapt.ts';
 import { buildPlan } from '../src/lib/generator.ts';
@@ -9,8 +9,10 @@ import { liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
 import { prescribeExercise } from '../src/lib/progression.ts';
 import { FULL_BODY_A, NEEDS_LOAD_REASON } from '../src/data/flagship.ts';
 import { completeSession, createSession, updatePerformedSet } from '../src/lib/session.ts';
+import { EMPTY_STATE, serializeExport } from '../src/lib/storage.ts';
+import { parseState, validateState } from '../src/lib/validate.ts';
 import { planSlots, slotProgram, todayProgram } from '../src/lib/sequence.ts';
-import type { Profile } from '../src/types.ts';
+import type { Profile, WorkoutRecord } from '../src/types.ts';
 
 const gym: Profile = {
   goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 5,
@@ -98,14 +100,96 @@ test('#188: a dumbbell load above the travel rack caps to its top and says so', 
   assert.ok(liveExercises(adapted, gym, history).find((exercise) => exercise.exerciseId === 'goblet-squat')?.planned.every((set) => set.weight === top));
 });
 
-test('#188: a capped session never lowers the next load at the user\'s own gear', () => {
+/** Run today's travel day as prescribed: every planned set done as planned, then finished. */
+const travelSession = (id: string, now: string, history: WorkoutRecord[]) => {
+  const { adapted } = day('hotel', 60, history);
+  let session = createSession({ id, name: 'Legs', dayIndex: legs.index, now, exercises: liveExercises(adapted, gym, history) });
+  session.exercises.forEach((exercise, i) => exercise.performed.forEach((_, j) => {
+    session = updatePerformedSet(session, i, j, { done: true }, now);
+  }));
+  return completeSession(session, { early: false, now });
+};
+const gobletSets = (record: WorkoutRecord) => record.exercises.filter((exercise) => exercise.exerciseId === 'goblet-squat');
+const rx = (history: WorkoutRecord[], setup?: EquipmentChoice) => {
+  const prescription = prescribeExercise(goblet, gym, history, true, true, setup);
+  return { weight: prescription.weight, reps: prescription.reps, basis: prescription.basis };
+};
+
+test('#188: a go-heavier target above the travel rack plans its top at one more rep, never a 0 kg pick', () => {
+  const home = workout('w-1', '2026-11-01T10:00:00.000Z', 40, 40, 'goblet-squat', 'Goblet Squat', 30);
+  const before = rx([home]);
+  assert.equal(before.basis, 'go-heavier');
+  const { adapted } = day('hotel', 60, [home]);
+  const planned = liveExercises(adapted, gym, [home]).find((exercise) => exercise.exerciseId === 'goblet-squat')!;
+  assert.deepEqual(planned.planned.map((set) => set.weight), planned.planned.map(() => 25));
+  assert.ok(planned.planned.every((set) => set.reps === 31), JSON.stringify(planned.planned));
+  assert.equal(planned.setup, 'hotel', 'the session records the setup its sets ran on');
+  const travel = travelSession('t-1', '2026-11-02T10:00:00.000Z', [home]);
+  assert.deepEqual(rx([home, travel]), before, 'a travel session never changes the home prescription');
+});
+
+test('#188: a mid-session switch records each segment\'s setup and never lowers home loads', () => {
   const home = workout('w-1', '2026-11-01T10:00:00.000Z', 40);
-  const travel = workout('w-2', '2026-11-03T10:00:00.000Z', 25);
-  const again = workout('w-3', '2026-11-04T10:00:00.000Z', 25);
-  const before = prescribeExercise(goblet, gym, [home], true);
-  assert.ok(before.weight >= 40);
-  assert.equal(prescribeExercise(goblet, gym, [home, travel], true).weight, before.weight, 'one capped session');
-  assert.equal(prescribeExercise(goblet, gym, [home, travel, again], true).weight, before.weight, 'two capped sessions');
+  let session = createSession({ id: 'w-2', name: 'Legs', dayIndex: legs.index, now: '2026-11-03T10:00:00.000Z',
+    exercises: [{ exerciseId: 'goblet-squat', name: 'Goblet Squat',
+      planned: [0, 1, 2, 3].map(() => ({ weight: 40, reps: 8 })),
+      performed: [0, 1, 2, 3].map(() => ({ weight: 40, reps: 8, done: false, completedAt: null })) }] });
+  for (const index of [0, 1]) session = updatePerformedSet(session, 0, index, { done: true }, '2026-11-03T10:05:00.000Z');
+  const switched = restorePendingWorkout(session, day('hotel', 60, [home]).adapted, gym, [home]);
+  const segments = gobletSets(switched);
+  assert.deepEqual(segments.map((segment) => segment.setup), [undefined, 'hotel']);
+  assert.deepEqual(segments[0].performed.map((set) => [set.weight, set.done]), [[40, true], [40, true]]);
+  assert.ok(segments[1].planned.every((set) => set.weight <= 25));
+  let finished = switched;
+  finished.exercises.forEach((exercise, i) => exercise.performed.forEach((set, j) => {
+    if (!set.done) finished = updatePerformedSet(finished, i, j, { done: true }, '2026-11-03T10:30:00.000Z');
+  }));
+  const history = [home, completeSession(finished, { early: false, now: '2026-11-03T10:30:00.000Z' })];
+  assert.equal(rx(history).weight, 40, 'home reads only the home sets: 2 of 4 at 40 repeat 40');
+  // And back again: travel sets done first never pull a home day down either.
+  const back = restorePendingWorkout(createSession({ id: 'w-3', name: 'Legs', dayIndex: legs.index, now: '2026-11-04T10:00:00.000Z',
+    exercises: liveExercises(day('hotel', 60, [home]).adapted, gym, [home]) }), adaptWorkout(slotProgram(gym, legs, [home]), { minutes: 60, equipment: 'home' }, []), gym, [home]);
+  assert.ok(gobletSets(back).every((segment) => segment.setup === undefined), 'nothing done yet: the whole exercise moves to home');
+});
+
+test('#188: travel lifts progress from travel history while home holds', () => {
+  const home = workout('w-1', '2026-11-01T10:00:00.000Z', 18, 18, 'goblet-squat', 'Goblet Squat', 30);
+  const homeNext = rx([home]);
+  let history = [home];
+  const seen: { weight: number; reps: number }[] = [];
+  for (let k = 0; k < 5; k += 1) {
+    const next = rx(history, 'hotel');
+    seen.push({ weight: next.weight, reps: next.reps });
+    history = [...history, travelSession(`t-${k}`, `2026-11-1${k}T10:00:00.000Z`, history)];
+  }
+  for (let k = 1; k < seen.length; k += 1) {
+    const up = seen[k].weight > seen[k - 1].weight || (seen[k].weight === seen[k - 1].weight && seen[k].reps > seen[k - 1].reps);
+    assert.ok(up, JSON.stringify(seen));
+  }
+  assert.ok(seen.every((step) => EQUIPMENT_OPTIONS.hotel.loads.includes(step.weight)), JSON.stringify(seen));
+  assert.deepEqual(rx(history), homeNext, 'five travel sessions leave home where it was');
+});
+
+test('#188: records without a setup are the saved setup\'s, and a travel-only exercise starts fresh at home', () => {
+  const legacy = workout('w-1', '2026-11-01T10:00:00.000Z', 30);
+  assert.equal(gobletSets(legacy)[0].setup, undefined);
+  assert.equal(rx([legacy]).weight, rx([legacy], 'home').weight);
+  const travelOnly = travelSession('t-1', '2026-11-02T10:00:00.000Z', []);
+  assert.equal(rx([travelOnly]).basis, 'first-time');
+});
+
+test('#188: the stored setup validates and round-trips through export and restore', () => {
+  const record = travelSession('t-1', '2026-11-02T10:00:00.000Z', [workout('w-1', '2026-11-01T10:00:00.000Z', 30)]);
+  const state = { ...EMPTY_STATE, profile: gym, plan: buildPlan(gym), history: [workout('w-1', '2026-11-01T10:00:00.000Z', 30), record] };
+  const parsed = parseState(serializeExport(state, '2026-11-07T10:00:00.000Z'));
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
+  assert.deepEqual(parsed.state.history.map((item) => item.exercises.map((exercise) => exercise.setup ?? null)),
+    state.history.map((item) => item.exercises.map((exercise) => exercise.setup ?? null)));
+  assert.ok(parsed.state.history[1].exercises.every((exercise) => exercise.setup === 'hotel'));
+  assert.ok(!('setup' in parsed.state.history[0].exercises[0]) || parsed.state.history[0].exercises[0].setup === undefined);
+  const bad = structuredClone(state);
+  (bad.history[1].exercises[0] as { setup?: string }).setup = 'gym';
+  assert.equal(validateState(bad).ok, false);
 });
 
 test('#188: a lighter load the user chose, or a mixed-load hold, still drives the next load', () => {
