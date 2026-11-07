@@ -325,3 +325,25 @@ test('an open slot session gives a non-flagship movement its own rep range, not 
   const expected = prescribeExercise(other, profile, []).range;
   assert.deepEqual(shown.repRange, [expected.min, expected.max]);
 });
+
+// UI7-12 (#154): every recap line names the next target, and unfinished work says it repeats.
+test('recap: finished exercise names its next target; unfinished ones say the target repeats', () => {
+  const session = startLiveSession([]);
+  let logged = logAll(session, 0, 15, 10);
+  // Second exercise: one set only, so it is cut short.
+  logged = updatePerformedSet(logged, 1, 0, { weight: 10, reps: 8 });
+  logged = logSet(logged, 1, 0, '2026-11-02T10:20:00.000Z');
+  const { state, workout } = finish(logged);
+  const lines = progressionLines(workout, profile, state.history, 'kg');
+  assert.ok(lines.length >= 3);
+  for (const line of lines) assert.ok(line.next.length > 0, `${line.name} names a next target`);
+
+  const [done, partial, ...untouched] = lines;
+  assert.match(done.reason, /One step up|Add a rep|go heavier/);
+  assert.match(partial.reason, /^Repeat .+ was cut short\./);
+  const unlogged = untouched.filter((item) => item.performed === null && !/hold/.test(item.next));
+  assert.ok(unlogged.length > 0, 'at least one loaded exercise was left unlogged');
+  for (const line of unlogged) {
+    assert.match(line.reason, /was not logged\. Repeating the same prescription\./);
+  }
+});

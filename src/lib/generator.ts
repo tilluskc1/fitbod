@@ -157,6 +157,7 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
   const patternCounts = new Map<string, number>();
   const primaryMuscleCounts = new Map<MuscleGroup, number>();
 
+  const pullDay = day.focus[0] === 'Back';
   const canTake = (exercise: Exercise, allowDuplicatePattern: boolean): boolean => {
     if (picked.some((item) => item.id === exercise.id || areIncompatible(item.id, exercise.id))) return false;
     const patterns = patternCounts.get(exercise.pattern) ?? 0;
@@ -167,6 +168,8 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
     } else if (patterns >= 2) {
       return false;
     }
+    // A pull day is back first: one curl at most, the rest of the slots go to back work (#155).
+    if (pullDay && exercise.pattern === 'elbow_flexion' && patterns >= 1) return false;
     const primary = exercise.muscles[0];
     if ((primaryMuscleCounts.get(primary) ?? 0) >= 2) return false;
     return true;

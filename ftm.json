@@ -1,0 +1,72 @@
+{
+ "390-todaySheet": {
+  "tab": [],
+  "shift": []
+ },
+ "390-howto": {
+  "tab": [],
+  "shift": []
+ },
+ "390-ret": "OUT:play_arrow How-to",
+ "390-loggerIsDialog": false,
+ "390-loggerTab": [
+  "monitoring History",
+  "tune Replace",
+  "Enter dumbbell load (lb e",
+  "Skip first-weight help",
+  "Confirm",
+  "Edit weight for set 1",
+  "Edit reps for set 1",
+  "Edit weight for set 2",
+  "Edit reps for set 2",
+  "Edit weight for set 3",
+  "Edit reps for set 3",
+  "Edit weight for set 4",
+  "Edit reps for set 4",
+  "Edit weight for set 5",
+  "Edit reps for set 5",
+  "arrow_back_ios_new Push 0",
+  "Minimize workout",
+  "Finish",
+  "Incline Dumbbell Press de",
+  "Incline Dumbbell Press",
+  "More actions for Incline ",
+  "play_arrow How-to"
+ ],
+ "390-errs": [],
+ "360-todaySheet": {
+  "tab": [],
+  "shift": []
+ },
+ "360-howto": {
+  "tab": [],
+  "shift": []
+ },
+ "360-ret": "OUT:play_arrow How-to",
+ "360-loggerIsDialog": false,
+ "360-loggerTab": [
+  "monitoring History",
+  "tune Replace",
+  "Enter dumbbell load (lb e",
+  "Skip first-weight help",
+  "Confirm",
+  "Edit weight for set 1",
+  "Edit reps for set 1",
+  "Edit weight for set 2",
+  "Edit reps for set 2",
+  "Edit weight for set 3",
+  "Edit reps for set 3",
+  "Edit weight for set 4",
+  "Edit reps for set 4",
+  "Edit weight for set 5",
+  "Edit reps for set 5",
+  "arrow_back_ios_new Push 0",
+  "Minimize workout",
+  "Finish",
+  "Incline Dumbbell Press de",
+  "Incline Dumbbell Press",
+  "More actions for Incline ",
+  "play_arrow How-to"
+ ],
+ "360-errs": []
+}

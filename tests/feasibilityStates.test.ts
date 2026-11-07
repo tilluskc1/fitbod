@@ -89,7 +89,7 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
 
     const curls = screens(Today, Plan, noCurls, 'Pull');
     assert.match(curls.today, /<button[^>]*>Allow [^<]+<\/button>/);
-    assert.match(plain(curls.today), /Limited session · 3 of 5 exercises 3 of 5 exercises are possible [^.]+\. No biceps exercise is possible with these constraints\./, 'reason under the line');
+    assert.match(plain(curls.today), /Limited session · 4 of 5 exercises 4 of 5 exercises are possible [^.]+\. No biceps exercise is possible with these constraints\./, 'reason under the line');
 
     // Five alternatives: three chips, the rest behind the equipment settings.
     const push = screens(Today, Plan, barbell, 'Push');

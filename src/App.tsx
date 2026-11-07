@@ -105,6 +105,9 @@ import
 import DurationSheet from './components/DurationSheet';
 import type { LengthScope } from './components/DurationSheet';
 import GymSheet from './components/GymSheet';
+import SwitchSheet from './components/SwitchSheet';
+import { skipForward, switchOptions } from './lib/switchDay';
+import type { SwitchOption } from './lib/switchDay';
 import
  Onboarding from './components/Onboarding';
 import
@@ -131,8 +134,9 @@ type SheetState =
   | { kind: 'adjust' }
   | { kind: 'length' }
   | { kind: 'gym' }
+  | { kind: 'switch' }
   | { kind: 'settings' }
-  | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' }
+  | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' | 'history' }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
   | { kind: 'why'; exerciseId: string; exerciseIndex: number }
@@ -630,6 +634,21 @@ export default function App() {
       : `No day in your split works with ${chip}.`;
   })();
 
+  /** (#150) Train another day in the split: forward skips through the existing guarded skip, never a catch-up. */
+  const pickDay = (option: SwitchOption) => {
+    if (option.offset === 0) {
+      setSheet({ kind: 'none' });
+      return;
+    }
+    if (current) {
+      setNotice('Finish or discard the open session before switching days.');
+      return;
+    }
+    setState((currentState) => skipForward(currentState, option.offset, new Date().toISOString()));
+    setSheet({ kind: 'none' });
+    setNotice(`${option.name} is up. Skipped ${option.skips.join(', ')}; a skip earns no progression.`);
+  };
+
   const restoreOriginal = () => {
     setState((currentState) => {
       const original = adaptWorkout(
@@ -932,6 +951,7 @@ export default function App() {
               : currentState,
           )
         }
+        onReplace={(exerciseIndex) => setSheet({ kind: 'swap', exerciseIndex })}
         onOpenActions={(exerciseIndex, mode) =>
           setSheet({
             kind: 'actions',
@@ -1007,6 +1027,7 @@ export default function App() {
             onAdjust={() => setSheet({ kind: 'adjust' })}
             onOpenLength={() => setSheet({ kind: 'length' })}
             onOpenGym={() => setSheet({ kind: 'gym' })}
+            onOpenSwitch={slot ? () => setSheet({ kind: 'switch' }) : undefined}
             alternativeDay={alternativeDay}
             onWhy={() =>
               setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
@@ -1126,6 +1147,14 @@ export default function App() {
           savedGear={[...profile.equipment, ...profile.support].join(', ') || 'none'}
           onPick={pickSetup}
           onEditSaved={() => setSheet({ kind: 'settings' })}
+          onClose={closeSheet}
+        />
+      )}
+
+      {sheet.kind === 'switch' && profile && (
+        <SwitchSheet
+          options={switchOptions(profile, state, state.history, constraints)}
+          onPick={pickDay}
           onClose={closeSheet}
         />
       )}

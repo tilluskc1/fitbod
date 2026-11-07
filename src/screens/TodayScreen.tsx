@@ -41,6 +41,8 @@ interface Props {
   onOpenLength?: () => void;
   /** (#149) Opens the gym sheet. */
   onOpenGym?: () => void;
+  /** (#150) Opens the Switch sheet. */
+  onOpenSwitch?: () => void;
   /** (#149) On a day nothing fits, another day in the split that does, in one sentence. */
   alternativeDay?: string;
 }
@@ -161,6 +163,7 @@ export default function TodayScreen({
   onReviewChange,
   onOpenLength,
   onOpenGym,
+  onOpenSwitch,
   alternativeDay,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
@@ -242,6 +245,12 @@ export default function TodayScreen({
                 <Icon name="fitness_center" size={16} />
                 {setup.short}
                 <Icon name="expand_more" size={18} />
+              </button>
+            )}
+            {onOpenSwitch && (
+              <button type="button" className="t7-pill" onClick={onOpenSwitch} disabled={Boolean(current)} aria-label="Switch workout">
+                <Icon name="arrow_forward" size={16} />
+                Switch
               </button>
             )}
           </div>
