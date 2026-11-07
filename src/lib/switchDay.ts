@@ -1,7 +1,7 @@
 import type { AppState, Profile, WorkoutRecord } from '../types.ts';
 import { adaptWorkout } from './adapt.ts';
 import type { Constraints } from './adapt.ts';
-import { currentSlot, cursorFor, planSlots, skipCurrentSlot, slotProgram } from './sequence.ts';
+import { currentSlot, cursorFor, planSlots, skipCurrentSlot, todayProgram } from './sequence.ts';
 
 export interface SwitchOption {
   slotId: string;
@@ -31,7 +31,9 @@ export function switchOptions(
   const start = slots.findIndex((slot) => slot.id === here.id);
   return slots.map((_, step) => {
     const slot = slots[(start + step) % slots.length];
-    const program = slotProgram(profile, slot, history);
+    // The saved setup rates the saved day; another setup rates the day it rebuilds (#188).
+    const program = todayProgram(profile, slot, history,
+      constraints.equipment === 'home' ? {} : constraints);
     const adapted = adaptWorkout(program, constraints, profile.exclusions ?? []);
     const status: SwitchOption['status'] =
       adapted.totalSets === 0 || program.feasibility?.status === 'infeasible' ? 'none'

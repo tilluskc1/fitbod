@@ -1,5 +1,6 @@
 import type { AppState, MuscleGroup, PlanDay, Profile, SlotSkip, WorkoutRecord } from '../types.ts';
 import type { Program, ProgramExercise } from '../data/flagship.ts';
+import type { EquipmentChoice } from './adapt.ts';
 import { detailOf, loadModeOf, programExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { buildPlan, generateWorkout } from './generator.ts';
@@ -131,6 +132,34 @@ export function slotProgram(
     exercises,
     feasibility: generated.feasibility,
   };
+}
+
+/** The kit a today-only setup other than the saved one provides (#188). Bands have no catalog movements. */
+const SETUP_KIT: Record<Exclude<EquipmentChoice, 'home'>, Pick<Profile, 'equipment' | 'support'>> = {
+  hotel: { equipment: ['Dumbbell'], support: ['Bench'] },
+  bodyweight: { equipment: [], support: [] },
+  bands: { equipment: [], support: [] },
+};
+
+/**
+ * Today's program for the slot (#188). The saved setup keeps the saved day, rebuilt only when
+ * today is longer (#17); a shorter day is trimmed later by `adaptWorkout`. Another setup
+ * rebuilds the day from that setup's kit at today's length, so it gets that kit's best work
+ * and its own honest feasibility instead of what survives the saved day.
+ */
+export function todayProgram(
+  profile: Profile,
+  slot: PlanSlot,
+  history: WorkoutRecord[],
+  today: { minutes?: number; equipment?: EquipmentChoice } = {},
+): Program {
+  const saved = profile.sessionMinutes ?? 35;
+  if (!today.equipment || today.equipment === 'home') {
+    return slotProgram(today.minutes && today.minutes > saved ? { ...profile, sessionMinutes: today.minutes } : profile, slot, history);
+  }
+  const kit = SETUP_KIT[today.equipment];
+  const program = slotProgram({ ...profile, ...kit, sessionMinutes: today.minutes ?? saved }, slot, history);
+  return { ...program, setup: today.equipment };
 }
 
 /**

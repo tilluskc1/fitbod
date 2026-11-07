@@ -30,7 +30,7 @@ import
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A, programSetCount } from './data/flagship';
-import { cursorFor, planRevisionOf, planSlots, revisePlan, skipCurrentSlot, slotAt, slotProgram, updateProfile } from './lib/sequence';
+import { cursorFor, planRevisionOf, planSlots, revisePlan, skipCurrentSlot, slotAt, slotProgram, todayProgram, updateProfile } from './lib/sequence';
 import {
   liveAdapted,
   liveExercises,
@@ -361,17 +361,25 @@ export default function App() {
    * value feeds Today, the review, the logger and the sheets, so no screen can
    * describe work the next one will not ask for.
    */
-  /** The slot's day built for a length; longer than the saved length adds work (#17). */
-  const programAt = useCallback(
-    (minutes?: number) => (profile && slot
-      ? slotProgram(minutes ? { ...profile, sessionMinutes: minutes } : profile, slot, state.history)
-      : FULL_BODY_A),
+  /**
+   * The slot's day for a length and setup: longer than the saved length adds work (#17), a
+   * shorter one is trimmed by adaptWorkout, and a setup other than the saved one is rebuilt
+   * from that setup's kit (#188).
+   */
+  const programFor = useCallback(
+    (today: Partial<Constraints> = {}) => (profile && slot ? todayProgram(profile, slot, state.history, today) : FULL_BODY_A),
     [profile, slot, state.history],
   );
-  // A today-only length above the saved one rebuilds the day at that length; a shorter one trims it.
-  const longerToday = override && profile && override.minutes > (profile.sessionMinutes ?? 35) ? override.minutes : undefined;
-  const program = useMemo(() => programAt(longerToday), [programAt, longerToday]);
-  const defaultProgram = useMemo(() => programAt(), [programAt]);
+  const program = useMemo(() => programFor(constraints), [programFor, constraints]);
+  /** The saved setup's day at today's length: what the saved gear runs and restores to. */
+  const homeProgram = useMemo(() => programFor({ minutes: constraints.minutes }), [programFor, constraints.minutes]);
+  /** Today's setup at the saved length: the base the duration sheet compares against. */
+  const defaultProgram = useMemo(() => programFor({ equipment: constraints.equipment }), [programFor, constraints.equipment]);
+  /** A proposed adaptation: another setup is rebuilt from its kit, the saved one adapts the saved day. */
+  const adaptFor = useCallback(
+    (next: Constraints) => adaptWorkout(next.equipment === 'home' ? homeProgram : programFor(next), next, exclusions),
+    [homeProgram, programFor, exclusions],
+  );
   const adapted = useMemo(
     () => adaptWorkout(program, constraints, exclusions),
     [program, constraints, exclusions],
@@ -387,8 +395,8 @@ export default function App() {
   );
 
   const pendingAdapted = useMemo(
-    () => (pending ? adaptWorkout(program, pending.constraints, exclusions) : null),
-    [pending, program, exclusions],
+    () => (pending ? adaptFor(pending.constraints) : null),
+    [pending, adaptFor],
   );
 
   const current = state.current;
@@ -479,7 +487,7 @@ export default function App() {
    * so the preview, the review and the logger can never disagree.
    */
   const startSession = (next: Constraints): boolean => {
-    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
+    const workout = adaptFor(next);
     if (workout.exercises.length === 0) {
       setNotice('No movement in this workout can be done with that setup.');
       return false;
@@ -516,7 +524,7 @@ export default function App() {
     const next = replacePrompt;
     setReplacePrompt(null);
     if (!next) return;
-    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
+    const workout = adaptFor(next);
     if (workout.exercises.length > 0) beginSession(workout);
   };
 
@@ -566,7 +574,7 @@ export default function App() {
     };
     // An open session keeps its completed sets: the adaptation replaces only
     // the pending prescriptions, so adjusting mid-workout never discards work.
-    const workout = adaptWorkout(program, next, profile?.exclusions ?? []);
+    const workout = adaptFor(next);
     if (current) {
       if (workout.exercises.length === 0) {
         setNotice('No movement in this workout can be done with that setup.');
@@ -670,7 +678,7 @@ export default function App() {
     if (!profile || !slot || adapted.exercises.length > 0) return undefined;
     const fits = planSlots(state.plan)
       .filter((other) => other.id !== slot.id)
-      .map((other) => ({ name: other.name, sets: adaptWorkout(slotProgram(profile, other, state.history), constraints, profile.exclusions ?? []).totalSets }))
+      .map((other) => ({ name: other.name, sets: adaptWorkout(todayProgram(profile, other, state.history, constraints.equipment === 'home' ? {} : constraints), constraints, profile.exclusions ?? []).totalSets }))
       .filter((other) => other.sets > 0);
     const chip = SETUPS[constraints.equipment].chip.toLowerCase();
     return fits.length
@@ -696,7 +704,7 @@ export default function App() {
   const restoreOriginal = () => {
     setState((currentState) => {
       const original = adaptWorkout(
-        program,
+        homeProgram,
         currentState.profile ? defaultConstraints(currentState.profile) : DEFAULT_CONSTRAINTS,
         currentState.profile?.exclusions ?? [],
       );
@@ -1195,7 +1203,7 @@ export default function App() {
 
       {sheet.kind === 'length' && profile && (
         <DurationSheet
-          options={lengthOptions(defaultProgram, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35, (minutes) => programAt(minutes))}
+          options={lengthOptions(defaultProgram, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35, (minutes) => programFor({ minutes, equipment: constraints.equipment }))}
           current={constraints.minutes}
           onClose={closeSheet}
           onPick={pickLength}
@@ -1204,7 +1212,7 @@ export default function App() {
 
       {sheet.kind === 'gym' && profile && (
         <GymSheet
-          options={setupOptions(program, constraints, profile.exclusions ?? [])}
+          options={setupOptions(program, constraints, profile.exclusions ?? [], (choice) => (choice === 'home' ? homeProgram : programFor({ ...constraints, equipment: choice })))}
           current={constraints.equipment}
           dayName={program.name}
           savedGear={isGymKit(profile) ? 'full gym' : [...profile.equipment, ...profile.support].join(', ') || 'none'}
@@ -1235,7 +1243,7 @@ export default function App() {
           }}
           onPreview={(next, notices) => {
             setPending(createProposal(next, proposalBase()));
-            setPendingNotices(withCeiling(notices, adaptWorkout(program, next, profile?.exclusions ?? [])));
+            setPendingNotices(withCeiling(notices, adaptFor(next)));
             setSheet({ kind: 'none' });
             setView('adapt');
           }}
@@ -1385,7 +1393,7 @@ export default function App() {
       {replacePrompt && current && (
         <DiscardSessionSheet
           currentName={current.name}
-          nextName={adaptWorkout(program, replacePrompt, profile?.exclusions ?? []).name}
+          nextName={adaptFor(replacePrompt).name}
           onDiscard={discardAndBegin}
           onKeep={() => setReplacePrompt(null)}
           onClose={() => setReplacePrompt(null)}

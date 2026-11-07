@@ -45,6 +45,8 @@ export interface Program {
   exercises: ProgramExercise[];
   /** The generated slot's honest status: Ready, Limited or Not enough equipment. */
   feasibility?: Feasibility;
+  /** A today-only setup the day was rebuilt for (#188); its gear is already checked. Absent: the saved setup. */
+  setup?: 'hotel' | 'bodyweight' | 'bands';
 }
 
 export const FULL_BODY_A: Program = {

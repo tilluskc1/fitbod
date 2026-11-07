@@ -81,6 +81,11 @@ function numbersFor(
   // Ready to go heavier with no next load the app can name (#165): the set waits for the
   // lifter's own pick instead of repeating last time's load as if it were the target.
   if (prescription.basis === 'go-heavier') return { weight: 0, reps: prescription.reps };
+  // A travel rack (#188) has what it has: the closest load at or under the target, else the lifter's pick.
+  if (exercise.rackLoads && prescription.weight > 0) {
+    const rack = [...exercise.rackLoads].sort((a, b) => a - b).filter((value) => value <= prescription.weight).at(-1);
+    return { weight: rack ?? 0, reps: prescription.reps };
+  }
   return { weight: prescription.weight, reps: prescription.reps };
 }
 

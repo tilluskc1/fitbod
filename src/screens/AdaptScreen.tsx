@@ -29,7 +29,9 @@ function summaryLine(adapted: AdaptedWorkout, originalSets: number): string {
     (exercise) => (exercise.originalWeight ?? exercise.weight) !== exercise.weight,
   );
   const parts: string[] = [];
-  if (adapted.exercises.length > 0) {
+  if (adapted.setup && adapted.exercises.length > 0) {
+    parts.push(`Rebuilt for ${EQUIPMENT_OPTIONS[adapted.setup].chip.toLowerCase()}: ${adapted.exercises.length} exercises.`);
+  } else if (adapted.exercises.length > 0) {
     parts.push(reweighted.length > 0 ? 'Same exercises and sets, loads set to what you own.' : 'Same exercises and weights.');
   }
   if (trimmed.length > 0) {
