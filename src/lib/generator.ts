@@ -51,6 +51,12 @@ const SPLITS: Record<number, PlanDay[]> = {
 };
 
 const CORE_PATTERNS = new Set(['core_flexion', 'core_stability']);
+/**
+ * A split day that lists Core after its main muscles takes one core exercise of at most 3 sets;
+ * the slot and time that frees go to the day's first muscle (#190). Full Body is not a split day.
+ */
+const capsCore = (day: PlanDay) => !day.name.startsWith('Full Body') && day.focus.includes('Core') && day.focus[0] !== 'Core';
+const CAPPED_CORE_SETS = 3;
 
 /**
  * Main lifts, best first within each movement (#131); the equipment filter
@@ -163,7 +169,8 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
   const primaryMuscleCounts = new Map<MuscleGroup, number>();
 
   const pullDay = day.focus[0] === 'Back';
-  const canTake = (exercise: Exercise, allowDuplicatePattern: boolean): boolean => {
+  const coreCapped = capsCore(day);
+  const canTake = (exercise: Exercise, allowDuplicatePattern: boolean, perMuscle = 2): boolean => {
     if (picked.some((item) => item.id === exercise.id || areIncompatible(item.id, exercise.id))) return false;
     const patterns = patternCounts.get(exercise.pattern) ?? 0;
     if (CORE_PATTERNS.has(exercise.pattern)) {
@@ -176,7 +183,7 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
     // A pull day is back first: one curl at most, the rest of the slots go to back work (#155).
     if (pullDay && exercise.pattern === 'elbow_flexion' && patterns >= 1) return false;
     const primary = exercise.muscles[0];
-    if ((primaryMuscleCounts.get(primary) ?? 0) >= 2) return false;
+    if ((primaryMuscleCounts.get(primary) ?? 0) >= perMuscle) return false;
     return true;
   };
 
@@ -241,7 +248,29 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
     if (canTake(exercise, true)) take(exercise);
   }
 
-  return { picked, covering, requirements };
+  // 4. A split day keeps one core exercise: a second one gives its slot to the day's first muscle,
+  // else another of its muscles (#190), in the direction the day has less of; a tie goes to the lead's
+  // (a second row beside a chin-up). With nothing to take it, the slot stays empty and the day is shorter.
+  // The new exercise is the first to go when time runs short, as the second core was.
+  const extraCore = coreCapped ? picked.filter((exercise) => CORE_PATTERNS.has(exercise.pattern))[1] : undefined;
+  let freed: Exercise | undefined;
+  if (extraCore) {
+    const leadPattern = pickLead(picked, day.focus)?.pattern;
+    const used = (exercise: Exercise) => 2 * (patternCounts.get(exercise.pattern) ?? 0) + Number(exercise.pattern !== leadPattern);
+    for (const muscle of day.focus.filter((item) => item !== 'Core')) {
+      freed = compoundFirst.filter((exercise) => exercise.muscles[0] === muscle && canTake(exercise, true, 3))
+        .sort((a, b) => used(a) - used(b))[0];
+      if (freed) break;
+    }
+  }
+  if (extraCore) {
+    picked.splice(picked.indexOf(extraCore), 1);
+    patternCounts.set(extraCore.pattern, (patternCounts.get(extraCore.pattern) ?? 1) - 1);
+    primaryMuscleCounts.set(extraCore.muscles[0], (primaryMuscleCounts.get(extraCore.muscles[0]) ?? 1) - 1);
+    if (freed) take(freed);
+  }
+
+  return { picked, covering, requirements, freed };
 }
 
 /**
@@ -265,7 +294,7 @@ export function generateWorkout(
   const fixed = targetCountOverride && targetCountOverride > 0
     ? Math.min(max, Math.max(MIN_EXERCISES, Math.round(targetCountOverride)))
     : undefined;
-  const { picked, covering, requirements } = selectExercises(profile, day, dayIndex, fixed ?? max);
+  const { picked, covering, requirements, freed } = selectExercises(profile, day, dayIndex, fixed ?? max);
 
   const coveredRequirements = requirements.filter((requirement) =>
     picked.some((exercise) => matchesRequirement(exercise, requirement)),
@@ -296,7 +325,9 @@ export function generateWorkout(
     const index = day.focus.indexOf(exercise.muscles[0]);
     return index < 0 ? day.focus.length : index;
   };
-  picked.sort((a, b) => tier(a) - tier(b) || focusRank(a) - focusRank(b));
+  // The slot a second core exercise freed (#190) goes first, unless it holds the lead.
+  const spare = (exercise: Exercise) => Number(exercise === freed && exercise !== lead);
+  picked.sort((a, b) => spare(a) - spare(b) || tier(a) - tier(b) || focusRank(a) - focusRank(b));
   const prescriptions = picked.map((exercise) =>
     prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined));
   const sets = prescriptions.map((prescription) => prescription.sets);
@@ -338,7 +369,8 @@ export function generateWorkout(
     // later compound never ends up with more sets than the lead (#133). A 5-set lead is already past 4.
     if (exhausted && room >= anotherExercise) {
       for (let index = 0; index < kept; index += 1) {
-        if (sets[index] < 4 && seconds() + exerciseSeconds(sets[index] + 1, rests[index]) - exerciseSeconds(sets[index], rests[index]) <= budget) sets[index] += 1;
+        const most = capsCore(day) && CORE_PATTERNS.has(picked[index].pattern) ? CAPPED_CORE_SETS : 4;
+        if (sets[index] < most && seconds() + exerciseSeconds(sets[index] + 1, rests[index]) - exerciseSeconds(sets[index], rests[index]) <= budget) sets[index] += 1;
       }
     }
     // The target is what the saved gear covers (#67): more gear could add exercises, but a day that
