@@ -532,3 +532,37 @@ export function consequence(option: LengthOption): string {
   return option.dropped.length ? `${sets} · ${lengthList(option.dropped)} out` : `${sets} · fewer sets, same exercises`;
 }
 
+
+/** Setups the Today gym sheet offers (#149), in display order. */
+export const SETUP_CHOICES: EquipmentChoice[] = ['home', 'hotel', 'bodyweight', 'bands'];
+
+export interface SetupOption {
+  choice: EquipmentChoice;
+  totalSets: number;
+  /** Sets the saved home setup holds at today's length. */
+  baseSets: number;
+  kind: 'program' | 'same' | 'fewer' | 'none';
+}
+
+/** What each setup leaves of today's workout, at today's length, against the saved home setup. */
+export function setupOptions(program: Program, constraints: Constraints, exclusions: string[]): SetupOption[] {
+  const base = adaptWorkout(program, { ...constraints, equipment: 'home' }, exclusions);
+  return SETUP_CHOICES.map((choice) => {
+    const adapted = adaptWorkout(program, { ...constraints, equipment: choice }, exclusions);
+    const kind: SetupOption['kind'] =
+      adapted.totalSets === 0 ? 'none'
+      : choice === 'home' ? 'program'
+      : adapted.totalSets === base.totalSets ? 'same'
+      : 'fewer';
+    return { choice, totalSets: adapted.totalSets, baseSets: base.totalSets, kind };
+  });
+}
+
+/** What one setup does, in a few words. */
+export function setupConsequence(option: SetupOption, dayName: string): string {
+  const sets = `${option.totalSets} ${option.totalSets === 1 ? 'set' : 'sets'}`;
+  if (option.kind === 'none') return `Nothing in ${dayName} works`;
+  if (option.kind === 'program') return `${sets} · your gear`;
+  if (option.kind === 'same') return `${sets} · same workout`;
+  return `${option.totalSets} of ${option.baseSets} sets fit`;
+}

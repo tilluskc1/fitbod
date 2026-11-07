@@ -9,6 +9,8 @@ import
   adaptWorkout,
   confirmedLoads,
   lengthOptions,
+  setupOptions,
+  EQUIPMENT_OPTIONS as SETUPS,
   DEFAULT_CONSTRAINTS,
   loadOptions,
   restorePendingWorkout,
@@ -102,6 +104,7 @@ import
  AdaptScreen from './screens/AdaptScreen';
 import DurationSheet from './components/DurationSheet';
 import type { LengthScope } from './components/DurationSheet';
+import GymSheet from './components/GymSheet';
 import
  Onboarding from './components/Onboarding';
 import
@@ -127,6 +130,7 @@ type SheetState =
   | { kind: 'none' }
   | { kind: 'adjust' }
   | { kind: 'length' }
+  | { kind: 'gym' }
   | { kind: 'settings' }
   | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' }
   | { kind: 'day'; dayIndex: number }
@@ -582,6 +586,50 @@ export default function App() {
     setNotice('Today only. Your program is unchanged.');
   };
 
+  /** (#149) Today's equipment. Today only; the saved setup at the default length restores the original. */
+  const pickSetup = (choice: EquipmentChoice) => {
+    if (!profile || current) return;
+    if (choice === 'home' && constraints.minutes === (profile.sessionMinutes ?? 35)) {
+      restoreOriginal();
+      setNotice('Back to your gear.');
+      return;
+    }
+    setState((currentState) => ({
+      ...currentState,
+      todayOverride: {
+        date: dayKey(new Date()),
+        minutes: constraints.minutes,
+        equipment: choice === 'home' || choice === 'hotel' ? ['Dumbbell'] : [],
+        support: [],
+        appliedAt: new Date().toISOString(),
+        choice,
+      },
+    }));
+    proposalRevisionRef.current += 1;
+    appliedProposalRef.current = null;
+    setPending(null);
+    setPendingNotices([]);
+    setSheet({ kind: 'none' });
+    setNotice('Today only. Your program is unchanged.');
+  };
+
+  /**
+   * (#149) On a day the current setup cannot train, name another day in the
+   * split that it can, with its set count. Nothing is invented: each is adapted
+   * from the user's own plan with today's constraints.
+   */
+  const alternativeDay = (() => {
+    if (!profile || !slot || adapted.exercises.length > 0) return undefined;
+    const fits = planSlots(state.plan)
+      .filter((other) => other.id !== slot.id)
+      .map((other) => ({ name: other.name, sets: adaptWorkout(slotProgram(profile, other, state.history), constraints, profile.exclusions ?? []).totalSets }))
+      .filter((other) => other.sets > 0);
+    const chip = SETUPS[constraints.equipment].chip.toLowerCase();
+    return fits.length
+      ? fits.map((other) => `${other.name} works with ${chip}: ${other.sets} sets.`).join(' ') + ' Switch day to train it.'
+      : `No day in your split works with ${chip}.`;
+  })();
+
   const restoreOriginal = () => {
     setState((currentState) => {
       const original = adaptWorkout(
@@ -958,6 +1006,8 @@ export default function App() {
             onPreview={() => setSheet({ kind: 'preview' })}
             onAdjust={() => setSheet({ kind: 'adjust' })}
             onOpenLength={() => setSheet({ kind: 'length' })}
+            onOpenGym={() => setSheet({ kind: 'gym' })}
+            alternativeDay={alternativeDay}
             onWhy={() =>
               setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
             }
@@ -1065,6 +1115,18 @@ export default function App() {
           current={constraints.minutes}
           onClose={closeSheet}
           onPick={pickLength}
+        />
+      )}
+
+      {sheet.kind === 'gym' && profile && (
+        <GymSheet
+          options={setupOptions(program, constraints, profile.exclusions ?? [])}
+          current={constraints.equipment}
+          dayName={program.name}
+          savedGear={[...profile.equipment, ...profile.support].join(', ') || 'none'}
+          onPick={pickSetup}
+          onEditSaved={() => setSheet({ kind: 'settings' })}
+          onClose={closeSheet}
         />
       )}
 

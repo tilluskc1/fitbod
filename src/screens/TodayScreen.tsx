@@ -39,6 +39,10 @@ interface Props {
   onReviewChange?: (change: ProfileChange) => void;
   /** (#148) Opens the duration sheet. Absent in contexts that cannot change today's length. */
   onOpenLength?: () => void;
+  /** (#149) Opens the gym sheet. */
+  onOpenGym?: () => void;
+  /** (#149) On a day nothing fits, another day in the split that does, in one sentence. */
+  alternativeDay?: string;
 }
 
 function greeting(now: Date): string {
@@ -156,6 +160,8 @@ export default function TodayScreen({
   onSkipSlot,
   onReviewChange,
   onOpenLength,
+  onOpenGym,
+  alternativeDay,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -228,6 +234,19 @@ export default function TodayScreen({
               {adapted.minutes} min
               <Icon name="expand_more" size={18} />
             </button>
+            {onOpenGym && (
+              <button
+                type="button"
+                className="t7-pill"
+                onClick={onOpenGym}
+                disabled={Boolean(current)}
+                aria-label={`Equipment today, ${setup.chip}`}
+              >
+                <Icon name="fitness_center" size={16} />
+                {setup.short}
+                <Icon name="expand_more" size={18} />
+              </button>
+            )}
           </div>
         )}
 
@@ -387,6 +406,7 @@ export default function TodayScreen({
                       ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit, first.exerciseId === leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId))), plannedLoad(profile.loads, history, first.exerciseId, unit))
                       : 'Pick a workout you can keep. The program follows from that.'}
               </p>
+              {adapted.exercises.length === 0 && alternativeDay && <p className="coach-card__text">{alternativeDay}</p>}
             </div>
           </div>
           <div className="coach-card__actions">
