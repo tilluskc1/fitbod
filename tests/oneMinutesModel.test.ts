@@ -59,13 +59,39 @@ test('#203: each day reads the same minutes on Plan, the switch and gym sheets a
       }
     }
   }
-  // Known overrun, exposed rather than hidden by the single model: a 2-day strength Full Body day
-  // at 20 min hits the generator's floor (4 movements × 2 sets) and runs 21. Today already read 21;
-  // Plan used to promise 20. Fixing the generator's floor is #197's, not this issue's.
-  assert.deepEqual(over, [
-    'gym Get Stronger 2d 20min Full Body A: 21',
-    'home Get Stronger 2d 20min Full Body A: 21',
-  ]);
+  // #197: a 2-day strength Full Body day at 20 min used to run 21 at the generator's floor.
+  assert.deepEqual(over, []);
+});
+
+test('#197: no day promises more than its length, at any level, and a short day keeps its movements', () => {
+  const over: string[] = [];
+  for (const [kit, gear] of Object.entries(KITS)) {
+    for (const goal of ['Build Muscle', 'Get Stronger']) {
+      for (const experience of ['Beginner', 'Intermediate', 'Advanced']) {
+        for (const days of [2, 3, 4, 5, 6]) {
+          for (const saved of [20, 30, 45, 60]) {
+            const profile = { ...profileFor(gear, days, saved, goal), experience } as Profile;
+            for (const slot of planSlots(buildPlan(profile))) {
+              for (const minutes of new Set([saved, 15, 20])) {
+                if (minutes > saved) continue;
+                const today = todayDay(profile, slot, minutes);
+                if (today.minutes > minutes) over.push(`${kit} ${goal} ${experience} ${days}d saved ${saved} today ${minutes} ${slot.name}: ${today.minutes}`);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.deepEqual(over, []);
+  // The floor gives up a set, not a required movement: the day stays Ready with all four.
+  for (const gear of [KITS.gym, KITS.home]) {
+    const profile = profileFor(gear, 2, 20, 'Get Stronger');
+    const program = slotProgram(profile, planSlots(buildPlan(profile))[0], []);
+    assert.equal(program.name, 'Full Body A');
+    assert.equal(program.feasibility?.status, 'ok');
+    assert.equal(program.exercises.length, 4);
+  }
 });
 
 test('#203: the review names the honest figure, not the asked length', async () => {

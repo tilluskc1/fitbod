@@ -333,6 +333,11 @@ export function generateWorkout(
       if (sets[index] > least) sets[index] -= 1;
       else index -= 1;
     }
+    // Still promising more minutes than asked at that floor (a 2-day strength day at 20 min, #197):
+    // the last movements drop to one set. Dropping a required movement would read as a gear gap (#67).
+    for (let index = kept - 1; index >= 0 && Math.round(seconds() / 60) * 60 > budget; index -= 1) {
+      if (!(index === 0 && lead) && sets[index] > 1) sets[index] -= 1;
+    }
     // No exercise left to add and at least one more exercise's worth of time:
     // 3-set work gets a fourth set in priority order while it fits, the lead first, so a
     // later compound never ends up with more sets than the lead (#133). A 5-set lead is already past 4.
