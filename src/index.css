@@ -1462,10 +1462,10 @@ textarea:focus-visible {
 
 .onboarding {
   min-height: 100%;
-  padding: 26px 22px 30px;
+  padding: 18px 22px 0;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 16px;
   /* A long step still scrolls on a small phone, but no scrollbar is drawn (like .screen). */
   scrollbar-width: none;
 }
@@ -1532,6 +1532,18 @@ textarea:focus-visible {
   border: 1px solid #e3eedc;
   background: #ffffff;
   min-height: 66px;
+}
+
+/* Goals sit two to a row with one-line descriptions so step 1 fits a phone (#222). */
+.option-list--grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 10px;
+}
+
+.option-list--grid .option-card {
+  min-height: 0;
+  padding: 12px 14px;
 }
 
 .option-card.selected {
@@ -1607,6 +1619,12 @@ textarea:focus-visible {
   padding-top: 18px;
   display: flex;
   gap: 10px;
+  /* Continue stays in reach on every step; the step scrolls above it (#222). */
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--surface) 72%, rgba(230, 242, 241, 0));
 }
 
 .onboarding-actions .primary {

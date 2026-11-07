@@ -5,13 +5,15 @@ import { DEFAULT_SUPPORT, EXERCISES } from '../src/data/exercises.ts';
 import { buildPlan, generateWorkout } from '../src/lib/generator.ts';
 import type { Profile } from '../src/types.ts';
 
-test('a fresh onboarding pre-selects no support equipment', async () => {
-  // The support chips live on step 4, which a static render cannot reach; assert the state they initialise from, and that Onboarding uses it.
+test('choosing At home pre-selects no support equipment', async () => {
+  // Onboarding now starts At a gym (owner default, #222), where a gym's racks and benches are
+  // preselected. Home gear must still never assume a bench: choosing At home resets support to
+  // DEFAULT_SUPPORT. The chips live on step 4, which a static render cannot reach, so assert the source.
   assert.deepEqual(DEFAULT_SUPPORT, []);
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const source = (await server.transformRequest('/src/components/Onboarding.tsx'))!.code;
-    assert.match(source, /useState\(DEFAULT_SUPPORT\)|useState\(\w*DEFAULT_SUPPORT/);
+    assert.match(source, /setSupport\(DEFAULT_SUPPORT\)/);
   } finally {
     await server.close();
   }
