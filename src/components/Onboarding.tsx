@@ -8,10 +8,10 @@ interface Props {
 }
 
 const GOALS: { value: Goal; label: string; blurb: string }[] = [
-  { value: 'Build Muscle', label: 'Build muscle', blurb: 'Hypertrophy-focused training' },
-  { value: 'Lose Fat', label: 'Lose fat', blurb: 'Higher-rep, higher-volume work' },
-  { value: 'Get Stronger', label: 'Get stronger', blurb: 'Compound-lift progression' },
-  { value: 'General Fitness', label: 'General fitness', blurb: 'Balanced full-body training' },
+  { value: 'Build Muscle', label: 'Build muscle', blurb: 'Moderate reps' },
+  { value: 'Lose Fat', label: 'Lose fat', blurb: 'Higher reps' },
+  { value: 'Get Stronger', label: 'Get stronger', blurb: 'Heavy compounds' },
+  { value: 'General Fitness', label: 'General fitness', blurb: 'Balanced' },
 ];
 
 const EXPERIENCES: { value: Experience; label: string; blurb: string }[] = [
@@ -27,13 +27,13 @@ export default function Onboarding({ onComplete }: Props) {
   const [goal, setGoal] = useState<Goal>('Build Muscle');
   const [experience, setExperience] = useState<Experience>('Beginner');
   const [daysPerWeek, setDaysPerWeek] = useState(3);
-  // No preselection: the first plan must not assume a length the user never chose.
-  const [sessionMinutes, setSessionMinutes] = useState<number | null>(null);
-  const [equipment, setEquipment] = useState<Equipment[]>(['Dumbbell']);
-  const [support, setSupport] = useState<SupportEquipment[]>(DEFAULT_SUPPORT);
+  // Defaults the owner chose (#222): 45 minutes at a gym. Both stay one tap to change.
+  const [sessionMinutes, setSessionMinutes] = useState<number | null>(45);
+  const [equipment, setEquipment] = useState<Equipment[]>([...EQUIPMENT_OPTIONS]);
+  const [support, setSupport] = useState<SupportEquipment[]>([...SUPPORT_OPTIONS]);
   const [loadsText, setLoadsText] = useState('');
   // Where they train sets the starting gear (#180). It is not stored: the saved gear says it.
-  const [place, setPlace] = useState<'gym' | 'home' | null>(null);
+  const [place, setPlace] = useState<'gym' | 'home' | null>('gym');
   const choosePlace = (next: 'gym' | 'home') => {
     setPlace(next);
     if (next === 'gym') {
@@ -130,7 +130,7 @@ export default function Onboarding({ onComplete }: Props) {
           </div>
 
           <span className="setup-label">Your goal</span>
-          <div className="option-list">
+          <div className="option-list option-list--grid">
             {GOALS.map((option) => (
               <button
                 key={option.value}
