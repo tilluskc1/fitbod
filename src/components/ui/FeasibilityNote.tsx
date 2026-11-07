@@ -19,10 +19,14 @@ export default function FeasibilityNote({ feasibility, profile, onOpenSettings, 
   const reason = feasibility.reason.replace(/^Limited session: (\w)/, (_, first: string) => first.toUpperCase());
   const MAX_CHIPS = 3;
   const missing = missingFamilies(feasibility);
+  const countGap = selectedCount > 0 && selectedCount < targetCount;
+  // A full day whose gear cannot train a focus muscle at all names that muscle (#67, #174).
+  const open = !countGap && !missing ? feasibility.reason.match(/ No (.+) exercise is possible/)?.[1] : undefined;
   const line = [
     status === 'infeasible' ? 'Not enough equipment' : 'Limited session',
-    selectedCount > 0 && selectedCount < targetCount ? `${selectedCount} of ${targetCount} exercises` : '',
+    countGap ? `${selectedCount} of ${targetCount} exercises` : '',
     missing ? `no ${missing}` : '',
+    open ? `no ${open} work` : '',
   ].filter(Boolean).join(' · ');
   return (
     <div className={`feasibility feasibility--${status}`} role="note">

@@ -46,15 +46,19 @@ function coverageItem(feasibility: { coverage: CoverageResult[] }, id: string): 
   return item;
 }
 
-test('kettlebell-only: Push and Pull are honestly limited and name the gear that fills them (#174)', () => {
+test('kettlebell-only: Push fills a short session, Pull names the biceps gap and the gear that fills it (#67, #174)', () => {
   const profile = makeProfile({ equipment: ['Kettlebell'] });
   const plan = buildPlan(profile);
   const push = generateWorkout(profile, plan[0], 0);
   const pull = generateWorkout(profile, plan[1], 1);
 
-  // A kettlebell presses overhead; Push-Up covers the horizontal press.
-  assert.equal(push.feasibility.status, 'limited');
+  // A kettlebell presses overhead; Push-Up covers the horizontal press. At 35 min that fills the
+  // session, so it is Ready (#67); at 60 min two exercises cannot fill half the time, so it is Limited.
+  assert.equal(push.feasibility.status, 'ok');
   assert.deepEqual(push.exercises.map((exercise) => exercise.exerciseId), ['kettlebell-press', 'push-up']);
+  const long = generateWorkout({ ...profile, sessionMinutes: 60 }, plan[0], 0);
+  assert.equal(long.feasibility.status, 'limited');
+  assert.match(long.feasibility.reason, /^Limited session: 2 of \d exercises are possible/);
 
   // A kettlebell rows, so Pull is a real day, but nothing here trains biceps directly: it says so
   // instead of claiming "biceps curls" from the row, and offers gear that adds a curl.

@@ -92,11 +92,15 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
 
     const curls = screens(Today, Plan, noCurls, 'Pull');
     assert.match(curls.today, /<button[^>]*>Allow [^<]+<\/button>/);
-    assert.match(plain(curls.today), /Limited session · 4 of 6 exercises 4 of 6 exercises are possible [^.]+\. No biceps exercise is possible with these constraints\./, 'reason under the line');
+    // The day fills its time, but with every curl excluded nothing trains biceps: named, with the fix (#67, #174).
+    assert.match(plain(curls.today), /Limited session · no biceps work 4 exercises fit\. No biceps exercise is possible with these constraints\./, 'reason under the line');
 
-    // Five alternatives: three chips, the rest behind the equipment settings.
-    const push = screens(Today, Plan, barbell, 'Push');
-    assert.equal(programFor(barbell, 'Push').feasibility?.alternatives.length, 5);
+    // Five alternatives: three chips, the rest behind the equipment settings. A kettlebell cannot fill
+    // half of a 60-minute Push, so that day is short (#67); a barbell Push now fills its 35 min and is Ready.
+    const thinPush: Profile = { ...kettlebell, sessionMinutes: 60 };
+    const push = screens(Today, Plan, thinPush, 'Push');
+    assert.equal(programFor(thinPush, 'Push').feasibility?.alternatives.length, 5);
+    assert.equal(programFor(barbell, 'Push').feasibility?.status, 'ok');
     for (const html of [push.today, push.plan]) {
       assert.equal((html.match(/class="feasibility__alt"/g) ?? []).length, 3);
       assert.match(html, /<button[^>]*>More in Equipment<\/button>/);
@@ -120,10 +124,12 @@ test('each alternative does what it says; Allow only previews, Confirm saves, Ca
   await withServer(async (load) => {
     const { default: FeasibilityNote } = await load('/src/components/ui/FeasibilityNote.tsx');
     const { ConfirmChange } = await load('/src/screens/Sheets.tsx');
-    const feasibility = programFor(noCurls, 'Pull').feasibility!;
+    // A thin day (the gear cannot fill half of 60 min) with an excluded exercise: more than three fixes on offer.
+    const thin: Profile = { ...base, daysPerWeek: 3, equipment: ['Kettlebell'], loads: {}, sessionMinutes: 60, exclusions: ['kettlebell-press'] };
+    const feasibility = programFor(thin, 'Push').feasibility!;
     let settings = 0;
     const reviews: { title: string; detail: string; patch: { exclusions?: string[] } }[] = [];
-    const node = (FeasibilityNote as (p: object) => unknown)({ feasibility, profile: noCurls,
+    const node = (FeasibilityNote as (p: object) => unknown)({ feasibility, profile: thin,
       onOpenSettings: () => { settings += 1; }, onReviewChange: (change: never) => reviews.push(change) });
     for (const button of elements(node).filter((el) => el.type === 'button')) button.props.onClick?.();
     const shown = feasibility.alternatives.slice(0, 3);
@@ -135,7 +141,7 @@ test('each alternative does what it says; Allow only previews, Confirm saves, Ca
     const [first] = reviews;
     assert.match(first.title, /^Allow .+ again\?$/);
     assert.match(first.detail, /future workouts/);
-    assert.deepEqual(first.patch.exclusions, noCurls.exclusions.filter((id) => id !== allow[0].exerciseId));
+    assert.deepEqual(first.patch.exclusions, thin.exclusions.filter((id) => id !== allow[0].exerciseId));
 
     const saved: unknown[] = [];
     let cancelled = 0;

@@ -75,11 +75,18 @@ test("Plan's catalog row reads the sets the fitted day gives, not the bare presc
   assert.match(row, /^4 sets/);
 });
 
-test('a day missing gear reports the gap the gear would close', () => {
-  const home = at(60, { daysPerWeek: 3, equipment: ['Dumbbell'], support: ['Bench'] });
-  const push = shape(home);
-  assert.equal(push.feasibility.status, 'limited');
-  assert.ok(push.targetCount > push.exercises.length && push.targetCount <= 6, `${push.exercises.length} of ${push.targetCount}`);
+test('a home day that fills its time is Ready; only gear that cannot fill half the session is a gap (#67)', () => {
+  for (const minutes of [45, 60]) {
+    const home = at(minutes, { daysPerWeek: 3, equipment: ['Dumbbell'], support: ['Bench'] });
+    buildPlan(home).forEach((day, index) => {
+      const session = generateWorkout(home, day, index);
+      assert.equal(session.feasibility.status, 'ok', `${day.name} at ${minutes} min: ${session.feasibility.reason}`);
+      assert.equal(session.targetCount, session.exercises.length);
+    });
+  }
+  const thin = shape(at(60, { daysPerWeek: 3, equipment: ['Kettlebell'], support: [] }));
+  assert.equal(thin.feasibility.status, 'limited');
+  assert.ok(thin.targetCount > thin.exercises.length && thin.targetCount <= 6, `${thin.exercises.length} of ${thin.targetCount}`);
 });
 
 test('every generated day fits its labelled minutes, except a 20-minute floor by under a minute', () => {
