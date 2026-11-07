@@ -26,7 +26,7 @@ import
 import
  type { Proposal, ProposalContext } from './lib/proposal';
 import
- { defaultConstraints, withCeiling } from './lib/constraints';
+ { defaultConstraints, ownedProfile, todayConstraints, withCeiling } from './lib/constraints';
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A, programSetCount } from './data/flagship';
@@ -305,24 +305,13 @@ export default function App() {
 
   /* ---------- derived ---------- */
 
-  const profile = state.profile;
+  /** Every screen reads the owned loads (#194); Settings edits the stored profile itself. */
+  const profile = useMemo(() => ownedProfile(state.profile), [state.profile]);
   const unit = unitOf(profile);
   const today = useMemo(() => new Date(now), [now]);
   const override = useMemo(() => activeOverride(state, today), [state, today]);
 
-  /**
-   * Today's constraint state: the approved adaptation, the saved equipment
-   * and session length, or the home default before onboarding finishes.
-   */
-  const constraints: Constraints = useMemo(() => {
-    if (!override) return profile ? defaultConstraints(profile) : DEFAULT_CONSTRAINTS;
-    return {
-      minutes: override.minutes,
-      equipment:
-        override.choice ?? (override.equipment.includes('Dumbbell') ? 'home' : 'bodyweight'),
-      loads: profile && profile.loads.Dumbbell?.length ? profile.loads.Dumbbell : undefined,
-    };
-  }, [override, profile]);
+  const constraints: Constraints = useMemo(() => todayConstraints(profile, override), [override, profile]);
 
   const exclusions = profile?.exclusions ?? NO_EXCLUSIONS;
   /** The slot the sequence is up to: the real A/B/C day, not a repeated fixture. */
@@ -980,7 +969,7 @@ export default function App() {
         history={state.history}
         now={now}
         loadOptions={loadOptions(constraints.equipment, constraints.loads)}
-        profileLoads={state.profile?.loads}
+        profileLoads={profile?.loads}
         calibrationLoads={confirmedLoads(constraints.equipment, constraints.loads)}
         experience={state.profile?.experience}
         skippedCalibrations={calibrationSkips}
@@ -1030,7 +1019,7 @@ export default function App() {
         onFeedback={saveFeedback}
         onRetryFeedback={attemptSave}
         progression={recapLines}
-        highlight={recapHighlight(recap, state.history, recapLines, unit, state.profile ?? undefined)}
+        highlight={recapHighlight(recap, state.history, recapLines, unit, profile)}
         onViewHistory={() => {
           setView('tabs');
           setTab('progress');
@@ -1056,7 +1045,7 @@ export default function App() {
         constraints={pending.constraints}
         notices={pendingNotices}
         unit={unit}
-        loads={state.profile?.loads}
+        loads={profile?.loads}
         history={state.history}
         onStart={() => acceptAdaptation(pending)}
         onEdit={() => {
@@ -1119,7 +1108,7 @@ export default function App() {
           <ProgressScreen
             history={state.history}
             unit={unit}
-            loads={state.profile?.loads}
+            loads={profile?.loads}
             onExport={exportData}
             onCorrect={correctSet}
             onDelete={deleteWorkout}
@@ -1257,9 +1246,9 @@ export default function App() {
         </Sheet>
       )}
 
-      {sheet.kind === 'settings' && (
+      {sheet.kind === 'settings' && state.profile && (
         <SettingsSheet
-          profile={profile}
+          profile={state.profile}
           onChange={patchProfile}
           onExport={exportData}
           onRestore={restoreFile}
@@ -1324,7 +1313,7 @@ export default function App() {
               planned={exercise.planned}
               history={state.history}
               unit={unit}
-              loads={state.profile?.loads}
+              loads={profile?.loads}
               reason={targetNotes[exercise.exerciseId]}
               onClose={closeSheet}
             />
@@ -1338,7 +1327,7 @@ export default function App() {
           exercises={todayExercises}
           unit={unit}
           history={state.history}
-          loads={state.profile?.loads}
+          loads={profile?.loads}
           // The tab bar's start: the one validated path (startSession).
           onStart={sheet.kind === 'preview' && !current ? () => { closeSheet(); startWorkout(); } : undefined}
           onClose={closeSheet}

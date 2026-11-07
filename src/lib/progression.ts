@@ -216,6 +216,20 @@ export function roleTarget(
   return { sets: compound && !(heavy && dayHasLead) ? 4 : 3, range };
 }
 
+/** A saved kit with a barbell and machines or cables is a gym, not a home setup (#180). */
+export function isGymKit(profile: Pick<Profile, 'equipment'>): boolean {
+  return profile.equipment.includes('Barbell')
+    && (profile.equipment.includes('Machine') || profile.equipment.includes('Cable'));
+}
+
+/**
+ * The loads the user owns: the one place a stored rack is read. A gym kit owns none, so a rack
+ * saved before #180 is ignored, never a cap or a pick; the stored value is left as it is (#194).
+ */
+export function ownedLoads(profile: Pick<Profile, 'equipment' | 'loads'>): Profile['loads'] {
+  return isGymKit(profile) ? {} : profile.loads;
+}
+
 /** Loads the profile says are actually selectable for this equipment. */
 export function availableLoads(profile: Pick<Profile, 'loads'>, equipment: Equipment): number[] {
   const list = profile.loads[equipment] ?? [];
@@ -349,7 +363,7 @@ export function prescribeExercise(
 ): Prescription {
   const catalog = repRangeFor(exercise);
   const { sets, range } = roleTarget(exercise, profile, lead, dayHasLead);
-  const available = availableLoads(profile, exercise.equipment);
+  const available = availableLoads({ loads: ownedLoads(profile) }, exercise.equipment);
   const increment = incrementFor(exercise.equipment, available);
   const last = lastExercisePerformance(history, exercise.id);
   const base = {

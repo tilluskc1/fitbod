@@ -49,8 +49,9 @@ interface AdjustProps {
 the others.
  */
 export function AdjustSheet({ constraints, originalMinutes, unit, profile, onClose, onPreview }: AdjustProps) {
+  const gym = Boolean(profile && isGymKit(profile));
   const [current, setCurrent] = useState(constraints);
-  const [text, setText] = useState(constraintSentence(constraints));
+  const [text, setText] = useState(constraintSentence(constraints, gym));
   const [notices, setNotices] = useState<ConstraintNotice[]>([]);
   // Nothing understood is not the same as nothing to change, so say so.
   const [unread, setUnread] = useState(false);
@@ -60,7 +61,7 @@ export function AdjustSheet({ constraints, originalMinutes, unit, profile, onClo
     setCurrent(resolved.constraints);
     setNotices(resolved.notices);
     setUnread(false);
-    setText(constraintSentence(resolved.constraints));
+    setText(constraintSentence(resolved.constraints, gym));
   };
 
   const onText = (value: string) => {
@@ -191,7 +192,7 @@ export function AdjustSheet({ constraints, originalMinutes, unit, profile, onClo
                   <span>
                     <span className="equipment-choice__name">{option.label}</span>
                     <span className="equipment-choice__detail">
-                      {key === 'home' && current.loads?.length && !(profile && isGymKit(profile))
+                      {key === 'home' && current.loads?.length && !gym
                         ? `Yours: ${current.loads.map((load) => formatWeight(load, unit)).join(', ')}`
                         : option.detail}
                     </span>
