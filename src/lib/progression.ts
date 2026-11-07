@@ -360,9 +360,10 @@ function setupRack(setup: SetupChoice, equipment: Equipment): number[] | undefin
 
 /**
  * `lead`: this is the day's first compound (see `leadCompoundId`). `setup`: where the work
- * runs (#188). The saved setup reads only its own history. A today-only setup takes the higher
- * (load, then reps) of what its own history and the saved setup's prescribe, so neither a stale
- * trip nor a home week holds it back. A travel rack is then the only rack: a load is the closest
+ * runs (#188). The saved setup reads only its own history. A today-only setup follows whichever
+ * of its own and the saved setup's last sessions is more recent, so a stale trip never holds it
+ * back, a step down the lifter chose at home carries over, and a run of trips progresses from
+ * itself. A travel rack is then the only rack: a load is the closest
  * one at or under the target (none: the lifter picks), and a lift that would go past its
  * heaviest load climbs one rep at a time at that load, up to the range top, and holds there.
  */
@@ -388,7 +389,8 @@ export function prescribeExercise(
   const own = from(setup);
   if (setup === 'home') return own;
   const home = from('home');
-  return home.weight > own.weight || (home.weight === own.weight && home.reps > own.reps) ? home : own;
+  const at = (prescription: Prescription) => (prescription.last ? new Date(prescription.last.date).getTime() : Number.NEGATIVE_INFINITY);
+  return at(home) > at(own) ? home : own;
 }
 
 function withRack(prescription: Prescription, rack: number[]): Prescription {

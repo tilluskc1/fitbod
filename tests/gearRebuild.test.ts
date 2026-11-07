@@ -319,7 +319,7 @@ test('#188: a rebuilt day says it was rebuilt, never "same as your program"', as
 const labelled = (record: WorkoutRecord, setup: EquipmentChoice) =>
   ({ ...record, exercises: record.exercises.map((exercise) => ({ ...exercise, setup })) });
 
-test('#188: a today-only setup takes the higher of its own and the home prescription', () => {
+test('#188: a today-only setup follows whichever of its own and home history is more recent', () => {
   const history = [
     labelled(workout('t-old', '2026-10-01T10:00:00.000Z', 15), 'hotel'),
     workout('h-1', '2026-10-05T10:00:00.000Z', 30),
@@ -333,8 +333,22 @@ test('#188: a today-only setup takes the higher of its own and the home prescrip
     labelled(workout('b-old', '2026-10-01T10:00:00.000Z', 0, 0, 'push-up', 'Push-Up', 6), 'bodyweight'),
     workout('h-push', '2026-10-10T10:00:00.000Z', 0, 0, 'push-up', 'Push-Up', 14),
   ];
-  assert.ok(reps('bodyweight') >= reps('home'), `bodyweight ${reps('bodyweight')} vs home ${reps('home')}`);
+  assert.equal(reps('bodyweight'), reps('home'), 'the newer home push-ups drive the bodyweight day');
   assert.equal(reps('home'), prescribeExercise(pushUp, gym, [pushHistory[1]], false).reps, 'home reads only home');
+});
+
+test('#188: a step down the lifter chose at home carries to the next trip', () => {
+  const history = [
+    workout('h-1', '2026-10-01T10:00:00.000Z', 40),
+    labelled(workout('t-1', '2026-10-03T10:00:00.000Z', 25, 25, 'goblet-squat', 'Goblet Squat', 10), 'hotel'),
+    workout('h-2', '2026-10-06T10:00:00.000Z', 40, 15),
+  ];
+  const travel = prescribeExercise(goblet, gym, history, true, true, 'hotel');
+  assert.equal(travel.last?.workoutId, 'h-2');
+  assert.ok(travel.weight <= 15, `travel ${travel.weight}x${travel.reps}`);
+  // And a newer trip drives the next trip, even below an older, heavier home day.
+  const trip = [...history, labelled(workout('t-2', '2026-10-08T10:00:00.000Z', 15, 15, 'goblet-squat', 'Goblet Squat', 8), 'hotel')];
+  assert.equal(prescribeExercise(goblet, gym, trip, true, true, 'hotel').last?.workoutId, 't-2');
 });
 
 test('#188: at the top travel dumbbell reps climb to the range top, then hold and say so', () => {
