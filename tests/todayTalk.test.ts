@@ -7,7 +7,7 @@ import type { EquipmentChoice } from '../src/lib/adapt.ts';
 import { AREAS, AREA_MUSCLES, musclesOf, worksSkipped } from '../src/lib/areas.ts';
 import type { Area } from '../src/lib/areas.ts';
 import { keywordParser, resolveConstraints } from '../src/lib/constraints.ts';
-import { buildPlan } from '../src/lib/generator.ts';
+import { MAX_EXERCISES, buildPlan } from '../src/lib/generator.ts';
 import { liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
 import { activeOverride, dayKey } from '../src/lib/plan.ts';
 import { cursorFor, kitProfile, planSlots, slotLinkFor, todayProgram, withSkipped } from '../src/lib/sequence.ts';
@@ -405,11 +405,13 @@ test('#211: sweep — every muscle of an asked area is trained or named, no skip
               assert.notEqual(preview.status, 'ready', `${at}: ${muscle} uncovered reads Ready`);
               if (live.exercises.length > 0) assert.equal(preview.status, 'limited', at);
               assert.ok(new RegExp(`\\b${MUSCLE_WORD[muscle]}\\b`).test(why), `${at}: why never names ${muscle}: ${why}`);
-              // The cause is the real one: the kit has no such exercise (or only a twin of one in the day),
-              // the skip rules out every one, or time.
-              const possible = EXERCISES.filter((exercise) => exercise.muscles[0] === muscle && provides(caps, exercise.needs)
-                && !live.exercises.some((e) => areIncompatible(e.exerciseId, exercise.id)));
-              const cause = possible.length === 0 ? 'gear' : possible.every((exercise) => worksSkipped(exercise, skipped)) ? 'skip' : 'time';
+              // The cause is the real one: the kit has no such exercise, the skip rules out every one, its only
+              // moves repeat one in the day, the day holds its most exercises, or time.
+              const possible = EXERCISES.filter((exercise) => exercise.muscles[0] === muscle && provides(caps, exercise.needs));
+              const allowed = possible.filter((exercise) => !worksSkipped(exercise, skipped));
+              const cause = possible.length === 0 ? 'gear' : allowed.length === 0 ? 'skip'
+                : allowed.every((exercise) => live.exercises.some((e) => areIncompatible(e.exerciseId, exercise.id))) ? 'twin'
+                : live.exercises.length >= MAX_EXERCISES[gym.experience] ? 'cap' : 'time';
               assert.equal(gap.cause, cause, `${at}: ${muscle}`);
               // Covering comes before a second exercise for an asked muscle: time leaves a muscle out
               // only when no asked muscle has two exercises.
@@ -437,6 +439,36 @@ test('#211: "back is sore, legs, 45 min" at a full gym trains hamstrings, not a 
   assert.equal(preview.status, 'ready');
   assert.deepEqual(preview.gaps, []);
   assert.ok(preview.minutes <= 45, `${preview.minutes} min`);
+});
+
+test('#211: a muscle left out by the exercise cap names the cap, not time', () => {
+  const run = (profile: Profile) => {
+    const talk: TalkState = { equipment: 'home', minutes: 90, train: ['Chest', 'Shoulders', 'Arms', 'Legs', 'Core'], skip: [], sore: [], pain: false, notices: [] };
+    const constraints = talkConstraints(talk, undefined, lower.focus);
+    const program = todayProgram(profile, lower, [], constraints);
+    return customDayPreview(talk, program, adaptWorkout(program, constraints, [], profile.goal), profile, lower.focus);
+  };
+  for (const [experience, cap] of [['Intermediate', 8], ['Beginner', 6]] as const) {
+    const preview = run({ ...gym, experience });
+    assert.equal(preview.exercises.length, cap, experience);
+    assert.equal(preview.status, 'limited');
+    assert.ok(preview.gaps.length > 0 && preview.gaps.every((gap) => gap.cause === 'cap'), JSON.stringify(preview.gaps));
+    const line = preview.why.find((item) => item.label === `Room for ${cap} exercises:`);
+    assert.ok(line && /^no .+ work today\.$/.test(line.text), JSON.stringify(preview.why));
+    assert.ok(preview.why.every((item) => item.label !== 'Not enough time:'), JSON.stringify(preview.why));
+  }
+});
+
+test('#211: a muscle whose only move repeats one in the day says so', () => {
+  const talk: TalkState = { equipment: 'bodyweight', minutes: 45, train: ['Chest', 'Arms'], skip: [], sore: [], pain: false, notices: [] };
+  const constraints = talkConstraints(talk, undefined, lower.focus);
+  const program = todayProgram(gym, lower, [], constraints);
+  const preview = customDayPreview(talk, program, adaptWorkout(program, constraints, [], gym.goal), gym, lower.focus);
+  assert.deepEqual(preview.exercises.map((e) => e.exerciseId), ['push-up']);
+  assert.deepEqual(preview.gaps.find((gap) => gap.muscle === 'Triceps'),
+    { area: 'Arms', muscle: 'Triceps', cause: 'twin', repeats: { exercise: 'Diamond Push-Up', of: 'Push-Up' } });
+  assert.ok(preview.why.some((line) => line.label === 'No separate triceps move:' && line.text === 'Diamond Push-Up repeats Push-Up.'), JSON.stringify(preview.why));
+  assert.ok(preview.why.every((line) => !/triceps exercise with this gear/.test(line.text)), JSON.stringify(preview.why));
 });
 
 test('#193: an asked area with no exercise reads Limited and names the cause', () => {
