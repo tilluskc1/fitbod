@@ -371,6 +371,8 @@ export function customDayPreview(
     if (repeated && allowed.every((exercise) => twinOf(exercise))) {
       return [{ area, muscle, cause: 'twin', repeats: { exercise: allowed[0].name, of: repeated.name } }];
     }
+    // An empty day left nothing out for time or the cap: it is the day's "Not enough equipment" (#216).
+    if (adapted.exercises.length === 0) return [{ area, muscle, cause: 'gear' }];
     return [{ area, muscle, cause: adapted.exercises.length >= MAX_EXERCISES[profile.experience] ? 'cap' : 'time' }];
   }));
   const of = (cause: GapCause) => gaps.filter((gap) => gap.cause === cause).map((gap) => gap.muscle);

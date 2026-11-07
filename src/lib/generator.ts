@@ -316,8 +316,9 @@ export function generateWorkout(
 
   // Core accessories alone do not make a Push/Pull/Legs session. If none of the
   // day's required movement families can be performed, this is infeasible and
-  // the caller must not start a workout.
-  if (requirements.length > 0 && coveredRequirements === 0) {
+  // the caller must not start a workout. A described day (#211) only picks its asked muscles, so it
+  // keeps what it found: curls and extensions are an Arms day with Chest skipped (#216).
+  if (requirements.length > 0 && coveredRequirements === 0 && !(day.everyMuscle && picked.length > 0)) {
     const targetCount = fixed ?? max;
     return {
       exercises: [],
