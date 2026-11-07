@@ -858,7 +858,7 @@ export default function App() {
         <Recovery
           error={recovery.message}
           raw={recovery.raw}
-          onDownload={() => downloadText(recovery.raw, 'fitbod-original-state.json')}
+          onDownload={() => downloadText(recovery.raw, 'strength-original-state.json')}
           onRestore={(next: AppState, summary: ImportSummary) => {
             setState(next);
             setRecovery(null);

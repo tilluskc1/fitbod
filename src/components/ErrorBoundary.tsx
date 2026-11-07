@@ -31,7 +31,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     try {
       const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
       if (!raw) return;
-      downloadText(raw, 'fitbod-raw-state.json');
+      downloadText(raw, 'strength-raw-state.json');
     } catch {
       // The fallback screen has nothing more it can safely do.
     }

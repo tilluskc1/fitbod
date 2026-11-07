@@ -3,10 +3,10 @@ import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
 import { toDisplay, unitLabel, unitOf } from '../lib/units';
-import { exerciseMeta, programSetCount, setText, targetSummary } from '../data/flagship';
+import { exerciseMeta, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
-import { currentWorkout, EQUIPMENT_OPTIONS, estimatedMinutes } from '../lib/adapt';
+import { currentWorkout, EQUIPMENT_OPTIONS, promisedMinutes } from '../lib/adapt';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
 import Demo from '../components/ui/Demo';
@@ -170,10 +170,7 @@ export default function TodayScreen({
   const targetDays = profile.daysPerWeek;
   const setup = EQUIPMENT_OPTIONS[equipment];
   // Equipment or exclusions can leave far less work than the requested time.
-  const estimated =
-    !current && adapted.totalSets < programSetCount(program)
-      ? estimatedMinutes(program, adapted.totalSets)
-      : adapted.minutes;
+  const estimated = !current ? promisedMinutes(program, adapted) : adapted.minutes;
   const minutes = current ? (current.durationMin ?? adapted.minutes) : estimated;
   // A day with nothing to do has no duration to promise.
   const timed = Boolean(current) || adapted.exercises.length > 0;
