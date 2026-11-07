@@ -912,7 +912,12 @@ export default function App() {
   const recordBackup = () => setState((currentState) => ({ ...currentState, lastBackupAt: new Date().toISOString() }));
 
   const exportData = () => {
-    downloadText(serializeExport(state), exportFilename());
+    try {
+      downloadText(serializeExport(state), exportFilename());
+    } catch {
+      setNotice('Backup not saved, so nothing was recorded. Try again.');
+      return;
+    }
     recordBackup();
     setNotice('Backup downloaded.');
   };

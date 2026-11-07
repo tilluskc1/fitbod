@@ -42,7 +42,8 @@ export async function shareBackup(
   const { nav, download } = deps;
   if (nav?.share && nav.canShare?.({ files: [file] })) {
     try {
-      await nav.share({ files: [file], title: 'Home Strength backup' });
+      // Files only: some iOS share targets save a title as a separate text file.
+      await nav.share({ files: [file] });
       return { ok: true, via: 'share' };
     } catch (error) {
       // The user closed the sheet: nothing to report.
@@ -50,6 +51,10 @@ export async function shareBackup(
       return { ok: false, message: 'Backup not shared, so nothing was recorded. Try again, or use Export JSON backup in Settings.' };
     }
   }
-  download(text, filename);
+  try {
+    download(text, filename);
+  } catch {
+    return { ok: false, message: 'Backup not saved, so nothing was recorded. Try again.' };
+  }
   return { ok: true, via: 'download' };
 }

@@ -99,7 +99,7 @@ test('share resolves: recorded, no download', async () => {
   });
   assert.deepEqual(result, { ok: true, via: 'share' });
   assert.equal(calls.length, 0);
-  assert.equal(shared?.title, 'Home Strength backup');
+  assert.equal(shared?.title, undefined, 'files only: some iOS share targets save a title as a separate text file');
   const file = shared?.files?.[0];
   assert.ok(file);
   assert.equal(file.name, 'strength-backup-x.json');
@@ -177,4 +177,14 @@ test('Settings offers Back up now beside Export and the only-copy note names bac
   } finally {
     await server.close();
   }
+});
+
+test('a download that throws records nothing and says so; the share carries only the file (#225 review)', async () => {
+  const { shareBackup } = await import('../src/lib/backup.ts');
+  const failed = await shareBackup('{}', 'b.json', { download: () => { throw new Error('blocked'); } });
+  assert.equal(failed.ok, false);
+  assert.match(failed.message ?? '', /nothing was recorded/);
+  let shared: unknown;
+  await shareBackup('{}', 'b.json', { nav: { canShare: () => true, share: async (data: unknown) => { shared = data; } }, download: () => {} });
+  assert.deepEqual(Object.keys(shared as object), ['files']);
 });
