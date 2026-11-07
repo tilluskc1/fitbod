@@ -22,9 +22,9 @@ const bodyweight = { ...base, equipment: [], loads: {} };
 const barbell: Profile = { ...base, equipment: ['Barbell'], loads: {} };
 const fullGear: Profile = { ...base, equipment: ['Dumbbell', 'Barbell', 'Cable', 'Machine'], support: ['Bench', 'Rack', 'Pull-up bar'] };
 // Every curl excluded: Pull loses its biceps exercises (3 of 5), and Allow offers each curl back.
-// 45 min: at honest rest (#132) a 35-min Pull only has room for the 4 exercises still possible, so no gap shows.
-// What it plans: Dumbbell Row 4, Rear Delt Fly 4, Plank 4, Russian Twist 4 (about 38 min). No other back or
-// biceps exercise fits this kit, so the second core keeps its slot (#190).
+// It plans Dumbbell Row 4, Rear Delt Fly 4, Plank 3: about 29 min at honest rest (#132), with one core
+// exercise by the split-day cap (#190) and no other back or biceps move for this kit. That is more than
+// half of 45 min, so no count gap shows (#67), only the missing biceps.
 const noCurls = { ...dumbbells, sessionMinutes: 45, exclusions: EXERCISES.filter((e) => e.pattern === 'elbow_flexion').map((e) => e.id) };
 
 const programFor = (who: Profile, name: string) => {
@@ -94,9 +94,9 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
 
     const curls = screens(Today, Plan, noCurls, 'Pull');
     assert.match(curls.today, /<button[^>]*>Allow [^<]+<\/button>/);
-    // Row, rear-delt fly and two core moves fill more than half the 45 min, but with every curl excluded
+    // Row, rear-delt fly and one core move fill more than half the 45 min, but with every curl excluded
     // nothing trains biceps: named, with the fix (#67, #174).
-    assert.match(plain(curls.today), /Limited session · no biceps work 4 exercises fit\. No biceps exercise is possible with these constraints\./, 'reason under the line');
+    assert.match(plain(curls.today), /Limited session · no biceps work 3 exercises fit\. No biceps exercise is possible with these constraints\./, 'reason under the line');
 
     // Five alternatives: three chips, the rest behind the equipment settings. A kettlebell cannot fill
     // half of a 60-minute Push, so that day is short (#67); a barbell Push now fills its 35 min and is Ready.

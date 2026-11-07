@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { exerciseById } from '../src/data/exercises.ts';
+import { EXERCISES, exerciseById } from '../src/data/exercises.ts';
 import { buildPlan, generateWorkout } from '../src/lib/generator.ts';
 import { sessionRests, sessionSeconds, warmUpSeconds } from '../src/lib/sessionTime.ts';
 import type { Equipment, Profile, SupportEquipment } from '../src/types.ts';
@@ -13,10 +13,13 @@ const GYM = {
   support: ['Bench', 'Rack', 'Pull-up bar'] as SupportEquipment[],
 };
 const HOME = { equipment: ['Dumbbell'] as Equipment[], support: ['Bench'] as SupportEquipment[] };
+const DUMBBELLS = { equipment: ['Dumbbell'] as Equipment[], support: [] as SupportEquipment[] };
 const BAR = { equipment: [] as Equipment[], support: ['Pull-up bar'] as SupportEquipment[] };
+const BACK_MOVES = EXERCISES.filter((exercise) => exercise.muscles[0] === 'Back').map((exercise) => exercise.id);
 
-const profileOf = (kit: typeof GYM, daysPerWeek: number, sessionMinutes: number, experience: Profile['experience'] = 'Intermediate') =>
-  ({ goal: 'Build Muscle', experience, daysPerWeek, ...kit, exclusions: [], loads: {}, sessionMinutes }) as Profile;
+type Kit = { equipment: Equipment[]; support: SupportEquipment[]; exclusions?: string[] };
+const profileOf = (kit: Kit, daysPerWeek: number, sessionMinutes: number, experience: Profile['experience'] = 'Intermediate') =>
+  ({ goal: 'Build Muscle', experience, daysPerWeek, exclusions: [], ...kit, loads: {}, sessionMinutes }) as Profile;
 
 const isCore = (id: string) => ['core_flexion', 'core_stability'].includes(exerciseById(id)?.pattern ?? '');
 const pattern = (id: string) => exerciseById(id)?.pattern;
@@ -61,32 +64,32 @@ test('5-day gym, 60 min: the freed Pull slot goes to the direction the day has l
   assert.ok(ids.filter((id) => pattern(id) === 'vertical_pull').length >= 1, label);
 });
 
-test('bodyweight and a pull-up bar, 60 min: with nothing else to take the slot, Pull keeps its second core', () => {
-  // At bb952db: Pull-Up 4, Chin-Up 4, Plank 4, Russian Twist 4, Ready. Dropping the core flipped it to "3 of 6".
+test('bodyweight and a pull-up bar, 60 min: nothing can take the freed slot, so Pull is shorter', () => {
+  // Shorter by owner decision (#190): the cap has no exceptions. At bb952db this day was Pull-Up 4, Chin-Up 4,
+  // Plank 4, Russian Twist 4 (Ready, 38 min); no other back or biceps move exists for this kit.
   for (const experience of ['Beginner', 'Intermediate'] as const) {
-    const { session, seconds, label } = day(profileOf(BAR, 5, 60, experience), 'Pull');
-    assert.equal(session.feasibility.status, 'ok', label);
-    assert.equal(session.exercises.length, 4, label);
-    assert.ok(seconds >= 38 * 60, `${label} (${(seconds / 60).toFixed(1)} min)`);
+    const { session, label } = day(profileOf(BAR, 5, 60, experience), 'Pull');
+    assert.equal(label, 'Pull: Pull-Up 4, Chin-Up 4, Plank 3');
+    assert.equal(session.feasibility.status, 'limited', label);
+    assert.match(session.feasibility.reason, /3 of 6 exercises/, label);
   }
 });
 
-test('Pull, Legs and Lower keep the cap where another exercise can take the slot, 20 to 90 min', () => {
+test('every Pull, Legs and Lower keeps the cap, whatever the kit, 20 to 90 min', () => {
   let checked = 0;
-  for (const [name, kit] of [['gym', GYM], ['home', HOME], ['bar', BAR]] as const)
+  const kits = [['gym', GYM], ['home', HOME], ['dumbbells', DUMBBELLS], ['bar', BAR],
+    ['gym without back moves', { ...GYM, exclusions: BACK_MOVES }]] as const;
+  for (const [name, kit] of kits)
     for (const experience of ['Beginner', 'Intermediate', 'Advanced'] as const)
-      for (const daysPerWeek of [3, 4, 5, 6])
+      for (const daysPerWeek of [2, 3, 4, 5, 6])
         for (const minutes of [20, 30, 45, 60, 90]) {
           const profile = profileOf(kit, daysPerWeek, minutes, experience);
           for (const item of buildPlan(profile).filter((entry) => CAPPED.test(entry.name))) {
-            const { session, core, coreSets, seconds, label } = day(profile, item.name);
+            const { core, coreSets, seconds, label } = day(profile, item.name);
             const where = `${name} ${experience} ${daysPerWeek}d ${minutes}m ${label}`;
-            assert.ok(seconds <= minutes * 60, where);
-            assert.notEqual(session.feasibility.status, 'infeasible', where);
-            // A bodyweight kit may keep a second core when no other focus exercise exists for the slot.
-            if (name === 'bar') { assert.ok(core.length <= 2, where); continue; }
             assert.ok(core.length <= 1, where);
             assert.ok(coreSets <= 3, where);
+            assert.ok(seconds <= minutes * 60, where);
             checked += 1;
           }
         }

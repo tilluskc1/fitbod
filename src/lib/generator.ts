@@ -250,7 +250,7 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
 
   // 4. A split day keeps one core exercise: a second one gives its slot to the day's first muscle,
   // else another of its muscles (#190), in the direction the day has less of; a tie goes to the lead's
-  // (a second row beside a chin-up). With nothing to take it, the second core stays and so do its sets.
+  // (a second row beside a chin-up). With nothing to take it, the slot stays empty and the day is shorter.
   // The new exercise is the first to go when time runs short, as the second core was.
   const extraCore = coreCapped ? picked.filter((exercise) => CORE_PATTERNS.has(exercise.pattern))[1] : undefined;
   let freed: Exercise | undefined;
@@ -263,15 +263,14 @@ function selectExercises(profile: Profile, day: PlanDay, dayIndex: number, targe
       if (freed) break;
     }
   }
-  if (extraCore && freed) {
+  if (extraCore) {
     picked.splice(picked.indexOf(extraCore), 1);
     patternCounts.set(extraCore.pattern, (patternCounts.get(extraCore.pattern) ?? 1) - 1);
     primaryMuscleCounts.set(extraCore.muscles[0], (primaryMuscleCounts.get(extraCore.muscles[0]) ?? 1) - 1);
-    take(freed);
+    if (freed) take(freed);
   }
 
-  // A second core that kept its slot keeps the day uncapped, sets included.
-  return { picked, covering, requirements, freed, coreCapped: coreCapped && (!extraCore || freed !== undefined) };
+  return { picked, covering, requirements, freed };
 }
 
 /**
@@ -295,7 +294,7 @@ export function generateWorkout(
   const fixed = targetCountOverride && targetCountOverride > 0
     ? Math.min(max, Math.max(MIN_EXERCISES, Math.round(targetCountOverride)))
     : undefined;
-  const { picked, covering, requirements, freed, coreCapped } = selectExercises(profile, day, dayIndex, fixed ?? max);
+  const { picked, covering, requirements, freed } = selectExercises(profile, day, dayIndex, fixed ?? max);
 
   const coveredRequirements = requirements.filter((requirement) =>
     picked.some((exercise) => matchesRequirement(exercise, requirement)),
@@ -370,7 +369,7 @@ export function generateWorkout(
     // later compound never ends up with more sets than the lead (#133). A 5-set lead is already past 4.
     if (exhausted && room >= anotherExercise) {
       for (let index = 0; index < kept; index += 1) {
-        const most = coreCapped && CORE_PATTERNS.has(picked[index].pattern) ? CAPPED_CORE_SETS : 4;
+        const most = capsCore(day) && CORE_PATTERNS.has(picked[index].pattern) ? CAPPED_CORE_SETS : 4;
         if (sets[index] < most && seconds() + exerciseSeconds(sets[index] + 1, rests[index]) - exerciseSeconds(sets[index], rests[index]) <= budget) sets[index] += 1;
       }
     }
