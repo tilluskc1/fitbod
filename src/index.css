@@ -642,6 +642,21 @@ textarea:focus-visible {
   margin-top: 5px;
 }
 
+.plan-focus {
+  display: block;
+  font-size: 13.5px;
+  color: var(--on-surface-muted);
+  margin-top: 4px;
+}
+
+.plan-item--later .plan-name {
+  font-size: 19px;
+}
+
+.plan-loop {
+  padding: 4px 4px 0;
+}
+
 .plan-foot {
   display: flex;
   align-items: center;
