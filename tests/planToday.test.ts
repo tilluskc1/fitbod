@@ -5,63 +5,117 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { buildPlan } from '../src/lib/generator.ts';
 import { planSlots, slotProgram } from '../src/lib/sequence.ts';
-import { adaptWorkout, todayGlance, type AdaptedWorkout } from '../src/lib/adapt.ts';
+import { adaptWorkout, todayGlance, type AdaptedWorkout, type EquipmentChoice } from '../src/lib/adapt.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import { liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
 import { createSession } from '../src/lib/session.ts';
+import type { Program } from '../src/data/flagship.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
 // #189: Plan's header and Up next described the saved day while View session showed today's.
 const gym = { name: 'K', goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 4, equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable'],
   support: ['Bench', 'Rack', 'Pull-up bar'], exclusions: [], loads: {}, unit: 'kg', sessionMinutes: 60 } as unknown as Profile;
-const slot = planSlots(buildPlan(gym))[0];
-const program = slotProgram(gym, slot, []);
+const bodyweight = { ...gym, equipment: [], support: [] } as unknown as Profile;
+const firstDay = (who: Profile) => {
+  const slot = planSlots(buildPlan(who))[0];
+  return { slot, program: slotProgram(who, slot, []) };
+};
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const noop = () => {};
 
-async function render(adapted: AdaptedWorkout, current: WorkoutRecord | null, adjusted = false) {
+interface Day { who: Profile; program: Program; focus: string[]; adapted: AdaptedWorkout; current: WorkoutRecord | null; overridden: boolean; equipment: EquipmentChoice }
+
+/** Today, Plan and View session rendered from the same state, the way App wires them. */
+async function surfaces({ who, program, focus, adapted, current, overridden, equipment }: Day) {
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
+    const { default: Today } = await server.ssrLoadModule('/src/screens/TodayScreen.tsx');
     const { default: Plan } = await server.ssrLoadModule('/src/screens/PlanScreen.tsx');
     const { DaySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
-    // What App hands View session: the running session, else today's adapted day.
-    const exercises = current?.exercises ?? liveExercises(liveAdapted(adapted, gym, []), gym, []);
-    const today = todayGlance(program, adapted, current);
-    const sheet = plain(renderToStaticMarkup(createElement(DaySheet, { name: today.name, minutes: today.minutes, exercises, unit: 'kg', onClose: noop })));
-    const plan = plain(renderToStaticMarkup(createElement(Plan, { profile: gym, upcoming: [], focus: slot.focus, program, today, adjusted, history: [], unit: 'kg',
-      now: new Date('2026-11-07T10:00:00Z'), onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop })));
-    return { sheet, plan };
+    const live = liveAdapted(adapted, who, []);
+    const exercises = current?.exercises ?? liveExercises(live, who, []);
+    const today = todayGlance(program, adapted, current, overridden);
+    const now = new Date('2026-11-07T10:00:00Z');
+    const sheet = plain(renderToStaticMarkup(createElement(DaySheet, { name: today.name, minutes: today.minutes, approx: today.approx, exercises, unit: 'kg', onClose: noop })));
+    const plan = plain(renderToStaticMarkup(createElement(Plan, { profile: who, upcoming: [], focus, program, today, equipment, history: [], unit: 'kg',
+      now, onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop })));
+    const todayScreen = plain(renderToStaticMarkup(createElement(Today, { profile: who, program, adapted: live, equipment, adjusted: overridden, history: [], current, now,
+      onPreview: noop, onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop, onOpenLength: noop })));
+    const pick = (text: string, pattern: RegExp, label: string) => {
+      const match = text.match(pattern);
+      assert.ok(match, `${label}: ${text.slice(0, 400)}`);
+      return match.slice(1);
+    };
+    return {
+      today,
+      card: pick(todayScreen, /The workout (≈?\d+) min · (\d+) sets/, 'Today card'),
+      header: pick(plan, /(\d+) exercises? · (\d+) sets · (≈?\d+) minutes · (\w+(?: gym)?)/, 'Plan header'),
+      upNext: pick(plan, /UP NEXT .*? (≈?\d+) min · (\d+) exercises? · (\d+) sets/, 'Up next'),
+      sheet: pick(sheet, /(≈?\d+) min · (\d+) exercises? · (\d+) sets/, 'View session'),
+      plan,
+    };
   } finally {
     await server.close();
   }
 }
 
-test('a today-only 30 min day: Plan header and Up next match View session', async () => {
+function agree(seen: Awaited<ReturnType<typeof surfaces>>, minutes: string, exercises: string, sets: string) {
+  assert.deepEqual(seen.card, [minutes, sets], 'Today card');
+  assert.deepEqual(seen.header.slice(0, 3), [exercises, sets, minutes], 'Plan header');
+  assert.deepEqual(seen.upNext, [minutes, exercises, sets], 'Up next');
+  assert.deepEqual(seen.sheet, [minutes, exercises, sets], 'View session');
+}
+
+test('a today-only 30 min day: Today, Plan header, Up next and View session show the same honest minutes', async () => {
+  const { slot, program } = firstDay(gym);
   const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
-  const { sheet, plan } = await render(adapted, null, true);
-  const [, minutes, exercises, sets] = sheet.match(/(\d+) min estimated · (\d+) exercises · (\d+) sets/) ?? [];
-  assert.equal(`${minutes}/${exercises}/${sets}`, '30/6/12', 'View session shows the trimmed day');
-  assert.match(plan, new RegExp(`${exercises} exercises · ${sets} sets · ${minutes} minutes · Full gym`), 'header');
-  assert.match(plan, new RegExp(`UP NEXT Upper A Chest .*? ${minutes} min · ${exercises} exercises · ${sets} sets · Adjusted for today`), 'Up next');
+  const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: true, equipment: 'home' });
+  // 12 of 23 sets take 31 minutes: the overrun shows, it is not clamped to the 30 asked for.
+  agree(seen, '31', '6', '12');
+  assert.match(seen.plan, /UP NEXT .*? 31 min · 6 exercises · 12 sets · Adjusted for today/);
+  assert.equal(seen.header[3], 'Full gym', 'a length-only change keeps the saved setup word');
 });
 
-test('a running session: Plan header and Up next match the session, not the day as it would build now', async () => {
+test('a bodyweight day whose work cannot fill the hour reads ≈ everywhere', async () => {
+  const { slot, program } = firstDay(bodyweight);
+  const adapted = adaptWorkout(program, defaultConstraints(bodyweight), []);
+  const seen = await surfaces({ who: bodyweight, program, focus: slot.focus, adapted, current: null, overridden: false, equipment: 'bodyweight' });
+  agree(seen, '≈15', '1', '4');
+  assert.doesNotMatch(seen.plan, /Adjusted for today/);
+});
+
+test('a running session: every surface shows the session, and it is not labelled adjusted', async () => {
+  const { slot, program } = firstDay(gym);
   const started = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
   const current = createSession({ id: 's1', name: started.name, dayIndex: 0, exercises: liveExercises(started, gym, []), now: '2026-11-07T09:00:00Z', durationMin: started.minutes });
-  // The override has lapsed since the start; today's adapted day is the full 60 minutes again.
-  const adapted = adaptWorkout(program, defaultConstraints(gym), []);
-  const { sheet, plan } = await render(adapted, current);
-  assert.match(sheet, /30 min estimated · 6 exercises · 12 sets/);
-  assert.match(plan, /6 exercises · 12 sets · 30 minutes · Full gym/);
-  assert.match(plan, /UP NEXT Upper A Chest .*? 30 min · 6 exercises · 12 sets/);
-  assert.doesNotMatch(plan, /Adjusted for today/, 'a running session is not labelled as an adjusted plan');
+  // Today's override still applies, but the open session is what runs.
+  const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted: started, current, overridden: true, equipment: 'home' });
+  agree(seen, '30', '6', '12');
+  assert.equal(seen.today.adjusted, false);
+  assert.doesNotMatch(seen.plan, /Adjusted for today/);
 });
 
 test('no override and no session: Plan numbers are the saved day, as before', async () => {
+  const { slot, program } = firstDay(gym);
   const adapted = adaptWorkout(program, defaultConstraints(gym), []);
-  const { sheet, plan } = await render(adapted, null);
-  assert.match(sheet, /60 min estimated · 7 exercises · 23 sets/);
-  assert.match(plan, /7 exercises · 23 sets · 60 minutes · Full gym/);
-  assert.match(plan, /UP NEXT Upper A Chest .*? 60 min · 7 exercises · 23 sets/);
-  assert.doesNotMatch(plan, /Adjusted for today/);
+  const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: false, equipment: 'home' });
+  agree(seen, '60', '7', '23');
+  assert.equal(seen.header[3], 'Full gym');
+  assert.doesNotMatch(seen.plan, /Adjusted for today/);
+});
+
+test('a today-only setup names that setup in the Plan header', async () => {
+  const { slot, program } = firstDay(gym);
+  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), equipment: 'hotel' }, []);
+  const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: true, equipment: 'hotel' });
+  assert.equal(seen.header[3], 'Travel');
+});
+
+test('todayGlance: adjusted only while no session runs', () => {
+  const { program } = firstDay(gym);
+  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, []);
+  const current = createSession({ id: 's1', name: adapted.name, dayIndex: 0, exercises: liveExercises(adapted, gym, []), now: '2026-11-07T09:00:00Z', durationMin: 30 });
+  assert.equal(todayGlance(program, adapted, null, true).adjusted, true);
+  assert.equal(todayGlance(program, adapted, current, true).adjusted, false);
+  assert.equal(todayGlance(program, adapted, null, false).adjusted, false);
 });

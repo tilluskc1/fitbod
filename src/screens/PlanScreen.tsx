@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, EXERCISES, SUPPORT_OPTIONS } from '../data/exercises';
-import { isGymKit, type DayGlance } from '../lib/adapt';
+import { isGymKit, setupFor, type DayGlance, type EquipmentChoice } from '../lib/adapt';
+import { defaultConstraints } from '../lib/constraints';
 import type { Program } from '../data/flagship';
 import { capabilitiesFor, provides } from '../lib/capabilities';
 import { catalogRowMeta } from '../lib/liveProgression';
@@ -31,8 +32,8 @@ interface Props {
   program: Program;
   /** That day as View session shows it: the running session, else today's adjusted day (#189). */
   today: DayGlance;
-  /** A today-only length or setup applies (the Today badge's wording). */
-  adjusted?: boolean;
+  /** Today's setup; a today-only one names itself in the header. */
+  equipment?: EquipmentChoice;
   slotLabel?: string;
   history: WorkoutRecord[];
   unit: Unit;
@@ -51,7 +52,7 @@ export default function PlanScreen({
   focus = [],
   program,
   today,
-  adjusted = false,
+  equipment,
   slotLabel,
   history,
   unit,
@@ -63,6 +64,8 @@ export default function PlanScreen({
 }: Props) {
   const [tab, setTab] = useState<'week' | 'equipment'>('week');
   const minutes = `${today.approx ? '≈' : ''}${today.minutes}`;
+  const savedSetup = profile.equipment.length === 0 ? 'Bodyweight' : isGymKit(profile) ? 'Full gym' : 'Home';
+  const setup = equipment && equipment !== defaultConstraints(profile).equipment ? setupFor(equipment, profile).short : savedSetup;
   const dayIds = program.exercises.map((exercise) => exercise.exerciseId);
   const daySets = Object.fromEntries(program.exercises.map((exercise) => [exercise.exerciseId, exercise.sets]));
 
@@ -104,7 +107,7 @@ export default function PlanScreen({
       </header>
       <p className="page-sub">
         {today.exercises} exercises · {today.sets} sets · {today.exercises > 0 && `${minutes} minutes · `}
-        {profile.equipment.length === 0 ? 'Bodyweight' : isGymKit(profile) ? 'Full gym' : 'Home'}
+        {setup}
       </p>
 
       <div className="segmented" role="tablist" aria-label="Plan views">
@@ -143,7 +146,7 @@ export default function PlanScreen({
                 <strong className="plan-name">{today.name}</strong>
                 {focus.length > 0 && <span className="plan-focus">{focus.join(' · ')}</span>}
                 <span className="plan-meta">
-                  {today.exercises > 0 && `${minutes} min · `}{today.exercises} exercises · {today.sets} sets{adjusted ? ' · Adjusted for today' : ''}
+                  {today.exercises > 0 && `${minutes} min · `}{today.exercises} exercises · {today.sets} sets{today.adjusted ? ' · Adjusted for today' : ''}
                 </span>
                 <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
                 <span className="plan-foot">

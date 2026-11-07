@@ -406,7 +406,7 @@ export default function App() {
     [current, adapted, liveProgram, profile, state.history],
   );
   /** The name, counts and minutes of that same day, for Plan and View session alike (#189). */
-  const todayDay = useMemo(() => todayGlance(program, adapted, current), [program, adapted, current]);
+  const todayDay = useMemo(() => todayGlance(program, adapted, current, Boolean(override)), [program, adapted, current, override]);
 
   /** The one-line reason behind each computed target, keyed by exercise. */
   const targetNotes = useMemo(() => {
@@ -1108,7 +1108,7 @@ export default function App() {
             focus={slot?.focus}
             program={program}
             today={todayDay}
-            adjusted={Boolean(override) && !current}
+            equipment={constraints.equipment}
             slotLabel={slotLabel}
             history={state.history}
             unit={unit}
@@ -1338,6 +1338,7 @@ export default function App() {
         <DaySheet
           name={todayDay.name}
           minutes={todayDay.minutes}
+          approx={todayDay.approx}
           exercises={todayExercises}
           unit={unit}
           history={state.history}
