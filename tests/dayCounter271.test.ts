@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { dayCounter } from '../src/lib/sequence.ts';
 
-// #271: "Slot" is our internal word; lifters see "Day N of M this week". The rendered Today, Plan and
+// #271: "Slot" is our internal word; lifters see "Day N of M". The rendered Today, Plan and
 // Train text is checked in the browser by scripts/e2e/day-counter.mjs.
 test('the counter speaks in days, and a single-day plan shows none', () => {
   assert.equal(dayCounter(0, 4), 'Day 1 of 4');
@@ -28,8 +28,8 @@ test('no user-facing string in src says "slot"', () => {
   walk(new URL('../src', import.meta.url).pathname);
   // Line by line, so a quote or backtick in one place can never pair with one far away.
   // A word, not code: `slot.name`, `slot?.index`, `slot:` or `slot-row` are identifiers and keys.
-  const word = /(?<![.\w-])slots?(?![?.:(\w-])/i;
-  const prose = (text: string) => (word.test(text) && /\s/.test(text.trim())) || /(?<![.\w-])Slots?(?![?.:(\w-])/.test(text);
+  const word = /(?<![.\w-])slots?(?![?.:(\[\w-])/i;
+  const prose = (text: string) => (word.test(text) && /\s/.test(text.trim())) || /(?<![.\w-])Slots?(?![?.:(\[\w-])/.test(text);
   for (const file of files) {
     let inComment = false;
     readFileSync(file, 'utf8').split('\n').forEach((raw, index) => {
@@ -38,7 +38,7 @@ test('no user-facing string in src says "slot"', () => {
       line = line.replace(/\/\*.*?\*\//g, '');
       if (line.includes('/*')) { inComment = true; line = line.slice(0, line.indexOf('/*')); }
       line = line.replace(/(^|\s)\/\/.*$/, '');
-      const pieces = [...line.matchAll(/'([^']*)'|"([^"]*)"|`([^`]*)`|\}([^<>{}=;()\[\],]+)</g)].map((m) => m[1] ?? m[2] ?? m[3] ?? m[4]);
+      const pieces = [...line.matchAll(/'([^']*)'|"([^"]*)"|`([^`]*)`|\}([^<>{}=;()\[\],]+)<|(?<!=)>([^<>{}]+)(?:[<{]|$)/g)].map((m) => m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5]);
       // JSX text on a line of its own: words only, no code punctuation.
       if (/^\s*[A-Za-z][^<>{}=;()\[\]`'"]*$/.test(line) && /\s\S/.test(line.trim())) pieces.push(line);
       for (const piece of pieces) {
