@@ -1974,6 +1974,12 @@ body {
   gap: 10px;
 }
 
+@media (max-height: 700px) {
+  /* (#256) Short visible area: the dock's two actions share one row so the planner entry stays above it. */
+  .flow-dock.flow-dock { flex-direction: row; align-items: center; gap: 8px; padding-top: 4px; padding-bottom: 8px; }
+  .flow-dock.flow-dock > .pill-primary { flex: 1; }
+}
+
 .flow-dock--edge {
   padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--outline-variant);
@@ -4268,6 +4274,12 @@ button.aw-exercise__name-btn {
   color: #ffffff;
   background: #56706f;
 }
+@media (max-height: 700px) {
+  /* (#256) iPhone Chrome's ~650px visible area: a shorter hero keeps the planner entry above the dock. */
+  .t7-hero.t7-hero { min-height: 0; padding: 16px; gap: 6px; }
+  .t7-hero .t7-hero__title { font-size: 24px; max-width: 16ch; }
+}
+
 .t7-hero__photo {
   position: absolute;
   inset: 0;
@@ -4498,10 +4510,25 @@ button.aw-exercise__name-btn {
 .tt-open .ms { flex: none; color: var(--accent-text); }
 .tt-line { font-size: 15px; font-weight: 500; color: var(--on-surface); }
 .tt-tell { display: grid; gap: 8px; }
+/* (#256) The planner's action bar: always the bottom-most, fully visible buttons while it is open. */
+.tt-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 16;
+  display: grid;
+  gap: 8px;
+  margin: 0 -20px -20px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  background: var(--surface-container-lowest, #ffffff);
+  box-shadow: 0 -10px 18px -14px rgba(20, 40, 40, 0.35);
+}
 .tt-nav { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 8px; align-items: center; }
 .tt-skip { justify-self: center; min-height: 44px; }
 .tt-hint { color: var(--muted); font-size: 13px; }
 .tt-say {
+  /* (#256) Focus scrolling keeps the box above the planner's pinned action bar. */
+  scroll-margin-bottom: 150px;
   width: 100%;
   min-height: 86px;
   resize: none;

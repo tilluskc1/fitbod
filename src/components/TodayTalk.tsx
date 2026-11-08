@@ -153,10 +153,13 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
             <span>Your weekly plan keeps every day; nothing is lost.</span>
           </div>
         )}
-        <button type="button" className="pill-primary" onClick={() => onStart(built.talk)} disabled={day.exercises.length === 0}>
-          Start this workout
-        </button>
-        <button type="button" className="secondary" onClick={() => go('time')}>Change answers</button>
+        {/* (#256) The planner's own action bar: pinned to the bottom while the tab bar steps aside. */}
+        <div className="tt-bar">
+          <button type="button" className="pill-primary" onClick={() => onStart(built.talk)} disabled={day.exercises.length === 0}>
+            Start this workout
+          </button>
+          <button type="button" className="secondary" onClick={() => go('time')}>Change answers</button>
+        </div>
       </section>
     );
   }
@@ -253,6 +256,7 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
         </div>
       )}
 
+      <div className="tt-bar">
       <div className="tt-nav">
         <button type="button" className="secondary" onClick={() => (index === 0 ? close() : go(QUESTIONS[index - 1]))}>
           {index === 0 ? 'Cancel' : 'Back'}
@@ -267,6 +271,7 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
           Build with these answers
         </button>
       )}
+      </div>
     </section>
   );
 }
