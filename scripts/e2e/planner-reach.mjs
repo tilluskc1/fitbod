@@ -108,7 +108,8 @@ async function walkPlanner(page, where) {
       // bottom 330px; the visual viewport shrinks, and on iPhone may also shift up (offsetTop).
       // The test does not scroll for the app: whatever reveals the box must be the app's own doing.
       const size = page.viewportSize();
-      for (const shift of [0, 120]) {
+      // 0: no shift; 120: partly shifted; 330: shifted by the whole keyboard (then --kb is 0).
+      for (const shift of [0, 120, 330]) {
         const top = shift;
         const bottom = size.height - 330 + shift;
         await page.locator('#tt-say').focus();
