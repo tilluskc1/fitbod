@@ -11,6 +11,8 @@
 const BUILD_ID = 'dev';
 const BUILD_ASSETS = [];
 const CACHE = `fitbod-clone-shell-v6-${BUILD_ID}`;
+// Exercise photos and clips seen online. Kept across deploys: a new build must not wipe them.
+const MEDIA = 'fitbod-clone-media-v1';
 const SHELL = [
   ...BUILD_ASSETS,
   '/',
@@ -71,7 +73,7 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key.startsWith('fitbod-clone-') && key !== CACHE)
+            .filter((key) => key.startsWith('fitbod-clone-') && key !== CACHE && key !== MEDIA)
             .map((key) => caches.delete(key)),
         ),
       )
@@ -117,12 +119,11 @@ self.addEventListener('fetch', (event) => {
     caches.match(request, { ignoreVary: true }).then((cached) => {
       if (cached) return cached;
       return fetchWithTimeout(request).then((response) => {
-        if (
-          response.ok &&
-          ['image', 'script', 'style', 'font'].includes(request.destination)
-        ) {
+        const kind = request.destination;
+        if (response.ok && ['image', 'video', 'script', 'style', 'font'].includes(kind)) {
           const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
+          const name = kind === 'image' || kind === 'video' ? MEDIA : CACHE;
+          caches.open(name).then((cache) => cache.put(request, copy));
         }
         return response;
       });

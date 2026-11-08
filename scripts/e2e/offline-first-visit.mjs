@@ -90,7 +90,7 @@ try {
       check(placeholder, `${where}: no labelled placeholder for an uncached exercise photo offline`);
       const labelled = await page.locator('.photo[role="img"][aria-label$="demonstration"]').count();
       check(labelled > 0, `${where}: photo slots lost their label`);
-      await page.screenshot({ path: join(process.env.E2E_SHOTS ?? '.', `offline-${where}.png`) }).catch(() => {});
+      if (process.env.E2E_SHOTS) await page.screenshot({ path: join(process.env.E2E_SHOTS, `offline-${where}.png`) });
     }
 
     check(errors.length === 0, `${where}: page errors: ${errors.join(' | ')}`);
