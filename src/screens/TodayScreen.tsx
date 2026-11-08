@@ -349,7 +349,7 @@ export default function TodayScreen({
         {fresher && onPickFresher && onKeepNext && !current && (
           <div className="feasibility" role="note">
             <p className="feasibility__line">{listAreas(fresher.areas)} trained {fresher.when}. {fresher.option.name} is fresher.</p>
-            <p className="feasibility__reason">Switching skips {fresher.option.skips.join(', ')}.</p>
+            <p className="feasibility__reason">Switching skips {listAreas(fresher.option.skips)}.</p>
             <div className="feasibility__alts">
               <button className="feasibility__alt" onClick={() => onPickFresher(fresher.option)}>Switch to {fresher.option.name}</button>
               <button className="feasibility__alt feasibility__alt--text" onClick={onKeepNext}>Keep {fresher.nextName}</button>

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fresherDay, listAreas, musclesWorked, nextRepeats, recentlyTrained } from '../src/lib/recovery.ts';
-import { planSlots } from '../src/lib/sequence.ts';
+import { fresherDay, listAreas, musclesWorked, nextRepeats, recentlyTrained, todayFresher } from '../src/lib/recovery.ts';
+import { buildPlan } from '../src/lib/generator.ts';
+import { planSlots, todayProgram } from '../src/lib/sequence.ts';
 import { switchOptions } from '../src/lib/switchDay.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
 import type { AppState, Profile, WorkoutRecord } from '../src/types.ts';
@@ -36,9 +37,11 @@ function record(ids: string[], endedHoursAgo: number, { done = true, status = 'c
 const upperDay = (h: number) => record(['barbell-bench-press', 'barbell-row', 'overhead-press', 'lat-pulldown'], h);
 const lowerDay = (h: number) => record(['back-squat', 'romanian-deadlift', 'plank'], h);
 
-function offer(seq: number, history: WorkoutRecord[], plan = upperLower) {
-  const state = at(seq, plan);
-  return fresherDay(planSlots(state.plan), switchOptions(profile, state, history, gym), history, NOW);
+const skipAt = (seq: number, h = 10, revision = 1) =>
+  ({ id: `skip:${revision}:${seq}`, revision, seq, slotId: 'any', at: hoursAgo(h) });
+/** Today's offer through the one public path; by default the slot before the cursor was skipped 10 h ago. */
+function offer(seq: number, history: WorkoutRecord[], plan = upperLower, slotSkips = [skipAt(seq - 1)]) {
+  return todayFresher(profile, { ...at(seq, plan), history, slotSkips }, gym, null, NOW);
 }
 
 test('#134: muscles worked follow the skipped-area rule: hinge counts the back, assisting arms do not', () => {
@@ -174,4 +177,42 @@ test('#134 fix: the precheck needs no priced days: nextRepeats is empty when no 
   assert.deepEqual(nextRepeats(slots(fiveDay)[3], [legsDay(20)], NOW), [], '5-day Upper after Legs');
   assert.deepEqual(nextRepeats(slots(sixDay)[3], [record(['barbell-bench-press'], 20)], NOW), [], '6-day Push B');
   assert.deepEqual(nextRepeats(slots(upperLower)[2], [upperDay(20)], NOW), ['Back', 'Chest', 'Shoulders'], 'Upper B after Upper A');
+});
+
+/* ---------- fix round 2: only when the order was broken ---------- */
+
+test('#134 order: no offer on the planned order, however much repeats (5-day: Pull 44 h, Legs 20 h, Upper next)', () => {
+  assert.equal(offer(3, [pullDay(44), legsDay(20)], fiveDay, []), null);
+  assert.equal(offer(2, [upperDay(20)], upperLower, []), null, 'no skip, no described day');
+  assert.equal(offer(2, [upperDay(20)], upperLower, [skipAt(1, 50)]), null, 'the skip is older than 48 h');
+  assert.equal(offer(2, [upperDay(20)], upperLower, [skipAt(1, 10, 0)]), null, 'the skip belongs to an older plan');
+  assert.equal(offer(2, [upperDay(20)])?.option.name, 'Lower B', 'a skip 10 h ago breaks the order');
+});
+
+test('#134 order: a finished described day breaks the order too', () => {
+  const described = { ...upperDay(20), name: 'Chest + Back + Shoulders', planRevision: 1 } as WorkoutRecord;
+  assert.equal(offer(2, [described], upperLower, [])?.option.name, 'Lower B');
+});
+
+test('#134 order: sweep, every split 2-6, 1 to 3 days done in the planned order from every start: no offer', () => {
+  for (let days = 2; days <= 6; days += 1) {
+    const plan = buildPlan({ ...profile, daysPerWeek: days });
+    const slots = planSlots(plan);
+    for (let start = 0; start < days; start += 1) {
+      for (let done = 1; done <= 3; done += 1) {
+        const history: WorkoutRecord[] = [];
+        for (let k = 0; k < done; k += 1) {
+          const slot = slots[(start + k) % days];
+          const ids = todayProgram(profile, slot, history, gym).exercises.map((exercise) => exercise.exerciseId);
+          history.push({ ...record(ids, (done - k) * 20), slotId: slot.id, slotSeq: start + k, planRevision: 1 } as WorkoutRecord);
+        }
+        assert.equal(offer(start + done, history, plan as typeof upperLower, []), null, `${days}-day from ${slots[start].name}, ${done} done`);
+      }
+    }
+  }
+});
+
+test('#134 lead: on 6-day Push B the lead repeats only when a done lift listed Shoulders first', () => {
+  assert.equal(offer(3, [record(['face-pull'], 20)], sixDay), null, 'a face pull is back work that touches the shoulders');
+  assert.equal(offer(3, [record(['overhead-press'], 20)], sixDay)?.option.name, 'Pull B');
 });

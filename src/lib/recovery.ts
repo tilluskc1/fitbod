@@ -3,7 +3,7 @@ import type { Constraints } from './adapt.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { areasOf, worksSkipped } from './areas.ts';
 import { activeOverride, dayKey } from './plan.ts';
-import { currentSlot, planSlots } from './sequence.ts';
+import { currentSlot, isDescribedSession, planRevisionOf, planSlots } from './sequence.ts';
 import type { PlanSlot } from './sequence.ts';
 import { switchOptions } from './switchDay.ts';
 import type { SwitchOption } from './switchDay.ts';
@@ -40,11 +40,8 @@ export function musclesWorked(record: WorkoutRecord): Set<MuscleGroup> {
 export function recentlyTrained(history: WorkoutRecord[], now: Date): Map<MuscleGroup, Date> {
   const recent = new Map<MuscleGroup, Date>();
   for (const record of history) {
-    if (record.status !== 'completed') continue;
-    const ended = Date.parse(record.endedAt ?? '');
-    const time = Number.isNaN(ended) ? Date.parse(record.date) : ended;
-    if (Number.isNaN(time) || now.getTime() - time > RECOVERY_HOURS * HOUR_MS) continue;
-    const at = new Date(Math.min(time, now.getTime()));
+    const at = endedWithin(record, now);
+    if (!at) continue;
     for (const muscle of musclesWorked(record)) {
       const last = recent.get(muscle);
       if (!last || at > last) recent.set(muscle, at);
@@ -53,20 +50,57 @@ export function recentlyTrained(history: WorkoutRecord[], now: Date): Map<Muscle
   return recent;
 }
 
+/** When a finished session ended, clamped to now; null outside the 48 h window or without a readable time. */
+function endedWithin(record: WorkoutRecord, now: Date): Date | null {
+  if (record.status !== 'completed') return null;
+  const ended = Date.parse(record.endedAt ?? '');
+  const time = Number.isNaN(ended) ? Date.parse(record.date) : ended;
+  if (Number.isNaN(time) || now.getTime() - time > RECOVERY_HOURS * HOUR_MS) return null;
+  return new Date(Math.min(time, now.getTime()));
+}
+
+/** Muscles a done exercise listed first in the window: a face pull leads with the back, not the shoulders. */
+function ledRecently(history: WorkoutRecord[], now: Date): Set<MuscleGroup> {
+  const led = new Set<MuscleGroup>();
+  for (const record of history) {
+    if (!endedWithin(record, now)) continue;
+    for (const entry of record.exercises) {
+      const lead = entry.performed.some((set) => set.done) ? exerciseById(entry.exerciseId)?.muscles[0] : undefined;
+      if (lead) led.add(lead);
+    }
+  }
+  return led;
+}
+
+/**
+ * (#134) The split's order was broken in the last 48 h: a skip recorded under this plan (Switch
+ * records its skips too) or a finished described day. The planned order alone never offers.
+ */
+export function orderBroken(state: AppState, now: Date): boolean {
+  const revision = planRevisionOf(state);
+  const within = (iso: string) => now.getTime() - Date.parse(iso) <= RECOVERY_HOURS * HOUR_MS;
+  return (state.slotSkips ?? []).some((skip) => skip.revision === revision && within(skip.at))
+    || state.history.some((record) => isDescribedSession(record) && endedWithin(record, now) !== null);
+}
+
 /** The muscles a day repeats. Core is left out: most days end with it, and it recovers fast. */
 function repeats(slot: PlanSlot, recent: Map<MuscleGroup, Date>): MuscleGroup[] {
   return slot.focus.filter((muscle) => muscle !== 'Core' && recent.has(muscle));
 }
 
-/** What the day up next repeats, when it is worth an offer: its lead muscle, or two areas. Else []. */
-function worthOffering(slot: PlanSlot, recent: Map<MuscleGroup, Date>): MuscleGroup[] {
+/**
+ * What the day up next repeats, when it is worth an offer: its lead muscle, led by a done lift,
+ * or two areas. Else [].
+ */
+function worthOffering(slot: PlanSlot, recent: Map<MuscleGroup, Date>, led: Set<MuscleGroup>): MuscleGroup[] {
   const repeated = repeats(slot, recent);
-  return repeated.includes(slot.focus[0]) || areasOf(repeated).length >= 2 ? repeated : [];
+  const lead = slot.focus[0];
+  return (repeated.includes(lead) && led.has(lead)) || areasOf(repeated).length >= 2 ? repeated : [];
 }
 
 /** The cheap precheck (#134): no day is priced. Empty means no offer can follow. */
 export function nextRepeats(slot: PlanSlot, history: WorkoutRecord[], now: Date): MuscleGroup[] {
-  return worthOffering(slot, recentlyTrained(history, now));
+  return worthOffering(slot, recentlyTrained(history, now), ledRecently(history, now));
 }
 
 export interface FresherDay {
@@ -87,8 +121,8 @@ function dayLabel(at: Date, now: Date): string {
 }
 
 /**
- * (#134, owner choice A) When the day up next repeats its lead muscle, or two areas, trained in
- * the last 48 h, the freshest day at most 2 skips ahead that can run today. The fixed split stays
+ * (#134, owner choice A) When the day up next repeats its lead muscle (led by a done lift), or two
+ * areas, trained in the last 48 h, the freshest day at most 2 skips ahead that can run today. The fixed split stays
  * the default: this only offers. Freshest is the fewest repeated muscles, ties to the fewest skips;
  * it is offered only when it repeats at most half as many as the day up next, so near-equal days
  * (Full Body) never nag. A day with nothing to train today ('none') is never offered.
@@ -105,7 +139,7 @@ export function fresherDay(
   const next = options.find((option) => option.offset === 0);
   const nextSlot = next && byId.get(next.slotId);
   if (!next || !nextSlot) return null;
-  const repeated = worthOffering(nextSlot, recent);
+  const repeated = worthOffering(nextSlot, recent, ledRecently(history, now));
   if (repeated.length === 0) return null;
 
   let best: { option: SwitchOption; count: number } | null = null;
@@ -134,9 +168,9 @@ export function listAreas(areas: string[]): string {
 export const keepKey = (slotId: string, now: Date) => `${dayKey(now)}|${slotId}`;
 
 /**
- * Today's offer (#134): none while a session is open, on a described day, without a slot, or once
- * Keep was tapped for this slot today. The Switch sheet's options are only priced once the cheap
- * `nextRepeats` precheck says an offer can follow.
+ * Today's offer (#134): only after the split's order was broken (`orderBroken`); none while a
+ * session is open, on a described day, without a slot, or once Keep was tapped for this slot
+ * today. The Switch sheet's options are only priced once the cheap checks say an offer can follow.
  */
 export function todayFresher(
   profile: Profile | null,
@@ -147,6 +181,6 @@ export function todayFresher(
 ): FresherDay | null {
   const slot = currentSlot(state);
   if (!profile || !slot || state.current || activeOverride(state, now)?.focus || kept === keepKey(slot.id, now)) return null;
-  if (nextRepeats(slot, state.history, now).length === 0) return null;
+  if (!orderBroken(state, now) || nextRepeats(slot, state.history, now).length === 0) return null;
   return fresherDay(planSlots(state.plan), switchOptions(profile, state, state.history, constraints), state.history, now);
 }
