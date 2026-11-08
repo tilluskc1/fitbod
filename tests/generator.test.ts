@@ -122,13 +122,12 @@ test('full equipment produces a full, coverage-complete Push session', () => {
   const counts = patternCounts(push.exercises);
 
   assert.equal(push.feasibility.status, 'ok');
-  // An intermediate's 60 minutes hold a third chest press on Push (#96).
-  assert.equal(push.exercises.length, 7, 'every exercise the Push caps allow');
-  assert.equal(push.targetCount, 7);
+  assert.equal(push.exercises.length, 6, 'every exercise the Push caps allow');
+  assert.equal(push.targetCount, 6);
   assert.ok(push.feasibility.coverage.every((item) => item.satisfied));
   assert.ok((counts.get('core_stability') ?? 0) <= 1);
   assert.ok((counts.get('core_flexion') ?? 0) <= 1);
-  for (const count of counts.values()) assert.ok(count <= 3, 'never more than three of one movement');
+  for (const count of counts.values()) assert.ok(count <= 2, 'never more than two of one movement');
   assert.equal(new Set(push.exercises.map((exercise) => exercise.exerciseId)).size, push.exercises.length);
 });
 
@@ -142,8 +141,8 @@ test('a common home kit still fills a full Push session', () => {
   const push = generateWorkout(profile, plan[0], 0);
 
   assert.equal(push.feasibility.status, 'ok');
-  assert.equal(push.exercises.length, 7, 'every exercise the Push caps allow, a third chest press included (#96)');
-  assert.equal(push.targetCount, 7);
+  assert.equal(push.exercises.length, 6, 'every exercise the Push caps allow');
+  assert.equal(push.targetCount, 6);
   assert.ok(push.feasibility.coverage.every((item) => item.satisfied));
   assert.ok(push.feasibility.alternatives.length === 0);
 });

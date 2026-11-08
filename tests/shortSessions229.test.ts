@@ -122,8 +122,6 @@ test('45 and 60 minutes are unchanged: saved 45, saved 60, and 60 shortened to 4
     return `${lines.length} ${createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 16)}`;
   };
   assert.equal(fingerprint(45, 45), '720 0a32976338351765');
-  // #96 (owner-triaged rule): an intermediate or advanced Push or Legs day at 60 may hold a muscle's
-  // third exercise; beginners and 45 are unchanged. Was 9e4652a30bc81703 and 2fe9cffcf719b9ea.
-  assert.equal(fingerprint(60, 60), '720 253728b95bd5d886');
-  assert.equal(fingerprint(60, 45), '720 4c8a27fc379bbbeb');
+  assert.equal(fingerprint(60, 60), '720 9e4652a30bc81703');
+  assert.equal(fingerprint(60, 45), '720 2fe9cffcf719b9ea');
 });

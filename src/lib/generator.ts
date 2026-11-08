@@ -280,24 +280,19 @@ function selectExercises(profile: Profile, day: DayRequest, dayIndex: number, ta
 
   // A further exercise for the day's first muscle that can take one, else the next, in the direction
   // the day has less of; a tie goes to the lead's (a second row beside a chin-up).
-  const further = (perMuscle: (muscle: MuscleGroup) => number) => {
+  const further = (perMuscle: (muscle: MuscleGroup) => number, loadedFirst = false) => {
     const leadPattern = pickLead(picked, day.focus)?.pattern;
     const used = (exercise: Exercise) => 2 * (patternCounts.get(exercise.pattern) ?? 0) + Number(exercise.pattern !== leadPattern);
+    // A third (#96) is a loaded move wherever the kit loads the muscle: no push-up as a gym's third press.
+    const loaded = (muscle: MuscleGroup) => loadedFirst && eligible.some((exercise) => exercise.muscles[0] === muscle && exercise.equipment !== 'Bodyweight');
     for (const muscle of day.focus.filter((item) => item !== 'Core')) {
-      const best = compoundFirst.filter((exercise) => exercise.muscles[0] === muscle && canTake(exercise, true, perMuscle(muscle)))
+      const best = compoundFirst.filter((exercise) => exercise.muscles[0] === muscle && canTake(exercise, true, perMuscle(muscle))
+        && !(loaded(muscle) && exercise.equipment === 'Bodyweight'))
         .sort((a, b) => used(a) - used(b))[0];
       if (best) return best;
     }
     return undefined;
   };
-
-  // 3b. A trained lifter's focus muscle may take a third exercise while slots remain (#96). Like the
-  // slot step 4 frees, it is the first to go when time runs short.
-  const thirds = new Set<Exercise>();
-  for (let next = further(cap); next && picked.length < target; next = further(cap)) {
-    take(next);
-    thirds.add(next);
-  }
 
   // 4. A split day keeps one core exercise: a second one gives its slot to the day's first muscle,
   // else another of its muscles (#190), up to a third for it. With nothing to take it, the slot stays
@@ -311,7 +306,15 @@ function selectExercises(profile: Profile, day: DayRequest, dayIndex: number, ta
     if (freed) take(freed);
   }
 
-  return { picked, covering, requirements, freed, thirds };
+  // 5. A trained lifter's focus muscle may take a third exercise while slots remain (#96). It stays
+  // out of the day: `generateWorkout` adds it only into time the day leaves over.
+  const thirds: Exercise[] = [];
+  for (let next = further(cap, true); next && picked.length < target; next = further(cap, true)) {
+    take(next);
+    thirds.push(next);
+  }
+
+  return { picked: picked.filter((exercise) => !thirds.includes(exercise)), covering, requirements, freed, thirds };
 }
 
 /**
@@ -369,8 +372,8 @@ export function generateWorkout(
     const index = day.focus.indexOf(exercise.muscles[0]);
     return index < 0 ? day.focus.length : index;
   };
-  // The slot a second core exercise freed (#190) and a muscle's third (#96) go first, unless they hold the lead.
-  const spare = (exercise: Exercise) => Number((exercise === freed || thirds.has(exercise)) && exercise !== lead);
+  // The slot a second core exercise freed (#190) goes first, unless it holds the lead.
+  const spare = (exercise: Exercise) => Number(exercise === freed && exercise !== lead);
   picked.sort((a, b) => spare(a) - spare(b) || tier(a) - tier(b) || focusRank(a) - focusRank(b));
   const prescriptions = picked.map((exercise) =>
     prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined, setup));
@@ -442,8 +445,7 @@ export function generateWorkout(
     // Preferences stay: a 'more' pick reorders the fill, and that is the user's choice, not a gap.
     const open = { ...profile, equipment: [...EQUIPMENT_OPTIONS], support: [...SUPPORT_OPTIONS], exclusions: [] };
     const capacity = selectExercises(open, day, dayIndex, max).picked.length;
-    // A muscle's third that did not fit (#96) leaves the day as full as it was without it.
-    const exhausted = kept === all - [...thirds].filter((exercise) => !picked.includes(exercise)).length;
+    const exhausted = kept === all;
     // Too long even at the floor: thin the last exercises first, down to 2 sets (the lead to 3;
     // under 30 minutes the lead may go to 2 so a four-movement day still fits, #132).
     for (let index = kept - 1; index >= 0 && seconds() > budget; ) {
@@ -471,6 +473,16 @@ export function generateWorkout(
     const thin = exhausted && seconds() < budget * 0.5;
     targetCount = kept < all || !thin ? kept
       : Math.min(capacity, kept + Math.max(0, Math.floor(room / anotherExercise)));
+    // A muscle's third (#96) only fills time left over: it takes no set from the day above.
+    for (const exercise of short ? [] : thirds) {
+      const prescription = prescribeExercise(exercise, profile, history, false, lead !== undefined, setup);
+      picked.push(exercise);
+      sets.push(prescription.sets);
+      rests.push(restSecondsFor(exercise, false, profile.goal, minutes));
+      prescriptions.push(prescription);
+      if (seconds() > budget) drop(picked.length - 1);
+      else targetCount = Math.max(targetCount, picked.length);
+    }
   }
 
   // Trimming used the priority above; the session itself runs lead, compounds, isolation, core (#133).

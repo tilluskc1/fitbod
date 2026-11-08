@@ -23,24 +23,31 @@ const FIXTURE = new URL('./fixtures/muscleCap96-main.json', import.meta.url);
 const profileOf = (kit: keyof typeof KITS, experience: Profile['experience'], daysPerWeek: number, sessionMinutes: number, goal: Goal = 'Build Muscle') =>
   ({ goal, experience, daysPerWeek, unit: 'lb', sessionMinutes, ...KITS[kit], exclusions: [], loads: {} }) as unknown as Profile;
 
-type Sweep = { output: Record<string, string>; muscles: Record<string, string> };
+/** `days`: a trained lifter's days of 45 minutes or more, as indexes into `lists` ("id:sets ..."). */
+type Sweep = { output: Record<string, string>; muscles: Record<string, string>; lists: string[]; days: Record<string, number[]> };
 
-/** Every generated day of one kit, level, split and length, all goals, hashed: whole output, and muscles trained. */
+/** Every generated day of one kit, level, split and length, all goals: hashed whole output and muscles trained, and the lists. */
 function sweep(): Sweep {
-  const out: Sweep = { output: {}, muscles: {} };
+  const out: Sweep = { output: {}, muscles: {}, lists: [], days: {} };
   for (const kit of Object.keys(KITS) as (keyof typeof KITS)[]) for (const experience of LEVELS)
     for (const daysPerWeek of [2, 3, 4, 5, 6]) for (const minutes of LENGTHS) {
       const output = createHash('sha256');
       const muscles = createHash('sha256');
+      const key = `${kit} ${experience} ${daysPerWeek}d ${minutes}`;
+      const listed = experience !== 'Beginner' && minutes >= 45;
+      if (listed) out.days[key] = [];
       for (const goal of GOALS) {
         const profile = profileOf(kit, experience, daysPerWeek, minutes, goal);
         buildPlan(profile).forEach((day, index) => {
           const session = generateWorkout(profile, day, index, []);
           output.update(JSON.stringify(session));
           muscles.update(`${[...new Set(session.exercises.map((exercise) => exerciseById(exercise.exerciseId)!.muscles[0]))].sort()}\n`);
+          if (!listed) return;
+          const list = session.exercises.map((exercise) => `${exercise.exerciseId}:${exercise.planned.length}`).join(' ');
+          if (!out.lists.includes(list)) out.lists.push(list);
+          out.days[key].push(out.lists.indexOf(list));
         });
       }
-      const key = `${kit} ${experience} ${daysPerWeek}d ${minutes}`;
       out.output[key] = output.digest('hex').slice(0, 16);
       out.muscles[key] = muscles.digest('hex').slice(0, 16);
     }
@@ -83,10 +90,32 @@ const primaries = (profile: Profile, name: string) => {
   return generateWorkout(profile, plan[index], index, []).exercises.map((exercise) => exerciseById(exercise.exerciseId)!);
 };
 
-test('an advanced Push day at 60 minutes in a full gym holds three chest presses', () => {
-  for (const [daysPerWeek, name] of [[3, 'Push'], [6, 'Push A']] as const) {
-    const day = primaries(profileOf('gym', 'Advanced', daysPerWeek, 60), name);
-    const presses = day.filter((exercise) => exercise.pattern === 'horizontal_push').map((exercise) => exercise.id);
-    assert.ok(presses.length === 3, `${name}: ${presses.join(', ')}`);
+test('an advanced Push day with time to spare in a full gym holds three loaded chest presses', () => {
+  // At 60 minutes the day's own sets fill the time, so no third (a third only takes spare time).
+  for (const [daysPerWeek, name] of [[3, 'Push'], [6, 'Push A'], [6, 'Push B']] as const) {
+    const day = primaries(profileOf('gym', 'Advanced', daysPerWeek, 90), name);
+    const presses = day.filter((exercise) => exercise.pattern === 'horizontal_push');
+    assert.ok(presses.length === 3 && presses.every((exercise) => exercise.equipment !== 'Bodyweight'),
+      `${name}: ${presses.map((exercise) => exercise.id).join(', ')}`);
   }
+});
+
+const setsOf = (list: string) => new Map(list.split(' ').filter(Boolean).map((item) => [item.split(':')[0], Number(item.split(':')[1])]));
+/** Each trained lifter's day of 45+ minutes: main's exercises and sets, and today's. */
+const pairs = Object.keys(main.days).flatMap((key) => main.days[key].map((index, day) =>
+  ({ key, before: setsOf(main.lists[index]), after: setsOf(now.lists[now.days[key][day]]) })));
+
+test('a third only fills spare time: every exercise of the day on main keeps its sets', () => {
+  assert.equal(pairs.length, 1920);
+  const lost = pairs.flatMap(({ key, before, after }) => [...before]
+    .filter(([id, sets]) => (after.get(id) ?? 0) < sets).map(([id, sets]) => `${key}: ${id} ${sets} -> ${after.get(id) ?? 0}`));
+  assert.deepEqual(lost, []);
+});
+
+test('a third is a loaded move in a kit that loads the muscle; push-ups are no third press in a gym', () => {
+  // Every focus muscle has a dumbbell or gym move in these kits; a bodyweight kit may still add a bodyweight third.
+  const added = pairs.filter(({ key }) => !key.startsWith('bodyweight'))
+    .flatMap(({ key, before, after }) => [...after.keys()].filter((id) => !before.has(id)).map((id) => ({ key, id })));
+  assert.ok(added.length > 0);
+  assert.deepEqual(added.filter(({ id }) => exerciseById(id)!.equipment === 'Bodyweight'), []);
 });
