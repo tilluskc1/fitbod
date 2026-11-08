@@ -4,6 +4,7 @@ import type { EquipmentChoice } from '../lib/adapt';
 import { AREAS } from '../lib/areas';
 import type { Area } from '../lib/areas';
 import { noticeText } from '../lib/constraints';
+import { PAIN_CHECK } from '../lib/safety';
 import { restLabel } from '../lib/sessionTime';
 import { NO_TAPS, composeTalk, gearLabel, tapsAfterEdit } from '../lib/todayTalk';
 import type { CustomDayPreview, TalkState, Taps } from '../lib/todayTalk';
@@ -111,7 +112,7 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
   }
 
   const gear = gearLabel(talk.equipment, profile);
-  const line = talk.pain ? 'You mentioned pain. Nothing will be built around it.' : planLine(talk, plannedName, plannedAreas, gear);
+  const line = talk.pain ? `You mentioned pain. Nothing will be built around it. ${PAIN_CHECK}` : planLine(talk, plannedName, plannedAreas, gear);
 
   if (step === 'summary' && built) {
     const { day } = built;
@@ -218,7 +219,7 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
           </div>
           {talk.pain ? (
             <p className="tt-stop" role="alert">
-              <b>You mentioned pain.</b> I can work around soreness, not pain. Skip today or check with someone who can look at it.
+              <b>You mentioned pain.</b> I can work around soreness, not pain. {PAIN_CHECK}
               <button type="button" className="secondary" onClick={() => { setHurts(false); setSoreOnly(true); }}>It's only soreness</button>
             </p>
           ) : left.length > 0 ? (

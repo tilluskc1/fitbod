@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DEFAULT_SUPPORT, EQUIPMENT_OPTIONS, SUPPORT_OPTIONS } from '../data/exercises';
+import { SAFETY_NOTICE } from '../lib/safety';
 import { loadLimitText, overLoadLimit, parseLoads } from '../lib/units';
 import type { Equipment, Experience, Goal, Profile, SupportEquipment, Unit } from '../types';
 
@@ -279,6 +280,12 @@ export default function Onboarding({ onComplete }: Props) {
           </>
           )}
         </section>
+      )}
+
+      {step === 3 && (
+        <p className="muted onboarding-safety" role="note">
+          {SAFETY_NOTICE}
+        </p>
       )}
 
       <div className="onboarding-actions">
