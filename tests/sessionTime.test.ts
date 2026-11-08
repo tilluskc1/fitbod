@@ -31,12 +31,15 @@ test('rest follows the role in the day: lead 120–180 s, other compounds 90–1
   }
 });
 
-test('under 30 minutes every role rests at the short end of its range, with a shorter warm-up', () => {
+test('at 30 minutes or less every role rests at the short end of its range, with a shorter warm-up (#229)', () => {
   assert.equal(restSecondsFor(ex('barbell-bench-press'), true, 'Build Muscle', 20), 120);
   assert.equal(restSecondsFor(ex('overhead-press'), false, 'Build Muscle', 20), 90);
   assert.equal(restSecondsFor(ex('lateral-raise'), false, 'Build Muscle', 20), 60);
   assert.equal(warmUpSeconds(20), 180);
-  assert.equal(warmUpSeconds(30), 300);
+  assert.equal(warmUpSeconds(30), 180);
+  assert.equal(restSecondsFor(ex('barbell-bench-press'), true, 'Build Muscle', 30), 120);
+  assert.equal(restSecondsFor(ex('barbell-bench-press'), true, 'Build Muscle', 45), 150);
+  assert.equal(warmUpSeconds(45), 300);
   assert.equal(warmUpSeconds(undefined), 300);
 });
 

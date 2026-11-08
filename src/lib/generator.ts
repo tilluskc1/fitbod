@@ -16,7 +16,8 @@ import {
   requirementsForDay,
 } from './feasibility.ts';
 import { isCompound, pickLead, prescribeExercise } from './progression.ts';
-import { REST_SECONDS, exerciseSeconds, restSecondsFor, sessionSeconds, warmUpSeconds } from './sessionTime.ts';
+import { REST_SECONDS, SHORT_SESSION_MAX_SETS, SHORT_SESSION_MINUTES, exerciseSeconds, fitSets, leadFloorSets, restSecondsFor, sessionSeconds, warmUpSeconds } from './sessionTime.ts';
+import { programExercise } from '../data/flagship.ts';
 
 const SPLITS: Record<number, PlanDay[]> = {
   2: [
@@ -80,6 +81,7 @@ export function buildPlan(profile: Profile): PlanDay[] {
 }
 
 export const MIN_EXERCISES = 3;
+
 /** Past this, extra exercises mostly add fatigue, not results. */
 export const MAX_EXERCISES = { Beginner: 6, Intermediate: 8, Advanced: 8 } as const;
 /** Thinned to fit a short session, an exercise keeps at least this many sets; the lead keeps 3. */
@@ -353,13 +355,15 @@ export function generateWorkout(
 
   let targetCount = fixed ?? picked.length;
   if (fixed === undefined) {
-    const budget = (profile.sessionMinutes ?? 35) * 60;
+    const minutes = profile.sessionMinutes ?? 35;
+    const budget = minutes * 60;
+    const short = minutes < SHORT_SESSION_MINUTES;
     const all = picked.length;
-    const leadFloor = (profile.sessionMinutes ?? 35) < 30 ? MIN_SETS : 3;
+    const leadFloor = leadFloorSets(minutes);
+    const held = new Set(lead ? [lead, ...covering] : covering);
     // A described day (#211) keeps one exercise per focus muscle, in focus order, while the lead,
     // the day's requirements and those exercises fit at their floor sets: the cut below then takes a
     // second exercise for a muscle before the only one for another. A muscle past that is left for time.
-    const held = new Set(lead ? [lead, ...covering] : covering);
     if (day.everyMuscle) {
       const floorSeconds = (items: Exercise[]) => estimatedSeconds(
         items.map((exercise) => Math.min(sets[picked.indexOf(exercise)], exercise === lead ? leadFloor : MIN_SETS)),
@@ -370,13 +374,39 @@ export function generateWorkout(
         if (cover && floorSeconds([...held, cover]) <= budget) held.add(cover);
       }
     }
-    // Cut from the end, never the lead nor a day requirement's only cover, while the day runs long.
-    for (let index = picked.length - 1; index > 0 && picked.length > MIN_EXERCISES && seconds() > budget; index -= 1) {
-      if (held.has(picked[index])) continue;
+    const drop = (index: number) => {
       picked.splice(index, 1);
       sets.splice(index, 1);
       rests.splice(index, 1);
       prescriptions.splice(index, 1);
+    };
+    if (short) {
+      // Under 45 minutes (#229) the day is fitted by the same rule a today-only shorter length uses
+      // (`fitSets`): every movement at its floor before any is cut, cut from the end of the priority
+      // order, sets handed back evenly, none past 3. Cutting whole movements first left a
+      // 30-minute day at 3 exercises and 9 sets.
+      const dropOrder = picked.map((_, index) => index).reverse();
+      const fitted = fitSets(
+        picked.map((exercise, index) => ({
+          sets: sets[index],
+          rest: rests[index],
+          hold: Boolean(programExercise(exercise.id)?.holdSeconds),
+          lead: exercise === lead,
+          keep: held.has(exercise),
+          pattern: exercise.pattern,
+        })),
+        dropOrder,
+        budget,
+        warmUpSeconds(minutes),
+        { cap: SHORT_SESSION_MAX_SETS, minCount: MIN_EXERCISES, leadFloor, twoPresses: true },
+      );
+      fitted.forEach((count, index) => { sets[index] = count; });
+      for (let index = picked.length - 1; index >= 0; index -= 1) if (sets[index] === 0) drop(index);
+    }
+    // Cut from the end, never the lead nor a day requirement's only cover, while the day runs long.
+    for (let index = picked.length - 1; index > 0 && picked.length > MIN_EXERCISES && seconds() > budget; index -= 1) {
+      if (held.has(picked[index])) continue;
+      drop(index);
     }
     const kept = picked.length;
     const room = budget - seconds();
@@ -401,7 +431,7 @@ export function generateWorkout(
     // No exercise left to add and at least one more exercise's worth of time:
     // 3-set work gets a fourth set in priority order while it fits, the lead first, so a
     // later compound never ends up with more sets than the lead (#133). A 5-set lead is already past 4.
-    if (exhausted && room >= anotherExercise) {
+    if (!short && exhausted && room >= anotherExercise) {
       for (let index = 0; index < kept; index += 1) {
         const most = capsCore(day) && CORE_PATTERNS.has(picked[index].pattern) ? CAPPED_CORE_SETS : 4;
         if (sets[index] < most && seconds() + exerciseSeconds(sets[index] + 1, rests[index]) - exerciseSeconds(sets[index], rests[index]) <= budget) sets[index] += 1;

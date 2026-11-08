@@ -28,7 +28,8 @@ const shape = (profile: Profile, dayIndex = 0) => {
 test('session minutes set how many exercises an Upper day holds, within the documented bounds', () => {
   // Honest time with rest by role and a warm-up (#132): fewer sets per length than before.
   assert.deepEqual(shape(at(20)).sets, [3, 2, 2], 'at least 3 exercises; under 30 min even the lead thins');
-  assert.deepEqual(shape(at(35)).sets, [5, 3, 3]);
+  // #229: under 45 minutes movements come before sets: the lead stops at 3 and five movements fit.
+  assert.deepEqual(shape(at(35)).sets, [3, 3, 2, 2, 2]);
   assert.deepEqual(shape(at(45)).sets, [5, 3, 3, 3]);
   assert.deepEqual(shape(at(60)).sets, [5, 3, 3, 3, 3, 3, 3]);
   assert.equal(shape(at(120)).exercises.length, 8, 'Intermediate tops out at 8 exercises');

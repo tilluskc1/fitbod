@@ -70,7 +70,11 @@ test('#188: a focus muscle bodyweight cannot train reads Limited, not padded', (
 
 test('#188: the saved setup keeps today\'s program exactly', () => {
   assert.deepEqual(todayProgram(gym, legs, [], { minutes: 60, equipment: 'home' }), slotProgram(gym, legs, []));
-  assert.deepEqual(todayProgram(gym, legs, [], { minutes: 30, equipment: 'home' }), slotProgram(gym, legs, []), 'shorter trims later');
+  assert.deepEqual(todayProgram(gym, legs, [], { minutes: 45, equipment: 'home' }), slotProgram(gym, legs, []), '45 and over trims later');
+  // Under 45 the day is built at today's length (#229) and remembers the saved length it came from.
+  const short = todayProgram(gym, legs, [], { minutes: 30, equipment: 'home' });
+  assert.deepEqual(short.exercises, slotProgram({ ...gym, sessionMinutes: 30 }, legs, []).exercises, 'under 45 rebuilds there');
+  assert.equal(short.shortenedFrom?.minutes, 60);
   assert.deepEqual(todayProgram(gym, legs, [], { minutes: 90, equipment: 'home' }), slotProgram({ ...gym, sessionMinutes: 90 }, legs, []), 'longer rebuilds (#17)');
   assert.deepEqual(todayProgram(gym, legs, []), slotProgram(gym, legs, []));
 });

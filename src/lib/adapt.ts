@@ -6,7 +6,7 @@ import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
 import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
 import { estimatedSeconds } from './generator.ts';
-import { sessionRests } from './sessionTime.ts';
+import { SHORT_SESSION_MINUTES, sessionRests } from './sessionTime.ts';
 import { liveExercises } from './liveProgression.ts';
 
 /**
@@ -352,8 +352,12 @@ export function adaptWorkout(
   }
 
   // 5. Anything reduced to nothing was dropped to fit the time, so the review
-  //    screen can say what went and why.
+  //    screen can say what went and why. A day built at a today-only length under 45 minutes
+  //    (#229) names the saved day's movements it does not have.
   const kept = exercises.filter((exercise) => exercise.sets > 0);
+  if (program.shortenedFrom && minutes <= program.minutes) {
+    for (const exercise of program.shortenedFrom.dropped) skipped.push({ ...exercise, reason: 'time' });
+  }
   for (const exercise of exercises) {
     if (exercise.sets === 0) {
       skipped.push({
@@ -389,7 +393,8 @@ export function adaptWorkout(
   const trimmedSets = kept.some((exercise) => exercise.sets < exercise.originalSets);
   const forTime = skipped.filter((item) => item.reason === 'time');
   const forEquipment = skipped.filter((item) => item.reason === 'equipment');
-  const timeTrimmed = trimmedSets || forTime.length > 0;
+  // A day built at a shorter today-only length (#229) was cut for time even when no movement went.
+  const timeTrimmed = trimmedSets || forTime.length > 0 || (program.shortenedFrom !== undefined && minutes <= program.minutes);
   // The program is the ceiling: a request above its own minutes cannot add
   // work, so cap the label at what the surviving sets take. Requests at or
   // under the program (the trimming direction) keep their label unchanged.
@@ -635,7 +640,9 @@ export function lengthOptions(
   const kept = new Set(base.exercises.map((exercise) => exercise.exerciseId));
   return LENGTH_CHOICES.map((minutes) => {
     // A day rebuilt for today's setup (#188) is rebuilt at every length, as picking it would.
-    const source = programAt && (minutes > defaultMinutes || program.setup) ? programAt(minutes) : program;
+    // So is a shorter one under 45 minutes, built at that length the way picking it would (#229).
+    const source = programAt && (minutes > defaultMinutes || (minutes < defaultMinutes && minutes < SHORT_SESSION_MINUTES) || program.setup)
+      ? programAt(minutes) : program;
     const adapted = adaptWorkout(source, { ...constraints, minutes }, exclusions, goal);
     const now = new Set(adapted.exercises.map((exercise) => exercise.exerciseId));
     const dropped = base.exercises.filter((exercise) => kept.has(exercise.exerciseId) && !now.has(exercise.exerciseId)).map((exercise) => exercise.name);

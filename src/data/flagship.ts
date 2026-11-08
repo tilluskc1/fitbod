@@ -47,6 +47,11 @@ export interface Program {
   feasibility?: Feasibility;
   /** A today-only setup the day was rebuilt for (#188); its gear is already checked. Absent: the saved setup. */
   setup?: 'hotel' | 'bodyweight' | 'bands';
+  /**
+   * Built at a today-only length under 45 minutes and under the saved one (#229): the saved length,
+   * and the saved day's movements this day does not have, so the review can name what went.
+   */
+  shortenedFrom?: { minutes: number; dropped: { exerciseId: string; name: string; sets: number }[] };
 }
 
 export const FULL_BODY_A: Program = {

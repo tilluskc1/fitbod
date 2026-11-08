@@ -363,6 +363,8 @@ export default function App() {
   const program = useMemo(() => programFor(constraints), [programFor, constraints]);
   /** The saved setup's day at today's length: what the saved gear runs and restores to. */
   const homeProgram = useMemo(() => programFor({ minutes: constraints.minutes }), [programFor, constraints.minutes]);
+  /** The saved day at the saved length: what Restore original goes back to (a short day today is rebuilt, #229). */
+  const savedProgram = useMemo(() => programFor(), [programFor]);
   /** Today's setup (and described day) at the saved length: the base the duration sheet compares against. */
   const defaultProgram = useMemo(
     () => programFor({ equipment: constraints.equipment, focus: constraints.focus, skip: constraints.skip }),
@@ -765,7 +767,7 @@ export default function App() {
     if (describedSession) return;
     setState((currentState) => {
       const original = adaptWorkout(
-        homeProgram,
+        savedProgram,
         currentState.profile ? defaultConstraints(currentState.profile) : DEFAULT_CONSTRAINTS,
         currentState.profile?.exclusions ?? [],
         currentState.profile?.goal,

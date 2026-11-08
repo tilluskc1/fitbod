@@ -235,7 +235,8 @@ test('when today\'s setup drops the lead, the next compound takes its five sets'
   assert.ok(lead);
   const heir = leadCompoundId(ids.filter((id) => id !== lead));
   assert.ok(heir);
-  const adapted = adaptWorkout(program, DEFAULT_CONSTRAINTS, [lead], profile.goal);
+  // At the saved 45 minutes: a shorter day today caps every movement at 3 sets (#229).
+  const adapted = adaptWorkout(program, { ...DEFAULT_CONSTRAINTS, minutes: 45 }, [lead], profile.goal);
   const promoted = adapted.exercises.find((exercise) => exercise.exerciseId === heir);
   assert.equal(promoted?.sets, 5);
   assert.equal(promoted?.originalSets, 5);
@@ -249,7 +250,13 @@ test('bodyweight never takes the heavy lead; a barbell compound does when there 
   const push = generateWorkout(dumbbells, buildPlan(dumbbells)[0], 0).exercises;
   assert.notEqual(push[0].exerciseId, 'push-up');
   assert.equal(def(push[0].exerciseId).equipment, 'Dumbbell');
-  assert.equal(push[0].planned.length, 5, 'the dumbbell lead opens the session with the heavy sets');
+  // Under 45 minutes no movement passes 3 sets (#229), the lead included.
+  assert.equal(push[0].planned.length, 3, 'the dumbbell lead opens the session');
+  // At 45 the dumbbell lead takes the heavy sets.
+  const dumbbells45 = { ...dumbbells, sessionMinutes: 45 };
+  const push45 = generateWorkout(dumbbells45, buildPlan(dumbbells45)[0], 0).exercises;
+  assert.equal(def(push45[0].exerciseId).equipment, 'Dumbbell');
+  assert.equal(push45[0].planned.length, 5, 'the dumbbell lead opens the session with the heavy sets');
   const pushUp = push.find((exercise) => exercise.exerciseId === 'push-up');
   if (pushUp) assert.equal(pushUp.planned.length, 3);
   assert.equal(shape('push-up', profileOf(), true), '3 × 10–20', 'a lead flag cannot make bodyweight heavy');

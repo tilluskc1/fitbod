@@ -6,6 +6,7 @@ import { EXERCISES, exerciseById } from '../data/exercises.ts';
 import { buildPlan, generateWorkout } from './generator.ts';
 import { leadCompoundId, REP_RANGES, roleTarget, savedSetup } from './progression.ts';
 import { MAX_WEIGHT } from './validate.ts';
+import { SHORT_SESSION_MINUTES } from './sessionTime.ts';
 import { customDayName, worksSkipped } from './areas.ts';
 
 /**
@@ -138,9 +139,26 @@ export function slotProgram(
   };
 }
 
-/** The slot's day for a length chosen today: a longer one rebuilds the day there (#17); a shorter one is trimmed by adapt. */
+/**
+ * The slot's day for a length chosen today: a longer one rebuilds the day there (#17), and so does
+ * one under 45 minutes, so a today-only 30 is the day a saved 30 builds (#229). A shorter length of
+ * 45 or more keeps the saved day for `adaptWorkout` to trim on the timer's model (#203).
+ */
 export function slotProgramAt(profile: Profile, slot: PlanSlot, history: WorkoutRecord[], minutes?: number): Program {
-  return slotProgram(minutes !== undefined && minutes > (profile.sessionMinutes ?? 35) ? { ...profile, sessionMinutes: minutes } : profile, slot, history);
+  return atLength(profile, minutes, (at) => slotProgram(at, slot, history));
+}
+
+function atLength(profile: Profile, minutes: number | undefined, build: (profile: Profile) => Program): Program {
+  const saved = profile.sessionMinutes ?? 35;
+  if (minutes === undefined || minutes === saved) return build(profile);
+  if (minutes > saved) return build({ ...profile, sessionMinutes: minutes });
+  if (minutes >= SHORT_SESSION_MINUTES) return build(profile);
+  const full = build(profile);
+  const program = build({ ...profile, sessionMinutes: minutes });
+  const kept = new Set(program.exercises.map((exercise) => exercise.exerciseId));
+  const dropped = full.exercises.filter((exercise) => !kept.has(exercise.exerciseId))
+    .map(({ exerciseId, name, sets }) => ({ exerciseId, name, sets }));
+  return { ...program, shortenedFrom: { minutes: saved, dropped } };
 }
 
 /** The kit a today-only setup other than the saved one provides (#188). Bands have no catalog movements. */
@@ -166,8 +184,8 @@ export function withSkipped(profile: Profile, skip: MuscleGroup[]): Profile {
 
 /**
  * Today's program for the slot (#188). Every setup builds at today's length the way
- * `slotProgramAt` does: a longer day is rebuilt there (#17), a shorter one keeps the saved length
- * and `adaptWorkout` trims it on the timer's model (#203). The saved setup keeps the saved day;
+ * `slotProgramAt` does: a longer day, or one under 45 minutes, is rebuilt there (#17, #229); another
+ * shorter one keeps the saved length and `adaptWorkout` trims it on the timer's model (#203). The saved setup keeps the saved day;
  * another setup rebuilds the day from that setup's kit, so it gets that kit's best work and its
  * own honest feasibility instead of what survives the saved day. The saved setup is the one
  * `defaultConstraints` picks (`savedSetup`): a no-gear profile's bodyweight day is its program.
@@ -204,10 +222,11 @@ export function todayProgram(
     const minutes = today.minutes ?? saved;
     return slotProgram(minutes === saved ? profile : { ...profile, sessionMinutes: minutes }, slot, history);
   }
-  // A described day keeps today's length (#193); a rebuilt planned day is trimmed from the saved one.
-  const minutes = custom ? today.minutes ?? saved : today.minutes !== undefined && today.minutes > saved ? today.minutes : saved;
+  // A described day keeps today's length (#193); a rebuilt planned day follows `slotProgramAt`'s rule.
   const kit = SETUP_KIT[today.equipment];
-  const program = slotProgram({ ...profile, ...kit, sessionMinutes: minutes }, slot, history, today.equipment);
+  const program = custom
+    ? slotProgram({ ...profile, ...kit, sessionMinutes: today.minutes ?? saved }, slot, history, today.equipment)
+    : atLength({ ...profile, ...kit }, today.minutes, (at) => slotProgram(at, slot, history, today.equipment));
   // Gear chips would add to the saved setup, which today's gear does not change: the reason
   // already names what today's setup cannot train, and the gym sheet switches back.
   const feasibility = program.feasibility && {

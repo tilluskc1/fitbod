@@ -42,17 +42,18 @@ test('20 minutes with home dumbbells fits 8 sets by the timer', () => {
   assert.equal(adapted.note, 'Volume trimmed to 8 sets to fit 20 min.');
 });
 
-test('30 minutes with home dumbbells fits 10 sets by the timer (#203)', () => {
+test('30 minutes with home dumbbells keeps the whole program on 30-minute rests (#203, #229)', () => {
+  // Since #229, 30 minutes rests at the short end: the 11-set program takes 26 minutes, no trim.
   const adapted = home(30);
 
-  assert.equal(adapted.totalSets, 10);
+  assert.equal(adapted.totalSets, 11);
   assert.ok(todayGlance(adapted, null).minutes <= 30);
   assert.deepEqual(
     adapted.exercises.map((exercise) => exercise.sets),
-    [3, 3, 3, 1],
+    [3, 3, 3, 2],
   );
   assert.equal(adapted.skipped.length, 0);
-  assert.equal(adapted.note, 'Volume trimmed to 10 sets to fit 30 min.');
+  assert.equal(adapted.note, 'Same exercises, weights and sets as your program.');
 });
 
 test('a 15-minute day drops whole movements until the timer fits it, then refills the lead (#203)', () => {

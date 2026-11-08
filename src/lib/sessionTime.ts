@@ -14,7 +14,7 @@ export const REST_SECONDS = {
   core: 60,
 } as const;
 
-/** Under 30 minutes every role rests at the short end of its range (lead 120–180, compound 90–120, isolation 60–90). */
+/** At 30 minutes or less every role rests at the short end of its range (lead 120–180, compound 90–120, isolation 60–90; #229). */
 export const SHORT_REST_SECONDS = {
   lead: 120,
   strengthLead: 150,
@@ -23,13 +23,13 @@ export const SHORT_REST_SECONDS = {
   core: 45,
 } as const;
 
-const isShort = (sessionMinutes?: number) => sessionMinutes !== undefined && sessionMinutes < 30;
+const isShort = (sessionMinutes?: number) => sessionMinutes !== undefined && sessionMinutes <= 30;
 
 /** Working time of one set. */
 export const WORK_SECONDS = 35;
 /** Setting up an exercise and moving on to the next. */
 export const TRANSITION_SECONDS = 90;
-/** General warm-up before the first working set, counted once per session: 5 min, 3 under 30 min. */
+/** General warm-up before the first working set, counted once per session: 5 min, 3 at 30 min or less. */
 export const WARM_UP_SECONDS = 300;
 export const SHORT_WARM_UP_SECONDS = 180;
 
@@ -72,6 +72,83 @@ export function exerciseSeconds(sets: number, rest: number): number {
 export function sessionSeconds(items: { sets: number; rest: number }[], warmUp = WARM_UP_SECONDS): number {
   const work = items.reduce((sum, item) => sum + exerciseSeconds(item.sets, item.rest), 0);
   return work > 0 ? warmUp + work : 0;
+}
+
+/** Under this many minutes no movement takes more than `SHORT_SESSION_MAX_SETS` (#229). */
+export const SHORT_SESSION_MINUTES = 45;
+export const SHORT_SESSION_MAX_SETS = 3;
+
+/** The lead's floor when a day is fitted: 3 sets, 2 under 30 minutes so a four-movement day still fits (#132, #229). */
+export function leadFloorSets(sessionMinutes: number): number {
+  return sessionMinutes < 30 ? 2 : 3;
+}
+
+/** One movement as `fitSets` sees it. */
+export interface FitItem {
+  sets: number;
+  rest: number;
+  /** A timed hold: its floor is one set. */
+  hold?: boolean;
+  /** The day's lead: no other movement ends with more sets. */
+  lead?: boolean;
+  /** Never dropped (the lead, a day requirement's only cover). */
+  keep?: boolean;
+  /** The movement pattern, for `twoPresses`. */
+  pattern?: string;
+}
+
+/**
+ * Fits a short day to a budget on the timer's own clock (#229); a today-only length under 45 minutes
+ * is built at that length, so it gets the same day. Each movement starts at its own sets, at most
+ * `cap`. Over the budget, every movement goes to its floor (2 sets, 1 on a hold, `leadFloor` on the
+ * lead); still over, whole movements drop in `dropOrder` (never a kept one, never below `minCount`).
+ * With `twoPresses`, a day that pulls keeps at most two presses. Then sets come back one per
+ * movement per pass, in reverse drop order, while the day fits: up to each movement's own count and
+ * `cap`, never past the lead's (#133). Returns the set counts; 0 means dropped.
+ */
+export function fitSets(
+  items: FitItem[],
+  dropOrder: number[],
+  budget: number,
+  warmUp: number,
+  {
+    cap = Infinity,
+    minCount = 1,
+    leadFloor = 2,
+    twoPresses = false,
+  }: { cap?: number; minCount?: number; leadFloor?: number; twoPresses?: boolean } = {},
+): number[] {
+  const most = items.map((item) => Math.min(item.sets, cap));
+  const sets = [...most];
+  const seconds = () => sessionSeconds(items.map((item, index) => ({ sets: sets[index], rest: item.rest })), warmUp);
+  const floor = (item: FitItem) => (item.hold ? 1 : item.lead ? leadFloor : 2);
+  if (seconds() > budget) items.forEach((item, index) => { sets[index] = Math.min(sets[index], floor(item)); });
+  for (const index of dropOrder) {
+    if (seconds() <= budget || sets.filter((count) => count > 0).length <= minCount) break;
+    if (!items[index].keep) sets[index] = 0;
+  }
+  // `twoPresses`: a day that pulls keeps at most two presses; a third goes in drop order and its time
+  // goes back to the rest (#131, #229). A Push day is all presses and keeps them.
+  const live = (test: RegExp) => items.map((_, index) => index).filter((index) => sets[index] > 0 && test.test(items[index].pattern ?? ''));
+  if (twoPresses && live(/_pull$/).length > 0) {
+    for (const index of dropOrder) {
+      if (live(/_push$/).length <= 2 || sets.filter((count) => count > 0).length <= minCount) break;
+      if (sets[index] > 0 && /_push$/.test(items[index].pattern ?? '') && !items[index].lead && !items[index].keep) sets[index] = 0;
+    }
+  }
+  const lead = items.findIndex((item, index) => item.lead && sets[index] > 0);
+  const refill = [...dropOrder].reverse().filter((index) => sets[index] > 0);
+  for (let added = true; added; ) {
+    added = false;
+    for (const index of refill) {
+      const limit = lead < 0 || index === lead ? most[index] : Math.min(most[index], sets[lead]);
+      if (sets[index] >= limit) continue;
+      sets[index] += 1;
+      if (seconds() > budget) sets[index] -= 1;
+      else added = true;
+    }
+  }
+  return sets;
 }
 
 /** "2:30" for 150 s, "90 s" under two minutes. */
