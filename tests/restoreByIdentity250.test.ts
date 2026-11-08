@@ -157,7 +157,9 @@ test('#250: a replacement swapped in before any set keeps its slot\'s budget on 
   assert.deepEqual(done(restored), done(running));
   assert.equal(ids(restored).filter((id) => id === 'barbell-bench-press').length, 1, ids(restored).join(', '));
   assert.equal(pendingOf(restored, 'barbell-bench-press'), 4, 'bench is not charged for the incline\'s replacement');
-  assert.equal(pendingOf(restored, 'incline-dumbbell-press'), 3, 'the incline slot owes 4 minus its replacement\'s 1');
+  assert.equal(pendingOf(restored, 'incline-dumbbell-press') + pendingOf(restored, replacement.id), 3,
+    'the incline slot owes 4 minus its replacement\'s 1');
+  assert.equal(new Set(ids(restored)).size, ids(restored).length, ids(restored).join(', '));
 });
 
 test('#250: #188 setup segments survive a shorten and restore', () => {
@@ -292,4 +294,43 @@ test('#250 fuzz guard: logs, swaps, shortens and restores never change a logged 
       }
     }
   }
+});
+
+test('#250 review 2: a replacement swapped in before a set counts against the exercise it replaced, not the first of its pattern', () => {
+  const dumbbells: Profile = { ...gym, daysPerWeek: 4, equipment: ['Dumbbell'], support: ['Bench'] };
+  const beginner: Profile = { ...gym, experience: 'Beginner', daysPerWeek: 3 };
+  let cases = 0;
+  for (const profile of [gym, beginner, dumbbells]) {
+    for (const slot of planSlots(buildPlan(profile))) {
+      const day = (today: Partial<Constraints> = {}) => adaptWorkout(todayProgram(profile, slot, [], today),
+        { ...defaultConstraints(profile), ...today }, profile.exclusions, profile.goal);
+      const full = day();
+      const list = full.exercises.map((exercise) => exercise.exerciseId);
+      const pattern = (id: string) => exerciseById(id)?.pattern;
+      // A first exercise of a pattern, a later one of the same pattern to swap, and another to log.
+      const swapped = list.find((id, index) => list.slice(0, index).some((other) => pattern(other) === pattern(id)));
+      if (!swapped) continue;
+      const first = list.find((id) => pattern(id) === pattern(swapped))!;
+      const other = list.find((id) => pattern(id) !== pattern(swapped))!;
+      const candidate = rankedReplacements(exerciseById(swapped)!, profile, inDay(full))[0];
+      if (!candidate) continue;
+      let running = createSession({ id: 'r2', name: full.name, dayIndex: slot.index, now: NOW, durationMin: full.minutes,
+        exercises: liveExercises(full, profile, []) });
+      running = log(running, other);
+      running = swapPendingExercise(running, list.indexOf(swapped), { exerciseId: candidate.id, name: candidate.name, weight: 30, reps: 8 });
+      running = log(running, candidate.id);
+      const shortened = restorePendingWorkout(running, day({ minutes: 30 }), profile, []);
+      const restored = restorePendingWorkout(shortened, full, profile, []);
+      const sets = (id: string) => full.exercises.find((exercise) => exercise.exerciseId === id)!.sets;
+      const label = `${profile.experience} ${profile.equipment.length} ${slot.name}: ${ids(restored).join(', ')}`;
+      assert.deepEqual(done(restored).map((item) => JSON.stringify(item)).sort(), done(running).map((item) => JSON.stringify(item)).sort(), label);
+      assert.equal(new Set(ids(restored)).size, ids(restored).length, `${label}: listed twice`);
+      assert.equal(pendingOf(restored, first), sets(first), `${label}: ${first} owes all its own sets`);
+      assert.equal(pendingOf(restored, other), sets(other) - 1, `${label}: ${other} owes its sets minus its own 1`);
+      assert.equal(pendingOf(restored, swapped) + pendingOf(restored, candidate.id), sets(swapped) - 1,
+        `${label}: ${swapped}'s slot owes its sets minus its replacement's 1`);
+      cases += 1;
+    }
+  }
+  assert.ok(cases >= 4, `${cases} cases across profiles`);
 });

@@ -590,8 +590,9 @@ export function restorePendingWorkout(
   // 2. Then, in session order, a replacement right after the half it replaced, by the swap split the
   // session stores: read on the raw entry, so a part-logged exercise never looks like a kept half.
   // 3. Last resort, by pattern: an entry with neither (a replacement swapped in before
-  // its slot logged a set) takes the first same-pattern exercise that has nothing logged; a legacy entry
-  // with no stored requirement takes the first of that pattern, as before.
+  // its slot logged a set) takes the same-pattern exercise missing from the session (the one swapped
+  // away), else the first with nothing logged; a legacy entry with no stored requirement takes the
+  // first of that pattern, as before.
   const continues = new Set<WorkoutExercise>();
   logged.forEach((entry, index) => {
     if (!entry || owner.has(index)) return;
@@ -602,9 +603,17 @@ export function restorePendingWorkout(
       return;
     }
     const owned = new Set(owner.values());
-    const same = prescription.flatMap((prescribed, slot) => pattern(prescribed.exerciseId) === pattern(entry.exerciseId) ? [slot] : []);
-    const slot = same.find((candidate) => !owned.has(candidate)) ?? (entry.originalPlannedSets === undefined ? same[0] : undefined);
-    if (slot !== undefined) owner.set(index, slot);
+    const inSession = new Set(session.exercises.map((exercise) => exercise.exerciseId));
+    const same = prescription.flatMap((prescribed, slot) => pattern(prescribed.exerciseId) === pattern(entry.exerciseId) && !owned.has(slot) ? [slot] : []);
+    // The one the swap took out of the session first: the replacement carries that slot's pending
+    // sets, so it stays out across restores. Then the first with nothing logged.
+    const swappedAway = same.find((candidate) => !inSession.has(prescription[candidate].exerciseId));
+    if (swappedAway !== undefined) continues.add(entry);
+    const slot = swappedAway ?? same[0]
+      ?? (entry.originalPlannedSets === undefined
+        ? prescription.findIndex((prescribed) => pattern(prescribed.exerciseId) === pattern(entry.exerciseId))
+        : -1);
+    if (slot >= 0) owner.set(index, slot);
   });
   const exercises: WorkoutExercise[] = [];
   prescription.forEach((prescribed, slot) => {
