@@ -55,6 +55,12 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: before planning, grep `src/` for the feature's nouns and say in the brief what exists. Check:
    the plan stop names the existing component or says none was found.
 
+11. **Write the story, don't ask whether to.** The owner asked for "plan my workout" and I answered with
+   two options and "pick one and I'll write the story"; the owner had to ask twice (#236).
+   Rule: an owner idea with no open issue becomes a story in the same turn, with the recommended default
+   picked and named so the owner can override (AGENTS.md, Autonomy envelope). Check: the reply to an
+   owner idea links an issue number.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
