@@ -5,8 +5,14 @@
  * shell and previously loaded media available when the network disappears.
  * Uncached images still fall back to the text placeholder in ExerciseMedia.
  */
-const CACHE = 'fitbod-clone-shell-v5';
+// The build (vite.config.ts, swBuildManifest) replaces BUILD_ID and BUILD_ASSETS with the
+// hashed JS and CSS it emitted. Precaching them on install means one online visit is enough
+// to open offline (#251); a new deploy changes BUILD_ID, so the old cache is dropped.
+const BUILD_ID = 'dev';
+const BUILD_ASSETS = [];
+const CACHE = `fitbod-clone-shell-v6-${BUILD_ID}`;
 const SHELL = [
+  ...BUILD_ASSETS,
   '/',
   '/index.html',
   '/favicon.svg',
@@ -15,6 +21,12 @@ const SHELL = [
   '/icons/icon-512.png',
   '/icons/icon-maskable-512.png',
   '/icons/apple-touch-icon.png',
+  '/fonts/material-symbols-outlined.woff2',
+  '/fonts/outfit-latin-var.woff2',
+  '/fonts/plus-jakarta-sans-400.woff2',
+  '/fonts/plus-jakarta-sans-500.woff2',
+  '/fonts/plus-jakarta-sans-600.woff2',
+  '/fonts/plus-jakarta-sans-700.woff2',
 ];
 const NETWORK_TIMEOUT_MS = 4000;
 
@@ -87,8 +99,8 @@ self.addEventListener('fetch', (event) => {
           return response;
         }
         return (
-          (await cache.match('/index.html')) ||
-          (await cache.match('/')) ||
+          (await cache.match('/index.html', { ignoreVary: true })) ||
+          (await cache.match('/', { ignoreVary: true })) ||
           new Response('Offline and no cached app shell is available.', {
             status: 503,
             headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -99,8 +111,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Module scripts carry an Origin header and hosts often answer with `Vary: Origin`, so a
+  // precached script would never match without ignoreVary (#251).
   event.respondWith(
-    caches.match(request).then((cached) => {
+    caches.match(request, { ignoreVary: true }).then((cached) => {
       if (cached) return cached;
       return fetchWithTimeout(request).then((response) => {
         if (
