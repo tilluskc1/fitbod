@@ -71,6 +71,12 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    answered (the text it saw) and lapses when that changes; only the explicit answer may set it.
    Check: `tests/planToday236.test.ts` (pain stop test).
 
+14. **Carry what the generator added; don't infer it.** #96 failed review three times, each over how the
+   "third" exercise was identified (unmarked, then by its position after core).
+   Rule: when a later step must undo something the generator added, carry that fact on the in-memory
+   object that already flows to it (`Program.thirds`), never infer it from shape or position (lesson 1).
+   Check: `tests/muscleCap96.test.ts`, a trim drops exactly `program.thirds`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
