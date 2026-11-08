@@ -1330,7 +1330,7 @@ export default function App() {
   return (
     <PhoneFrame>
       {notice && (
-        <div className="app-alerts" role="status">
+        <div className="app-alerts app-alerts--toast" role="status">
           <div className="banner" style={{ margin: '8px 0 0' }}>
             <span>{notice}</span>
             <button onClick={() => setNotice(null)} aria-label="Dismiss message">
