@@ -65,6 +65,7 @@ import
 } from './lib/session';import { setWorkoutFeedback } from './lib/feedback';
 import
  { EMPTY_STATE,
+  eraseLocalData,
   STORAGE_KEY,
   exportFilename,
   loadState,
@@ -133,6 +134,7 @@ import
   ExerciseActionsSheet,
   FinishSheet,
   SettingsSheet,
+  StartOverSheet,
   SwapSheet,
   WhySheet,
 } from './screens/Sheets';
@@ -146,6 +148,7 @@ type SheetState =
   | { kind: 'gym' }
   | { kind: 'switch' }
   | { kind: 'settings' }
+  | { kind: 'startOver' }
   | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' | 'history' }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
@@ -184,8 +187,23 @@ function backupRaw(raw: string): boolean {
   }
 }
 
+/**
+ * (#263) Starting over remounts the app from storage, exactly as a first
+ * launch reads it, so no in-memory screen, sheet or session survives an erase.
+ */
 export default function App() {
-  const [state, setState] = useState<AppState>(INITIAL.state);
+  const [boot, setBoot] = useState({ run: 0, initial: INITIAL });
+  return (
+    <AppRun
+      key={boot.run}
+      initial={boot.initial}
+      onStartOver={() => setBoot((current) => ({ run: current.run + 1, initial: loadState() }))}
+    />
+  );
+}
+
+function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: () => void }) {
+  const [state, setState] = useState<AppState>(initial.state);
   const [view, setView] = useState<View>('tabs');
   const [tab, setTab] = useState<Tab>('today');
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' });
@@ -193,7 +211,7 @@ export default function App() {
   const [pendingNotices, setPendingNotices] = useState<ConstraintNotice[]>([]);
   const [recapId, setRecapId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(INITIAL));
+  const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(initial));
   // The one feedback write the screens can speak about. It only becomes "saved"
   // when saveState verified the write that carried this answer.
   const [feedbackWrite, setFeedbackWrite] = useState<
@@ -203,10 +221,10 @@ export default function App() {
   const [now, setNow] = useState(() => Date.now());
   // A stored profile means onboarding already happened: a reload must never
   // drop a resumed or just-finished session behind the splash again.
-  const [showSplash, setShowSplash] = useState(() => INITIAL.state.profile === null);
+  const [showSplash, setShowSplash] = useState(() => initial.state.profile === null);
   const [recovery, setRecovery] = useState<{ message: string; raw: string } | null>(
-    INITIAL.status === 'corrupt'
-      ? { message: INITIAL.error ?? 'Saved data could not be read.', raw: INITIAL.raw ?? '' }
+    initial.status === 'corrupt'
+      ? { message: initial.error ?? 'Saved data could not be read.', raw: initial.raw ?? '' }
       : null,
   );
   // Active-session replacement asks in-app (#19); the native prompt blocked
@@ -219,11 +237,10 @@ export default function App() {
 
   const appliedProposalRef = useRef<string | null>(null);
   const proposalRevisionRef = useRef(0);
-  const revisionRef = useRef(INITIAL.revision);
+  const revisionRef = useRef(initial.revision);
   const pendingWriteRef = useRef<string | undefined>(undefined);
-  const skipSaveRef = useRef(true);
   const adoptingRef = useRef(false);
-  const forceSaveRef = useRef(INITIAL.status === 'corrupt');
+  const forceSaveRef = useRef(initial.status === 'corrupt');
 
   /* ---------- persistence ---------- */
 
@@ -253,20 +270,15 @@ export default function App() {
   }, [state]);
 
   useEffect(() => {
-    if (recovery) {
-      skipSaveRef.current = false;
-      return;
-    }
-    if (skipSaveRef.current) {
-      skipSaveRef.current = false;
-      return;
-    }
+    // Never write back what was just loaded. An identity check, not a one-shot flag: StrictMode
+    // re-runs this on mount, and a spent flag wrote an empty record over a start over (#263).
+    if (recovery || state === initial.state) return;
     if (adoptingRef.current) {
       adoptingRef.current = false;
       return;
     }
     attemptSave();
-  }, [state, recovery, attemptSave]);
+  }, [state, initial.state, recovery, attemptSave]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -926,17 +938,23 @@ export default function App() {
   };
 
   /** (#225) Same file as Export, through the Share sheet; a cancel or failure records nothing. */
-  const backupNow = async () => {
+  const backupNow = async (): Promise<string | null> => {
     const result = await shareBackup(serializeExport(state), exportFilename(), {
       nav: typeof navigator === 'undefined' ? undefined : navigator,
       download: downloadText,
     });
-    if (result.ok) {
-      recordBackup();
-      setNotice(result.via === 'share' ? 'Backup shared.' : 'Backup downloaded.');
-    } else if (result.message) {
-      setNotice(result.message);
-    }
+    // Returned too, for a sheet that covers the notice (#263).
+    const message = result.ok ? (result.via === 'share' ? 'Backup shared.' : 'Backup downloaded.') : result.message ?? null;
+    if (result.ok) recordBackup();
+    if (message) setNotice(message);
+    return message;
+  };
+
+  /** (#263) Erase this browser's data, then boot as a first launch; a refusal is returned to the sheet. */
+  const startOver = () => {
+    const result = eraseLocalData();
+    if (result.ok) onStartOver();
+    return result;
   };
 
   const restoreFile = async (file: File | undefined) => {
@@ -1389,8 +1407,19 @@ export default function App() {
           onExport={exportData}
           onBackup={backupNow}
           onRestore={restoreFile}
+          onStartOver={() => setSheet({ kind: 'startOver' })}
           onClose={closeSheet}
           storageNote={storageNote}
+        />
+      )}
+
+      {sheet.kind === 'startOver' && (
+        <StartOverSheet
+          sessionOpen={Boolean(state.current)}
+          lastBackupAt={state.lastBackupAt}
+          onBackup={backupNow}
+          onErase={startOver}
+          onClose={() => setSheet({ kind: 'settings' })}
         />
       )}
 
