@@ -44,18 +44,18 @@ function memoryStore(entries: Record<string, string> = {}, fail: { remove?: stri
 
 /* ---------- T1: eraseLocalData ---------- */
 
-test('erase removes exactly the app keys and leaves every other key alone', () => {
+test('erase removes every key the app owns and leaves other apps alone', () => {
   const store = memoryStore({
     [STORAGE_KEY]: '{"saved":true}',
     [LEGACY_BACKUP_KEY]: '{"old":true}',
+    'fitbod-clone-v1:corrupt-backup': '{"profile":{"name":"Old"}}',
+    'fitbod-clone-v1:anything-later': 'x',
     'other-app': 'keep',
-    'fitbod-clone-v1:corrupt-backup': 'keep too',
+    'fitbod-clone-v2': 'keep too',
+    'fitbod-clone-v1-extra': 'not ours either',
   });
   assert.deepEqual(eraseLocalData(store), { ok: true });
-  assert.deepEqual([...store.map.entries()].sort(), [
-    ['fitbod-clone-v1:corrupt-backup', 'keep too'],
-    ['other-app', 'keep'],
-  ]);
+  assert.deepEqual([...store.map.keys()].sort(), ['fitbod-clone-v1-extra', 'fitbod-clone-v2', 'other-app']);
 });
 
 test('erase succeeds when the keys were never written (nothing to remove)', () => {
@@ -64,22 +64,26 @@ test('erase succeeds when the keys were never written (nothing to remove)', () =
   assert.equal(store.map.get('other-app'), 'keep');
 });
 
-test('storage that refuses the erase reports it, with a way forward, and keeps the plan and workouts', () => {
-  for (const remove of [LEGACY_BACKUP_KEY, STORAGE_KEY, '*']) {
-    const store = memoryStore({ [STORAGE_KEY]: 'data', [LEGACY_BACKUP_KEY]: 'old' }, { remove });
+test('storage that throws mid-way says so, names what is left, and the main record goes last', () => {
+  const entries = { [STORAGE_KEY]: 'data', [LEGACY_BACKUP_KEY]: 'old', 'fitbod-clone-v1:corrupt-backup': 'older' };
+  for (const remove of [LEGACY_BACKUP_KEY, 'fitbod-clone-v1:corrupt-backup', STORAGE_KEY, '*']) {
+    const store = memoryStore(entries, { remove });
     const result = eraseLocalData(store);
     assert.equal(result.ok, false, `refused remove of ${remove}`);
     if (!result.ok) {
-      assert.match(result.error, /still here/);
+      assert.deepEqual(result.left, [...store.map.keys()].sort(), 'left names exactly what is still stored');
+      assert.ok(result.left.includes(STORAGE_KEY));
+      assert.match(result.error, /plan and workouts are still here/);
       assert.match(result.error, /Try again|site data/);
     }
     assert.equal(store.map.get(STORAGE_KEY), 'data', 'the main record is never the half that went');
   }
 });
 
-test('unreachable storage, a throwing read and a silent no-op all fail loudly', () => {
+test('unreachable storage, a throwing listing and a silent no-op all fail loudly', () => {
   assert.equal(eraseLocalData(null).ok, false);
-  assert.equal(eraseLocalData(memoryStore({ [STORAGE_KEY]: 'data' }, { get: true })).ok, false);
+  const unlisted = { ...memoryStore({ [STORAGE_KEY]: 'data' }), key: () => { throw new Error('blocked'); }, length: 1 };
+  assert.equal(eraseLocalData(unlisted).ok, false, 'storage that cannot be listed is not erased');
   const stuck = { ...memoryStore({ [STORAGE_KEY]: 'data' }), removeItem: () => undefined };
   assert.equal(eraseLocalData(stuck).ok, false, 'a removal that did not happen is not a success');
 });
@@ -166,7 +170,7 @@ test('the sheet names what goes, spares backup files, and puts Back up now befor
       sessionOpen: false, onBackup: async () => null, onErase: () => ({ ok: true }), onClose: noop,
     }));
     const text = plain(html);
-    assert.match(text, /your plan, every logged workout, your preferences and your backup date/i);
+    assert.match(text, /your plan, every logged workout, your preferences, your backup date and any older copies/i);
     assert.match(text, /this browser/i);
     assert.match(text, /backup file .*isn.t affected/i);
     assert.match(text, /Not backed up yet\./);

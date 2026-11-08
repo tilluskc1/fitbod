@@ -782,8 +782,8 @@ export function StartOverSheet({
   return (
     <Sheet key="choose" title="Start over?" subtitle="On this device" onClose={onClose}>
       <p className="sheet-copy">
-        This erases your plan, every logged workout, your preferences and your backup date in this browser, then
-        opens the app as new. A backup file you already saved isn't affected; you can restore it after you set up
+        This erases your plan, every logged workout, your preferences, your backup date and any older copies the
+        app kept in this browser, then opens the app as new. A backup file you already saved isn't affected; you can restore it after you set up
         again.
       </p>
       <p className="settings-row__note" role="status" style={{ marginTop: 10 }}>
