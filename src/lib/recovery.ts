@@ -10,6 +10,8 @@ import type { SwitchOption } from './switchDay.ts';
 
 /** A muscle trained this recently is still recovering (#134). */
 export const RECOVERY_HOURS = 48;
+/** The offer never reaches further than this many skips (#134). */
+const MAX_SKIPS = 2;
 const HOUR_MS = 3_600_000;
 
 /**
@@ -32,15 +34,17 @@ export function musclesWorked(record: WorkoutRecord): Set<MuscleGroup> {
 
 /**
  * Each muscle trained in the last 48 h, with when it was last trained. Derived from history alone:
- * finished sessions, timed by when they ended (or started, on legacy records). Nothing is stored.
+ * finished sessions, timed by when they ended (or started, on legacy records or a bad end), a
+ * planned or a described day alike. An end a little ahead of this clock (skew, a restore) is now.
  */
 export function recentlyTrained(history: WorkoutRecord[], now: Date): Map<MuscleGroup, Date> {
   const recent = new Map<MuscleGroup, Date>();
   for (const record of history) {
     if (record.status !== 'completed') continue;
-    const at = new Date(record.endedAt ?? record.date);
-    const age = now.getTime() - at.getTime();
-    if (Number.isNaN(age) || age < 0 || age > RECOVERY_HOURS * HOUR_MS) continue;
+    const ended = Date.parse(record.endedAt ?? '');
+    const time = Number.isNaN(ended) ? Date.parse(record.date) : ended;
+    if (Number.isNaN(time) || now.getTime() - time > RECOVERY_HOURS * HOUR_MS) continue;
+    const at = new Date(Math.min(time, now.getTime()));
     for (const muscle of musclesWorked(record)) {
       const last = recent.get(muscle);
       if (!last || at > last) recent.set(muscle, at);
@@ -52,6 +56,17 @@ export function recentlyTrained(history: WorkoutRecord[], now: Date): Map<Muscle
 /** The muscles a day repeats. Core is left out: most days end with it, and it recovers fast. */
 function repeats(slot: PlanSlot, recent: Map<MuscleGroup, Date>): MuscleGroup[] {
   return slot.focus.filter((muscle) => muscle !== 'Core' && recent.has(muscle));
+}
+
+/** What the day up next repeats, when it is worth an offer: its lead muscle, or two areas. Else []. */
+function worthOffering(slot: PlanSlot, recent: Map<MuscleGroup, Date>): MuscleGroup[] {
+  const repeated = repeats(slot, recent);
+  return repeated.includes(slot.focus[0]) || areasOf(repeated).length >= 2 ? repeated : [];
+}
+
+/** The cheap precheck (#134): no day is priced. Empty means no offer can follow. */
+export function nextRepeats(slot: PlanSlot, history: WorkoutRecord[], now: Date): MuscleGroup[] {
+  return worthOffering(slot, recentlyTrained(history, now));
 }
 
 export interface FresherDay {
@@ -72,11 +87,11 @@ function dayLabel(at: Date, now: Date): string {
 }
 
 /**
- * (#134, owner choice A) When the day up next repeats muscles trained in the last 48 h, the
- * freshest day in the split that can run today. The fixed split stays the default: this only
- * offers. Freshest is the fewest repeated muscles, ties to the fewest skips; it is offered only
- * when it repeats at most half as many as the day up next, so near-equal days (Full Body) never
- * nag. A day with nothing to train today ('none') is never offered.
+ * (#134, owner choice A) When the day up next repeats its lead muscle, or two areas, trained in
+ * the last 48 h, the freshest day at most 2 skips ahead that can run today. The fixed split stays
+ * the default: this only offers. Freshest is the fewest repeated muscles, ties to the fewest skips;
+ * it is offered only when it repeats at most half as many as the day up next, so near-equal days
+ * (Full Body) never nag. A day with nothing to train today ('none') is never offered.
  */
 export function fresherDay(
   slots: PlanSlot[],
@@ -90,23 +105,23 @@ export function fresherDay(
   const next = options.find((option) => option.offset === 0);
   const nextSlot = next && byId.get(next.slotId);
   if (!next || !nextSlot) return null;
-  const nextRepeats = repeats(nextSlot, recent);
-  if (nextRepeats.length === 0) return null;
+  const repeated = worthOffering(nextSlot, recent);
+  if (repeated.length === 0) return null;
 
   let best: { option: SwitchOption; count: number } | null = null;
   for (const option of options) {
     const slot = byId.get(option.slotId);
-    if (option.offset === 0 || !slot || option.status === 'none') continue;
+    if (option.offset === 0 || option.offset > MAX_SKIPS || !slot || option.status === 'none') continue;
     const count = repeats(slot, recent).length;
     if (!best || count < best.count || (count === best.count && option.offset < best.option.offset)) best = { option, count };
   }
-  if (!best || best.count * 2 > nextRepeats.length) return null;
+  if (!best || best.count * 2 > repeated.length) return null;
 
-  const latest = nextRepeats.reduce((last, muscle) => {
+  const latest = repeated.reduce((last, muscle) => {
     const at = recent.get(muscle)!;
     return at > last ? at : last;
   }, new Date(0));
-  return { option: best.option, nextName: next.name, areas: areasOf(nextRepeats), when: dayLabel(latest, now) };
+  return { option: best.option, nextName: next.name, areas: areasOf(repeated), when: dayLabel(latest, now) };
 }
 
 /** "Chest, Back and Arms": an English list. */
@@ -120,8 +135,8 @@ export const keepKey = (slotId: string, now: Date) => `${dayKey(now)}|${slotId}`
 
 /**
  * Today's offer (#134): none while a session is open, on a described day, without a slot, or once
- * Keep was tapped for this slot today. The Switch sheet's options are only priced when something
- * was trained in the last 48 h.
+ * Keep was tapped for this slot today. The Switch sheet's options are only priced once the cheap
+ * `nextRepeats` precheck says an offer can follow.
  */
 export function todayFresher(
   profile: Profile | null,
@@ -132,6 +147,6 @@ export function todayFresher(
 ): FresherDay | null {
   const slot = currentSlot(state);
   if (!profile || !slot || state.current || activeOverride(state, now)?.focus || kept === keepKey(slot.id, now)) return null;
-  if (recentlyTrained(state.history, now).size === 0) return null;
+  if (nextRepeats(slot, state.history, now).length === 0) return null;
   return fresherDay(planSlots(state.plan), switchOptions(profile, state, state.history, constraints), state.history, now);
 }
