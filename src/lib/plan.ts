@@ -85,6 +85,30 @@ export interface ExerciseInWorkout {
   firstPlanned: { weight: number; reps: number } | null;
 }
 
+type Segment = Pick<WorkoutExercise, 'planned' | 'performed' | 'originalPlannedSets'>;
+
+/**
+ * `next` took over the rest of `kept`'s slot in a swap (`swapPendingExercise`): `kept` is the
+ * logged half, short of the slot's sets, and `next` carries exactly the sets the slot still owed.
+ */
+export function continuesSlot(kept: Segment, next: Segment): boolean {
+  const required = kept.originalPlannedSets;
+  return required !== undefined && kept.planned.length < required
+    && kept.performed.every((set) => set.done) && next.originalPlannedSets === required - kept.planned.length;
+}
+
+/** Per segment: a swapped-away half whose slot a later half finished, so it is held to its own sets (#105). */
+function finishedByLaterHalf(exercises: Segment[]): boolean[] {
+  const finished = exercises.map(() => false);
+  for (let index = exercises.length - 2; index >= 0; index -= 1) {
+    const next = exercises[index + 1];
+    if (!continuesSlot(exercises[index], next)) continue;
+    const owed = finished[index + 1] ? 0 : (next.originalPlannedSets ?? 0);
+    finished[index] = next.performed.filter((set) => set.done).length >= Math.max(next.planned.length, owed);
+  }
+  return finished;
+}
+
 /** All the work one exercise did in a workout, across repeated segments. */
 export function exerciseInWorkout(
   workout: WorkoutRecord,
@@ -92,16 +116,18 @@ export function exerciseInWorkout(
 ): ExerciseInWorkout | null {
   const segments = workout.exercises.filter((exercise) => exercise.exerciseId === exerciseId);
   if (segments.length === 0) return null;
+  const finished = finishedByLaterHalf(workout.exercises);
   const done: PerformedSet[] = [];
   let plannedTotal = 0;
   let marked = 0;
-  for (const segment of segments) {
+  workout.exercises.forEach((segment, index) => {
+    if (segment.exerciseId !== exerciseId) return;
     plannedTotal += segment.planned.length;
-    marked = Math.max(marked, segment.originalPlannedSets ?? 0);
+    if (!finished[index]) marked = Math.max(marked, segment.originalPlannedSets ?? 0);
     for (const set of segment.performed) {
       if (set.done) done.push(set);
     }
-  }
+  });
   return {
     segments,
     done,

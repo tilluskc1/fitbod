@@ -15,6 +15,7 @@ import {
   swapPendingExercise,
   updatePerformedSet,
 } from '../src/lib/session.ts';
+import { exerciseInWorkout } from '../src/lib/plan.ts';
 import type { AppState, WorkoutRecord } from '../src/types.ts';
 
 const START = '2026-01-01T10:00:00.000Z';
@@ -177,10 +178,10 @@ test('the swap-back journey logs and corrects the returned set under the origina
   session = swapPendingExercise(session, 1, PRESS_CANDIDATE);
 
   // The returned press segment is a separate entry; its active set can be
-  // logged like any other and carries the original prescription's marker.
+  // logged like any other and carries the one set the slot still owed (#105).
   const returned = session.exercises[2];
   assert.equal(returned.exerciseId, 'dumbbell-floor-press');
-  assert.equal(returned.originalPlannedSets, 3);
+  assert.equal(returned.originalPlannedSets, 1);
   session = logSet(session, 2, 0, LATER);
   const progress = sessionProgress(session);
   assert.equal(progress.done, 3);
@@ -208,10 +209,12 @@ test('completing 1 of an originally 3-set exercise preserves the requirement', (
   const finished = applyFinish(state, session.id, { early: true, now: FINISH });
   const workout = finished.history[0];
 
-  // The kept press segment and the replacement both carry the slot's original
-  // 3-set requirement; neither earned a full session.
+  // The kept press segment carries the slot's original 3-set requirement and the
+  // replacement the 2 sets the slot still owed (#105); neither earned a full session.
   assert.equal(workout.exercises[0].originalPlannedSets, 3);
-  assert.equal(workout.exercises[1].originalPlannedSets, 3);
+  assert.equal(workout.exercises[1].originalPlannedSets, 2);
+  assert.equal(exerciseInWorkout(workout, 'dumbbell-floor-press')?.requirement, 3);
+  assert.equal(exerciseInWorkout(workout, 'push-up')?.requirement, 2);
 
   const pressed = workout.exercises[0].performed.filter((set) => set.done);
   assert.equal(pressed.length, 1);

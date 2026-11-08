@@ -151,7 +151,8 @@ export interface WorkoutExercise {
   performed: PerformedSet[];
   /**
    * Set count this session slot originally prescribed, kept when a swap split
-   * the work. Unset on untouched entries. Individual sets still hold no
+   * the work; a swap's replacement carries the sets the slot still owed (#105,
+   * older records carry the slot's count there too). Unset on untouched entries. Individual sets still hold no
    * identity — `shortcut: segments stay anonymous, one field per segment`.
    */
   originalPlannedSets?: number;

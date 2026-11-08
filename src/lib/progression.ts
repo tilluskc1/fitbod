@@ -11,7 +11,7 @@ import type {
 } from '../types.ts';
 import { loadLimitText, loadValue, unitLabel } from './units.ts';
 import { MAX_WEIGHT } from './validate.ts';
-import { exerciseInWorkout } from './plan.ts';
+import { continuesSlot, exerciseInWorkout } from './plan.ts';
 import { HOTEL_DUMBBELLS, programExercise } from '../data/flagship.ts';
 import { exerciseById } from '../data/exercises.ts';
 
@@ -163,8 +163,7 @@ export function leadCompoundId(exerciseIds: string[]): string | undefined {
 
 /**
  * Every exercise holding the lead slot of a session: the first compound, plus a
- * compound swapped in for its remaining sets. A swap split keeps only the done
- * sets and both halves carry the slot's requirement (see `swapPendingExercise`).
+ * compound swapped in for its remaining sets (see `continuesSlot`).
  */
 export function leadSlotIds(
   exercises: Pick<WorkoutExercise, 'exerciseId' | 'planned' | 'performed' | 'originalPlannedSets'>[],
@@ -173,12 +172,8 @@ export function leadSlotIds(
   if (start < 0) return [];
   const ids = [exercises[start].exerciseId];
   for (let index = start + 1; index < exercises.length; index += 1) {
-    const kept = exercises[index - 1];
     const next = exercises[index];
-    const required = kept.originalPlannedSets;
-    const split = required !== undefined && kept.planned.length < required
-      && kept.performed.every((set) => set.done) && next.originalPlannedSets === required;
-    if (!split || !canLeadId(next.exerciseId)) break;
+    if (!continuesSlot(exercises[index - 1], next) || !canLeadId(next.exerciseId)) break;
     ids.push(next.exerciseId);
   }
   return ids;

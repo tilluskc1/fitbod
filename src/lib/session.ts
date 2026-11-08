@@ -292,9 +292,10 @@ export function unskipExercise(session: WorkoutRecord, exerciseIndex: number): W
  * so a stale swap callback cannot overwrite a set logged while the sheet was
  * open.
  *
- * Both split segments carry the slot's original prescribed set count, so
- * progression judges the original requirement instead of the shrunken
- * remainder: swapping away unfinished sets must not earn a load increase.
+ * The kept half carries the slot's original prescribed set count and the
+ * replacement the sets the slot still owed (#105), so progression judges the
+ * slot, not the shrunken remainder: swapping away unfinished sets earns no load
+ * increase, and a replacement that finishes the slot is not cut short.
  */
 export function swapPendingExercise(
   session: WorkoutRecord,
@@ -332,7 +333,7 @@ export function swapPendingExercise(
   const replacement: WorkoutExercise = {
     exerciseId: candidate.exerciseId,
     name: candidate.name,
-    originalPlannedSets: slotRequirement,
+    originalPlannedSets: Math.max(pending.length, slotRequirement - keptIndices.length),
     // A swap runs on the same setup as the sets it replaces (#188).
     ...(original.setup ? { setup: original.setup } : {}),
     planned: plannedSets,

@@ -214,7 +214,7 @@ test('a swap for the lead takes over the lead range, in place or after logged se
   assert.deepEqual(split.exercises.map((exercise) => exercise.exerciseId), ['barbell-bench-press', target.id, 'overhead-press']);
   assert.deepEqual(leadSlotIds(split.exercises), ['barbell-bench-press', target.id]);
 
-  // Its sets logged at 7 reps: the recap holds it inside the lead's 4–6, not 6–10.
+  // Its sets logged at 7 reps finish the slot (#105): the step restarts at the lead's 4, not 6–10's 6.
   const done = {
     ...split,
     exercises: split.exercises.map((exercise) =>
@@ -224,7 +224,8 @@ test('a swap for the lead takes over the lead range, in place or after logged se
     ),
   };
   const line = progressionLines(done, profile, [done], 'kg').find((item) => item.exerciseId === target.id);
-  assert.match(line?.next ?? '', /^6 reps @ 26 kg/);
+  assert.match(line?.next ?? '', /^4 reps @ /);
+  assert.match(line?.reason ?? '', /reps restart at 4\./);
 });
 
 test('when today\'s setup drops the lead, the next compound takes its five sets', () => {
