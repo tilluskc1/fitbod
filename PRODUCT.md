@@ -40,11 +40,11 @@ exercise list.
 - A session is planned, performed and reviewed in one browser on one device; there is no account to
   sign into and no second device to reconcile.
 - Used in a gym or home gym, often on flaky or no connectivity. Offline reopen is a real path, not a
-  marketing line; media that was never loaded falls back to a labeled placeholder.
+  marketing line; media that was never loaded falls back to a placeholder named for screen readers.
 - Data lives in `localStorage` under one versioned key, roughly 5 MB, with no cloud copy. Back up now
   (Share sheet or download) and JSON export are the only backups, and the app says so. On iPhone a Home
   Screen app has its own storage.
-- Weights, volume and PRs are read after the fact in History, including correcting a set logged wrong.
+- Logged weights and reps are read after the fact in Progress, and a set logged wrong can be corrected.
 
 ## Capabilities and Constraints
 
@@ -58,8 +58,9 @@ Confirmed and shipped:
   barbell does not imply a rack.
 - Goal and experience change programming: intermediate and advanced lifters who want muscle or
   strength get a five-set heavy lead; "Get stronger" uses strength ranges and rests.
-- Double progression inside movement-specific rep ranges, with load steps taken from the dumbbells the
-  user lists (onboarding or Settings) and documented per-equipment defaults otherwise. An unfinished
+- Double progression inside movement-specific rep ranges. Barbell, machine and cable step by documented
+  per-equipment defaults; at home, dumbbells step to the next listed pair (onboarding or Settings); with no
+  list a topped-out dumbbell or kettlebell lift asks the lifter to pick the next one up. An unfinished
   exercise repeats its target rather than advancing.
 - Today-only changes (length, gear, switch day) and "Plan today with me", built through the same
   generator; the planned day stays next.

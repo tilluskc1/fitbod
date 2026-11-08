@@ -35,11 +35,13 @@ TypeScript support.
   never implies a bench, nor a barbell a rack.
 - **Programming**: lead lift, other compounds, isolation, core. Goal and experience change the work:
   intermediate and advanced lifters who want muscle or strength get a five-set heavy lead, with
-  strength rep ranges and rests for "Get stronger" (`src/lib/progression.ts`).
+  strength rep ranges for "Get stronger" (`src/lib/progression.ts`); "Get stronger" also rests the
+  lead longer at every level (`src/lib/sessionTime.ts`).
 - **Progression**: double progression inside each movement's rep range. Load moves up one step only
   when every set is completed at the top of the range; an unfinished or skipped exercise repeats its
-  target. Steps come from your listed dumbbells when you give them, otherwise from per-equipment
-  defaults.
+  target. Barbell, machine and cable loads step by per-equipment defaults; at home, dumbbells step to the next
+  pair you listed, and with no list a dumbbell or kettlebell lift that tops out asks you to pick your
+  next one up.
 - **Logging**: one tap per set, rest by role, swap, skip, add or remove sets, finish early; the
   prescription is never rewritten by what you log. History can be corrected afterwards.
 - **Progress, Plan, Coach, Recap**: the week with honest minutes per day, charts from real sets only,
@@ -48,7 +50,8 @@ TypeScript support.
   export, validated restore with merge and dedupe, a recovery screen for unreadable data.
 - **Install and offline**: web app manifest and icons; production builds register a service worker
   that precaches the built app, so one online visit is enough to open it offline. Exercise photos seen
-  online stay cached; others fall back to a labelled placeholder.
+  online stay cached; others fall back to a placeholder that keeps the exercise's name for screen
+  readers.
 
 ## Data and storage
 
@@ -70,7 +73,8 @@ before clearing site data, changing phones or moving into the installed app.
 
 - **Bodyweight moves progress by reps only.** There is no added-load field, so push-ups and pull-ups
   hold at the top of their range.
-- **A PR is the heaviest completed set.** There is no volume, rep or estimated-1RM record.
+- **A best is the heaviest load, then the most reps at it.** There is no volume or estimated-1RM
+  record.
 - **No deload or autoregulation.** A stalled lift repeats its target; nothing schedules a back-off week.
 - **No supersets, no exercise videos.**
 - **One browser, one user.** No accounts, sync or URL routes. A tab with an unsaved change shows a

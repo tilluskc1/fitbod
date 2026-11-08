@@ -23,6 +23,8 @@ test('README and PRODUCT.md state the real exercise count', () => {
 test('README says every exercise has photographs only while that is true', () => {
   const missing = EXERCISES.filter((e) => !(media as Record<string, { frames: string[] }>)[e.id]?.frames?.length);
   assert.equal(missing.length, 0, `README claims every exercise has photos; missing: ${missing.map((e) => e.id)}`);
+  const notTwo = EXERCISES.filter((e) => (media as Record<string, { frames: string[] }>)[e.id]?.frames?.length !== 2);
+  assert.equal(notTwo.length, 0, `README says two photographs each; not two: ${notTwo.map((e) => e.id)}`);
 });
 
 test('the docs name the shipped app and its units, and drop Phase 1 claims', () => {
