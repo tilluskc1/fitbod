@@ -43,7 +43,7 @@ The board is GitHub Project 11 ("Fitbod", owner `tilluskc1`). Its issues are the
 
 - Every dev turn that touches code updates its issue before the turn ends — `Status`, plus one comment with what changed, the checks actually run, and what is still open — and every later turn repeats that until the issue is closed. No silent work. If no open issue covers the work, open one first.
 - Statuses: `Todo` → `In Progress` → `Review` → `Ready to merge` → `Done`. `Done` only when every acceptance box is checked, the checks pass on the final commit, and it is merged to `main`.
-- `Review` means built on a feature branch and being verified at a named SHA. `Ready to merge` means verified at that SHA and waiting on a human; the loop that drives these states never merges.
+- `Review` means built on a feature branch and being verified at a named SHA. `Ready to merge` means verified at that SHA; it merges under the standing merge rule below, otherwise it waits on a human.
 - Never mark `Done` from a feature branch, a passing helper test, or a screenshot that has not been reproduced at 390×844 and 360×780.
 - Work left uncommitted, unmerged or unverified keeps its issue open and says so in the comment. Reopening is cheaper than a false `Done`.
 - New scope found mid-task gets its own issue; do not quietly widen the one being worked.
@@ -72,7 +72,8 @@ Independent review means a separate agent at a named SHA. If only one agent did 
 Inside this envelope the loop acts without asking. Outside it, it parks the issue with one question, a recommended default and a safe fallback, then continues with the next issue instead of ending the run.
 
 - May do unasked: claim the lock, `start` an issue and move it through `In Progress` and `Review`, post `[work-board]` comments, add or remove `ready-for-agent` and `needs-info`, create `work/<issue>-<slug>` branches and worktrees, commit, push them, open or update draft PRs.
-- Must ask first: merging to `main`, marking `Done`, deploying, changing the shape of stored data, adding a dependency, or widening an issue's scope.
+- Must ask first: marking `Done`, changing the shape of stored data, adding a dependency, widening an issue's scope, a change to the agreed look or flow, and any merge outside the standing merge rule.
+- **Standing merge rule (owner, 2026-11-08):** merging to `main` (a production deploy on Vercel) needs no extra ask when all of these hold: a separate reviewer agent passed the PR at its final SHA; the PR changes no stored-data shape, adds no dependency, and changes no agreed look or flow (or the owner already approved that change); on the merged result `npm test`, `npm run lint` and `npm run build` pass, plus a browser pass at 390×844 and 360×780 when screens change; after the push the commit status shows `Vercel=success`. Merge in order on a local `merge/*` branch, push `main` once, then report the SHA, checks and what went live. If Vercel fails, say so at once with the fix. `Done` stays with the owner.
 - Keep going: when an issue reaches `Review`, start the next eligible issue in the same turn. Do not ask for permission between issues.
 - Park, don't stall: a decision the repository cannot answer becomes a `needs-info` park on that issue, and the next issue starts.
 - One run reports once, at the end: issues moved with their SHAs, checks actually run, what parked and why.
