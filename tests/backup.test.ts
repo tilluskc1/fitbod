@@ -151,10 +151,12 @@ test('Today shows the backup line only when one is due', async () => {
       profile, program: FULL_BODY_A, adapted: adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home' }, [], undefined),
       equipment: 'home', adjusted: false, history: [finished()], current: null, now: NOW,
       onPreview: noop, onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop,
-      backup, onBackup: noop,
+      backup, onBackup: noop, composer: createElement('button', null, 'Plan today with me'),
     })).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     const due = render(backupReminder(trained(daysAgo(9)), NOW));
     assert.match(due, /Last backup: 9 days ago\. Back up now/);
+    // (#243) The day's entry comes first; the weekly nudge must not push it under the dock.
+    assert.match(due, /Plan today with me .*Last backup: 9 days ago/);
     const fresh = render(backupReminder(trained(daysAgo(2)), NOW));
     assert.doesNotMatch(fresh, /Last backup|Not backed up|Back up now/);
   } finally {
