@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fresherDay, listAreas, musclesWorked, recentlyTrained } from '../src/lib/recovery.ts';
+import { fresherDay, listAreas, musclesWorked, nextRepeats, recentlyTrained } from '../src/lib/recovery.ts';
 import { planSlots } from '../src/lib/sequence.ts';
 import { switchOptions } from '../src/lib/switchDay.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
@@ -50,7 +50,6 @@ test('#134: muscles worked follow the skipped-area rule: hinge counts the back, 
 test('#134: only finished sessions in the last 48 h count; open, old and future sessions do not', () => {
   assert.ok(recentlyTrained([upperDay(47)], NOW).has('Chest'));
   assert.equal(recentlyTrained([upperDay(49)], NOW).size, 0, 'older than 48 h');
-  assert.equal(recentlyTrained([upperDay(-2)], NOW).size, 0, 'a clock in the future');
   assert.equal(recentlyTrained([record(['barbell-row'], 1, { status: 'active' })], NOW).size, 0, 'an open session');
   const legacy = { ...upperDay(5), endedAt: undefined } as unknown as WorkoutRecord;
   assert.ok(recentlyTrained([legacy], NOW).has('Back'), 'a legacy record without endedAt uses its start');
@@ -105,4 +104,74 @@ test('#134: a day with nothing to train today is never offered', () => {
   const options = switchOptions(profile, state, [upperDay(20)], gym).map((option) =>
     option.name.startsWith('Lower') ? { ...option, status: 'none' as const } : option);
   assert.equal(fresherDay(planSlots(state.plan), options, [upperDay(20)], NOW), null);
+});
+
+/* ---------- fix round 1: the gate, the reach, the clock ---------- */
+
+const ppl = [
+  { name: 'Push', focus: ['Chest', 'Shoulders', 'Triceps'] },
+  { name: 'Pull', focus: ['Back', 'Biceps', 'Core'] },
+  { name: 'Legs', focus: ['Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'] },
+];
+const fiveDay = [...ppl,
+  { name: 'Upper', focus: ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps'] },
+  { name: 'Lower', focus: ['Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'] },
+];
+const sixDay = [
+  { name: 'Push A', focus: ['Chest', 'Shoulders', 'Triceps'] },
+  { name: 'Pull A', focus: ['Back', 'Biceps', 'Core'] },
+  { name: 'Legs A', focus: ['Quads', 'Hamstrings', 'Glutes', 'Calves'] },
+  { name: 'Push B', focus: ['Shoulders', 'Chest', 'Triceps'] },
+  { name: 'Pull B', focus: ['Back', 'Biceps', 'Core'] },
+  { name: 'Legs B', focus: ['Hamstrings', 'Glutes', 'Quads', 'Calves', 'Core'] },
+];
+const legsDay = (h: number) => record(['back-squat', 'romanian-deadlift'], h);
+const pullDay = (h: number) => record(['barbell-row', 'lat-pulldown'], h);
+
+test('#134 fix: 3-day, Pull done, Legs skipped, Push next: no offer', () => {
+  assert.equal(offer(3, [pullDay(20)], ppl), null);
+});
+
+test('#134 fix: 4-day, Lower done, Upper skipped: offers Upper A', () => {
+  assert.equal(offer(3, [lowerDay(20)])?.option.name, 'Upper A');
+});
+
+test('#134 fix: 5-day, Legs done (squat + RDL), Upper next: no offer, though the hinge marked the back', () => {
+  assert.equal(offer(3, [legsDay(20)], fiveDay), null);
+});
+
+test('#134 fix: 5-day, Lower done, Push skipped: no offer further than 2 skips', () => {
+  assert.equal(offer(6, [legsDay(20)], fiveDay), null, 'Push is fresh, but 4 skips away');
+});
+
+test('#134 fix: 6-day, one repeated muscle that does not lead the day: no offer', () => {
+  assert.equal(offer(3, [record(['barbell-bench-press'], 20)], sixDay), null, 'Push B repeats Chest only');
+});
+
+test('#134 fix: between equally fresh days, the fewest skips wins', () => {
+  const result = offer(4, [pullDay(20)], sixDay);
+  assert.equal(result?.option.name, 'Legs B');
+  assert.equal(result?.option.offset, 1);
+});
+
+test('#134 fix: a bad endedAt falls back to the start; a future end counts as now', () => {
+  const bad = { ...upperDay(5), endedAt: 'not a date' } as unknown as WorkoutRecord;
+  assert.ok(recentlyTrained([bad], NOW).has('Chest'), 'NaN endedAt uses date');
+  const neither = { ...bad, date: 'nope' } as unknown as WorkoutRecord;
+  assert.equal(recentlyTrained([neither], NOW).size, 0, 'both bad: skipped');
+  assert.equal(recentlyTrained([upperDay(-2)], NOW).get('Chest')?.getTime(), NOW.getTime(), 'a clock in the future');
+  assert.equal(offer(2, [upperDay(-2)])?.when, 'today');
+});
+
+test('#134 fix: a described-day record (no slot link) counts', () => {
+  const described = { ...record(['barbell-bench-press', 'overhead-press'], 10), name: 'Chest + Shoulders' } as WorkoutRecord;
+  assert.equal(described.slotId, undefined);
+  assert.deepEqual([...recentlyTrained([described], NOW).keys()].sort(), ['Chest', 'Shoulders']);
+});
+
+test('#134 fix: the precheck needs no priced days: nextRepeats is empty when no offer can follow', () => {
+  const slots = (plan: typeof upperLower) => planSlots(plan as AppState['plan']);
+  assert.deepEqual(nextRepeats(slots(fiveDay)[3], [legsDay(20)], NOW), [], '5-day Upper after Legs');
+  assert.deepEqual(nextRepeats(slots(sixDay)[3], [record(['barbell-bench-press'], 20)], NOW), [], '6-day Push B');
+  assert.deepEqual(nextRepeats(slots(upperLower)[2], [upperDay(20)], NOW), ['Back', 'Chest', 'Shoulders'], 'Upper B after Upper A');
 });
