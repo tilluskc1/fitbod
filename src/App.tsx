@@ -46,6 +46,7 @@ import {
 } from './lib/liveProgression';
 import { sessionRests } from './lib/sessionTime';
 import { leadCompoundId, leadSlotIds, savedSetup } from './lib/progression';
+import { areasOf } from './lib/areas';
 import
  {
   applyCancel,
@@ -1195,7 +1196,17 @@ export default function App() {
             onOpenSwitch={slot ? () => setSheet({ kind: 'switch' }) : undefined}
             alternativeDay={alternativeDay}
             composer={slot && talkBase ? (
-              <TodayTalk profile={profile} plannedName={slot.name} base={talkBase} preview={talkPreview} onStart={startTalk} onActive={setComposing} />
+              <TodayTalk
+                profile={profile}
+                plannedName={slot.name}
+                plannedAreas={areasOf(slot.focus)}
+                savedGear={savedSetup(profile)}
+                savedMinutes={profile.sessionMinutes ?? 35}
+                base={talkBase}
+                preview={talkPreview}
+                onStart={startTalk}
+                onActive={setComposing}
+              />
             ) : undefined}
             composing={composing}
             canRestore={!describedSession}

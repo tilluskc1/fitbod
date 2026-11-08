@@ -4490,11 +4490,15 @@ button.aw-exercise__name-btn {
 .tt { display: grid; gap: 12px; }
 .tt h2 { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; }
 .tt-badge { display: inline-block; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-text); font-weight: 600; }
-.tt-toggle { padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; text-align: left; font: inherit; }
-.tt-chev { color: var(--muted); transition: transform 0.15s ease; }
-.tt-chev--open { transform: rotate(180deg); }
+.tt-open { padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 56px; text-align: left; font: inherit; color: var(--on-surface); }
+.tt-open b { display: block; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.tt-open small { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
+.tt-open .ms { flex: none; color: var(--accent-text); }
+.tt-line { font-size: 15px; font-weight: 500; color: var(--on-surface); }
+.tt-tell { display: grid; gap: 8px; }
+.tt-nav { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 8px; align-items: center; }
+.tt-skip { justify-self: center; min-height: 44px; }
 .tt-hint { color: var(--muted); font-size: 13px; }
-.tt-body { display: grid; gap: 12px; }
 .tt-say {
   width: 100%;
   min-height: 86px;
@@ -4509,20 +4513,6 @@ button.aw-exercise__name-btn {
   color: var(--on-surface);
 }
 .tt-say::placeholder { color: var(--muted); }
-.tt-examples { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-.tt-examples::-webkit-scrollbar { display: none; }
-.tt-ex-chip {
-  flex: none;
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--surface-container-high);
-  font-size: 13px;
-  color: var(--on-surface-muted);
-}
-.tt-understood { display: grid; gap: 10px; }
-.tt-row { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; align-items: start; }
-.tt-k { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding-top: 14px; }
 .tt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .tt-chip {
   min-height: 44px;

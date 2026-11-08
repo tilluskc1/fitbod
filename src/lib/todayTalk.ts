@@ -225,7 +225,8 @@ export function talkFromText(text: string, base: TalkState): TalkState {
 export interface Taps {
   equipment?: EquipmentChoice;
   minutes?: number;
-  areas: Partial<Record<Area, 'train' | 'skip' | 'off'>>;
+  /** 'sore' skips the area and says why (#236 asks "anything sore?"). */
+  areas: Partial<Record<Area, 'train' | 'skip' | 'sore' | 'off'>>;
 }
 export const NO_TAPS: Taps = { areas: {} };
 
@@ -244,8 +245,8 @@ export function composeTalk(base: TalkState, text: string, taps: Taps): TalkStat
     talk = {
       ...talk,
       train: has(talk.train, area, tap === 'train'),
-      skip: has(talk.skip, area, tap === 'skip'),
-      sore: talk.sore.filter((item) => item !== area),
+      skip: has(talk.skip, area, tap === 'skip' || tap === 'sore'),
+      sore: has(talk.sore, area, tap === 'sore'),
     };
   }
   return talk;
