@@ -341,3 +341,11 @@ export function updateProfile(state: AppState, patch: Partial<Profile>): AppStat
     ? { ...state, profile: next }
     : revisePlan(state, next);
 }
+
+/**
+ * (#271) Where today sits in the week, in lifter words ("Day 2 of 4 this week"); "slot" is our
+ * internal word. A single-day plan shows no counter.
+ */
+export function dayCounter(index: number, total: number): string | undefined {
+  return total > 1 ? `Day ${index + 1} of ${total} this week` : undefined;
+}

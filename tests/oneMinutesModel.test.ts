@@ -224,7 +224,7 @@ test('#203: rendered, the app\'s Today, Plan\'s later list, the switch sheet and
     const planText = plain(renderToStaticMarkup(createElement(Plan, {
       profile, upcoming: upcomingDays(profile, plan, slots[0], []), focus: slots[0].focus, program: upperA,
       today: todayGlance(adaptWorkout(upperA, defaultConstraints(profile), [], profile.goal), null, false, profile.goal),
-      slotLabel: 'Slot 1 of 4', history: [], unit: 'kg', now: new Date('2026-11-07T10:00:00Z'),
+      slotLabel: 'Day 1 of 4 this week', history: [], unit: 'kg', now: new Date('2026-11-07T10:00:00Z'),
       onOpenSettings() {}, onViewDay() {}, onOpenLibrary() {},
     })));
     assert.match(planText, new RegExp(`THEN Lower A [^0-9]*${minutes} min · `));
