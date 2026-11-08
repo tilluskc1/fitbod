@@ -2398,6 +2398,8 @@ body {
 .compare-line__value {
   color: #3d4847;
   font-weight: 500;
+  /* "6 · 6 · 6 @ 132.5 lb total" wraps evenly, never with "total" alone (#245). */
+  text-wrap: balance;
 }
 
 .compare-line__value--target {

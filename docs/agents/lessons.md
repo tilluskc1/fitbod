@@ -61,6 +61,11 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    picked and named so the owner can override (AGENTS.md, Autonomy envelope). Check: the reply to an
    owner idea links an issue number.
 
+12. **An e2e must compare values across screens, not count its own clicks.** The #245 e2e passed while
+   only matching `\d+ × \d+` and asserting a tap counter the script itself incremented; review 1 failed it.
+   Rule: assert the number one surface shows equals the number the next one uses (Today's last load =
+   logger's previous; target load = set 1's prefilled weight). Check: `scripts/e2e/second-workout.mjs`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

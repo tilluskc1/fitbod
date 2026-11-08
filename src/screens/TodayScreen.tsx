@@ -4,7 +4,7 @@ import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
 import type { LastPerformance } from '../lib/plan';
 import { toDisplay, unitLabel, unitOf } from '../lib/units';
-import { exerciseMeta, setText, targetSummary } from '../data/flagship';
+import { exerciseMeta, lastSummary, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { currentWorkout, setupFor, todayGlance } from '../lib/adapt';
@@ -397,7 +397,7 @@ export default function TodayScreen({
                         {last ? 'Last session' : 'No history yet'}
                       </span>
                       <span className="compare-line__value">
-                        {last && first ? setText(first.exerciseId, last.reps) : '—'}
+                        {last && first ? lastSummary(first, last.sets, unit, plannedLoad(profile.loads, history, first.exerciseId, unit)) : '—'}
                       </span>
                     </span>
                     <span className="compare-line">
