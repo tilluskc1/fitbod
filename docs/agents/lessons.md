@@ -32,7 +32,10 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: a fix round may not change an owner-approved rule; ask instead.
 
 6. **Never commit while a check is red.** I chained `commit` after a failing `npm test`.
-   Rule: commit only in a separate step after reading the counts. Check: `scripts`/merge helpers stop on
+   Repeated on #271 (2026-11-08): `npm test ...; git commit` in one command pushed f704f2a with one
+   stale test red.
+   Rule: commit only in a separate step after reading the counts; never put `git commit` in the same
+   command as a check. Check: `scripts`/merge helpers stop on
    `# fail` > 0 (see `.scratch/orchestrate/audit-fixes/m.sh` pattern: commit is the merge itself; re-run tests before `git push`).
 
 7. **Push only the ref you mean.** Fast-forwarding stacked PR bases, I moved a PR's own head branch.
