@@ -282,13 +282,13 @@ export default function Onboarding({ onComplete }: Props) {
         </section>
       )}
 
-      {step === 3 && (
-        <p className="muted onboarding-safety" role="note">
-          {SAFETY_NOTICE}
-        </p>
-      )}
-
-      <div className="onboarding-actions">
+      <div className={`onboarding-actions${step === 3 ? ' onboarding-actions--notice' : ''}`}>
+        {/* (#252) In the sticky bar, so it is on screen above Build my plan on every path and height. */}
+        {step === 3 && (
+          <p className="muted onboarding-safety" role="note">
+            {SAFETY_NOTICE}
+          </p>
+        )}
         {step > 0 && (
           <button className="secondary" style={{ flex: '0 0 104px' }} onClick={() => setStep((value) => value - 1)}>
             Back

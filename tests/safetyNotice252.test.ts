@@ -15,9 +15,13 @@ test('the wording is the product default', () => {
 
 test('onboarding shows the notice on the last step, before Build my plan', () => {
   const onboarding = src('components/Onboarding.tsx');
-  const notice = onboarding.indexOf('{step === 3 && (\n        <p className="muted onboarding-safety" role="note">\n          {SAFETY_NOTICE}');
-  assert.ok(notice > 0, 'notice on step 3');
-  assert.ok(notice < onboarding.indexOf('Build my plan'), 'notice comes before the button');
+  // Inside the sticky actions bar, so no path (At home adds many chips) can push it below the fold.
+  // The browser proof is scripts/e2e/safety-notice.mjs.
+  const bar = onboarding.indexOf('<div className={`onboarding-actions');
+  const notice = onboarding.indexOf('{SAFETY_NOTICE}');
+  assert.ok(bar > 0 && notice > bar, 'notice sits in the sticky actions bar');
+  assert.match(onboarding.slice(bar, notice), /step === 3/);
+  assert.ok(notice < onboarding.lastIndexOf('Build my plan'), 'notice comes before the button');
 });
 
 test('Settings has an About group with the notice, no pop-up', () => {
@@ -25,10 +29,10 @@ test('Settings has an About group with the notice, no pop-up', () => {
   assert.match(sheets, /id="settings-about">\s*About\s*<\/h3>\s*<div className="settings-card">\s*<p className="settings-row settings-row__note">\{SAFETY_NOTICE\}<\/p>/);
 });
 
-test('both pain stops add the professional check', () => {
+test('the pain stop adds the professional check, once (role=alert announces it)', () => {
   const talk = src('components/TodayTalk.tsx');
   assert.match(talk, /<b>You mentioned pain\.<\/b> I can work around soreness, not pain\. \{PAIN_CHECK\}/);
-  assert.match(talk, /`You mentioned pain\. Nothing will be built around it\. \$\{PAIN_CHECK\}`/);
+  assert.equal(talk.split('{PAIN_CHECK}').length - 1, 1);
 });
 
 test('no screen claims a diagnosis or that it is safe to train through pain', () => {

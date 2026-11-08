@@ -112,7 +112,7 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
   }
 
   const gear = gearLabel(talk.equipment, profile);
-  const line = talk.pain ? `You mentioned pain. Nothing will be built around it. ${PAIN_CHECK}` : planLine(talk, plannedName, plannedAreas, gear);
+  const line = talk.pain ? 'You mentioned pain. Nothing will be built around it.' : planLine(talk, plannedName, plannedAreas, gear);
 
   if (step === 'summary' && built) {
     const { day } = built;
