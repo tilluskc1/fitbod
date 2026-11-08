@@ -33,7 +33,7 @@ import
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A } from './data/flagship';
-import { cursorFor, isDescribedSession, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
+import { cursorFor, dayCounter, isDescribedSession, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
 import { withoutCustomDay } from './lib/plan';
 import { baseTalk, customDayPreview, describedDayStatus, describedSessionStatus, talkConstraints } from './lib/todayTalk';
 import type { TalkState } from './lib/todayTalk';
@@ -347,7 +347,7 @@ export default function App() {
   );
   const slotLabel = useMemo(() => {
     const slots = planSlots(state.plan);
-    return slot && slots.length > 1 ? `Slot ${slot.index + 1} of ${slots.length}` : undefined;
+    return slot ? dayCounter(slot.index, slots.length) : undefined;
   }, [slot, state.plan]);
   /**
    * The slot's own program, prescribed from this user's plan and history. One
@@ -524,12 +524,12 @@ export default function App() {
    */  const skipTodaySlot = () => {
     if (!slot) return;
     if (current) {
-      setNotice('Finish or discard the open session before skipping to the next slot.');
+      setNotice('Finish or discard the open session before skipping this one.');
       return;
     }
     const offered = cursorFor(state);
     setState((currentState) => skipCurrentSlot(currentState, new Date().toISOString(), offered));
-    setNotice('Slot skipped. A skip is not a workout and earns no progression.');
+    setNotice('Session skipped. A skip is not a workout and earns no progression.');
   };
 
   /** Explicit discard consent from the in-app sheet (#19) runs the replacement once. */

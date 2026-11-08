@@ -385,7 +385,7 @@ export function adaptWorkout(
       cappedMinutes: null,
       totalSets: 0,
       originalSets,
-      note: `This slot has no main movement with ${setup.chip.toLowerCase()}. Use the required equipment or skip it.`,
+      note: `This day has no main movement with ${setup.chip.toLowerCase()}. Use the required equipment or skip it.`,
     };
   }
 

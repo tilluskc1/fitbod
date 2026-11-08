@@ -34,7 +34,7 @@ interface Props {
   onRestore: () => void;
   onOpenSettings: () => void;
   onOpenExercise: (exerciseId: string, exerciseIndex: number) => void;
-  /** "Slot 2 of 3" when the program has more than one day. */
+  /** "Day 2 of 3" when the program has more than one day. */
   slotLabel?: string;
   /** Explicit skip of the slot on offer. Absent means the plan has no sequence. */
   onSkipSlot?: () => void;
