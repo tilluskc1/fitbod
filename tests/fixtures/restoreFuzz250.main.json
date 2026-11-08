@@ -1,0 +1,19 @@
+{
+  "source": "restorePendingWorkout at 3d9f3d1 (main), fuzz(restore, 400)",
+  "counts": {
+    "length": {
+      "restores": 1545,
+      "wrongPending": 922,
+      "lost": 435,
+      "changed": 355,
+      "doubled": 459
+    },
+    "gear": {
+      "restores": 635,
+      "wrongPending": 702,
+      "lost": 223,
+      "changed": 150,
+      "doubled": 206
+    }
+  }
+}
