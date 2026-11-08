@@ -4513,7 +4513,8 @@ button.aw-exercise__name-btn {
 /* (#256) The planner's action bar: always the bottom-most, fully visible buttons while it is open. */
 .tt-bar {
   position: sticky;
-  bottom: 0;
+  /* --kb: the part of the screen an on-screen keyboard covers (src/lib/keyboardInset.ts). */
+  bottom: var(--kb, 0px);
   z-index: 16;
   display: grid;
   gap: 8px;
@@ -4528,7 +4529,7 @@ button.aw-exercise__name-btn {
 .tt-hint { color: var(--muted); font-size: 13px; }
 .tt-say {
   /* (#256) Focus scrolling keeps the box above the planner's pinned action bar. */
-  scroll-margin-bottom: 150px;
+  scroll-margin-bottom: calc(150px + var(--kb, 0px));
   width: 100%;
   min-height: 86px;
   resize: none;

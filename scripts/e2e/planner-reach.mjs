@@ -104,21 +104,31 @@ async function walkPlanner(page, where) {
     check((await page.locator('nav.tabbar').count()) === 0 || !(await page.locator('nav.tabbar').isVisible()), `${where}: tab bar still shown on step ${step}`);
     await shot(page, `${where}-step${step}`);
     if (step === 1) {
-      // Keyboard open: the visible area shrinks; the main action must still be on screen.
+      // Keyboard open, as a phone does it: the layout keeps its height and the keyboard covers the
+      // bottom 330px (the visual viewport shrinks). The browser then scrolls the focused box into
+      // the part still visible. Next and the box must both sit inside that visible band.
       const size = page.viewportSize();
+      const band = size.height - 330;
       await page.locator('#tt-say').focus();
-      await page.setViewportSize({ width: size.width, height: size.height - 330 });
-      // A phone scrolls the focused box into view when the keyboard opens; do the same.
+      await page.evaluate((h) => window.__fakeKeyboard(h), band);
       await page.locator('#tt-say').evaluate((el) => el.scrollIntoView({ block: 'nearest' }));
-      await reachable(page, next, 'step 1 primary, keyboard open', where);
       const say = await page.locator('#tt-say').boundingBox();
       const bar = await page.locator('.tt-bar').boundingBox();
-      check(say && bar && say.y + say.height <= bar.y, `${where}: text box hidden behind the action bar with the keyboard open`);
+      const nb = await next.boundingBox();
+      check(nb && nb.y >= 0 && nb.y + nb.height <= band, `${where}: Next under the keyboard (y ${nb && Math.round(nb.y)}-${nb && Math.round(nb.y + nb.height)}, visible to ${band})`);
+      check(say && bar && say.y >= 0 && say.y + say.height <= bar.y, `${where}: text box hidden behind the action bar with the keyboard open`);
+      const hit = await next.evaluate((el) => { const b = el.getBoundingClientRect(); const h = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return Boolean(h && (h === el || el.contains(h))); });
+      check(hit, `${where}: Next does not own its tap with the keyboard open`);
       await shot(page, `${where}-step1-keyboard`);
       await page.locator('#tt-say').blur();
-      await page.setViewportSize(size);
+      await page.evaluate(() => window.__fakeKeyboard(null));
     }
+    const heading = await page.locator('.tt h2').innerText();
     await next.click();
+    if (step < 4) {
+      const moved = await page.waitForFunction((was) => document.querySelector('.tt h2')?.textContent !== was, heading, { timeout: 3000 }).then(() => true, () => false);
+      check(moved, `${where}: Next on step ${step} did not move to the next question`);
+    }
   }
   const start = page.getByRole('button', { name: 'Start this workout' });
   await start.waitFor();
@@ -135,6 +145,18 @@ const browser = await chromium.launch();
 try {
   for (const [width, height] of [[390, 844], [360, 780], [390, 650]]) {
     const page = await browser.newPage({ viewport: { width, height } });
+    // Chromium cannot shrink the visual viewport without shrinking the layout, so stand in a
+    // controllable visualViewport; the app reads only height, offsetTop and its events.
+    await page.addInitScript(() => {
+      const real = window.visualViewport;
+      const fake = new EventTarget();
+      let covered = null;
+      Object.defineProperty(fake, 'height', { get: () => covered ?? window.innerHeight });
+      Object.defineProperty(fake, 'offsetTop', { get: () => 0 });
+      Object.defineProperty(fake, 'width', { get: () => real?.width ?? window.innerWidth });
+      Object.defineProperty(window, 'visualViewport', { get: () => fake });
+      window.__fakeKeyboard = (visible) => { covered = visible; fake.dispatchEvent(new Event('resize')); };
+    });
     const errors = [];
     page.on('pageerror', (error) => errors.push(String(error)));
     await page.clock.setFixedTime(day(0));

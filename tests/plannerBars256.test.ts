@@ -19,12 +19,26 @@ test("every planner step and the summary keep their actions in the pinned bar", 
   assert.equal(talk.split('<div className="tt-bar">').length - 1, 2);
   const bar = rule('.tt-bar');
   assert.match(bar, /position: sticky/);
-  assert.match(bar, /bottom: 0/);
+  assert.match(bar, /bottom: var\(--kb, 0px\)/);
   assert.match(bar, /env\(safe-area-inset-bottom/);
-  assert.match(rule('.tt-say'), /scroll-margin-bottom: 150px/);
+  assert.match(rule('.tt-say'), /scroll-margin-bottom: calc\(150px \+ var\(--kb, 0px\)\)/);
 });
 
 test('the entry comes before the backup note so the reminder cannot push it under the dock', () => {
   const today = read('src/screens/TodayScreen.tsx');
   assert.ok(today.indexOf('{!current && composer}') < today.indexOf('{backup && onBackup && !current'));
+});
+
+test('the keyboard inset is what the visual viewport hides, never negative', async () => {
+  const { keyboardInset } = await import('../src/lib/keyboardInset.ts');
+  assert.equal(keyboardInset(844, null), 0);
+  assert.equal(keyboardInset(844, { height: 844, offsetTop: 0 }), 0);
+  assert.equal(keyboardInset(844, { height: 514, offsetTop: 0 }), 330);
+  assert.equal(keyboardInset(844, { height: 514, offsetTop: 100 }), 230); // page scrolled under the keyboard
+  assert.equal(keyboardInset(844, { height: 900, offsetTop: 0 }), 0);
+});
+
+test('Android resizes the layout for the keyboard; iPhone gets the inset', () => {
+  assert.match(read('index.html'), /interactive-widget=resizes-content/);
+  assert.match(read('src/main.tsx'), /trackKeyboardInset\(\)/);
 });

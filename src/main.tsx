@@ -4,6 +4,10 @@ import './index.css'
 import App from './App.tsx'
 import ErrorBoundary from './components/ErrorBoundary.tsx'
 import { currentDevice } from './lib/install.ts'
+import { trackKeyboardInset } from './lib/keyboardInset.ts'
+
+// (#256) Lift pinned bars above an on-screen keyboard that covers the page (iPhone).
+trackKeyboardInset()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

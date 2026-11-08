@@ -76,6 +76,13 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    photos on every deploy. Rule: e2e scripts write screenshots only when `E2E_SHOTS` is set; runtime
    media lives in its own cache that deploys keep. Check: `git status` is clean after `npm run e2e`.
 
+14. **A shrunk viewport is not a phone keyboard.** #256's first e2e "opened the keyboard" with
+   `setViewportSize(h - 330)`, which shrinks the layout; iPhone (and Android without
+   `interactive-widget=resizes-content`) keeps the layout and covers it, so the pinned bar sat under
+   the keyboard and review failed it. Rule: keyboard checks keep the layout height and shrink only the
+   visual viewport, and assert the action sits inside the visible band. Check:
+   `scripts/e2e/planner-reach.mjs` (fake `visualViewport`), `src/lib/keyboardInset.ts`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
