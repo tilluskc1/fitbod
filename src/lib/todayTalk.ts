@@ -44,17 +44,20 @@ export interface TalkParse extends ParsedConstraints {
   pain?: true;
 }
 
-/** Words for each area; "upper body" and "lower body" name several. */
+/** Words for each area; "upper body", "lower body" and "full body" name several. */
 const AREA_WORDS: { word: string; areas: Area[] }[] = [
   { word: 'chest|pecs?', areas: ['Chest'] },
   // "Back" the muscle, not the adverb: "back at the gym", "get back", "came back" train nothing.
   { word: `(?<!\\b(?:get|got|getting|came|come|coming|go|going|went|be|been|i'm|im|we're)\\s)back(?!\\s+(?:at|home|to|in|into|from|on|after)\\b)|lats?`, areas: ['Back'] },
   { word: 'shoulders?|delts?', areas: ['Shoulders'] },
   { word: 'arms?|biceps?|triceps?', areas: ['Arms'] },
-  { word: 'legs?|quads?|hamstrings?|glutes?|calf|calves', areas: ['Legs'] },
+  { word: 'leg[\\s-]?day|legs?|quads?|hamstrings?|glutes?|calf|calves', areas: ['Legs'] },
   { word: 'abs|core|abdominals?', areas: ['Core'] },
-  { word: 'upper body', areas: ['Chest', 'Back', 'Shoulders', 'Arms'] },
-  { word: 'lower body', areas: ['Legs'] },
+  // #237: "upperbody", "upper-body", "full body" and a bare "upper". "Upper back" and "upper chest"
+  // name only that muscle, so a bare "upper" never counts before a muscle word.
+  { word: 'upper[\\s-]?body|upper(?![\\s-]*(?:back|chest|body|arms?|traps?|lats?|shoulders?|delts?|abs)\\b)', areas: ['Chest', 'Back', 'Shoulders', 'Arms'] },
+  { word: 'lower[\\s-]?body', areas: ['Legs'] },
+  { word: 'full[\\s-]?body', areas: [...AREAS] },
 ];
 const HURT = 'hurts?|hurting|injured|tweaked|pulled|strained';
 /** After the area: "legs are sore", "shoulder hurts". */
@@ -92,7 +95,7 @@ const EXCEPT_SORE = /\b(?:sore|tired|fried|wrecked|dead|aching|achy|stiff)\b/;
 /** "Legs are fine": neither trained nor skipped. */
 const FINE = /^\s+(?:(?:is|are|feel|feels|feeling|seem|seems)\s+)?(?:fine|ok|okay|good|great|alright|fresh)\b/;
 /** "Everything is sore", "whole body is tired": every area is skipped. */
-const ALL_SORE = /(?<!\bnot\s)\b(?:everything|(?<!\b(?:is|are|feel|feels)\s)all|(?:my\s+)?(?:whole|full)\s+body)(?:['’]s|\s+(?:is|are|feels?))?\s+(?:sore|tired|fried|wrecked|dead|aching|achy|stiff)\b/;
+const ALL_SORE = /(?<!\bnot\s)\b(?:everything|(?<!\b(?:is|are|feel|feels)\s)all|(?:my\s+)?(?:whole\s+|full[\s-]?)body)(?:['’]s|\s+(?:is|are|feels?))?\s+(?:sore|tired|fried|wrecked|dead|aching|achy|stiff)\b/;
 const NOT_BEFORE = '(?<!\\b(?:not|no|never)\\s)';
 const SORE_BEFORE_RE = new RegExp(`${NOT_BEFORE}\\b(?:${SORE_BEFORE})\\s+$`);
 const LEAVE_BEFORE_RE = new RegExp(`${NOT_BEFORE}\\b(?:${LEAVE_BEFORE})\\s+$`);
