@@ -98,7 +98,7 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
 
   if (step === null) {
     return (
-      <section className="t7-card tt tt--entry" aria-label="Plan today with me">
+      <section className="t7-card tt" aria-label="Plan today with me">
         <span className="tt-badge">Planned today · {plannedName}</span>
         <button type="button" className="tt-open" onClick={() => go('time')}>
           <span>
