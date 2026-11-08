@@ -66,6 +66,16 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: assert the number one surface shows equals the number the next one uses (Today's last load =
    logger's previous; target load = set 1's prefilled weight). Check: `scripts/e2e/second-workout.mjs`.
 
+13. **Test offline as a first-time visitor, through the real worker.** #251: the app went blank offline
+   after one visit because JS and CSS were cached only on a second visit; once precached, the scripts
+   still missed because hosts answer `Vary: Origin` and module scripts send an Origin header.
+   Rule: any service-worker change runs the offline e2e in a fresh browser context (one online visit,
+   then offline reload); cache lookups use `ignoreVary`. Check: `scripts/e2e/offline-first-visit.mjs`,
+   `tests/offlineShell251.test.ts`.
+   Review also caught two PNGs the e2e had written into the repo root and a cache name that wiped viewed
+   photos on every deploy. Rule: e2e scripts write screenshots only when `E2E_SHOTS` is set; runtime
+   media lives in its own cache that deploys keep. Check: `git status` is clean after `npm run e2e`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
@@ -73,6 +83,7 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
 - **Time:** shorter and longer than the saved length; 15/20 min floors; ≈ when under half.
 - **Days:** planned vs described; empty days; Limited must name its reason.
 - **Data:** older data without a new field; export/restore round trip; validate rejects bad values.
+- **Offline:** first visit then offline; a new deploy replacing cached assets; photos never loaded online.
 - **Phones:** 390×844 and 360×780; a 650px-tall visible area (iPhone Chrome); keyboard open; iPhone Home Screen app has its own storage.
 
 ## Efficiency
