@@ -22,6 +22,16 @@ test('#241: a denial with an exception still names pain, so it never builds a da
     'nothing hurts! but my knee does',
     'nothing hurts? except my knee',
     'nothing hurts\nexcept my knee',
+    'apart from my knee, nothing hurts',
+    'other than my knee, no pain',
+    'besides the knee, nothing hurts',
+    'except my knee nothing hurts',
+    'nothing hurts aside from my knee',
+    'nothing hurts save my knee',
+    'no pain excluding my wrist',
+    'nothing hurts, only my knee',
+    'nothing hurts, just my knee',
+    'nothing hurts though my knee aches',
   ]) assert.equal(talkParse(text).pain, true, text);
 });
 

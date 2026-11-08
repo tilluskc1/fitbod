@@ -77,11 +77,14 @@ const NO_PAIN = new RegExp([
   `\\b(?:doesn['’]?t|does not|don['’]?t|do not|isn['’]?t|is not|didn['’]?t|did not)\\s+(?:\\w+\\s+)?(?:hurt\\w*|injured)\\b`,
 ].join('|'), 'gi');
 /**
- * (#241) "Nothing hurts except my knee", "nothing hurts. but my knee does": a denial with an exception
- * word anywhere after it names pain. Deliberately blunt after two parser rounds (lesson 3): unsure reads
- * as pain, so "no pain. Skip legs but train chest" stops too, and "It's only soreness" answers it.
+ * (#241) "Nothing hurts except my knee", "apart from my knee, nothing hurts": a pain denial with an
+ * exception word anywhere in the text, before or after it, names pain. Deliberately blunt after three
+ * parser rounds (lesson 3): unsure reads as pain, so "no pain, but short on time" stops too, and
+ * "It's only soreness" answers it. Reading the text is best effort; the chips are the safety net.
  */
-const PAIN_EXCEPT = new RegExp(`(?:${NO_PAIN.source})[\\s\\S]*?\\b(?:except|apart from|other than|besides|save for|but)\\b`, 'i');
+const EXCEPT_WORD = /\b(?:except|apart from|aside from|other than|besides|save|excluding|minus|but|only|just|though)\b/i;
+const NO_PAIN_ONCE = new RegExp(NO_PAIN.source, 'i');
+const PAIN_EXCEPT = { test: (text: string) => NO_PAIN_ONCE.test(text) && EXCEPT_WORD.test(text) };
 /** "No gym today", "not at home": a negated place selects nothing. */
 const NO_PLACE = /\b(?:no|not|without|skip(?:ping)?|instead of)\s+(?:(?:at|to|the|a|my)\s+)*(?:gym|hotel|travel|home|garage)\b/gi;
 
