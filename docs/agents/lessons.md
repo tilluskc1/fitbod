@@ -42,6 +42,13 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
 8. **Merge stacked work early.** Long-lived branches diverged: #202 met 22 conflicts against later work.
    Rule: once a PR passes review, ask to merge before stacking more on its neighbours; keep stacks ≤ 2.
 
+9. **When two paths must give the same answer, make them one path.** #229 first aligned the generator's
+   cut with today-only trimming (rank, keep flags); the review showed a saved 45 shortened to 30 still gave 3
+   exercises, because a trim can only remove what the longer day already has. Building the short day
+   through the generator made them equal by construction and deleted the plumbing.
+   Rule: prefer one function over two kept in sync; test the claim from every starting point (saved
+   45/60/90), not the one that happens to work. Check: `tests/shortSessions229.test.ts`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
