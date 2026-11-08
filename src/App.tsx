@@ -120,6 +120,7 @@ import GymSheet from './components/GymSheet';
 import SwitchSheet from './components/SwitchSheet';
 import { skipForward, switchOptions, upcomingDays } from './lib/switchDay';
 import type { SwitchOption } from './lib/switchDay';
+import { keepKey, todayFresher } from './lib/recovery';
 import
  Onboarding from './components/Onboarding';
 import
@@ -216,6 +217,8 @@ export default function App() {
   const [replacePrompt, setReplacePrompt] = useState<Constraints | null>(null);
   /** First-weight steps skipped in this tab; in memory only, never stored. */
   const [calibrationSkips, setCalibrationSkips] = useState<string[]>([]);
+  /** (#134) Keep tapped on the fresher-day offer: this slot, today. In memory only, never stored. */
+  const [keptFresher, setKeptFresher] = useState<string | null>(null);
   /** (#193) The Today composer is open or previewing; it clears this when it closes or unmounts. */
   const [composing, setComposing] = useState(false);
 
@@ -307,6 +310,15 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [sessionRunning]);
 
+  // (#134) Outside a session `now` does not tick: coming back to the app refreshes it.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now());
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(null), 5000);
@@ -344,6 +356,14 @@ export default function App() {
   const upcoming = useMemo(
     () => (profile && slot ? upcomingDays(profile, state.plan, slot, state.history) : []),
     [profile, slot, state.plan, state.history],
+  );
+  /**
+   * (#134) A fresher day than the one up next. `now` only ticks while a session is open, and then
+   * the gate returns before pricing any day, so following `today` stays cheap.
+   */
+  const fresher = useMemo(
+    () => todayFresher(profile, state, plainConstraints, keptFresher, today),
+    [profile, state, plainConstraints, keptFresher, today],
   );
   const slotLabel = useMemo(() => {
     const slots = planSlots(state.plan);
@@ -1240,6 +1260,9 @@ export default function App() {
             onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
             backup={backupReminder(state, today)}
             onBackup={backupNow}
+            fresher={fresher}
+            onPickFresher={pickDay}
+            onKeepNext={() => slot && setKeptFresher(keepKey(slot.id, today))}
           />
         )}
         {tab === 'plan' && (            <PlanScreen
