@@ -5,63 +5,65 @@ import { AREAS } from '../lib/areas';
 import type { Area } from '../lib/areas';
 import { noticeText } from '../lib/constraints';
 import { restLabel } from '../lib/sessionTime';
-import { NO_TAPS, composeTalk, gearLabel, tapSkip, tapTrain, tapsAfterEdit } from '../lib/todayTalk';
+import { NO_TAPS, composeTalk, gearLabel, tapsAfterEdit } from '../lib/todayTalk';
 import type { CustomDayPreview, TalkState, Taps } from '../lib/todayTalk';
+import {
+  QUESTIONS, gearChoices, isPlannedPick, nothingSore, pickPlanned, planLine, timeChoices, toggleSore, toggleTrain,
+} from '../lib/planToday';
+import type { Question } from '../lib/planToday';
 import Icon from './ui/Icon';
 
 interface Props {
   profile: Profile;
-  /** The planned day's name, for the badge and the week line. */
+  /** The planned day's name, for the badge and Q3's "My planned day". */
   plannedName: string;
-  /** Today's gear and time and the planned day's areas: what the chips show before anything is said. */
+  /** The planned day's areas: what "My planned day" trains. */
+  plannedAreas: Area[];
+  /** The saved setup and length, pre-selected on Q4 and Q1. */
+  savedGear: EquipmentChoice;
+  savedMinutes: number;
+  /** Today's gear and time and the planned day's areas: every answer's default. */
   base: TalkState;
-  /** The day these chips build, from the same engine Start runs. */
+  /** The day these answers build, from the same engine Start runs. */
   preview: (talk: TalkState) => CustomDayPreview | null;
   onStart: (talk: TalkState) => void;
   /** Open or previewing: the screen's other primary steps aside. */
   onActive?: (active: boolean) => void;
 }
 
-const EXAMPLES: { label: string; say: string }[] = [
-  { label: 'Hotel gym, 30 min', say: 'Hotel gym, 30 min, upper body please.' },
-  { label: 'Home, back and arms', say: 'Home today, back and arms, an hour.' },
-  { label: 'Shoulders tired', say: 'Shoulders are tired, legs and abs, 60 min at the gym.' },
-  { label: 'Knee pain', say: 'My knee hurts, gym, legs.' },
-];
-const GEAR: EquipmentChoice[] = ['home', 'hotel', 'bodyweight'];
-const TIMES = [30, 45, 60];
-
-const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-const minutesLabel = (minutes: number) => (minutes === 60 ? '1 hr' : `${minutes} min`);
-const words = (areas: Area[]) => {
-  const list = areas.map((area) => area.toLowerCase());
-  return list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+const QUESTION_TEXT: Record<Question, string> = {
+  time: 'How long do you have?',
+  sore: 'Anything sore or hurting?',
+  train: 'What do you want to train?',
+  gear: 'Where are you training?',
 };
+const minutesLabel = (minutes: number) => (minutes === 60 ? '1 hr' : `${minutes} min`);
 
 /**
- * "Tell me about today" (#193). Collapsed until tapped so the workout card keeps its place on
- * Today. Text fills four rows of chips; the chips stay editable; Build shows the day the
- * generator makes from them, and Start runs exactly that day. Voice is the keyboard's own
- * dictation into the text box: nothing here listens.
+ * "Plan today with me" (#236) on the #193 composer: one question per screen with tap answers,
+ * defaults pre-selected, then the day the generator builds from them. "Or just tell me" fills the
+ * same answers from a sentence. Answers are chip taps over the text (`composeTalk`), so every way
+ * of answering builds the same day. Voice is the keyboard's own dictation: nothing here listens.
  */
-export default function TodayTalk({ profile, plannedName, base, preview, onStart, onActive }: Props) {
-  const [open, setOpen] = useState(false);
+export default function TodayTalk({ profile, plannedName, plannedAreas, savedGear, savedMinutes, base, preview, onStart, onActive }: Props) {
+  const [step, setStep] = useState<Question | 'summary' | null>(null);
   const [text, setText] = useState('');
-  // Chip taps sit on top of the text, so typing more never undoes them (see `tapsAfterEdit`).
+  // Answers sit on top of the text, so typing more never undoes them (see `tapsAfterEdit`).
   const [taps, setTaps] = useState<Taps>(NO_TAPS);
+  // Q2 "It hurts": pain from a tap, as the text's pain words do.
+  const [hurts, setHurts] = useState(false);
   // "It's only soreness": the lifter's answer to the pain stop, kept while the note still says pain.
   const [soreOnly, setSoreOnly] = useState(false);
   const [built, setBuilt] = useState<{ talk: TalkState; day: CustomDayPreview } | null>(null);
-  const textRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const said = composeTalk(base, text, taps);
-  const talk = soreOnly ? { ...said, pain: false } : said;
+  const talk = { ...said, pain: (said.pain && !soreOnly) || hurts };
 
   useEffect(() => {
-    onActive?.(open || built !== null);
+    onActive?.(step !== null);
     return () => onActive?.(false);
-  }, [open, built, onActive]);
-  // Gear or time changed in another sheet: that newer choice shows through the chips.
+  }, [step, onActive]);
+  // Gear or time changed in another sheet: that newer choice shows through the answers.
   const baseKey = `${base.equipment}:${base.minutes}`;
   const [seenBase, setSeenBase] = useState(baseKey);
   if (seenBase !== baseKey) {
@@ -69,31 +71,49 @@ export default function TodayTalk({ profile, plannedName, base, preview, onStart
     setTaps({ areas: taps.areas });
   }
 
+  const go = (next: Question | 'summary' | null) => {
+    setStep(next);
+    if (next !== 'summary') setBuilt(null);
+    requestAnimationFrame(() => titleRef.current?.focus());
+  };
+  /** Build from the answers so far; pain or nothing to train sends the lifter to that question instead. */
+  const build = () => {
+    if (talk.pain) return go('sore');
+    if (talk.train.length === 0) return go('train');
+    const day = preview(talk);
+    if (!day) return;
+    setBuilt({ talk, day });
+    go('summary');
+  };
   const say = (value: string) => {
     setTaps(tapsAfterEdit(taps, text, value));
     setText(value);
     if (!composeTalk(base, value, NO_TAPS).pain) setSoreOnly(false);
   };
-  const build = () => {
-    const day = preview(talk);
-    if (!day) return;
-    setBuilt({ talk, day });
-    requestAnimationFrame(() => titleRef.current?.focus());
-  };
-  const change = () => {
+  const close = () => {
+    setStep(null);
     setBuilt(null);
-    requestAnimationFrame(() => textRef.current?.focus());
   };
 
-  const gears = GEAR.includes(talk.equipment) ? GEAR : [...GEAR, talk.equipment];
-  const times = [...new Set([...TIMES, talk.minutes])].sort((a, b) => a - b);
-  const gear = gearLabel(talk.equipment, profile);
-  const summary = talk.pain
-    ? 'You mentioned pain. Nothing will be built around it.'
-    : `${talk.train.length ? capital(words(talk.train)) : 'Nothing to train'} with ${gear.toLowerCase()}${talk.skip.length ? `, skipping ${words(talk.skip)}` : ''}, ${talk.minutes} min.`;
-  const blocked = talk.pain || talk.train.length === 0;
+  if (step === null) {
+    return (
+      <section className="t7-card tt" aria-label="Plan today with me">
+        <span className="tt-badge">Planned today · {plannedName}</span>
+        <button type="button" className="tt-open" onClick={() => go('time')}>
+          <span>
+            <b>Plan today with me</b>
+            <small>How long, what's sore, what to train. I'll build it from your answers.</small>
+          </span>
+          <Icon name="chevron_right" size={22} />
+        </button>
+      </section>
+    );
+  }
 
-  if (built) {
+  const gear = gearLabel(talk.equipment, profile);
+  const line = talk.pain ? 'You mentioned pain. Nothing will be built around it.' : planLine(talk, plannedName, plannedAreas, gear);
+
+  if (step === 'summary' && built) {
     const { day } = built;
     return (
       <section className="t7-card tt" aria-label="Today's workout preview">
@@ -106,14 +126,16 @@ export default function TodayTalk({ profile, plannedName, base, preview, onStart
             {day.status === 'ready' ? 'Ready' : day.status === 'limited' ? 'Limited' : 'Not enough equipment'}
           </span>
         </div>
+        <p className="tt-line">{planLine(built.talk, plannedName, plannedAreas, gearLabel(built.talk.equipment, profile))}</p>
         <div className="tt-meta">
           <p><b>{day.approx ? '≈' : ''}{day.minutes}</b><small>min</small></p>
           <p><b>{day.sets}</b><small>sets</small></p>
           <p><b>{day.exercises.length}</b><small>exercises</small></p>
         </div>
         <div className="tt-why">
-          {day.why.map((line) => <p key={line.label}><b>{line.label}</b> {line.text}</p>)}
+          {day.why.map((why) => <p key={why.label}><b>{why.label}</b> {why.text}</p>)}
         </div>
+        {built.talk.notices.map((notice) => <p key={notice.kind} className="tt-warn">{noticeText(notice)}</p>)}
         <ul className="tt-list">
           {day.exercises.map((exercise) => (
             <li key={exercise.exerciseId} className="tt-ex">
@@ -134,94 +156,118 @@ export default function TodayTalk({ profile, plannedName, base, preview, onStart
         <button type="button" className="pill-primary" onClick={() => onStart(built.talk)} disabled={day.exercises.length === 0}>
           Start this workout
         </button>
-        <button type="button" className="secondary" onClick={change}>Change what I said</button>
+        <button type="button" className="secondary" onClick={() => go('time')}>Change answers</button>
       </section>
     );
   }
 
+  const question = step === 'summary' ? 'time' : step;
+  const index = QUESTIONS.indexOf(question);
+  const last = index === QUESTIONS.length - 1;
+  const left = talk.skip;
+  const offered = AREAS.filter((area) => !left.includes(area));
+  const planned = isPlannedPick(talk, plannedAreas);
+  // Pain stops at Q2; nothing to train stops at Q3 and Q4. Q1 always moves on, so text pain reaches its stop.
+  const blocked = (question !== 'time' && talk.pain) || ((question === 'train' || question === 'gear') && talk.train.length === 0);
+
   return (
-    <section className="t7-card tt" aria-label="Tell me about today">
+    <section className="t7-card tt" aria-label="Plan today with me">
       <div>
-        <span className="tt-badge">Planned today · {plannedName}</span>
-        <h2>
-          <button type="button" className="tt-toggle" aria-expanded={open} aria-controls="tt-body" onClick={() => setOpen(!open)}>
-            Tell me about today
-            <Icon name="expand_more" size={20} className={open ? 'tt-chev tt-chev--open' : 'tt-chev'} />
-          </button>
-        </h2>
-        <p className="tt-hint">Gear, time, anything sore, what you feel like training. Or just press Start.</p>
+        <span className="tt-badge">Plan today · {index + 1} of {QUESTIONS.length}</span>
+        <h2 ref={titleRef} tabIndex={-1}>{QUESTION_TEXT[question]}</h2>
+        <p className="sr-only" aria-live="polite">{line}</p>
       </div>
-      {open && (
-        <div id="tt-body" className="tt-body">
-          <label htmlFor="tt-say" className="sr-only">What's today like?</label>
-          <textarea
-            id="tt-say"
-            ref={textRef}
-            className="tt-say"
-            rows={3}
-            value={text}
-            placeholder="Full gym today. Legs are sore. Chest and abs, 45 min."
-            onChange={(event) => say(event.target.value)}
-          />
-          <div className="tt-examples" role="group" aria-label="Examples">
-            {EXAMPLES.map((example) => (
-              <button key={example.label} type="button" className="tt-ex-chip" onClick={() => say(example.say)}>{example.label}</button>
+
+      {question === 'time' && (
+        <>
+          <div className="tt-chips" role="group" aria-label="Time">
+            {timeChoices(savedMinutes, talk.minutes).map((minutes) => (
+              <button key={minutes} type="button" className="tt-chip" aria-pressed={talk.minutes === minutes}
+                onClick={() => setTaps({ ...taps, minutes })}>{minutesLabel(minutes)}</button>
             ))}
           </div>
-
-          <div className="tt-understood">
-            <p className="tt-hint">What I understood. Tap to change.</p>
-            <p className="sr-only" aria-live="polite">{summary}</p>
-            <div className="tt-row" role="group" aria-label="Gear">
-              <span className="tt-k" aria-hidden="true">Gear</span>
-              <div className="tt-chips">
-                {gears.map((choice) => (
-                  <button key={choice} type="button" className="tt-chip" aria-pressed={talk.equipment === choice}
-                    onClick={() => setTaps({ ...taps, equipment: choice })}>{gearLabel(choice, profile)}</button>
-                ))}
-              </div>
-            </div>
-            <div className="tt-row" role="group" aria-label="Train">
-              <span className="tt-k" aria-hidden="true">Train</span>
-              <div className="tt-chips">
-                {AREAS.map((area) => (
-                  <button key={area} type="button" className="tt-chip" aria-pressed={talk.train.includes(area)}
-                    onClick={() => setTaps(tapTrain(talk, taps, area))}>{area}</button>
-                ))}
-              </div>
-            </div>
-            <div className="tt-row" role="group" aria-label="Skip">
-              <span className="tt-k" aria-hidden="true">Skip</span>
-              <div className="tt-chips">
-                {AREAS.map((area) => (
-                  <button key={area} type="button" className="tt-chip tt-chip--skip" aria-pressed={talk.skip.includes(area)}
-                    onClick={() => setTaps(tapSkip(talk, taps, area))}>{area}</button>
-                ))}
-              </div>
-            </div>
-            <div className="tt-row" role="group" aria-label="Time">
-              <span className="tt-k" aria-hidden="true">Time</span>
-              <div className="tt-chips">
-                {times.map((minutes) => (
-                  <button key={minutes} type="button" className="tt-chip" aria-pressed={talk.minutes === minutes}
-                    onClick={() => setTaps({ ...taps, minutes })}>{minutesLabel(minutes)}</button>
-                ))}
-              </div>
-            </div>
+          {talk.notices.map((notice) => <p key={notice.kind} className="tt-warn">{noticeText(notice)}</p>)}
+          <div className="tt-tell">
+            <label htmlFor="tt-say" className="tt-hint">Or just tell me</label>
+            <textarea
+              id="tt-say"
+              className="tt-say"
+              rows={2}
+              value={text}
+              placeholder="30 min, legs are sore, upper body."
+              onChange={(event) => say(event.target.value)}
+            />
+            {text.trim() && (
+              <button type="button" className="secondary" onClick={build}>Plan from what I said</button>
+            )}
           </div>
+        </>
+      )}
 
+      {question === 'sore' && (
+        <>
+          <div className="tt-chips" role="group" aria-label="Sore or hurting">
+            <button type="button" className="tt-chip" aria-pressed={left.length === 0 && !talk.pain}
+              onClick={() => { setTaps(nothingSore(base, text, taps)); setHurts(false); setSoreOnly(true); }}>Nothing</button>
+            {AREAS.map((area) => (
+              <button key={area} type="button" className="tt-chip tt-chip--skip" aria-pressed={left.includes(area)}
+                onClick={() => setTaps(toggleSore(base, text, taps, area))}>{area}</button>
+            ))}
+            <button type="button" className="tt-chip tt-chip--skip" aria-pressed={talk.pain}
+              onClick={() => { setHurts(!talk.pain); if (talk.pain) setSoreOnly(true); }}>It hurts (pain)</button>
+          </div>
           {talk.pain ? (
             <p className="tt-stop" role="alert">
-              <b>You mentioned pain.</b> I can work around soreness, not pain. Skip today or check with someone who can look at it. If it's only soreness, edit your note.
-              <button type="button" className="secondary" onClick={() => setSoreOnly(true)}>It's only soreness</button>
+              <b>You mentioned pain.</b> I can work around soreness, not pain. Skip today or check with someone who can look at it.
+              <button type="button" className="secondary" onClick={() => { setHurts(false); setSoreOnly(true); }}>It's only soreness</button>
             </p>
-          ) : talk.train.length === 0 ? (
-            <p className="tt-warn">Pick at least one area to train.</p>
+          ) : left.length > 0 ? (
+            <p className="tt-hint">I'll leave out {left.join(', ').toLowerCase()} today.</p>
           ) : null}
-          {talk.notices.map((notice) => <p key={notice.kind} className="tt-warn">{noticeText(notice)}</p>)}
-          <button type="button" className="pill-primary" onClick={build} disabled={blocked}>Build today's workout</button>
+        </>
+      )}
+
+      {question === 'train' && (
+        <>
+          <div className="tt-chips" role="group" aria-label="Train">
+            <button type="button" className="tt-chip" aria-pressed={planned}
+              onClick={() => setTaps(pickPlanned(base, text, taps, plannedAreas))}>My planned day ({plannedName})</button>
+            {offered.map((area) => (
+              <button key={area} type="button" className="tt-chip" aria-pressed={!planned && talk.train.includes(area)}
+                onClick={() => setTaps(toggleTrain(base, text, taps, area, plannedAreas))}>{area}</button>
+            ))}
+          </div>
+          {left.length > 0 && <p className="tt-hint">Not offered: {left.join(', ')}. {talk.sore.length ? 'Sore wins today.' : 'You said skip.'}</p>}
+          {talk.train.length === 0 && <p className="tt-warn">{left.length ? 'Everything you planned is left out. ' : ''}Pick at least one area to train.</p>}
+        </>
+      )}
+
+      {question === 'gear' && (
+        <div className="tt-chips" role="group" aria-label="Gear">
+          {gearChoices(savedGear, talk.equipment).map((choice) => (
+            <button key={choice} type="button" className="tt-chip" aria-pressed={talk.equipment === choice}
+              onClick={() => setTaps({ ...taps, equipment: choice })}>
+              {gearLabel(choice, profile)}{choice === savedGear ? ' (saved)' : ''}
+            </button>
+          ))}
         </div>
+      )}
+
+      <div className="tt-nav">
+        <button type="button" className="secondary" onClick={() => (index === 0 ? close() : go(QUESTIONS[index - 1]))}>
+          {index === 0 ? 'Cancel' : 'Back'}
+        </button>
+        <button type="button" className="pill-primary" disabled={blocked}
+          onClick={() => (last ? build() : go(QUESTIONS[index + 1]))}>
+          {last ? 'Build my day' : 'Next'}
+        </button>
+      </div>
+      {!last && (
+        <button type="button" className="link-btn tt-skip" onClick={build}>
+          Build with these answers
+        </button>
       )}
     </section>
   );
 }
+
