@@ -16,6 +16,13 @@ It applies to every turn and every agent, not just the turn where it was invoked
 
 It stays on until the user says "normal mode" or "stop adhd mode". Those words end it for the rest of the session.
 
+## Lessons loop
+
+Before planning any task, read `docs/agents/lessons.md` and copy the relevant edge cases into the brief.
+When a review fails, a merge goes wrong, or the owner corrects something, add one lesson there (what
+happened, the rule, how to check it) in the same PR as the fix. Turn a lesson into a test or script check
+when it can be one.
+
 ## Agent skills
 
 ### Issue tracker
