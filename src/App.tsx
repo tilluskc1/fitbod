@@ -1,6 +1,8 @@
 import
  { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { backupReminder, shareBackup } from './lib/backup';
+import { offerFirstBackup } from './lib/dataHome';
+import { currentDevice } from './lib/install';
 import
  { downloadText } from './lib/download';
 import
@@ -940,18 +942,18 @@ export default function App() {
   };
 
   const restoreFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file) return false;
     let text: string;
     try {
       text = await file.text();
     } catch {
       setNotice('The file could not be read. Nothing changed.');
-      return;
+      return false;
     }
     const parsed = parseState(text);
     if (!parsed.ok) {
       setNotice(`Restore rejected: ${parsed.error}`);
-      return;
+      return false;
     }
     const merged = mergeImport(state, parsed.state);
     setState({ ...merged.state, todayOverride: state.todayOverride ?? null });
@@ -968,6 +970,7 @@ export default function App() {
             } the backup did not contain.`
           : ''),
     );
+    return Boolean(merged.state.profile);
   };
 
   const swapExercise = (exerciseIndex: number, nextExerciseId: string) => {
@@ -1055,7 +1058,22 @@ export default function App() {
   if (showSplash && !current) {
     return (
       <PhoneFrame>
-        <SplashScreen onStart={() => setShowSplash(false)} />
+        {/* (#258) A rejected restore from the installed-app prompt must say why. */}
+        {notice && (
+          <div className="app-alerts" role="status">
+            <div className="banner" style={{ margin: '8px 0 0' }}>
+              <span>{notice}</span>
+              <button onClick={() => setNotice(null)} aria-label="Dismiss message">
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+        <SplashScreen
+          onStart={() => setShowSplash(false)}
+          installed={typeof window !== 'undefined' && currentDevice().standalone}
+          onRestore={(file) => void restoreFile(file).then((restored) => { if (restored) setShowSplash(false); })}
+        />
       </PhoneFrame>
     );
   }
@@ -1135,6 +1153,8 @@ export default function App() {
           setView('tabs');
           setTab('today');
         }}
+        offerBackup={offerFirstBackup(state) && state.history.some((workout) => workout.id === recap.id)}
+        onBackup={backupNow}
       />
     ) : view === 'library' ? (
       <LibraryScreen

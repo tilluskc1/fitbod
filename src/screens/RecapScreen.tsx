@@ -1,7 +1,9 @@
 import type { WorkoutFeedback, WorkoutRecord } from '../types';
 import { FEEDBACK_CHOICES } from '../lib/feedback';
 import type { ProgressionLine } from '../lib/liveProgression';
+import { useState } from 'react';
 import { ArrowIcon, CheckIcon } from '../components/ui/Icons';
+import { FIRST_BACKUP } from '../lib/dataHome';
 
 /** The write covering this recap's answer, as the app last observed it. */
 export interface FeedbackWrite {
@@ -20,6 +22,9 @@ interface Props {
   onRetryFeedback: () => void;
   onViewHistory: () => void;
   onBackToday: () => void;
+  /** (#258) First finished workout and no backup yet: offer one, once. */
+  offerBackup?: boolean;
+  onBackup?: () => void;
 }
 
 function minutesOf(workout: WorkoutRecord): number {
@@ -39,7 +44,11 @@ export default function RecapScreen({
   onRetryFeedback,
   onViewHistory,
   onBackToday,
+  offerBackup = false,
+  onBackup,
 }: Props) {
+  // (#258) Hidden for this visit once used or dismissed; the offer's own condition keeps it to one workout.
+  const [backupHidden, setBackupHidden] = useState(false);
   const feedback = workout.feedback;
   const setCount = workout.exercises.reduce(
     (sum, exercise) => sum + exercise.performed.filter((set) => set.done).length,
@@ -128,6 +137,20 @@ export default function RecapScreen({
             </button>
           )}
         </section>
+
+        {offerBackup && onBackup && !backupHidden && (
+          <section className="recap-backup" aria-label="Back up">
+            <p>{FIRST_BACKUP}</p>
+            <div className="recap-backup__actions">
+              <button className="secondary" onClick={() => { setBackupHidden(true); onBackup(); }}>
+                Back up now
+              </button>
+              <button className="text-link" onClick={() => setBackupHidden(true)}>
+                Not now
+              </button>
+            </div>
+          </section>
+        )}
 
         {skippedCount > 0 && (
           <p className="recap-note">
