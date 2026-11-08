@@ -158,13 +158,16 @@ export function fresherDay(
   const next = options.find((option) => option.offset === 0);
   const nextSlot = next && byId.get(next.slotId);
   if (!next || !nextSlot) return null;
-  const repeated = worthOffering(nextSlot, recent, ledRecently(history, now));
+  const led = ledRecently(history, now);
+  const repeated = worthOffering(nextSlot, recent, led);
   if (repeated.length === 0) return null;
 
   let best: { option: SwitchOption; count: number } | null = null;
   for (const option of options) {
     const slot = byId.get(option.slotId);
     if (option.offset === 0 || option.offset > MAX_SKIPS || !slot || option.status === 'none') continue;
+    // A day that would itself get an offer is not fresher, only less stale.
+    if (worthOffering(slot, recent, led).length > 0) continue;
     const count = repeats(slot, recent).length;
     if (!best || count < best.count || (count === best.count && option.offset < best.option.offset)) best = { option, count };
   }
