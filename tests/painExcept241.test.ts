@@ -10,11 +10,22 @@ test('#241: a denial with an exception still names pain, so it never builds a da
     'no pain other than my wrist',
     'nothing hurts, except my elbow',
     'nothing hurts besides my hip',
+    'no pain today except my knee',
+    'no pain at all except my knee',
+    'nothing hurts today except my knee',
+    'no pain anywhere except the knee',
+    'nothing hurts but my knee',
+    'no pain but my knee',
+    'nothing hurts – except my knee',
   ]) assert.equal(talkParse(text).pain, true, text);
 });
 
-test('#241: a plain denial is still no pain', () => {
-  for (const text of ['nothing hurts', 'no pain today, chest', 'nothing hurts, 30 min', 'no pain, but legs are sore']) {
+test('#241: a plain denial is still no pain; the exception reaches only to the end of its sentence', () => {
+  for (const text of ['nothing hurts', 'no pain today, chest', 'nothing hurts, 30 min', 'no pain. Skip legs but train chest']) {
     assert.equal(talkParse(text).pain, undefined, text);
   }
+});
+
+test('#241: unsure reads as pain (lesson 3): "no pain, but legs are sore" stops; "It\'s only soreness" answers it', () => {
+  assert.equal(talkParse('no pain, but legs are sore').pain, true);
 });
