@@ -76,13 +76,13 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    photos on every deploy. Rule: e2e scripts write screenshots only when `E2E_SHOTS` is set; runtime
    media lives in its own cache that deploys keep. Check: `git status` is clean after `npm run e2e`.
 
-13. **Anchor a nudge on the event that breaks the plan.** #134's "a fresher day is up" offer counted
+14. **Anchor a nudge on the event that breaks the plan.** #134's "a fresher day is up" offer counted
    recently trained muscles; two review rounds found it flagging the split's own planned order (a
    hinge marks the back; Pull then Legs repeats two areas before Upper).
    Rule: trigger only on the event that breaks the plan (a skip, a described day), then apply the
    heuristic. Check: the planned-order sweep in `tests/recovery134.test.ts` (splits 2-6, 1-3 days done).
 
-14. **Merge only what a review passed.** #236 was merged at WIP 20cc161 without review ("owner: merge
+15. **Merge only what a review passed.** #236 was merged at WIP 20cc161 without review ("owner: merge
    without review"); a review then found a pain bug, and the fix that passed review (d020980) came after
    the merge, so production carried the bug.
    Rule: merge only a SHA a separate review passed, and name it in the merge commit. Check: before
