@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { buildPlan } from '../src/lib/generator.ts';
 import { planSlots, todayProgram } from '../src/lib/sequence.ts';
@@ -81,4 +82,20 @@ test('a bodyweight 30-minute day with 0 or 1 movement is never called Ready', ()
     const { program, adapted } = today(profile, slot, 30);
     if (adapted.exercises.length <= 1) assert.notEqual(program.feasibility?.status ?? 'ok', 'ok', label);
   }
+});
+
+test('45 and 60 minutes are unchanged: saved 45, saved 60, and 60 shortened to 45 for today', () => {
+  // Fingerprints of every generated day (exercises x sets, promised minutes, status) on main 460970b,
+  // before #229. A change here is a change to 45/60-minute programming: owner decision, not a fix.
+  const fingerprint = (saved: number, minutes: number) => {
+    const lines: string[] = [];
+    for (const { profile, slot } of days(['gym', 'home', 'bodyweight'], saved)) {
+      const { program, adapted, glance } = today(profile, slot, minutes);
+      lines.push(`${adapted.exercises.map((exercise) => `${exercise.exerciseId}x${exercise.sets}`).join(' ')}|${glance.minutes}|${program.feasibility?.status}`);
+    }
+    return `${lines.length} ${createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 16)}`;
+  };
+  assert.equal(fingerprint(45, 45), '720 0a32976338351765');
+  assert.equal(fingerprint(60, 60), '720 9e4652a30bc81703');
+  assert.equal(fingerprint(60, 45), '720 2fe9cffcf719b9ea');
 });
