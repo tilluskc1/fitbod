@@ -1,3 +1,7 @@
+> **Phase 1 history, not current.** This file describes the app as of Phase 1 (51 exercises, 41
+> tests, kg only). The current handoff is [`docs/chat-handoff.md`](docs/chat-handoff.md); trust it and
+> `README.md` over anything below.
+
 # Fitbod Clone — Engineering Handoff (Phase 1 complete)
 
 A current, verified reference for anyone picking this project up. Phase 1 was an audit plus

@@ -3,8 +3,9 @@
 State as of **2026-11-08**, verified against `main` at **`36df187`** (#229 short sessions, #230 catalog studio) plus this doc update.
 Repo: `tilluskc1/fitbod`. Board: GitHub Project 11. Design system: `DESIGN.md`. Live: https://fitbod-chi.vercel.app.
 
-> The older `HANDOFF.md`, `README.md`, `PRODUCT.md` and `AUDIT.md` describe **Phase 1**
-> (41 tests, kg only, 5 screens). They are stale. Trust this file.
+> `HANDOFF.md` and `AUDIT.md` describe **Phase 1** (41 tests, kg only, 5 screens) and are kept as
+> history. `README.md` and `PRODUCT.md` were brought up to date in #270 and are checked by
+> `tests/readmeFacts270.test.ts`. Trust this file for process and state.
 
 ---
 
