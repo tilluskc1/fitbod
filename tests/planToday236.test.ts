@@ -163,3 +163,18 @@ test('#236: the summary line', () => {
   assert.equal(planLine(base, lower.name, planned, 'Your gym'), `60 min · ${lower.name} · Your gym`);
   assert.equal(planLine(composeTalk(base, 'full body', NO_TAPS), lower.name, planned, 'Your gym'), '60 min · Full body · Your gym');
 });
+
+test('#236: in a 650px visible area the entry clears the sticky dock: compact hero, AA scrim, entry without the repeats', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  const start = css.indexOf('@media (max-height: 700px)');
+  assert.ok(start > 0, 'a short-screen block exists');
+  const block = css.slice(start, css.indexOf('\n}\n', start));
+  assert.match(block, /\.t7-hero \{ min-height: 0;/);
+  assert.match(block, /\.t7-hero__eyebrow \{ display: none; \}/);
+  assert.match(block, /\.t7-hero::after \{ background: linear-gradient\(90deg, rgba\(24, 40, 41, 0\.82\) 0%, rgba\(24, 40, 41, 0\.66\) 100%\); \}/,
+    'the full-width title keeps AA over the light wall (measured 6.6:1)');
+  assert.match(block, /\.tt--entry \.tt-badge,\s*\.tt--entry \.tt-open small \{ display: none; \}/);
+  const tsx = readFileSync(new URL('../src/components/TodayTalk.tsx', import.meta.url), 'utf8');
+  assert.match(tsx, /className="t7-card tt tt--entry" aria-label="Plan today with me"/, 'only the closed entry card compacts');
+});
