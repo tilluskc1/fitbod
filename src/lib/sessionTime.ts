@@ -91,19 +91,20 @@ export interface FitItem {
   hold?: boolean;
   /** The day's lead: no other movement ends with more sets. */
   lead?: boolean;
-  /** Dropped last (a day requirement's only cover); never dropped unless `keepIsSoft`. */
+  /** Never dropped (the lead, a day requirement's only cover). */
   keep?: boolean;
   /** The movement pattern, for `twoPresses`. */
   pattern?: string;
 }
 
 /**
- * Fits a day to a budget on the timer's own clock (#203, #229), the one rule a saved length and a
- * today-only length both use. Each movement starts at its own sets, at most `cap`. Over the budget,
- * every movement goes to its floor (2 sets, 1 on a hold, `leadFloor` on the lead); still over, whole movements drop in
- * `dropOrder` (a kept one only after the rest, and only when `keepIsSoft`; never below `minCount`). Then sets come back one per movement per
- * pass, in reverse drop order, while the day fits (after `twoPresses`, below): up to each movement's own count and `cap`, and
- * never past the lead's (#133). Returns the set counts; 0 means dropped.
+ * Fits a short day to a budget on the timer's own clock (#229); a today-only length under 45 minutes
+ * is built at that length, so it gets the same day. Each movement starts at its own sets, at most
+ * `cap`. Over the budget, every movement goes to its floor (2 sets, 1 on a hold, `leadFloor` on the
+ * lead); still over, whole movements drop in `dropOrder` (never a kept one, never below `minCount`).
+ * With `twoPresses`, a day that pulls keeps at most two presses. Then sets come back one per
+ * movement per pass, in reverse drop order, while the day fits: up to each movement's own count and
+ * `cap`, never past the lead's (#133). Returns the set counts; 0 means dropped.
  */
 export function fitSets(
   items: FitItem[],
@@ -114,20 +115,17 @@ export function fitSets(
     cap = Infinity,
     minCount = 1,
     leadFloor = 2,
-    keepIsSoft = false,
     twoPresses = false,
-  }: { cap?: number; minCount?: number; leadFloor?: number; keepIsSoft?: boolean; twoPresses?: boolean } = {},
+  }: { cap?: number; minCount?: number; leadFloor?: number; twoPresses?: boolean } = {},
 ): number[] {
   const most = items.map((item) => Math.min(item.sets, cap));
   const sets = [...most];
   const seconds = () => sessionSeconds(items.map((item, index) => ({ sets: sets[index], rest: item.rest })), warmUp);
   const floor = (item: FitItem) => (item.hold ? 1 : item.lead ? leadFloor : 2);
   if (seconds() > budget) items.forEach((item, index) => { sets[index] = Math.min(sets[index], floor(item)); });
-  // Kept movements go last, and only when `keepIsSoft`: a today-only length must fit its minutes.
-  const passes = keepIsSoft ? [false, true] : [false];
-  for (const dropKept of passes) for (const index of dropOrder) {
+  for (const index of dropOrder) {
     if (seconds() <= budget || sets.filter((count) => count > 0).length <= minCount) break;
-    if (!items[index].keep || dropKept) sets[index] = 0;
+    if (!items[index].keep) sets[index] = 0;
   }
   // `twoPresses`: a day that pulls keeps at most two presses; a third goes in drop order and its time
   // goes back to the rest (#131, #229). A Push day is all presses and keeps them.

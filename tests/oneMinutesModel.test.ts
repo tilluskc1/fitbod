@@ -124,8 +124,8 @@ test('#203: the review names the honest figure, not the asked length', async () 
 
 /** The day Today offers at a length chosen for today only: longer rebuilds it, shorter trims it (as App). */
 const todayDay = (profile: Profile, slot: Parameters<typeof slotProgram>[1], minutes: number) => {
-  const saved = profile.sessionMinutes ?? 35;
-  const program = slotProgram(minutes > saved ? { ...profile, sessionMinutes: minutes } : profile, slot, []);
+  // The day Today builds for that length: longer or under 45 rebuilds there (#17, #229), else trims.
+  const program = slotProgramAt(profile, slot, [], minutes);
   return todayGlance(adaptWorkout(program, { ...defaultConstraints(profile), minutes }, [], profile.goal), null, false, profile.goal);
 };
 
@@ -273,7 +273,10 @@ test('#203: a trimmed day fits its length, cannot take one more set back, and ke
               const where = `${kit} ${goal} ${days}d saved ${saved} today ${minutes} ${slot.name}`;
               if (adapted.exercises.length === 0) continue;
               const work = adapted.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.sets }));
-              if (seconds(work, profile.goal, minutes) > minutes * 60) problems.push(`over: ${where}`);
+              // A trimmed day fits by the second; a day built at a short length (#229) fits as the
+              // generator promises it, in whole minutes (#197).
+              const used = seconds(work, profile.goal, minutes);
+              if (program.shortenedFrom ? Math.round(used / 60) > minutes : used > minutes * 60) problems.push(`over: ${where}`);
               const lead = leadCompoundId(program.exercises.map((exercise) => exercise.exerciseId));
               const leadSets = adapted.exercises.find((exercise) => exercise.exerciseId === lead)?.sets;
               if (lead && leadSets === undefined) problems.push(`lead dropped: ${where}`);

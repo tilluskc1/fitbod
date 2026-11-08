@@ -16,6 +16,7 @@ import type { Goal, Profile } from '../src/types.ts';
 const KITS = {
   gym: { equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'], support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'] },
   home: { equipment: ['Dumbbell'], support: ['Bench'] },
+  homeBar: { equipment: ['Dumbbell'], support: ['Bench', 'Pull-up bar'] },
   bodyweight: { equipment: [], support: [] },
 } as const;
 const GOALS: Goal[] = ['Build Muscle', 'Lose Fat', 'Get Stronger', 'General Fitness'];
@@ -60,21 +61,46 @@ test('a saved 30-minute gym or home day has at least 4 movements, none past 3 se
 });
 
 test('under 45 minutes no movement passes 3 sets, saved or shortened for today', () => {
-  for (const { profile, slot, label } of days(['gym', 'home'], 60)) {
+  for (const { profile, slot, label } of days(['gym', 'home', 'homeBar'], 60)) {
     const { adapted } = today(profile, slot, 30);
     for (const exercise of adapted.exercises) assert.ok(exercise.sets <= 3, `${label} today 30: ${exercise.name} ${exercise.sets}`);
   }
 });
 
-test('a saved 30-minute day and a 60-minute day shortened to 30 for today are the same day', () => {
+test('a saved short day and a longer day shortened to it for today are the same day', () => {
+  // Reviewer repro: a saved 45 picked down to 30 still gave 3 exercises (#229 review 1).
   const differ: string[] = [];
-  for (const { profile, slot, label } of days(['gym', 'home', 'bodyweight'], 30)) {
-    const saved = today(profile, slot, 30);
-    const shortened = today({ ...profile, sessionMinutes: 60 }, slot, 30);
-    const shape = (day: typeof saved) => `${day.adapted.exercises.map((exercise) => `${exercise.exerciseId}x${exercise.sets}`).join(' ')} | ${day.glance.minutes}`;
-    if (shape(saved) !== shape(shortened)) differ.push(`${label}\n  saved ${shape(saved)}\n  today ${shape(shortened)}`);
+  const shape = (day: ReturnType<typeof today>) => `${day.adapted.exercises.map((exercise) => `${exercise.exerciseId}x${exercise.sets}`).join(' ')} | ${day.glance.minutes}`;
+  for (const minutes of [15, 20, 30]) {
+    for (const { profile, slot, label } of days(['gym', 'home', 'homeBar', 'bodyweight'], minutes)) {
+      const saved = shape(today(profile, slot, minutes));
+      for (const from of [45, 60, 90]) {
+        const shortened = shape(today({ ...profile, sessionMinutes: from }, slot, minutes));
+        if (saved !== shortened) differ.push(`${label} ${from} -> ${minutes}\n  saved ${saved}\n  today ${shortened}`);
+      }
+    }
   }
-  assert.deepEqual(differ, []);
+  assert.deepEqual(differ.slice(0, 5), [], `${differ.length} differ`);
+});
+
+test('a gym or home day shortened to 30 for today has at least 4 movements, from any saved length', () => {
+  const thin: string[] = [];
+  for (const from of [45, 60, 90]) {
+    for (const { profile, slot, label } of days(['gym', 'home', 'homeBar'], from)) {
+      const { adapted, glance } = today(profile, slot, 30);
+      if (adapted.exercises.length > 0 && adapted.exercises.length < 4) thin.push(`${label} ${from} -> 30: ${adapted.exercises.length}`);
+      assert.ok(glance.minutes <= 30, `${label} ${from} -> 30: ${glance.minutes} min`);
+    }
+  }
+  assert.deepEqual(thin, []);
+});
+
+test('a day shortened under 45 for today names what it dropped and says it was trimmed', () => {
+  const profile = { goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 4, unit: 'lb', sessionMinutes: 60, ...KITS.gym, exclusions: [], loads: {} } as unknown as Profile;
+  const slot = planSlots(buildPlan(profile))[0];
+  const { adapted } = today(profile, slot, 30);
+  assert.ok(adapted.skipped.some((item) => item.reason === 'time'), JSON.stringify(adapted.skipped));
+  assert.match(adapted.note, /^Volume trimmed to \d+ sets to fit 30 min\. .+ skipped to fit 30 min\./);
 });
 
 test('a bodyweight 30-minute day with 0 or 1 movement is never called Ready', () => {

@@ -36,13 +36,6 @@ export interface ProgramExercise {
   detail: string;
   /** Equipment family this movement needs; drives the adaptation engine. */
   requires: 'dumbbell' | 'bodyweight' | 'configured';
-  /**
-   * The only cover of a movement the day requires (#229): a shorter length drops it last, as the
-   * generator does, so a day shortened for today matches the same day saved at that length.
-   */
-  keep?: boolean;
-  /** The generator's priority (0 = first); a shorter length drops the highest rank first (#229). */
-  rank?: number;
 }
 
 export interface Program {
@@ -54,6 +47,11 @@ export interface Program {
   feasibility?: Feasibility;
   /** A today-only setup the day was rebuilt for (#188); its gear is already checked. Absent: the saved setup. */
   setup?: 'hotel' | 'bodyweight' | 'bands';
+  /**
+   * Built at a today-only length under 45 minutes and under the saved one (#229): the saved length,
+   * and the saved day's movements this day does not have, so the review can name what went.
+   */
+  shortenedFrom?: { minutes: number; dropped: { exerciseId: string; name: string; sets: number }[] };
 }
 
 export const FULL_BODY_A: Program = {

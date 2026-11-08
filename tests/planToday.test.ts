@@ -4,7 +4,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { buildPlan } from '../src/lib/generator.ts';
-import { planSlots, slotProgram } from '../src/lib/sequence.ts';
+import { planSlots, slotProgram, slotProgramAt } from '../src/lib/sequence.ts';
 import { adaptWorkout, swapCandidateFor, todayGlance, workMinutes, type AdaptedWorkout, type EquipmentChoice } from '../src/lib/adapt.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import { liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
@@ -73,11 +73,12 @@ function agree(seen: Awaited<ReturnType<typeof surfaces>>, minutes: string, exer
 }
 
 test('a today-only 30 min day: Today, Plan header, Up next and View session show the same honest minutes', async () => {
-  const { slot, program } = firstDay(gym);
+  const { slot } = firstDay(gym);
+  const program = slotProgramAt(gym, slot, [], 30);
   const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal);
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: true, equipment: 'home' });
-  // #203 trims by the timer's own rests; since #229 a 30-minute day rests at the short end and keeps
-  // the lead at 3 sets, so it holds 12 sets in 29 minutes, the same day a saved 30 builds.
+  // Since #229 a today-only length under 45 is built at that length, the same day a saved 30
+  // builds: short rests, the lead at 3 sets, 12 sets in 29 minutes.
   agree(seen, '29', '5', '12');
   assert.match(seen.plan, /UP NEXT .*? 29 min · 5 exercises · 12 sets · Adjusted for today/);
   assert.equal(seen.header[3], 'Full gym', 'a length-only change keeps the saved setup word');
@@ -92,12 +93,13 @@ test('a bodyweight day whose work cannot fill the hour reads ≈ everywhere', as
 });
 
 test('a running session: every surface shows the session, and it is not labelled adjusted', async () => {
-  const { slot, program } = firstDay(gym);
+  const { slot } = firstDay(gym);
+  const program = slotProgramAt(gym, slot, [], 30);
   const started = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal);
   const current = createSession({ id: 's1', name: started.name, dayIndex: 0, exercises: liveExercises(started, gym, []), now: '2026-11-07T09:00:00Z', durationMin: started.minutes });
   // Today's override still applies, but the open session is what runs.
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted: started, current, overridden: true, equipment: 'home' });
-  // #200: the promised figure stays after Start (29 since #229's 30-minute rests).
+  // #200: the promised figure stays after Start (29 since #229 builds the 30-minute day).
   agree(seen, '29', '5', '12');
   assert.equal(seen.today.adjusted, false);
   assert.doesNotMatch(seen.plan, /Adjusted for today/);

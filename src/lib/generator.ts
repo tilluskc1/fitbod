@@ -82,22 +82,6 @@ export function buildPlan(profile: Profile): PlanDay[] {
 
 export const MIN_EXERCISES = 3;
 
-/**
- * The order a day runs in (#133): lead, compounds, isolation, core. Among compounds, heavy barbell
- * lifts come while you are fresh and single-leg work last (#174). Indices into `picked`; ties keep
- * the priority order.
- */
-function sessionOrder(picked: Exercise[], lead: Exercise | undefined): number[] {
-  const showTier = (exercise: Exercise) => (exercise === lead ? 0
-    : isCompound(exercise) ? 1
-    : CORE_PATTERNS.has(exercise.pattern) ? 3 : 2);
-  const heaviness = (exercise: Exercise) => (exercise.pattern === 'lunge' ? 3
-    : exercise.equipment !== 'Barbell' ? 2
-    : exercise.pattern === 'squat' || exercise.pattern === 'hinge' ? 0 : 1);
-  return picked.map((_, index) => index)
-    .sort((a, b) => showTier(picked[a]) - showTier(picked[b])
-      || (showTier(picked[a]) === 1 ? heaviness(picked[a]) - heaviness(picked[b]) : 0) || a - b);
-}
 /** Past this, extra exercises mostly add fatigue, not results. */
 export const MAX_EXERCISES = { Beginner: 6, Intermediate: 8, Advanced: 8 } as const;
 /** Thinned to fit a short session, an exercise keeps at least this many sets; the lead keeps 3. */
@@ -131,10 +115,6 @@ export type DayRequest = PlanDay & { everyMuscle?: boolean };
 
 export interface GeneratedSession {
   exercises: WorkoutExercise[];
-  /** Exercises the generator never cuts for time: the lead and each requirement's only cover (#229). */
-  held?: string[];
-  /** Exercise ids in priority order: time cuts from the end (#229). */
-  priority?: string[];
   feasibility: ReturnType<typeof evaluateFeasibility>;
   targetCount: number;
 }
@@ -373,8 +353,6 @@ export function generateWorkout(
   /** One more 3-set isolation exercise: the unit "room for another exercise" is measured in. */
   const anotherExercise = exerciseSeconds(3, REST_SECONDS.isolation);
 
-  // Never cut for time: the lead and each day requirement's only cover (a described day adds below).
-  const held = new Set(lead ? [lead, ...covering] : covering);
   let targetCount = fixed ?? picked.length;
   if (fixed === undefined) {
     const minutes = profile.sessionMinutes ?? 35;
@@ -382,6 +360,7 @@ export function generateWorkout(
     const short = minutes < SHORT_SESSION_MINUTES;
     const all = picked.length;
     const leadFloor = leadFloorSets(minutes);
+    const held = new Set(lead ? [lead, ...covering] : covering);
     // A described day (#211) keeps one exercise per focus muscle, in focus order, while the lead,
     // the day's requirements and those exercises fit at their floor sets: the cut below then takes a
     // second exercise for a muscle before the only one for another. A muscle past that is left for time.
@@ -419,7 +398,7 @@ export function generateWorkout(
         dropOrder,
         budget,
         warmUpSeconds(minutes),
-        { cap: SHORT_SESSION_MAX_SETS, minCount: MIN_EXERCISES, leadFloor: leadFloorSets(minutes), twoPresses: true },
+        { cap: SHORT_SESSION_MAX_SETS, minCount: MIN_EXERCISES, leadFloor, twoPresses: true },
       );
       fitted.forEach((count, index) => { sets[index] = count; });
       for (let index = picked.length - 1; index >= 0; index -= 1) if (sets[index] === 0) drop(index);
@@ -467,7 +446,16 @@ export function generateWorkout(
   }
 
   // Trimming used the priority above; the session itself runs lead, compounds, isolation, core (#133).
-  const order = sessionOrder(picked, lead);
+  const showTier = (exercise: Exercise) => (exercise === lead ? 0
+    : isCompound(exercise) ? 1
+    : CORE_PATTERNS.has(exercise.pattern) ? 3 : 2);
+  // Among compounds, heavy barbell lifts come while you are fresh and single-leg work last (#174).
+  const heaviness = (exercise: Exercise) => (exercise.pattern === 'lunge' ? 3
+    : exercise.equipment !== 'Barbell' ? 2
+    : exercise.pattern === 'squat' || exercise.pattern === 'hinge' ? 0 : 1);
+  const order = picked.map((_, index) => index)
+    .sort((a, b) => showTier(picked[a]) - showTier(picked[b])
+      || (showTier(picked[a]) === 1 ? heaviness(picked[a]) - heaviness(picked[b]) : 0) || a - b);
 
   const exercises: WorkoutExercise[] = order.map((index) => {
     const exercise = picked[index];
@@ -492,8 +480,6 @@ export function generateWorkout(
 
   return {
     exercises,
-    held: picked.filter((exercise) => held.has(exercise)).map((exercise) => exercise.id),
-    priority: picked.map((exercise) => exercise.id),
     feasibility: evaluateFeasibility(profile, day, picked, targetCount),
     targetCount,
   };

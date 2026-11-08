@@ -252,6 +252,11 @@ test('bodyweight never takes the heavy lead; a barbell compound does when there 
   assert.equal(def(push[0].exerciseId).equipment, 'Dumbbell');
   // Under 45 minutes no movement passes 3 sets (#229), the lead included.
   assert.equal(push[0].planned.length, 3, 'the dumbbell lead opens the session');
+  // At 45 the dumbbell lead takes the heavy sets.
+  const dumbbells45 = { ...dumbbells, sessionMinutes: 45 };
+  const push45 = generateWorkout(dumbbells45, buildPlan(dumbbells45)[0], 0).exercises;
+  assert.equal(def(push45[0].exerciseId).equipment, 'Dumbbell');
+  assert.equal(push45[0].planned.length, 5, 'the dumbbell lead opens the session with the heavy sets');
   const pushUp = push.find((exercise) => exercise.exerciseId === 'push-up');
   if (pushUp) assert.equal(pushUp.planned.length, 3);
   assert.equal(shape('push-up', profileOf(), true), '3 × 10–20', 'a lead flag cannot make bodyweight heavy');
