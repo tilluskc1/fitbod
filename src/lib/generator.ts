@@ -86,9 +86,10 @@ export const MIN_EXERCISES = 3;
  * Exercises one muscle may take in a session, counted by each exercise's first-listed muscle (#96):
  * 2, or 3 on a day that lists the muscle in its focus for an advanced lifter, and for an
  * intermediate one at 60 minutes or more. A beginner's 2 is about 6-8 hard sets, plenty. Under
- * 45 minutes no muscle takes a third: movements come before sets (#229). A third may also be a
- * movement's third (bench, incline, close-grip). Weekly volume, about 10-20 hard sets a muscle,
- * is the guide behind it, not enforced.
+ * 45 minutes no muscle takes a third: movements come before sets (#229). A third only fills spare
+ * time and must be a new movement for the muscle, so in practice it is an isolation (a fly beside
+ * bench and incline), not another press: close-grip bench repeats the flat press. Weekly volume,
+ * about 10-20 hard sets a muscle, is the guide behind it, not enforced.
  */
 export function muscleCap(experience: Profile['experience'], minutes: number, focus: boolean): number {
   const third = focus && minutes >= SHORT_SESSION_MINUTES
