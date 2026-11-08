@@ -4,7 +4,7 @@ import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } fr
 import type { Exercise, Goal, MuscleGroup, Profile, SetupChoice, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
-import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
+import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor, swapContinues } from './progression.ts';
 import { estimatedSeconds } from './generator.ts';
 import { SHORT_SESSION_MINUTES, sessionRests } from './sessionTime.ts';
 import { liveExercises } from './liveProgression.ts';
@@ -570,21 +570,43 @@ export function restorePendingWorkout(
   history: WorkoutRecord[] = [],
 ): WorkoutRecord {
   const pattern = (id: string) => exerciseById(id)?.pattern ?? id;
-  const completed = session.exercises.flatMap((exercise) => {
+  // Each session entry's done sets alone, at its place in the session; null when nothing is logged.
+  const logged = session.exercises.map((exercise) => {
     const indices = exercise.performed.flatMap((set, index) => set.done ? [index] : []);
-    return indices.length > 0 ? [{
+    return indices.length > 0 ? {
       ...exercise,
       planned: indices.map((index) => ({ ...exercise.planned[index] })),
       performed: indices.map((index) => ({ ...exercise.performed[index] })),
-    }] : [];
+    } : null;
   });
-  const kept = new Set<WorkoutExercise>();
+  const prescription = profile ? liveExercises(original, profile, history) : toWorkoutExercises(original);
+  // Which prescribed exercise each logged entry counts against, by identity (#250), never two.
+  const owner = new Map<number, number>();
+  // 1. The same exercise, every segment of it (#188).
+  logged.forEach((entry, index) => {
+    const slot = entry ? prescription.findIndex((prescribed) => prescribed.exerciseId === entry.exerciseId) : -1;
+    if (slot >= 0) owner.set(index, slot);
+  });
+  // 2. Then, in session order, a replacement right after the half it replaced, by the swap split the
+  // session stores. 3. Last resort, by pattern: an entry with neither (a replacement swapped in before
+  // its slot logged a set) takes the first same-pattern exercise that has nothing logged; a legacy entry
+  // with no stored requirement takes the first of that pattern, as before.
+  logged.forEach((entry, index) => {
+    if (!entry || owner.has(index)) return;
+    const kept = logged[index - 1];
+    if (kept && owner.has(index - 1) && swapContinues(kept, entry)) {
+      owner.set(index, owner.get(index - 1)!);
+      return;
+    }
+    const owned = new Set(owner.values());
+    const same = prescription.flatMap((prescribed, slot) => pattern(prescribed.exerciseId) === pattern(entry.exerciseId) ? [slot] : []);
+    const slot = same.find((candidate) => !owned.has(candidate)) ?? (entry.originalPlannedSets === undefined ? same[0] : undefined);
+    if (slot !== undefined) owner.set(index, slot);
+  });
   const exercises: WorkoutExercise[] = [];
-  // shortcut: flagship has one slot per primary pattern; add slot identity before multi-slot programs.
-  for (const prescribed of profile ? liveExercises(original, profile, history) : toWorkoutExercises(original)) {
-    const group = completed.filter((exercise) => pattern(exercise.exerciseId) === pattern(prescribed.exerciseId));
+  prescription.forEach((prescribed, slot) => {
+    const group = logged.flatMap((entry, index) => entry && owner.get(index) === slot ? [entry] : []);
     group.forEach((exercise) => {
-      kept.add(exercise);
       exercise.originalPlannedSets = Math.max(exercise.originalPlannedSets ?? 0, prescribed.planned.length);
     });
     const done = group.reduce((sum, exercise) => sum + exercise.performed.length, 0);
@@ -604,9 +626,9 @@ export function restorePendingWorkout(
       });
     }
     exercises.push(...group);
-  }
+  });
   // Completed work stays even when the restored equipment/exclusions no longer prescribe it.
-  exercises.push(...completed.filter((exercise) => !kept.has(exercise)));
+  exercises.push(...logged.flatMap((entry, index) => entry && !owner.has(index) ? [entry] : []));
   return { ...session, durationMin: original.minutes, exercises };
 }
 
