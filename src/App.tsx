@@ -305,12 +305,17 @@ export default function App() {
   useEffect(() => {
     if (!sessionRunning) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-      window.clearInterval(timer);
-      // (#134) The last tick precedes the finish; without this a session just ended reads as future.
-      setNow(Date.now());
-    };
+    return () => window.clearInterval(timer);
   }, [sessionRunning]);
+
+  // (#134) Outside a session `now` does not tick: coming back to the app refreshes it.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now());
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   useEffect(() => {
     if (!notice) return;

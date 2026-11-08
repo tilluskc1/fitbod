@@ -31,8 +31,9 @@ const upperYesterday = {
     performed: [{ weight: 50, reps: 8, done: true, completedAt: hoursAgo(20) }],
   })),
 } as unknown as WorkoutRecord;
-// Upper A done yesterday, Lower A skipped: Upper B is up next.
-const state = { ...EMPTY_STATE, profile, plan, planRevision: 1, programCursor: { revision: 1, seq: 2 }, history: [upperYesterday] } as unknown as AppState;
+// Upper A done yesterday, Lower A skipped this morning: Upper B is up next.
+const state = { ...EMPTY_STATE, profile, plan, planRevision: 1, programCursor: { revision: 1, seq: 2 }, history: [upperYesterday],
+  slotSkips: [{ id: 'skip:1:1', revision: 1, seq: 1, slotId: 'slot-1-lower-a', at: hoursAgo(10) }] } as unknown as AppState;
 
 test('#134 gate: Today offers the fresher day on a planned day with no session open', () => {
   const offer = todayFresher(profile, state, gym, null, NOW);
@@ -70,6 +71,8 @@ test('#134 card: Today shows the offer with Switch and Keep, and hides it when n
     assert.match(shown, /Chest, Back and Shoulders trained yesterday\. Lower B is fresher\./);
     assert.match(shown, /Switching skips Upper B\./);
     assert.match(shown, /Switch to Lower B Keep Upper B/);
+    const twoSkips = render({ fresher: { ...fresher, option: { ...fresher.option, skips: ['Push', 'Pull'] } } });
+    assert.match(twoSkips, /Switching skips Push and Pull\./);
     const none = render({ fresher: null });
     assert.doesNotMatch(none, /is fresher|Switch to|Keep Upper B/);
     const running = render({ current: { ...upperYesterday, id: 'open', status: 'active', endedAt: null } });
