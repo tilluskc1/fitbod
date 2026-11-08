@@ -4555,6 +4555,18 @@ button.aw-exercise__name-btn {
 .tt-open b { display: block; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 .tt-open small { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
 .tt-open .ms { flex: none; color: var(--accent-text); }
+/* (#236) A short visible area (650px, iPhone Chrome): the entry must clear the sticky dock without
+   scrolling, so the hero drops its eyebrow and 220px floor and the entry drops what the hero already says. */
+@media (max-height: 700px) {
+  .t7-hero { min-height: 0; padding: 16px; gap: 6px; }
+  .t7-hero__eyebrow { display: none; }
+  .t7-hero__title { font-size: 22px; max-width: none; }
+  /* The title now runs the full width, over the light wall too: an even scrim keeps it AA. */
+  .t7-hero::after { background: linear-gradient(90deg, rgba(24, 40, 41, 0.82) 0%, rgba(24, 40, 41, 0.66) 100%); }
+  .tt--entry { padding: 10px 18px; gap: 0; }
+  .tt--entry .tt-badge,
+  .tt--entry .tt-open small { display: none; }
+}
 .tt-line { font-size: 15px; font-weight: 500; color: var(--on-surface); }
 .tt-tell { display: grid; gap: 8px; }
 /* (#256) The planner's action bar: always the bottom-most, fully visible buttons while it is open. */

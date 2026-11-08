@@ -9,7 +9,8 @@ import { restLabel } from '../lib/sessionTime';
 import { NO_TAPS, composeTalk, gearLabel, tapsAfterEdit } from '../lib/todayTalk';
 import type { CustomDayPreview, TalkState, Taps } from '../lib/todayTalk';
 import {
-  QUESTIONS, gearChoices, isPlannedPick, nothingSore, pickPlanned, planLine, timeChoices, toggleSore, toggleTrain,
+  NO_PAIN_ANSWER, QUESTIONS, answerPain, gearChoices, isPlannedPick, nothingSore, painStops, pickPlanned, planLine, timeChoices,
+  toggleSore, toggleTrain,
 } from '../lib/planToday';
 import type { Question } from '../lib/planToday';
 import Icon from './ui/Icon';
@@ -51,14 +52,13 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
   const [text, setText] = useState('');
   // Answers sit on top of the text, so typing more never undoes them (see `tapsAfterEdit`).
   const [taps, setTaps] = useState<Taps>(NO_TAPS);
-  // Q2 "It hurts": pain from a tap, as the text's pain words do.
-  const [hurts, setHurts] = useState(false);
-  // "It's only soreness": the lifter's answer to the pain stop, kept while the note still says pain.
-  const [soreOnly, setSoreOnly] = useState(false);
+  // Q2 "It hurts", and the text "It's only soreness" answered: other text with pain stops again.
+  const [pain, setPain] = useState(NO_PAIN_ANSWER);
   const [built, setBuilt] = useState<{ talk: TalkState; day: CustomDayPreview } | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const said = composeTalk(base, text, taps);
-  const talk = { ...said, pain: (said.pain && !soreOnly) || hurts };
+  const talk = { ...said, pain: painStops(pain, text, said.pain) };
+  const answer = (tap: Parameters<typeof answerPain>[1]) => setPain(answerPain(pain, tap, text));
 
   useEffect(() => {
     onActive?.(step !== null);
@@ -89,16 +89,16 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
   const say = (value: string) => {
     setTaps(tapsAfterEdit(taps, text, value));
     setText(value);
-    if (!composeTalk(base, value, NO_TAPS).pain) setSoreOnly(false);
   };
   const close = () => {
     setStep(null);
     setBuilt(null);
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('.tt-open')?.focus());
   };
 
   if (step === null) {
     return (
-      <section className="t7-card tt" aria-label="Plan today with me">
+      <section className="t7-card tt tt--entry" aria-label="Plan today with me">
         <span className="tt-badge">Planned today · {plannedName}</span>
         <button type="button" className="tt-open" onClick={() => go('time')}>
           <span>
@@ -212,18 +212,18 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
         <>
           <div className="tt-chips" role="group" aria-label="Sore or hurting">
             <button type="button" className="tt-chip" aria-pressed={left.length === 0 && !talk.pain}
-              onClick={() => { setTaps(nothingSore(base, text, taps)); setHurts(false); setSoreOnly(true); }}>Nothing</button>
+              onClick={() => { setTaps(nothingSore(base, text, taps)); answer('nothing'); }}>Nothing</button>
             {AREAS.map((area) => (
               <button key={area} type="button" className="tt-chip tt-chip--skip" aria-pressed={left.includes(area)}
                 onClick={() => setTaps(toggleSore(base, text, taps, area))}>{area}</button>
             ))}
             <button type="button" className="tt-chip tt-chip--skip" aria-pressed={talk.pain}
-              onClick={() => { setHurts(!talk.pain); if (talk.pain) setSoreOnly(true); }}>It hurts (pain)</button>
+              onClick={() => answer('hurts')}>It hurts (pain)</button>
           </div>
           {talk.pain ? (
             <p className="tt-stop" role="alert">
               <b>You mentioned pain.</b> I can work around soreness, not pain. {PAIN_CHECK}
-              <button type="button" className="secondary" onClick={() => { setHurts(false); setSoreOnly(true); }}>It's only soreness</button>
+              <button type="button" className="secondary" onClick={() => answer('soreness')}>It's only soreness</button>
             </p>
           ) : left.length > 0 ? (
             <p className="tt-hint">I'll leave out {left.join(', ').toLowerCase()} today.</p>
@@ -259,7 +259,8 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
 
       <div className="tt-bar">
       <div className="tt-nav">
-        <button type="button" className="secondary" onClick={() => (index === 0 ? close() : go(QUESTIONS[index - 1]))}>
+        <button type="button" className="secondary" aria-label={index === 0 ? undefined : 'Previous question'}
+          onClick={() => (index === 0 ? close() : go(QUESTIONS[index - 1]))}>
           {index === 0 ? 'Cancel' : 'Back'}
         </button>
         <button type="button" className="pill-primary" disabled={blocked}
