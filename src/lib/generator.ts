@@ -96,6 +96,24 @@ export function muscleCap(experience: Profile['experience'], minutes: number, fo
   return third ? 3 : 2;
 }
 
+/**
+ * A day's thirds (#96), from its exercise ids in session order: each past the base 2 of its
+ * first-listed muscle and after the day's core work. The generator ends the session with them; #190's
+ * freed slot, the only other way a muscle gets three, always comes before the core exercise it
+ * replaced. A day shortened for today drops its thirds before it cuts any set.
+ */
+export function thirdsOf(exerciseIds: string[]): Set<string> {
+  const counts = new Map<MuscleGroup, number>();
+  const muscle = (id: string) => exerciseById(id)?.muscles[0];
+  const lastCore = exerciseIds.findLastIndex((id) => muscle(id) === 'Core');
+  return new Set(exerciseIds.filter((id, index) => {
+    const primary = muscle(id);
+    if (!primary || primary === 'Core') return false;
+    counts.set(primary, (counts.get(primary) ?? 0) + 1);
+    return counts.get(primary)! > 2 && index > lastCore;
+  }));
+}
+
 /** Past this, extra exercises mostly add fatigue, not results. */
 export const MAX_EXERCISES = { Beginner: 6, Intermediate: 8, Advanced: 8 } as const;
 /** Thinned to fit a short session, an exercise keeps at least this many sets; the lead keeps 3. */
@@ -280,14 +298,18 @@ function selectExercises(profile: Profile, day: DayRequest, dayIndex: number, ta
 
   // A further exercise for the day's first muscle that can take one, else the next, in the direction
   // the day has less of; a tie goes to the lead's (a second row beside a chin-up).
-  const further = (perMuscle: (muscle: MuscleGroup) => number, loadedFirst = false) => {
+  const further = (perMuscle: (muscle: MuscleGroup) => number, third = false) => {
     const leadPattern = pickLead(picked, day.focus)?.pattern;
     const used = (exercise: Exercise) => 2 * (patternCounts.get(exercise.pattern) ?? 0) + Number(exercise.pattern !== leadPattern);
-    // A third (#96) is a loaded move wherever the kit loads the muscle: no push-up as a gym's third press.
-    const loaded = (muscle: MuscleGroup) => loadedFirst && eligible.some((exercise) => exercise.muscles[0] === muscle && exercise.equipment !== 'Bodyweight');
+    // A third (#96) is a loaded move wherever the kit loads the muscle (no push-up as a gym's third press),
+    // and a new movement for it: an incline or a fly beside a flat press, never a second flat press.
+    const loaded = (muscle: MuscleGroup) => eligible.some((exercise) => exercise.muscles[0] === muscle && exercise.equipment !== 'Bodyweight');
+    const movement = (exercise: Exercise) => [exercise.pattern, ...(exercise.secondaryPatterns ?? [])].join();
+    const fits = (exercise: Exercise) => !third || ((primaryMuscleCounts.get(exercise.muscles[0]) ?? 0) === 2
+      && !(exercise.equipment === 'Bodyweight' && loaded(exercise.muscles[0]))
+      && !picked.some((item) => item.muscles[0] === exercise.muscles[0] && movement(item) === movement(exercise)));
     for (const muscle of day.focus.filter((item) => item !== 'Core')) {
-      const best = compoundFirst.filter((exercise) => exercise.muscles[0] === muscle && canTake(exercise, true, perMuscle(muscle))
-        && !(loaded(muscle) && exercise.equipment === 'Bodyweight'))
+      const best = compoundFirst.filter((exercise) => exercise.muscles[0] === muscle && canTake(exercise, true, perMuscle(muscle)) && fits(exercise))
         .sort((a, b) => used(a) - used(b))[0];
       if (best) return best;
     }
@@ -473,8 +495,10 @@ export function generateWorkout(
     const thin = exhausted && seconds() < budget * 0.5;
     targetCount = kept < all || !thin ? kept
       : Math.min(capacity, kept + Math.max(0, Math.floor(room / anotherExercise)));
-    // A muscle's third (#96) only fills time left over: it takes no set from the day above.
+    // A muscle's third (#96) only fills time left over: it takes no set from the day above, and
+    // stays out when the day kept fewer than two others for its muscle.
     for (const exercise of short ? [] : thirds) {
+      if (picked.filter((item) => item.muscles[0] === exercise.muscles[0]).length < 2) continue;
       const prescription = prescribeExercise(exercise, profile, history, false, lead !== undefined, setup);
       picked.push(exercise);
       sets.push(prescription.sets);
@@ -486,7 +510,9 @@ export function generateWorkout(
   }
 
   // Trimming used the priority above; the session itself runs lead, compounds, isolation, core (#133).
+  // A muscle's third (#96) ends the session, after core, so `thirdsOf` finds it in the day.
   const showTier = (exercise: Exercise) => (exercise === lead ? 0
+    : thirds.includes(exercise) ? 4
     : isCompound(exercise) ? 1
     : CORE_PATTERNS.has(exercise.pattern) ? 3 : 2);
   // Among compounds, heavy barbell lifts come while you are fresh and single-leg work last (#174).

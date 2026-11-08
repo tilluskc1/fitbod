@@ -5,7 +5,7 @@ import type { Exercise, Goal, MuscleGroup, Profile, SetupChoice, WorkoutExercise
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
 import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
-import { estimatedSeconds } from './generator.ts';
+import { estimatedSeconds, thirdsOf } from './generator.ts';
 import { SHORT_SESSION_MINUTES, sessionRests } from './sessionTime.ts';
 import { liveExercises } from './liveProgression.ts';
 
@@ -316,6 +316,13 @@ export function adaptWorkout(
     .map((exercise, index) => ({ exercise, index }))
     .sort((a, b) => role(a.exercise) - role(b.exercise) || b.index - a.index)
     .map((entry) => entry.exercise);
+
+  // 1b. Over the length: a muscle's third (#96) goes, the last first, before any set is cut.
+  const thirds = thirdsOf(program.exercises.map((exercise) => exercise.exerciseId));
+  for (const exercise of [...exercises].reverse()) {
+    if (seconds() <= budget) break;
+    if (thirds.has(exercise.exerciseId)) exercise.sets = 0;
+  }
 
   // 2. Over the length: every movement goes to its floor (two working sets on a lift, one on a
   //    hold), and step 4 hands sets back evenly. Trimming one movement at a time left the lead at

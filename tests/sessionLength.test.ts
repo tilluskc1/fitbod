@@ -55,10 +55,11 @@ test('a Push day the caps fill at 6 spends extra time on sets, and is not called
   assert.deepEqual(push(45).sets, [5, 3, 3, 3]);
   assert.deepEqual(push(60).sets, [5, 4, 4, 4, 4, 3], 'the caps fill at 6; spare time goes to fourth sets in order');
   const long = push(75);
-  // The six keep their fourth sets; the time left over takes a third chest press and triceps move (#96).
-  assert.deepEqual(long.sets, [5, 4, 4, 3, 4, 4, 4, 3], 'the 3-set work behind the lead gets a fourth set');
+  // The six keep their fourth sets; the time left over ends the day with a third chest move, a fly (#96).
+  assert.deepEqual(long.sets, [5, 4, 4, 4, 4, 4, 3], 'the 3-set work behind the lead gets a fourth set');
+  assert.equal(long.exercises.at(-1)?.exerciseId, 'cable-fly');
   assert.equal(long.feasibility.status, 'ok', 'no gap the user could close');
-  assert.equal(long.targetCount, 8);
+  assert.equal(long.targetCount, 7);
 });
 
 test("a 'more' preference reorders the fill without making a full day Limited", () => {
