@@ -334,6 +334,8 @@ export default function TodayScreen({
           <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
         )}
 
+        {/* (#256) The planner entry comes straight after the hero, ahead of the backup note, so it stays above the dock. */}
+        {!current && composer}
         {/* (#225) Not mid-session: a backup taken now would miss the open session. */}
         {backup && onBackup && !current && (
           <div className="feasibility backup-note" role="note">
@@ -342,7 +344,6 @@ export default function TodayScreen({
           </div>
         )}
 
-        {!current && composer}
 
         <section className="t7-card t7-workout" aria-label="The workout">
           <div className="list-head">

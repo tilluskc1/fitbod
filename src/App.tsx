@@ -1283,7 +1283,8 @@ export default function App() {
             onEdit={() => setSheet({ kind: 'settings' })}
           />
         )}
-        <TabBar
+        {/* (#256) While the planner is open, its own action bar replaces the tab bar, as a sheet would. */}
+        {!(tab === 'today' && composing && !current) && <TabBar
           active={tab}
           onChange={(next) => {
             setTab(next);
@@ -1299,7 +1300,7 @@ export default function App() {
                 })()
               : undefined,
           }}
-        />
+        />}
       </>
     );
 
