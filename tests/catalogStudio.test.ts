@@ -25,6 +25,12 @@ test('a card carries what curation needs: frames, muscles, gear, pattern, role, 
   assert.equal(card.pattern, 'horizontal_push');
   assert.equal(card.role, 'Lead');
   assert.match(card.repRange, /^\d+–\d+$/);
+  // What the app prescribes (#230 review): a lead takes heavy ranges; the program's own range wins.
+  assert.deepEqual(card.leadRanges, { muscle: '4–6', strength: '3–5', beginner: '8–10' });
+  assert.deepEqual(catalogCard('dumbbell-bench-press').leadRanges, { muscle: '6–10', strength: '5–8', beginner: '8–10' });
+  assert.equal(catalogCard('plank').repRange, '45 s hold');
+  assert.equal(catalogCard('goblet-squat').repRange, '8–10');
+  assert.equal(catalogCard('lateral-raise').leadRanges, null);
   assert.ok(card.swaps.length > 0 && card.swaps.every((swap) => swap !== card.name));
   assert.equal(card.video, null, 'no clips yet: the slot is empty');
   assert.equal(catalogCard('lateral-raise').role, 'Isolation');
@@ -41,7 +47,7 @@ test('coverage: muscle by kit lists what each kit can train, and the gym covers 
   assert.ok(grid.cell('Chest', 'bodyweight').includes('Push-Up'));
 });
 
-test('coverage: pattern by kit shows a missing vertical pull at home', () => {
+test('coverage: pattern by kit shows no vertical pull without a bar', () => {
   const grid = coverage('pattern');
   assert.ok(grid.rows.includes('vertical_pull'));
   assert.deepEqual(grid.cell('vertical_pull', 'bodyweight'), []);

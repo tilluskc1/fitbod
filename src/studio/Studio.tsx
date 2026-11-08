@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { EXERCISES } from '../data/exercises.ts';
 import { STUDIO_KITS, catalogCard, catalogFlags, coverage, musclesWithCounts } from '../lib/catalog.ts';
 import type { CatalogCard } from '../lib/catalog.ts';
@@ -10,14 +10,14 @@ type Tab = 'exercises' | 'coverage' | 'flags';
 const KIT_LABEL = Object.fromEntries(STUDIO_KITS.map((kit) => [kit.id, kit.label]));
 const label = (pattern: string) => pattern.replace(/_/g, ' ');
 
-function Card({ card, onBroken }: { card: CatalogCard; onBroken: (path: string) => void }) {
+function Card({ card }: { card: CatalogCard }) {
   return (
     <article className="card" id={card.id}>
       <div className="card__frames">
         {card.frames.length === 0 && <div className="card__noframe">No frames</div>}
         {card.frames.map((frame, index) => (
           <figure key={frame}>
-            <img src={frame} alt="" loading="lazy" onError={() => onBroken(frame)} />
+            <img src={frame} alt="" loading="lazy" />
             <figcaption>{index === 0 ? 'Start' : index === card.frames.length - 1 ? 'Finish' : `Frame ${index + 1}`}</figcaption>
           </figure>
         ))}
@@ -34,6 +34,9 @@ function Card({ card, onBroken }: { card: CatalogCard; onBroken: (path: string) 
         <dt>Needs</dt><dd>{card.needs.length ? card.needs.join(', ') : 'nothing'}</dd>
         <dt>Also trains</dt><dd>{card.secondaryPatterns.length ? card.secondaryPatterns.map(label).join(', ') : '—'}</dd>
         <dt>Reps</dt><dd>{card.repRange}</dd>
+        {card.leadRanges && (
+          <><dt>As lead</dt><dd>{card.leadRanges.muscle} muscle · {card.leadRanges.strength} strength · {card.leadRanges.beginner} beginner</dd></>
+        )}
         <dt>Kits</dt><dd>{card.kits.map((kit) => KIT_LABEL[kit]).join(', ') || 'none'}</dd>
         <dt>Swaps</dt><dd>{card.swaps.length ? card.swaps.join(', ') : <span className="gap">none</span>}</dd>
         <dt>Video</dt><dd>{card.video ?? <span className="muted">empty slot</span>}</dd>
@@ -85,16 +88,33 @@ export default function Studio() {
   const [tab, setTab] = useState<Tab>('exercises');
   const [muscle, setMuscle] = useState<MuscleGroup | 'All'>('All');
   const [query, setQuery] = useState('');
-  const [broken, setBroken] = useState<string[]>([]);
+  // Every frame is checked once on open, not only the cards in view, so Flags is complete (#230 review).
+  const [broken, setBroken] = useState<{ id: string; path: string }[]>([]);
+  const [checked, setChecked] = useState(0);
   const rail = useMemo(() => musclesWithCounts(), []);
   const cards = useMemo(() => EXERCISES.map((exercise) => catalogCard(exercise.id)), []);
+  const frames = useMemo(() => cards.flatMap((card) => card.frames.map((path) => ({ id: card.id, path }))), [cards]);
+  useEffect(() => {
+    let live = true;
+    for (const frame of frames) {
+      const image = new Image();
+      image.onload = () => { if (live) setChecked((count) => count + 1); };
+      image.onerror = () => {
+        if (!live) return;
+        setChecked((count) => count + 1);
+        setBroken((list) => [...list, frame]);
+      };
+      image.src = frame.path;
+    }
+    return () => { live = false; };
+  }, [frames]);
+  const checking = checked < frames.length;
   const flags = useMemo(() => [
     ...catalogFlags(),
-    ...broken.map((path) => ({ kind: 'broken-frame' as const, exerciseId: path.split('/')[2] ?? path, detail: `${path} did not load` })),
+    ...broken.map((frame) => ({ kind: 'broken-frame' as const, exerciseId: frame.id, detail: `${frame.path} did not load` })),
   ], [broken]);
   const shown = cards.filter((card) => (muscle === 'All' || card.muscles[0] === muscle)
     && (query === '' || `${card.name} ${card.id}`.toLowerCase().includes(query.toLowerCase())));
-  const onBroken = (path: string) => setBroken((list) => (list.includes(path) ? list : [...list, path]));
 
   return (
     <div className="studio">
@@ -124,7 +144,7 @@ export default function Studio() {
           </aside>
           <main>
             <input className="search" type="search" placeholder="Search name or id" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search exercises" />
-            <div className="cards">{shown.map((card) => <Card key={card.id} card={card} onBroken={onBroken} />)}</div>
+            <div className="cards">{shown.map((card) => <Card key={card.id} card={card} />)}</div>
             {shown.length === 0 && <p className="muted">Nothing matches.</p>}
           </main>
         </div>
@@ -134,7 +154,11 @@ export default function Studio() {
 
       {tab === 'flags' && (
         <section>
-          {flags.length === 0 ? <p className="ok">Nothing to curate: every exercise has frames that load, every media entry has an exercise, and every exercise has a swap.</p> : (
+          {checking && <p className="muted">Checking frames: {checked} of {frames.length}…</p>}
+          {flags.length === 0 && !checking && (
+            <p className="ok">Nothing to curate: every exercise has frames that load, every media entry has an exercise, and every exercise has a swap.</p>
+          )}
+          {flags.length > 0 && (
             <ul className="flags">
               {flags.map((flag, index) => <li key={`${flag.kind}-${flag.exerciseId}-${index}`}><span className="chip">{flag.kind}</span> {flag.detail}</li>)}
             </ul>

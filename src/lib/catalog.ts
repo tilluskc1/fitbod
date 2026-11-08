@@ -2,7 +2,8 @@ import { EQUIPMENT_OPTIONS, EXERCISES, MUSCLE_GROUPS, SUPPORT_OPTIONS, exerciseB
 import media from '../data/media.json' with { type: 'json' };
 import type { Capability, Equipment, Exercise, MovementPattern, MuscleGroup, Profile, SupportEquipment } from '../types.ts';
 import { capabilitiesFor, provides } from './capabilities.ts';
-import { canLead, isCompound, repRangeFor } from './progression.ts';
+import { programExercise } from '../data/flagship.ts';
+import { canLead, isCompound, roleTarget } from './progression.ts';
 import { rankedReplacements } from './replacements.ts';
 
 /**
@@ -50,8 +51,11 @@ export interface CatalogCard {
   pattern: MovementPattern;
   secondaryPatterns: MovementPattern[];
   role: Role;
+  /** What the app prescribes outside the lead: the program's own range or hold first (as `roleTarget`). */
   repRange: string;
-  /** Best swaps with a full gym, by the app's own ranking. */
+  /** A Lead card's ranges in the lead slot, by lifter (#230 review): heavy muscle, strength, beginner. */
+  leadRanges: { muscle: string; strength: string; beginner: string } | null;
+  /** Best swaps with a full gym, as the app's swap sheet lists them (up to 6). */
   swaps: string[];
   /** The studio kits that can do it. */
   kits: StudioKit['id'][];
@@ -67,7 +71,12 @@ function roleOf(exercise: Exercise): Role {
 export function catalogCard(id: string): CatalogCard {
   const exercise = exerciseById(id);
   if (!exercise) throw new Error(`No exercise ${id}`);
-  const range = repRangeFor(exercise);
+  const hold = programExercise(id)?.holdSeconds;
+  const span = (lifter: Pick<Profile, 'goal' | 'experience'>, lead: boolean) => {
+    const range = roleTarget(exercise, lifter, lead).range;
+    return `${range.min}–${range.max}`;
+  };
+  const lead = roleOf(exercise) === 'Lead';
   return {
     id,
     name: exercise.name,
@@ -80,8 +89,13 @@ export function catalogCard(id: string): CatalogCard {
     pattern: exercise.pattern,
     secondaryPatterns: exercise.secondaryPatterns ?? [],
     role: roleOf(exercise),
-    repRange: `${range.min}–${range.max}`,
-    swaps: rankedReplacements(exercise, GYM).map((swap) => swap.name),
+    repRange: hold ? `${hold} s hold` : span({ goal: 'Build Muscle', experience: 'Intermediate' }, false),
+    leadRanges: lead ? {
+      muscle: span({ goal: 'Build Muscle', experience: 'Intermediate' }, true),
+      strength: span({ goal: 'Get Stronger', experience: 'Intermediate' }, true),
+      beginner: span({ goal: 'Build Muscle', experience: 'Beginner' }, true),
+    } : null,
+    swaps: rankedReplacements(exercise, GYM, [], 6).map((swap) => swap.name),
     kits: STUDIO_KITS.filter((kit) => provides(capsOf(kit), exercise.needs)).map((kit) => kit.id),
     instructions: exercise.instructions,
   };
