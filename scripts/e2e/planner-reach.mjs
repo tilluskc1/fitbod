@@ -3,6 +3,8 @@
 // at 390x844, 360x780 and 390x650 (iPhone Chrome's visible area), with and without the backup
 // reminder, and with the keyboard open on the text box. The entry also clears the dock by at least
 // 8px (#276), including right after Finish while the "Session saved to history" message shows.
+// A message floats only on Today: on Train it never covers Finish or Minimize, and with a save
+// error showing, Retry and Data stay tappable.
 //
 //   npm run e2e        (builds, then runs every scripts/e2e check against the built app)
 //
@@ -202,6 +204,48 @@ try {
     await walkPlanner(page, `${width}x${height}-reminder`);
     check(errors.length === 0, `${width}x${height}: page errors: ${errors.join(' | ')}`);
     await page.close();
+
+    // (#276) Off Today a message stays in the page: on Train it never covers Finish or Minimize.
+    const train = await browser.newPage({ viewport: { width, height } });
+    await train.addInitScript(() => {
+      const setItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (window.__failSaves && key === 'fitbod-clone-v1') throw new Error('blocked');
+        return setItem.call(this, key, value);
+      };
+    });
+    await train.clock.setFixedTime(day(0));
+    await onboard(train);
+    await train.getByRole('button', { name: 'Start workout' }).click();
+    await train.waitForSelector('.lg-ex');
+    for (let guard = 0; guard < 3; guard += 1) {
+      const confirm = train.getByRole('button', { name: 'Confirm' });
+      if (await confirm.count()) await confirm.click();
+    }
+    await train.locator('button.lg-check:not([disabled])').first().click();
+    await train.locator('[aria-label^="More actions for"]').first().click();
+    await train.getByRole('button', { name: "Remove today's remaining work" }).click();
+    await train.getByRole('button', { name: "Remove from today's workout" }).click();
+    const where = `${width}x${height}-train-message`;
+    check(await train.getByText(/skipped for today/).isVisible(), `${where}: message not showing`);
+    await reachable(train, train.locator('.finish-btn'), 'Finish', where);
+    await reachable(train, train.getByRole('button', { name: 'Minimize workout' }), 'Minimize', where);
+    await shot(train, where);
+
+    // (#276) With a save error showing, the message never floats over Retry or Data.
+    await train.getByRole('button', { name: 'Dismiss message' }).click();
+    await train.evaluate(() => { window.__failSaves = true; });
+    await train.locator('.finish-btn').click();
+    await train.getByRole('button', { name: 'Save completed work' }).click();
+    await train.getByRole('button', { name: 'Back to Today' }).click();
+    await train.waitForSelector('.t7-hero');
+    const failed = `${width}x${height}-save-error`;
+    check(await train.getByText('Not saved.').isVisible(), `${failed}: save error not showing`);
+    check(await train.getByText(/Saved the completed sets/).isVisible(), `${failed}: finish message not showing`);
+    await reachable(train, train.getByRole('button', { name: 'Retry' }), 'Retry', failed);
+    await reachable(train, train.getByRole('button', { name: 'Data', exact: true }), 'Data', failed);
+    await shot(train, failed);
+    await train.close();
   }
 } finally {
   await browser.close();
@@ -212,4 +256,4 @@ if (failures.length) {
   console.error(`planner-reach: ${failures.length} failure(s)\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('planner-reach: pass at 390x844, 360x780 and 390x650, with and without the backup reminder, and with the finish message');
+console.log('planner-reach: pass at 390x844, 360x780 and 390x650, with and without the backup reminder, with the finish message, and with a message on Train or over a save error');

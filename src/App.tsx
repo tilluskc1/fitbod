@@ -1330,7 +1330,9 @@ export default function App() {
   return (
     <PhoneFrame>
       {notice && (
-        <div className="app-alerts app-alerts--toast" role="status">
+        // (#276) Float only on Today, where it would push the planner entry under the dock, and
+        // never over a save-error or conflict alert's buttons.
+        <div className={view === 'tabs' && tab === 'today' && !conflict && saveUi.kind !== 'error' ? 'app-alerts app-alerts--toast' : 'app-alerts'} role="status">
           <div className="banner" style={{ margin: '8px 0 0' }}>
             <span>{notice}</span>
             <button onClick={() => setNotice(null)} aria-label="Dismiss message">

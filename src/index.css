@@ -1736,7 +1736,7 @@ textarea:focus-visible {
   padding: 0 17px;
 }
 
-/* (#276) A passing message floats over the top of the screen instead of pushing it down under the dock. */
+/* (#276) On Today a passing message floats over the top instead of pushing the entry under the dock. */
 .app-alerts--toast {
   position: absolute;
   top: env(safe-area-inset-top, 0px);
