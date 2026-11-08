@@ -4246,6 +4246,13 @@ button.aw-exercise__name-btn {
   margin: 0 0 6px;
 }
 
+/* (#225) The backup reminder: one line and its action, side by side while they fit. */
+.backup-note {
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .feasibility__reason {
   margin: -4px 0 0;
   font-size: 13px;

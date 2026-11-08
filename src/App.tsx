@@ -1,5 +1,6 @@
 import
  { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { backupReminder, shareBackup } from './lib/backup';
 import
  { downloadText } from './lib/download';
 import
@@ -907,9 +908,32 @@ export default function App() {
     setNotice('Workout deleted.');
   };
 
+  /** (#225) A file that left the app is a backup: the reminder counts it. */
+  const recordBackup = () => setState((currentState) => ({ ...currentState, lastBackupAt: new Date().toISOString() }));
+
   const exportData = () => {
-    downloadText(serializeExport(state), exportFilename());
+    try {
+      downloadText(serializeExport(state), exportFilename());
+    } catch {
+      setNotice('Backup not saved, so nothing was recorded. Try again.');
+      return;
+    }
+    recordBackup();
     setNotice('Backup downloaded.');
+  };
+
+  /** (#225) Same file as Export, through the Share sheet; a cancel or failure records nothing. */
+  const backupNow = async () => {
+    const result = await shareBackup(serializeExport(state), exportFilename(), {
+      nav: typeof navigator === 'undefined' ? undefined : navigator,
+      download: downloadText,
+    });
+    if (result.ok) {
+      recordBackup();
+      setNotice(result.via === 'share' ? 'Backup shared.' : 'Backup downloaded.');
+    } else if (result.message) {
+      setNotice(result.message);
+    }
   };
 
   const restoreFile = async (file: File | undefined) => {
@@ -1181,6 +1205,8 @@ export default function App() {
             onOpenSettings={() => setSheet({ kind: 'settings' })}
             onOpenExercise={(exerciseId, exerciseIndex) => setSheet({ kind: 'actions', exerciseId, exerciseIndex })}
             onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
+            backup={backupReminder(state, today)}
+            onBackup={backupNow}
           />
         )}
         {tab === 'plan' && (            <PlanScreen
@@ -1348,6 +1374,7 @@ export default function App() {
           profile={state.profile}
           onChange={patchProfile}
           onExport={exportData}
+          onBackup={backupNow}
           onRestore={restoreFile}
           onClose={closeSheet}
           storageNote={storageNote}

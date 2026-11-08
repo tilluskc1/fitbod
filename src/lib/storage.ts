@@ -390,6 +390,8 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
       planRevision: revision,
       programCursor: { revision, seq: cursorSeq },
       slotSkips,
+      // (#225) Restoring a file is not a backup of this browser: keep this browser's own date.
+      ...(current.lastBackupAt === undefined ? {} : { lastBackupAt: current.lastBackupAt }),
     },
     summary: {
       newWorkouts: imported.history.length - duplicateWorkouts,

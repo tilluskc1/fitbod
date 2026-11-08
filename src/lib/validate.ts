@@ -484,6 +484,8 @@ function normaliseState(value: unknown): AppState {
     raw.planRevision === undefined ? 0 : integer(raw.planRevision, 'state.planRevision', 0, MAX_SEQ);
   const programCursor = validateCursor(raw.programCursor, planRevision);
   const slotSkips = validateSkips(raw.slotSkips);
+  // (#225) Optional and written only when present, so older data reads unchanged.
+  const lastBackupAt = raw.lastBackupAt === undefined ? undefined : isoDate(raw.lastBackupAt, 'state.lastBackupAt');
 
   const ids = new Set<string>();
   for (const workout of [...history, ...(current ? [current] : [])]) {
@@ -500,6 +502,7 @@ function normaliseState(value: unknown): AppState {
     planRevision,
     programCursor,
     slotSkips,
+    ...(lastBackupAt === undefined ? {} : { lastBackupAt }),
   };
 }
 
