@@ -161,23 +161,10 @@ export function leadCompoundId(exerciseIds: string[]): string | undefined {
   return exerciseIds.find(canLeadId);
 }
 
-type SplitEntry = Pick<WorkoutExercise, 'planned' | 'performed' | 'originalPlannedSets'>;
-
-/**
- * Whether `next` took over the rest of `kept`'s slot in a swap: the swap leaves the replaced
- * half holding only its done sets, short of the slot's requirement, with the replacement right
- * after it carrying that same requirement (see `swapPendingExercise`). This is all a record
- * stores of a swap (#247 owns an explicit link).
- */
-export function swapContinues(kept: SplitEntry, next: SplitEntry): boolean {
-  const required = kept.originalPlannedSets;
-  return required !== undefined && kept.planned.length < required
-    && kept.performed.every((set) => set.done) && next.originalPlannedSets === required;
-}
-
 /**
  * Every exercise holding the lead slot of a session: the first compound, plus a
- * compound swapped in for its remaining sets (`swapContinues`).
+ * compound swapped in for its remaining sets. A swap split keeps only the done
+ * sets and both halves carry the slot's requirement (see `swapPendingExercise`).
  */
 export function leadSlotIds(
   exercises: Pick<WorkoutExercise, 'exerciseId' | 'planned' | 'performed' | 'originalPlannedSets'>[],
@@ -186,8 +173,12 @@ export function leadSlotIds(
   if (start < 0) return [];
   const ids = [exercises[start].exerciseId];
   for (let index = start + 1; index < exercises.length; index += 1) {
+    const kept = exercises[index - 1];
     const next = exercises[index];
-    if (!swapContinues(exercises[index - 1], next) || !canLeadId(next.exerciseId)) break;
+    const required = kept.originalPlannedSets;
+    const split = required !== undefined && kept.planned.length < required
+      && kept.performed.every((set) => set.done) && next.originalPlannedSets === required;
+    if (!split || !canLeadId(next.exerciseId)) break;
     ids.push(next.exerciseId);
   }
   return ids;

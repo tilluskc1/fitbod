@@ -4,7 +4,7 @@ import { FULL_BODY_A, HOME_DUMBBELLS, HOTEL_DUMBBELLS, loadModeOf, detailOf } fr
 import type { Exercise, Goal, MuscleGroup, Profile, SetupChoice, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
-import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor, swapContinues } from './progression.ts';
+import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
 import { estimatedSeconds } from './generator.ts';
 import { SHORT_SESSION_MINUTES, sessionRests } from './sessionTime.ts';
 import { liveExercises } from './liveProgression.ts';
@@ -570,70 +570,44 @@ export function restorePendingWorkout(
   history: WorkoutRecord[] = [],
 ): WorkoutRecord {
   const pattern = (id: string) => exerciseById(id)?.pattern ?? id;
-  // Each session entry's done sets alone, at its place in the session; null when nothing is logged.
-  const logged = session.exercises.map((exercise) => {
+  const completed = session.exercises.flatMap((exercise) => {
     const indices = exercise.performed.flatMap((set, index) => set.done ? [index] : []);
-    return indices.length > 0 ? {
+    return indices.length > 0 ? [{
       ...exercise,
       planned: indices.map((index) => ({ ...exercise.planned[index] })),
       performed: indices.map((index) => ({ ...exercise.performed[index] })),
-    } : null;
+    }] : [];
   });
   const prescription = profile ? liveExercises(original, profile, history) : toWorkoutExercises(original);
-  // Which prescribed exercise each logged entry counts against, by identity (#250), never two.
-  const owner = new Map<number, number>();
-  // 1. The same exercise, every segment of it (#188).
-  logged.forEach((entry, index) => {
-    const slot = entry ? prescription.findIndex((prescribed) => prescribed.exerciseId === entry.exerciseId) : -1;
-    if (slot >= 0) owner.set(index, slot);
-  });
-  // 2. Then, in session order, a replacement right after the half it replaced, by the swap split the
-  // session stores: read on the raw entry, so a part-logged exercise never looks like a kept half.
-  // 3. Last resort, by pattern: an entry with neither (a replacement swapped in before
-  // its slot logged a set) takes the same-pattern exercise missing from the session (the one swapped
-  // away), else the first with nothing logged; a legacy entry with no stored requirement takes the
-  // first of that pattern, as before.
-  const continues = new Set<WorkoutExercise>();
-  logged.forEach((entry, index) => {
-    if (!entry || owner.has(index)) return;
-    const kept = session.exercises[index - 1];
-    if (kept && owner.has(index - 1) && swapContinues(kept, entry)) {
-      owner.set(index, owner.get(index - 1)!);
-      continues.add(entry);
-      return;
-    }
-    const owned = new Set(owner.values());
-    const inSession = new Set(session.exercises.map((exercise) => exercise.exerciseId));
-    const same = prescription.flatMap((prescribed, slot) => pattern(prescribed.exerciseId) === pattern(entry.exerciseId) && !owned.has(slot) ? [slot] : []);
-    // The one the swap took out of the session first: the replacement carries that slot's pending
-    // sets, so it stays out across restores. Then the first with nothing logged.
-    const swappedAway = same.find((candidate) => !inSession.has(prescription[candidate].exerciseId));
-    if (swappedAway !== undefined) continues.add(entry);
-    const slot = swappedAway ?? same[0]
-      ?? (entry.originalPlannedSets === undefined
-        ? prescription.findIndex((prescribed) => pattern(prescribed.exerciseId) === pattern(entry.exerciseId))
-        : -1);
-    if (slot >= 0) owner.set(index, slot);
-  });
+  const inSession = new Set(session.exercises.map((exercise) => exercise.exerciseId));
+  // Which prescribed exercise a logged entry counts against (#250), by identity, never by position:
+  // 1. the same exercise, every setup segment of it (#188);
+  // 2. an exercise the day does not prescribe (a replacement) only when its pattern leaves one choice:
+  //    the day's only exercise of that pattern, or the only one with no entry in the session (the one
+  //    swapped away). Replacements of one pattern share that choice.
+  // 3. anything else is ambiguous and stays its own entry, owing nothing (#247 owns swap identity).
+  const slotOf = (entry: WorkoutExercise): number => {
+    const own = prescription.findIndex((prescribed) => prescribed.exerciseId === entry.exerciseId);
+    if (own >= 0) return own;
+    const same = prescription.flatMap((prescribed, slot) => pattern(prescribed.exerciseId) === pattern(entry.exerciseId) ? [slot] : []);
+    const missing = same.filter((slot) => !inSession.has(prescription[slot].exerciseId));
+    return same.length === 1 ? same[0] : missing.length === 1 ? missing[0] : -1;
+  };
+  const owner = new Map(completed.map((exercise) => [exercise, slotOf(exercise)]));
   const exercises: WorkoutExercise[] = [];
   prescription.forEach((prescribed, slot) => {
-    const group = logged.flatMap((entry, index) => entry && owner.get(index) === slot ? [entry] : []);
+    const group = completed.filter((exercise) => owner.get(exercise) === slot);
     group.forEach((exercise) => {
       exercise.originalPlannedSets = Math.max(exercise.originalPlannedSets ?? 0, prescribed.planned.length);
     });
     const done = group.reduce((sum, exercise) => sum + exercise.performed.length, 0);
     const pending = prescribed.planned.slice(done);
-    // A swapped slot's pending sets go to the last part of its swap chain, on that exercise's own
-    // prescription, so the kept half stays all done and the split survives the next restore.
-    // Otherwise pending sets join a segment on the same setup; a gear switch starts a new segment,
-    // so each set keeps the setup it ran on (#188).
-    const last = group.at(-1);
-    const swapTail = last && continues.has(last) && last.setup === prescribed.setup ? last : undefined;
-    const sameVariant = swapTail ?? group.find((exercise) => exercise.exerciseId === prescribed.exerciseId && exercise.setup === prescribed.setup);
+    // Pending sets join a segment on the same setup; a gear switch starts a new segment, so
+    // each set keeps the setup it ran on (#188).
+    const sameVariant = group.find((exercise) => exercise.exerciseId === prescribed.exerciseId && exercise.setup === prescribed.setup);
     if (sameVariant) {
-      const sets = swapTail ? pending.map(() => ({ ...swapTail.planned.at(-1)! })) : pending.map((set) => ({ ...set }));
-      sameVariant.planned.push(...sets);
-      sameVariant.performed.push(...sets.map((set) => ({ ...set, done: false, completedAt: null })));
+      sameVariant.planned.push(...pending.map((set) => ({ ...set })));
+      sameVariant.performed.push(...pending.map((set) => ({ ...set, done: false, completedAt: null })));
     } else if (pending.length > 0) {
       group.push({
         ...prescribed,
@@ -645,7 +619,7 @@ export function restorePendingWorkout(
     exercises.push(...group);
   });
   // Completed work stays even when the restored equipment/exclusions no longer prescribe it.
-  exercises.push(...logged.flatMap((entry, index) => entry && !owner.has(index) ? [entry] : []));
+  exercises.push(...completed.filter((exercise) => owner.get(exercise) === -1));
   return { ...session, durationMin: original.minutes, exercises };
 }
 

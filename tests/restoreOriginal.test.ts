@@ -44,12 +44,10 @@ test('Undo counts completed swap variants once and never transfers their loads',
   const restored = adaptation.restorePendingWorkout(active, original);
   assert.equal(sessionProgress(restored).total, 11);
   assert.deepEqual(done(restored), done(active));
-  // The slot's pending set goes to the last part of its swap, on the push-up's own load (#250).
   const press = restored.exercises.find((exercise) => exercise.exerciseId === 'dumbbell-floor-press');
-  const pushUp = restored.exercises.find((exercise) => exercise.exerciseId === 'push-up');
-  assert.equal(press?.performed.filter((set) => !set.done).length, 0);
-  assert.equal(pushUp?.performed.filter((set) => !set.done).length, 1);
-  assert.deepEqual(pushUp?.performed.map((set) => set.weight), [0, 0]);
+  assert.equal(press?.performed.filter((set) => !set.done).length, 1);
+  assert.equal(press?.planned.at(-1)?.weight, 15);
+  assert.equal(restored.exercises.find((exercise) => exercise.exerciseId === 'push-up')?.performed[0].weight, 0);
   assert.deepEqual(adaptation.restorePendingWorkout(restored, original), restored);
 });
 
