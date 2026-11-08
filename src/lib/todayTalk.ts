@@ -76,6 +76,11 @@ const NO_PAIN = new RegExp([
   '\\b(?:pain|injury|hurt)[\\s-]*free\\b',
   `\\b(?:doesn['’]?t|does not|don['’]?t|do not|isn['’]?t|is not|didn['’]?t|did not)\\s+(?:\\w+\\s+)?(?:hurt\\w*|injured)\\b`,
 ].join('|'), 'gi');
+/**
+ * (#241) "Nothing hurts except my knee": a denial with an exception names pain. A plain "but" is
+ * left out ("no pain, but legs are sore" is soreness); "but ... hurts" still reads its own pain word.
+ */
+const PAIN_EXCEPT = new RegExp(`(?:${NO_PAIN.source})\\s*,?\\s*(?:except|apart from|other than|besides|save for|but for)\\b`, 'i');
 /** "No gym today", "not at home": a negated place selects nothing. */
 const NO_PLACE = /\b(?:no|not|without|skip(?:ping)?|instead of)\s+(?:(?:at|to|the|a|my)\s+)*(?:gym|hotel|travel|home|garage)\b/gi;
 
@@ -184,7 +189,7 @@ export function talkParse(text: string): TalkParse {
   if (areas.train.length > 0) result.train = areas.train;
   if (areas.skip.length > 0) result.avoid = areas.skip;
   if (areas.sore.length > 0) result.sore = areas.sore;
-  if (PAIN.test(plain)) result.pain = true;
+  if (PAIN.test(plain) || PAIN_EXCEPT.test(text)) result.pain = true;
   return result;
 }
 
