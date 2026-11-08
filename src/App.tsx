@@ -65,7 +65,7 @@ import
 } from './lib/session';import { setWorkoutFeedback } from './lib/feedback';
 import
  { EMPTY_STATE,
-  eraseLocalData,
+  startOverErase,
   STORAGE_KEY,
   exportFilename,
   loadState,
@@ -938,7 +938,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   };
 
   /** (#225) Same file as Export, through the Share sheet; a cancel or failure records nothing. */
-  const backupNow = async (): Promise<string | null> => {
+  const backupNow = async (): Promise<{ ok: boolean; message: string | null }> => {
     const result = await shareBackup(serializeExport(state), exportFilename(), {
       nav: typeof navigator === 'undefined' ? undefined : navigator,
       download: downloadText,
@@ -947,12 +947,12 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const message = result.ok ? (result.via === 'share' ? 'Backup shared.' : 'Backup downloaded.') : result.message ?? null;
     if (result.ok) recordBackup();
     if (message) setNotice(message);
-    return message;
+    return { ok: result.ok, message };
   };
 
   /** (#263) Erase this browser's data, then boot as a first launch; a refusal is returned to the sheet. */
   const startOver = () => {
-    const result = eraseLocalData();
+    const result = startOverErase(state);
     if (result.ok) onStartOver();
     return result;
   };

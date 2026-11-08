@@ -31,7 +31,7 @@ import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 import { CheckIcon, LockIcon, PhoneIcon } from '../components/ui/Icons';
 import { currentDevice, installHint } from '../lib/install';
-import type { EraseResult } from '../lib/storage';
+import { START_OVER_BLOCKED } from '../lib/storage';
 
 /* ---------------- Adjust today ---------------- */
 
@@ -745,15 +745,22 @@ export function StartOverSheet({
 }: {
   sessionOpen: boolean;
   lastBackupAt?: string;
-  /** The #225 backup flow; resolves to the message it showed, if any. */
-  onBackup: () => Promise<string | null>;
+  /** The #225 backup flow; resolves to whether a file left the app and the message it showed, if any. */
+  onBackup: () => Promise<{ ok: boolean; message: string | null }>;
   /** Erase and restart; only a failure comes back, and it is shown here. */
-  onErase: () => EraseResult;
+  onErase: () => { ok: true } | { ok: false; error: string };
   onClose: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  // A backup made in this sheet: the erase no longer says "without a backup".
+  const [backedUp, setBackedUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const backup = async () => {
+    const result = await onBackup();
+    setBackupStatus(result.message);
+    if (result.ok) setBackedUp(true);
+  };
   const erase = () => {
     const result = onErase();
     if (!result.ok) setError(result.error);
@@ -763,8 +770,8 @@ export function StartOverSheet({
     return (
       <Sheet key="confirm" title="Erase everything?" onClose={onClose}>
         <p className="sheet-copy">
-          Without a backup, your plan, every logged workout, your preferences and your backup date leave this
-          browser for good. This can't be undone.
+          {backedUp ? 'Your' : 'Without a backup, your'} plan, every logged workout, your preferences and your backup
+          date leave this browser for good. This can't be undone.
         </p>
         {error && <p className="error-text" role="alert">{error}</p>}
         <div className="sheet-actions">
@@ -783,8 +790,8 @@ export function StartOverSheet({
     <Sheet key="choose" title="Start over?" subtitle="On this device" onClose={onClose}>
       <p className="sheet-copy">
         This erases your plan, every logged workout, your preferences, your backup date and any older copies the
-        app kept in this browser, then opens the app as new. A backup file you already saved isn't affected; you can restore it after you set up
-        again.
+        app kept in this browser, then opens the app as new. A backup file you already saved isn't affected; you
+        can restore it after you set up again.
       </p>
       <p className="settings-row__note" role="status" style={{ marginTop: 10 }}>
         {backupStatus ??
@@ -794,16 +801,16 @@ export function StartOverSheet({
       </p>
       {sessionOpen && (
         <p className="note-card" role="note" style={{ marginTop: 12 }}>
-          A workout is in progress. Finish or discard it first, then start over.
+          {START_OVER_BLOCKED}
         </p>
       )}
       <div className="sheet-actions">
-        <button className="primary" onClick={async () => setBackupStatus(await onBackup())}>
+        <button className="primary" onClick={backup}>
           Back up now
         </button>
         {!sessionOpen && (
           <button className="danger" onClick={() => setConfirming(true)}>
-            Erase without a backup
+            {backedUp ? 'Erase this device' : 'Erase without a backup'}
           </button>
         )}
       </div>

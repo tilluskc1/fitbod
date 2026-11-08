@@ -11,7 +11,9 @@ import {
   EMPTY_STATE,
   LEGACY_BACKUP_KEY,
   STORAGE_KEY,
+  START_OVER_BLOCKED,
   eraseLocalData,
+  startOverErase,
   loadState,
   mergeImport,
   saveState,
@@ -86,6 +88,17 @@ test('unreachable storage, a throwing listing and a silent no-op all fail loudly
   assert.equal(eraseLocalData(unlisted).ok, false, 'storage that cannot be listed is not erased');
   const stuck = { ...memoryStore({ [STORAGE_KEY]: 'data' }), removeItem: () => undefined };
   assert.equal(eraseLocalData(stuck).ok, false, 'a removal that did not happen is not a success');
+});
+
+test('an open workout refuses start over before anything is erased, with the sheet message', () => {
+  const store = memoryStore({ [STORAGE_KEY]: 'data', [LEGACY_BACKUP_KEY]: 'old' });
+  const open = { current: trainedState().history[0] };
+  const result = startOverErase(open, store);
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error, START_OVER_BLOCKED);
+  assert.deepEqual([...store.map.keys()].sort(), [STORAGE_KEY, LEGACY_BACKUP_KEY].sort(), 'nothing was touched');
+  assert.deepEqual(startOverErase({ current: null }, store), { ok: true }, 'with no workout open it erases');
+  assert.equal(store.map.size, 0);
 });
 
 /* ---------- round trip: back up, start over, restore ---------- */
@@ -167,7 +180,7 @@ test('the sheet names what goes, spares backup files, and puts Back up now befor
   const { server, mod } = await sheets();
   try {
     const html = renderToStaticMarkup(createElement(mod.StartOverSheet, {
-      sessionOpen: false, onBackup: async () => null, onErase: () => ({ ok: true }), onClose: noop,
+      sessionOpen: false, onBackup: async () => ({ ok: false, message: null }), onErase: () => ({ ok: true }), onClose: noop,
     }));
     const text = plain(html);
     assert.match(text, /your plan, every logged workout, your preferences, your backup date and any older copies/i);
@@ -186,10 +199,9 @@ test('an open workout blocks erasing and says why', async () => {
   const { server, mod } = await sheets();
   try {
     const text = plain(renderToStaticMarkup(createElement(mod.StartOverSheet, {
-      sessionOpen: true, lastBackupAt: '2026-11-02T09:00:00.000Z', onBackup: async () => null, onErase: () => ({ ok: true }), onClose: noop,
+      sessionOpen: true, lastBackupAt: '2026-11-02T09:00:00.000Z', onBackup: async () => ({ ok: false, message: null }), onErase: () => ({ ok: true }), onClose: noop,
     })));
-    assert.match(text, /workout is in progress/i);
-    assert.match(text, /Finish or discard it/);
+    assert.ok(text.includes(START_OVER_BLOCKED), 'the sheet shows the same message the guard returns');
     assert.doesNotMatch(text, /Erase without a backup/);
     assert.match(text, /Last backup: /);
   } finally {

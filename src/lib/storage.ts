@@ -239,6 +239,17 @@ export function eraseLocalData(store: EraseStore | null = storage()): EraseResul
   };
 }
 
+export const START_OVER_BLOCKED = 'A workout is in progress. Finish or discard it first, then start over.';
+
+/** (#263) The one start-over path: an open workout refuses it before any key is touched. */
+export function startOverErase(
+  state: Pick<AppState, 'current'>,
+  store?: EraseStore | null,
+): { ok: true } | { ok: false; error: string } {
+  if (state.current) return { ok: false, error: START_OVER_BLOCKED };
+  return store === undefined ? eraseLocalData() : eraseLocalData(store);
+}
+
 /**
  * Save with an expected revision. A newer stored revision means another tab
  * (or a previous session) wrote data we have not seen; the write is refused
