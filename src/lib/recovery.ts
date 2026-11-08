@@ -1,4 +1,4 @@
-import type { AppState, MuscleGroup, Profile, WorkoutRecord } from '../types.ts';
+import type { AppState, MuscleGroup, Profile, SlotSkip, WorkoutRecord } from '../types.ts';
 import type { Constraints } from './adapt.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { areasOf, worksSkipped } from './areas.ts';
@@ -13,6 +13,8 @@ export const RECOVERY_HOURS = 48;
 /** The offer never reaches further than this many skips (#134). */
 const MAX_SKIPS = 2;
 const HOUR_MS = 3_600_000;
+/** A skip stamped further ahead of this clock than this is not believed. */
+const FUTURE_SLACK_MS = 10 * 60_000;
 
 /**
  * The muscles a finished session worked, by the rule a skipped area uses (`worksSkipped`, #193):
@@ -50,11 +52,16 @@ export function recentlyTrained(history: WorkoutRecord[], now: Date): Map<Muscle
   return recent;
 }
 
+/** When a session ended, or started when its end is missing or bad; NaN when neither reads. */
+function endTime(record: WorkoutRecord): number {
+  const ended = Date.parse(record.endedAt ?? '');
+  return Number.isNaN(ended) ? Date.parse(record.date) : ended;
+}
+
 /** When a finished session ended, clamped to now; null outside the 48 h window or without a readable time. */
 function endedWithin(record: WorkoutRecord, now: Date): Date | null {
   if (record.status !== 'completed') return null;
-  const ended = Date.parse(record.endedAt ?? '');
-  const time = Number.isNaN(ended) ? Date.parse(record.date) : ended;
+  const time = endTime(record);
   if (Number.isNaN(time) || now.getTime() - time > RECOVERY_HOURS * HOUR_MS) return null;
   return new Date(Math.min(time, now.getTime()));
 }
@@ -72,15 +79,27 @@ function ledRecently(history: WorkoutRecord[], now: Date): Set<MuscleGroup> {
   return led;
 }
 
+/** This plan's skips (Switch's included) in the last 48 h, none stamped over 10 minutes ahead. */
+function recentSkips(state: AppState, now: Date): SlotSkip[] {
+  const revision = planRevisionOf(state);
+  return (state.slotSkips ?? []).filter((skip) => {
+    const age = now.getTime() - Date.parse(skip.at);
+    return skip.revision === revision && age >= -FUTURE_SLACK_MS && age <= RECOVERY_HOURS * HOUR_MS;
+  });
+}
+
 /**
- * (#134) The split's order was broken in the last 48 h: a skip recorded under this plan (Switch
- * records its skips too) or a finished described day. The planned order alone never offers.
+ * (#134) The split's order was broken in the last 48 h, after the last finished planned session:
+ * a skip or a finished described day. The planned order alone never offers, and training the
+ * offered day closes the break, so taking an offer cannot set up the next one.
  */
 export function orderBroken(state: AppState, now: Date): boolean {
-  const revision = planRevisionOf(state);
-  const within = (iso: string) => now.getTime() - Date.parse(iso) <= RECOVERY_HOURS * HOUR_MS;
-  return (state.slotSkips ?? []).some((skip) => skip.revision === revision && within(skip.at))
-    || state.history.some((record) => isDescribedSession(record) && endedWithin(record, now) !== null);
+  const lastPlanned = state.history.reduce((last, record) => {
+    const time = record.status === 'completed' && record.slotSeq !== undefined ? endTime(record) : NaN;
+    return time > last ? time : last;
+  }, -Infinity);
+  return recentSkips(state, now).some((skip) => Date.parse(skip.at) > lastPlanned)
+    || state.history.some((record) => isDescribedSession(record) && (endedWithin(record, now)?.getTime() ?? -Infinity) > lastPlanned);
 }
 
 /** The muscles a day repeats. Core is left out: most days end with it, and it recovers fast. */
@@ -182,5 +201,8 @@ export function todayFresher(
   const slot = currentSlot(state);
   if (!profile || !slot || state.current || activeOverride(state, now)?.focus || kept === keepKey(slot.id, now)) return null;
   if (!orderBroken(state, now) || nextRepeats(slot, state.history, now).length === 0) return null;
-  return fresherDay(planSlots(state.plan), switchOptions(profile, state, state.history, constraints), state.history, now);
+  // Never offer back the day just skipped: on a short split two skips wrap round to it.
+  const skipped = new Set(recentSkips(state, now).map((skip) => skip.slotId));
+  const options = switchOptions(profile, state, state.history, constraints).filter((option) => option.offset === 0 || !skipped.has(option.slotId));
+  return fresherDay(planSlots(state.plan), options, state.history, now);
 }
