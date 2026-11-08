@@ -296,12 +296,13 @@ export default function TrainScreen({
             <h2 style={{ fontSize: 20, letterSpacing: '-0.02em' }}>
               {session.exercises.length === 0
                 ? 'This session has no exercises'
-                : 'All remaining work is skipped'}
+                : progress.skipped > 0 ? 'All remaining work is skipped' : 'Every set is logged'}
             </h2>
             <p className="data-note" style={{ marginTop: 8 }}>
-              {progress.done} of {progress.total} sets completed · {progress.skipped} skipped
-              {progress.pending > 0 ? ` · ${progress.pending} not logged` : ''}. Skipping records
-              nothing, and Finish saves only completed sets.
+              {progress.done} of {progress.total} sets completed
+              {progress.skipped > 0 ? ` · ${progress.skipped} skipped` : ''}
+              {progress.pending > 0 ? ` · ${progress.pending} not logged` : ''}.{' '}
+              {progress.skipped > 0 ? 'Skipping records nothing, and Finish' : 'Finish'} saves only completed sets.
             </p>
           </section>
 
@@ -318,7 +319,7 @@ export default function TrainScreen({
                 <div className="context-row" style={{ borderBottom: 0 }}>
                   <span>{entry.name}</span>
                   <span className="tag">
-                    {done} of {entry.performed.length} sets
+                    {done} of {entry.performed.length} {entry.performed.length === 1 ? 'set' : 'sets'}
                     {entry.skipped ? ' · Skipped' : ''}
                     {!entry.skipped && pendingSets > 0 ? ' · Not logged' : ''}
                   </span>
