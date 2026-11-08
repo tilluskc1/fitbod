@@ -136,6 +136,7 @@ export function slotProgram(
     minutes: profile.sessionMinutes ?? 35,
     exercises,
     feasibility: generated.feasibility,
+    ...(generated.thirds ? { thirds: generated.thirds } : {}),
   };
 }
 

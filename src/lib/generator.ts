@@ -82,6 +82,21 @@ export function buildPlan(profile: Profile): PlanDay[] {
 
 export const MIN_EXERCISES = 3;
 
+/**
+ * Exercises one muscle may take in a session, counted by each exercise's first-listed muscle (#96):
+ * 2, or 3 on a day that lists the muscle in its focus for an advanced lifter, and for an
+ * intermediate one at 60 minutes or more. A beginner's 2 is about 6-8 hard sets, plenty. Under
+ * 45 minutes no muscle takes a third: movements come before sets (#229). A third only fills spare
+ * time and must be a new movement for the muscle, so in practice it is an isolation (a fly beside
+ * bench and incline), not another press: close-grip bench repeats the flat press. Weekly volume,
+ * about 10-20 hard sets a muscle, is the guide behind it, not enforced.
+ */
+export function muscleCap(experience: Profile['experience'], minutes: number, focus: boolean): number {
+  const third = focus && minutes >= SHORT_SESSION_MINUTES
+    && (experience === 'Advanced' || (experience === 'Intermediate' && minutes >= 60));
+  return third ? 3 : 2;
+}
+
 /** Past this, extra exercises mostly add fatigue, not results. */
 export const MAX_EXERCISES = { Beginner: 6, Intermediate: 8, Advanced: 8 } as const;
 /** Thinned to fit a short session, an exercise keeps at least this many sets; the lead keeps 3. */
@@ -117,6 +132,8 @@ export interface GeneratedSession {
   exercises: WorkoutExercise[];
   feasibility: ReturnType<typeof evaluateFeasibility>;
   targetCount: number;
+  /** The day's thirds (#96): exercises a shortened day drops before it cuts a set. Absent when none. */
+  thirds?: string[];
 }
 
 /**
@@ -126,7 +143,8 @@ export interface GeneratedSession {
  * What changed is the stopping rule: an exercise is only eligible if its
  * complete equipment requirements are met, it is not excluded, it belongs to
  * the day's focus, and taking it does not pile a third exercise onto the same
- * movement pattern. When the pool cannot fill the target, the session is
+ * movement pattern or muscle (a trained lifter's focus muscle may take a third,
+ * see `muscleCap`). When the pool cannot fill the target, the session is
  * shorter and reports itself as limited instead of silently padding with
  * unrelated movements.
  */
@@ -179,19 +197,20 @@ function selectExercises(profile: Profile, day: DayRequest, dayIndex: number, ta
 
   const pullDay = day.focus[0] === 'Back';
   const coreCapped = capsCore(day);
+  const cap = (muscle: MuscleGroup) => muscleCap(profile.experience, profile.sessionMinutes ?? 35, day.focus.includes(muscle));
   const canTake = (exercise: Exercise, allowDuplicatePattern: boolean, perMuscle = 2): boolean => {
     if (picked.some((item) => item.id === exercise.id || areIncompatible(item.id, exercise.id))) return false;
     const patterns = patternCounts.get(exercise.pattern) ?? 0;
+    const primary = exercise.muscles[0];
     if (CORE_PATTERNS.has(exercise.pattern)) {
       if (patterns >= 1) return false;
     } else if (!allowDuplicatePattern && patterns >= 1) {
       return false;
-    } else if (patterns >= 2) {
+    } else if (patterns >= Math.min(perMuscle, cap(primary))) {
       return false;
     }
     // A pull day is back first: one curl at most, the rest of the slots go to back work (#155).
     if (pullDay && exercise.pattern === 'elbow_flexion' && patterns >= 1) return false;
-    const primary = exercise.muscles[0];
     if ((primaryMuscleCounts.get(primary) ?? 0) >= perMuscle) return false;
     return true;
   };
@@ -262,21 +281,38 @@ function selectExercises(profile: Profile, day: DayRequest, dayIndex: number, ta
     if (canTake(exercise, true)) take(exercise);
   }
 
-  // 4. A split day keeps one core exercise: a second one gives its slot to the day's first muscle,
-  // else another of its muscles (#190), in the direction the day has less of; a tie goes to the lead's
-  // (a second row beside a chin-up). With nothing to take it, the slot stays empty and the day is shorter.
-  // The new exercise is the first to go when time runs short, as the second core was.
-  const extraCore = coreCapped ? picked.filter((exercise) => CORE_PATTERNS.has(exercise.pattern))[1] : undefined;
-  let freed: Exercise | undefined;
-  if (extraCore) {
+  // A further exercise for the day's first muscle that can take one, else the next, in the direction
+  // the day has less of; a tie goes to the lead's (a second row beside a chin-up).
+  const further = (perMuscle: (muscle: MuscleGroup) => number, third = false) => {
     const leadPattern = pickLead(picked, day.focus)?.pattern;
     const used = (exercise: Exercise) => 2 * (patternCounts.get(exercise.pattern) ?? 0) + Number(exercise.pattern !== leadPattern);
+    // A third (#96) is a loaded move wherever the kit loads the muscle (no push-up as a gym's third press),
+    // and a new movement for it: an incline or a fly beside a flat press, never a second flat press.
+    const loaded = (muscle: MuscleGroup) => eligible.some((exercise) => exercise.muscles[0] === muscle && exercise.equipment !== 'Bodyweight');
+    // Against everything the day already trains the muscle with, a compound third adds a pattern (an
+    // incline press also pushes up; no pulldown or pullover beside a chin-up), and an isolation is no copy.
+    const patterns = (exercise: Exercise) => [exercise.pattern, ...(exercise.secondaryPatterns ?? [])];
+    const newMovement = (exercise: Exercise) => {
+      const trained = picked.filter((item) => item.muscles.includes(exercise.muscles[0]));
+      return isCompound(exercise)
+        ? patterns(exercise).some((pattern) => !trained.some((item) => patterns(item).includes(pattern)))
+        : !trained.some((item) => patterns(item).join() === patterns(exercise).join());
+    };
+    const fits = (exercise: Exercise) => !third || ((primaryMuscleCounts.get(exercise.muscles[0]) ?? 0) === 2
+      && !(exercise.equipment === 'Bodyweight' && loaded(exercise.muscles[0])) && newMovement(exercise));
     for (const muscle of day.focus.filter((item) => item !== 'Core')) {
-      freed = compoundFirst.filter((exercise) => exercise.muscles[0] === muscle && canTake(exercise, true, 3))
+      const best = compoundFirst.filter((exercise) => exercise.muscles[0] === muscle && canTake(exercise, true, perMuscle(muscle)) && fits(exercise))
         .sort((a, b) => used(a) - used(b))[0];
-      if (freed) break;
+      if (best) return best;
     }
-  }
+    return undefined;
+  };
+
+  // 4. A split day keeps one core exercise: a second one gives its slot to the day's first muscle,
+  // else another of its muscles (#190), up to a third for it. With nothing to take it, the slot stays
+  // empty and the day is shorter. The new exercise is the first to go when time runs short, as the second core was.
+  const extraCore = coreCapped ? picked.filter((exercise) => CORE_PATTERNS.has(exercise.pattern))[1] : undefined;
+  const freed = extraCore && further(() => 3);
   if (extraCore) {
     picked.splice(picked.indexOf(extraCore), 1);
     patternCounts.set(extraCore.pattern, (patternCounts.get(extraCore.pattern) ?? 1) - 1);
@@ -284,7 +320,15 @@ function selectExercises(profile: Profile, day: DayRequest, dayIndex: number, ta
     if (freed) take(freed);
   }
 
-  return { picked, covering, requirements, freed };
+  // 5. A trained lifter's focus muscle may take a third exercise while slots remain (#96). It stays
+  // out of the day: `generateWorkout` adds it only into time the day leaves over.
+  const thirds: Exercise[] = [];
+  for (let next = further(cap, true); next && picked.length < target; next = further(cap, true)) {
+    take(next);
+    thirds.push(next);
+  }
+
+  return { picked: picked.filter((exercise) => !thirds.includes(exercise)), covering, requirements, freed, thirds };
 }
 
 /**
@@ -310,7 +354,7 @@ export function generateWorkout(
   const fixed = targetCountOverride && targetCountOverride > 0
     ? Math.min(max, Math.max(MIN_EXERCISES, Math.round(targetCountOverride)))
     : undefined;
-  const { picked, covering, requirements, freed } = selectExercises(profile, day, dayIndex, fixed ?? max);
+  const { picked, covering, requirements, freed, thirds } = selectExercises(profile, day, dayIndex, fixed ?? max);
 
   const coveredRequirements = requirements.filter((requirement) =>
     picked.some((exercise) => matchesRequirement(exercise, requirement)),
@@ -443,6 +487,18 @@ export function generateWorkout(
     const thin = exhausted && seconds() < budget * 0.5;
     targetCount = kept < all || !thin ? kept
       : Math.min(capacity, kept + Math.max(0, Math.floor(room / anotherExercise)));
+    // A muscle's third (#96) only fills time left over: it takes no set from the day above, and
+    // stays out when the day kept fewer than two others for its muscle.
+    for (const exercise of short ? [] : thirds) {
+      if (picked.filter((item) => item.muscles[0] === exercise.muscles[0]).length < 2) continue;
+      const prescription = prescribeExercise(exercise, profile, history, false, lead !== undefined, setup);
+      picked.push(exercise);
+      sets.push(prescription.sets);
+      rests.push(restSecondsFor(exercise, false, profile.goal, minutes));
+      prescriptions.push(prescription);
+      if (seconds() > budget) drop(picked.length - 1);
+      else targetCount = Math.max(targetCount, picked.length);
+    }
   }
 
   // Trimming used the priority above; the session itself runs lead, compounds, isolation, core (#133).
@@ -478,9 +534,11 @@ export function generateWorkout(
     };
   });
 
+  const kept = thirds.filter((exercise) => picked.includes(exercise)).map((exercise) => exercise.id);
   return {
     exercises,
     feasibility: evaluateFeasibility(profile, day, picked, targetCount),
     targetCount,
+    ...(kept.length > 0 ? { thirds: kept } : {}),
   };
 }

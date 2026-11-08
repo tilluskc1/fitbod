@@ -8,7 +8,7 @@ import { defaultConstraints } from '../src/lib/constraints.ts';
 import { buildPlan } from '../src/lib/generator.ts';
 import { liveAdapted } from '../src/lib/liveProgression.ts';
 import {
-  gearChoices, isPlannedPick, nothingSore, pickPlanned, planLine, timeChoices, toggleSore, toggleTrain,
+  NO_PAIN_ANSWER, answerPain, gearChoices, isPlannedPick, nothingSore, painStops, pickPlanned, planLine, timeChoices, toggleSore, toggleTrain,
 } from '../src/lib/planToday.ts';
 import { planSlots, todayProgram } from '../src/lib/sequence.ts';
 import {
@@ -153,6 +153,28 @@ test('#236: pain in the text is pain; the floors and gear choices', () => {
   assert.deepEqual(gearChoices('bodyweight', 'bodyweight'), ['bodyweight', 'hotel', 'bands'], 'a no-gear profile is not offered "home"');
 });
 
+test('#236: pain at Q2 or in the text never builds; only "It\'s only soreness" answers text pain, and only the text it saw', () => {
+  const { slots, constraints } = start(gym, 60);
+  const base = baseTalk(constraints, slots[0].focus);
+  const stops = (answer: typeof NO_PAIN_ANSWER, text: string) => painStops(answer, text, composeTalk(base, text, NO_TAPS).pain);
+  // Repro 1: Q2 "Nothing", Back, then pain in the text.
+  const nothing = answerPain(NO_PAIN_ANSWER, 'nothing', '');
+  assert.equal(stops(nothing, 'my knee hurts, 30 min'), true, '"Nothing" answers no text yet to come');
+  // Repro 2: "It hurts", "It's only soreness", then pain in the text.
+  const sore = answerPain(answerPain(NO_PAIN_ANSWER, 'hurts', ''), 'soreness', '');
+  assert.equal(stops(sore, ''), false, 'soreness clears the tapped pain');
+  assert.equal(stops(sore, 'back pain today'), true, 'new text pain stops again');
+  // "Nothing" and un-tapping "It hurts" never dismiss pain the text says.
+  const said = 'back pain today';
+  assert.equal(stops(answerPain(NO_PAIN_ANSWER, 'nothing', said), said), true);
+  assert.equal(stops(answerPain(answerPain(NO_PAIN_ANSWER, 'hurts', said), 'hurts', said), said), true);
+  // "It's only soreness" on that text builds while the text is unchanged; more text brings the stop back.
+  const answered = answerPain(NO_PAIN_ANSWER, 'soreness', said);
+  assert.equal(stops(answered, said), false);
+  assert.equal(stops(answered, `${said}, my knee hurts too`), true);
+  assert.equal(stops(answerPain(answered, 'hurts', said), said), true, '"It hurts" after soreness is pain again');
+});
+
 test('#236: the summary line', () => {
   const { slots, constraints } = start(gym, 60);
   const lower = slots[1];
@@ -162,4 +184,19 @@ test('#236: the summary line', () => {
   assert.equal(planLine(talk, lower.name, planned, 'Home gym'), '30 min · Upper body · skipping Legs · Home gym');
   assert.equal(planLine(base, lower.name, planned, 'Your gym'), `60 min · ${lower.name} · Your gym`);
   assert.equal(planLine(composeTalk(base, 'full body', NO_TAPS), lower.name, planned, 'Your gym'), '60 min · Full body · Your gym');
+});
+
+test('#236: in a 650px visible area the entry clears the sticky dock: compact hero, AA scrim, entry without the repeats', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  const start = css.indexOf('@media (max-height: 700px)');
+  assert.ok(start > 0, 'a short-screen block exists');
+  const block = css.slice(start, css.indexOf('\n}\n', start));
+  assert.match(block, /\.t7-hero \{ min-height: 0;/);
+  assert.match(block, /\.t7-hero__eyebrow \{ display: none; \}/);
+  assert.match(block, /\.t7-hero::after \{ background: linear-gradient\(90deg, rgba\(24, 40, 41, 0\.82\) 0%, rgba\(24, 40, 41, 0\.66\) 100%\); \}/,
+    'the full-width title keeps AA over the light wall (measured 6.6:1)');
+  assert.match(block, /\.tt--entry \.tt-badge,\s*\.tt--entry \.tt-open small \{ display: none; \}/);
+  const tsx = readFileSync(new URL('../src/components/TodayTalk.tsx', import.meta.url), 'utf8');
+  assert.match(tsx, /className="t7-card tt tt--entry" aria-label="Plan today with me"/, 'only the closed entry card compacts');
 });

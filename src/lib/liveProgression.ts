@@ -47,6 +47,11 @@ function loadText(kg: number, exerciseId: string, unit: Unit, text: string): str
     : `${text} ${unitLabel(unit)} each`;
 }
 
+/** " @ <load>" for a set, or nothing for a loaded movement with no load yet (#105): Today names none either. */
+function atLoad(kg: number, exerciseId: string, unit: Unit, text: string): string {
+  return kg <= 0 && loadModeOf(exerciseId) !== 'none' ? '' : ` @ ${loadText(kg, exerciseId, unit, text)}`;
+}
+
 /** A hold's seconds live in the rep field, so it never grows a load. */
 function holdSeconds(exerciseId: string): number | null {
   return programExercise(exerciseId)?.holdSeconds ?? null;
@@ -208,8 +213,8 @@ export function catalogRowMeta(
   const hold = holdSeconds(exercise.id);
   const lead = leadCompoundId(dayIds);
   const prescription = prescribeExercise(exercise, profile, history, exercise.id === lead, lead !== undefined);
-  const sets = daySets[exercise.id]
-    ?? (exercise.id === lead ? prescription.sets : programExercise(exercise.id)?.sets ?? prescription.sets);
+  // Off the day, the sets its role would get there: the same rule the generator uses, never a fixture.
+  const sets = daySets[exercise.id] ?? prescription.sets;
   const load =
     hold === null && prescription.weight > 0 ? ` · ${loadText(prescription.weight, exercise.id, unit, plannedLoad(profile.loads, history, exercise.id, unit)(prescription.weight))}` : '';
   return `${sets} ${sets === 1 ? 'set' : 'sets'} · ${setText(exercise.id, hold ?? prescription.reps)}${load}`;
@@ -230,13 +235,6 @@ export interface ProgressionLine {
   reason: string;
   /** The next load, when this very workout earned a load step; otherwise null. */
   earnedLoad: string | null;
-}
-
-function programTarget(exerciseId: string, presentedSets: number): string {
-  const program = programExercise(exerciseId);
-  if (!program) return `${presentedSets} sets`;
-  if (program.holdSeconds) return `${program.sets} × ${program.holdSeconds}s`;
-  return `${program.sets} × ${program.repRange[0]}–${program.repRange[1]}`;
 }
 
 /**
@@ -278,7 +276,7 @@ export function progressionLines(
     const hold = holdSeconds(exerciseId);
     const required = exerciseInWorkout(workout, exerciseId)?.requirement ?? presentedSets;
     const performed = best
-      ? `${done.length}/${required} sets · best ${setText(exerciseId, best.reps)} @ ${loadText(best.weight, exerciseId, unit, plannedLoad(profile.loads, history, exerciseId, unit)(best.weight))}`
+      ? `${done.length}/${required} ${required === 1 ? 'set' : 'sets'} · best ${setText(exerciseId, best.reps)}${atLoad(best.weight, exerciseId, unit, plannedLoad(profile.loads, history, exerciseId, unit)(best.weight))}`
       : null;
 
     const definition = exerciseById(exerciseId);
@@ -286,7 +284,7 @@ export function progressionLines(
       return {
         exerciseId,
         name,
-        original: programTarget(exerciseId, presentedSets),
+        original: hold !== null ? `${required} × ${hold}s` : `${required} ${required === 1 ? 'set' : 'sets'}`,
         adapted: `${presentedSets} ${presentedSets === 1 ? 'set' : 'sets'}`,
         performed,
         next: hold !== null ? `${hold}s hold` : 'Same as today',
@@ -306,13 +304,13 @@ export function progressionLines(
       exerciseId,
       name,
       // The slot's own requirement in the range it was prescribed in, not the flagship's fixture.
-      original: programExercise(exerciseId) ? `${required} × ${min}–${max}` : programTarget(exerciseId, presentedSets),
+      original: `${required} × ${min}–${max}`,
       adapted: `${presentedSets} ${presentedSets === 1 ? 'set' : 'sets'}`,
       performed,
       // #165: no named load for a go-heavier step; the next one up is the lifter's pick.
       next: prescription.basis === 'go-heavier'
         ? `${setText(exerciseId, prescription.reps)} @ your next ${definition.equipment.toLowerCase()} up`
-        : `${setText(exerciseId, prescription.reps)} @ ${loadText(prescription.weight, exerciseId, unit, nextLoad(prescription.weight))}`,
+        : `${setText(exerciseId, prescription.reps)}${atLoad(prescription.weight, exerciseId, unit, nextLoad(prescription.weight))}`,
       reason: describePrescription(prescription, unit),
       earnedLoad:
         prescription.basis === 'load-increase' && prescription.last?.workoutId === workout.id
@@ -350,7 +348,7 @@ export function recapHighlight(
       before &&
       (today.weight > before.weight || (today.weight === before.weight && today.reps > before.reps))
     ) {
-      return `New best: ${setText(line.exerciseId, today.reps)} @ ${loadText(today.weight, line.exerciseId, unit, plannedLoad(profile?.loads ?? {}, history, line.exerciseId, unit)(today.weight))} on ${line.name}`;
+      return `New best: ${setText(line.exerciseId, today.reps)}${atLoad(today.weight, line.exerciseId, unit, plannedLoad(profile?.loads ?? {}, history, line.exerciseId, unit)(today.weight))} on ${line.name}`;
     }
   }
   if (hasWork(workout) && !prior.some(hasWork)) return 'First session on the program';

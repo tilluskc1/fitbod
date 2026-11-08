@@ -72,7 +72,7 @@ Other observations from the same recording: the same day at 1 hour became 10 exe
 1. #88 Supersets (paired exercises, 3 rounds).
 2. #89 Session length drives exercise count (7 at 45 min, 10 at 1 hour).
 3. #93 Upper/lower day types for short plans.
-4. #96 A third chest or triceps compound on an upper day (our cap is 2 per primary muscle).
+4. #96 A third exercise for a focus muscle (done: see the per-muscle cap in `docs/chat-handoff.md`, Programming).
 5. #97 Heavy top set for the first compound (5 x 6).
 
 Shapes we already match: a rear-delt isolation slot, a core finisher, a bench-press-first day.

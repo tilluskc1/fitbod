@@ -52,6 +52,8 @@ export interface Program {
    * and the saved day's movements this day does not have, so the review can name what went.
    */
   shortenedFrom?: { minutes: number; dropped: { exerciseId: string; name: string; sets: number }[] };
+  /** Exercise ids that are a muscle's third (#96): a shorter length today drops them before any set. In memory only. */
+  thirds?: string[];
 }
 
 export const FULL_BODY_A: Program = {
