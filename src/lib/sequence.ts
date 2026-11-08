@@ -343,9 +343,10 @@ export function updateProfile(state: AppState, patch: Partial<Profile>): AppStat
 }
 
 /**
- * (#271) Where today sits in the week, in lifter words ("Day 2 of 4 this week"); "slot" is our
- * internal word. A single-day plan shows no counter.
+ * (#271) Where the next day sits in the plan, in lifter words ("Day 2 of 4"); "slot" is our internal
+ * word. It is plan position, not the calendar: the plan cycles by finishing or skipping days, so it
+ * must not say "this week" (that is the Weekly goal card's job). A single-day plan shows no counter.
  */
 export function dayCounter(index: number, total: number): string | undefined {
-  return total > 1 ? `Day ${index + 1} of ${total} this week` : undefined;
+  return total > 1 ? `Day ${index + 1} of ${total}` : undefined;
 }

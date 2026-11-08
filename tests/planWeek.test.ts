@@ -22,10 +22,10 @@ test('Plan lists every day of the week after the one up next, and names a gym ki
     const { default: Plan } = await server.ssrLoadModule('/src/screens/PlanScreen.tsx');
     const noop = () => {};
     const html = renderToStaticMarkup(createElement(Plan, { profile: gym, upcoming, focus: slots[0].focus, program,
-      today: todayGlance(adaptWorkout(program, defaultConstraints(gym), [], gym.goal), null), slotLabel: 'Day 1 of 4 this week', history: [], unit: 'kg',
+      today: todayGlance(adaptWorkout(program, defaultConstraints(gym), [], gym.goal), null), slotLabel: 'Day 1 of 4', history: [], unit: 'kg',
       now: new Date('2026-11-07T10:00:00Z'), onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-    assert.match(text, /UP NEXT · DAY 1 OF 4 THIS WEEK Upper A Chest · Back · Shoulders · Biceps · Triceps/);
+    assert.match(text, /UP NEXT · DAY 1 OF 4 Upper A Chest · Back · Shoulders · Biceps · Triceps/);
     assert.match(text, /THEN Lower A Quads · Hamstrings · Glutes · Calves · Core 58 min · 6 exercises · 20 sets/);
     assert.match(text, /AFTER THAT Upper B/);
     assert.match(text, /AFTER THAT Lower B/);

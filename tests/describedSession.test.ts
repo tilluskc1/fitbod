@@ -91,7 +91,7 @@ test('#220: Today names a running described session, "Today only", and its statu
     const now = new Date(START);
     const render = (current: typeof session, described: ReturnType<typeof describedSessionStatus>, day = program) =>
       renderToStaticMarkup(createElement(Today as never, { profile: gym, program: day, adapted: live, equipment: 'home', adjusted: true,
-        history: [], current, now, described, slotLabel: 'Day 1 of 4 this week', onPreview: noop, onAdjust: noop, onWhy: noop, onRestore: noop,
+        history: [], current, now, described, slotLabel: 'Day 1 of 4', onPreview: noop, onAdjust: noop, onWhy: noop, onRestore: noop,
         onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop }));
 
     const running = render(session, describedSessionStatus(session, override(TODAY), gym));
@@ -122,10 +122,10 @@ test('#220: a planned running session keeps its slot and the generator\'s chip',
   await withServer(async (load) => {
     const { default: Today } = await load('/src/screens/TodayScreen.tsx');
     const html = renderToStaticMarkup(createElement(Today as never, { profile: gym, program: shortDay, adapted: live, equipment: 'home',
-      adjusted: false, history: [], current: planned, now: new Date(START), described: null, slotLabel: 'Day 1 of 4 this week', onPreview: noop,
+      adjusted: false, history: [], current: planned, now: new Date(START), described: null, slotLabel: 'Day 1 of 4', onPreview: noop,
       onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop }));
     const hero = plain(heroOf(html));
-    assert.match(hero, /Day 1 of 4 this week/);
+    assert.match(hero, /Day 1 of 4/);
     assert.doesNotMatch(hero, /Today only/);
     assert.match(chipOf(html)?.[2] ?? '', /^Limited · \d+ of \d+$/);
   });
@@ -137,10 +137,10 @@ test('#220: a legacy running session (no slot link, no plan revision) still read
     assert.equal(legacy.slotSeq, undefined);
     assert.equal(legacy.planRevision, undefined);
     const html = renderToStaticMarkup(createElement(Today as never, { profile: gym, program: shortDay, adapted: live, equipment: 'home',
-      adjusted: false, history: [], current: legacy, now: new Date(START), described: null, slotLabel: 'Day 1 of 4 this week', onPreview: noop,
+      adjusted: false, history: [], current: legacy, now: new Date(START), described: null, slotLabel: 'Day 1 of 4', onPreview: noop,
       onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop }));
     const hero = plain(heroOf(html));
-    assert.match(hero, /Day 1 of 4 this week/);
+    assert.match(hero, /Day 1 of 4/);
     assert.doesNotMatch(hero, /Today only/);
     assert.match(chipOf(html)?.[2] ?? '', /^Limited · \d+ of \d+$/);
   });

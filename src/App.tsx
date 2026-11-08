@@ -522,7 +522,7 @@ export default function App() {
    */  const skipTodaySlot = () => {
     if (!slot) return;
     if (current) {
-      setNotice('Finish or discard the open session before skipping to the next session.');
+      setNotice('Finish or discard the open session before skipping this one.');
       return;
     }
     const offered = cursorFor(state);
