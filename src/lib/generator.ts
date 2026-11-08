@@ -96,24 +96,6 @@ export function muscleCap(experience: Profile['experience'], minutes: number, fo
   return third ? 3 : 2;
 }
 
-/**
- * A day's thirds (#96), from its exercise ids in session order: each past the base 2 of its
- * first-listed muscle and after the day's core work. The generator ends the session with them; #190's
- * freed slot, the only other way a muscle gets three, always comes before the core exercise it
- * replaced. A day shortened for today drops its thirds before it cuts any set.
- */
-export function thirdsOf(exerciseIds: string[]): Set<string> {
-  const counts = new Map<MuscleGroup, number>();
-  const muscle = (id: string) => exerciseById(id)?.muscles[0];
-  const lastCore = exerciseIds.findLastIndex((id) => muscle(id) === 'Core');
-  return new Set(exerciseIds.filter((id, index) => {
-    const primary = muscle(id);
-    if (!primary || primary === 'Core') return false;
-    counts.set(primary, (counts.get(primary) ?? 0) + 1);
-    return counts.get(primary)! > 2 && index > lastCore;
-  }));
-}
-
 /** Past this, extra exercises mostly add fatigue, not results. */
 export const MAX_EXERCISES = { Beginner: 6, Intermediate: 8, Advanced: 8 } as const;
 /** Thinned to fit a short session, an exercise keeps at least this many sets; the lead keeps 3. */
@@ -149,6 +131,8 @@ export interface GeneratedSession {
   exercises: WorkoutExercise[];
   feasibility: ReturnType<typeof evaluateFeasibility>;
   targetCount: number;
+  /** The day's thirds (#96): exercises a shortened day drops before it cuts a set. Absent when none. */
+  thirds?: string[];
 }
 
 /**
@@ -304,10 +288,17 @@ function selectExercises(profile: Profile, day: DayRequest, dayIndex: number, ta
     // A third (#96) is a loaded move wherever the kit loads the muscle (no push-up as a gym's third press),
     // and a new movement for it: an incline or a fly beside a flat press, never a second flat press.
     const loaded = (muscle: MuscleGroup) => eligible.some((exercise) => exercise.muscles[0] === muscle && exercise.equipment !== 'Bodyweight');
-    const movement = (exercise: Exercise) => [exercise.pattern, ...(exercise.secondaryPatterns ?? [])].join();
+    // Against everything the day already trains the muscle with, a compound third adds a pattern (an
+    // incline press also pushes up; no pulldown or pullover beside a chin-up), and an isolation is no copy.
+    const patterns = (exercise: Exercise) => [exercise.pattern, ...(exercise.secondaryPatterns ?? [])];
+    const newMovement = (exercise: Exercise) => {
+      const trained = picked.filter((item) => item.muscles.includes(exercise.muscles[0]));
+      return isCompound(exercise)
+        ? patterns(exercise).some((pattern) => !trained.some((item) => patterns(item).includes(pattern)))
+        : !trained.some((item) => patterns(item).join() === patterns(exercise).join());
+    };
     const fits = (exercise: Exercise) => !third || ((primaryMuscleCounts.get(exercise.muscles[0]) ?? 0) === 2
-      && !(exercise.equipment === 'Bodyweight' && loaded(exercise.muscles[0]))
-      && !picked.some((item) => item.muscles[0] === exercise.muscles[0] && movement(item) === movement(exercise)));
+      && !(exercise.equipment === 'Bodyweight' && loaded(exercise.muscles[0])) && newMovement(exercise));
     for (const muscle of day.focus.filter((item) => item !== 'Core')) {
       const best = compoundFirst.filter((exercise) => exercise.muscles[0] === muscle && canTake(exercise, true, perMuscle(muscle)) && fits(exercise))
         .sort((a, b) => used(a) - used(b))[0];
@@ -510,9 +501,7 @@ export function generateWorkout(
   }
 
   // Trimming used the priority above; the session itself runs lead, compounds, isolation, core (#133).
-  // A muscle's third (#96) ends the session, after core, so `thirdsOf` finds it in the day.
   const showTier = (exercise: Exercise) => (exercise === lead ? 0
-    : thirds.includes(exercise) ? 4
     : isCompound(exercise) ? 1
     : CORE_PATTERNS.has(exercise.pattern) ? 3 : 2);
   // Among compounds, heavy barbell lifts come while you are fresh and single-leg work last (#174).
@@ -544,9 +533,11 @@ export function generateWorkout(
     };
   });
 
+  const kept = thirds.filter((exercise) => picked.includes(exercise)).map((exercise) => exercise.id);
   return {
     exercises,
     feasibility: evaluateFeasibility(profile, day, picked, targetCount),
     targetCount,
+    ...(kept.length > 0 ? { thirds: kept } : {}),
   };
 }

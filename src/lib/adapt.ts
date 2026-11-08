@@ -5,7 +5,7 @@ import type { Exercise, Goal, MuscleGroup, Profile, SetupChoice, WorkoutExercise
 import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
 import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
-import { estimatedSeconds, thirdsOf } from './generator.ts';
+import { estimatedSeconds } from './generator.ts';
 import { SHORT_SESSION_MINUTES, sessionRests } from './sessionTime.ts';
 import { liveExercises } from './liveProgression.ts';
 
@@ -318,7 +318,7 @@ export function adaptWorkout(
     .map((entry) => entry.exercise);
 
   // 1b. Over the length: a muscle's third (#96) goes, the last first, before any set is cut.
-  const thirds = thirdsOf(program.exercises.map((exercise) => exercise.exerciseId));
+  const thirds = new Set(program.thirds);
   for (const exercise of [...exercises].reverse()) {
     if (seconds() <= budget) break;
     if (thirds.has(exercise.exerciseId)) exercise.sets = 0;

@@ -4,7 +4,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import test from 'node:test';
 import { exerciseById } from '../src/data/exercises.ts';
-import { buildPlan, estimatedSeconds, generateWorkout, muscleCap, thirdsOf } from '../src/lib/generator.ts';
+import { buildPlan, estimatedSeconds, generateWorkout, muscleCap } from '../src/lib/generator.ts';
+import { isCompound } from '../src/lib/progression.ts';
 import { adaptWorkout, todayGlance } from '../src/lib/adapt.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import { planSlots, todayProgram } from '../src/lib/sequence.ts';
@@ -45,9 +46,11 @@ const listOf = (exercises: { exerciseId: string; sets: number }[]) => exercises.
  * day, a saved day shortened for today ("saved>today"), a described day. `hashes`: the whole generated
  * output of a kit, level and length, every goal and day.
  */
-type Sweep = { cases: Record<string, string>; hashes: Record<string, string> };
+type Sweep = { cases: Record<string, string>; hashes: Record<string, string>; thirds: Record<string, string[]> };
 function sweep(): Sweep {
   const out: Record<string, string> = {};
+  /** The thirds the generated day or program carries (#96), by case. Not in the fixture. */
+  const thirds: Record<string, string[]> = {};
   const hashes = new Map<string, ReturnType<typeof createHash>>();
   for (const kit of Object.keys(KITS) as Kit[]) for (const experience of LEVELS) for (const goal of GOALS) {
     const goalKey = goal.replace(' ', '-');
@@ -58,6 +61,7 @@ function sweep(): Sweep {
           const session = generateWorkout(profile, day, index, []);
           const list = listOf(session.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.planned.length })));
           out[`day ${kit} ${experience} ${goalKey} ${minutes} ${daysPerWeek}d ${day.name}`] = list;
+          thirds[`day ${kit} ${experience} ${goalKey} ${minutes} ${daysPerWeek}d ${day.name}`] = session.thirds ?? [];
           const group = `${kit} ${experience} ${minutes}`;
           if (!hashes.has(group)) hashes.set(group, createHash('sha256'));
           hashes.get(group)!.update(JSON.stringify(session));
@@ -70,6 +74,7 @@ function sweep(): Sweep {
           const adapted = adaptWorkout(program, { ...defaultConstraints(profile), minutes }, profile.exclusions, goal);
           out[`trim ${kit} ${experience} ${goalKey} ${saved}>${minutes} ${daysPerWeek}d ${slot.name}`] =
             `${listOf(adapted.exercises)}|${todayGlance(adapted, null, false, goal).minutes}`;
+          thirds[`trim ${kit} ${experience} ${goalKey} ${saved}>${minutes} ${daysPerWeek}d ${slot.name}`] = program.thirds ?? [];
         }
       }
     }
@@ -79,9 +84,10 @@ function sweep(): Sweep {
       const adapted = adaptWorkout(program, { ...defaultConstraints(profile), minutes }, profile.exclusions, goal);
       out[`described ${kit} ${experience} ${goalKey} ${minutes} 4d ${focus.join('+')}`] =
         `${listOf(adapted.exercises)}|${todayGlance(adapted, null, false, goal).minutes}`;
+      thirds[`described ${kit} ${experience} ${goalKey} ${minutes} 4d ${focus.join('+')}`] = program.thirds ?? [];
     }
   }
-  return { cases: out, hashes: Object.fromEntries([...hashes].map(([group, hash]) => [group, hash.digest('hex').slice(0, 16)])) };
+  return { cases: out, hashes: Object.fromEntries([...hashes].map(([group, hash]) => [group, hash.digest('hex').slice(0, 16)])), thirds };
 }
 
 /** Stored as each case's index into its distinct lists, in sweep order: the cases repeat a lot. */
@@ -152,16 +158,42 @@ test('a third is a loaded move in a kit that loads the muscle: no push-up as a g
   assert.deepEqual(added.filter(({ key, id }) => exerciseById(id)!.equipment === 'Bodyweight' && loads(key, exerciseById(id)!.muscles[0])), []);
 });
 
-test('a third is a new movement for its muscle: an incline or fly beside a flat press, never a second flat press', () => {
-  const movement = (id: string) => { const exercise = exerciseById(id)!; return [exercise.pattern, ...(exercise.secondaryPatterns ?? [])].join(); };
-  const repeats = added.filter(({ key, id }) => [...setsOf(now[key]).keys()]
-    .some((other) => other !== id && exerciseById(other)!.muscles[0] === exerciseById(id)!.muscles[0] && movement(other) === movement(id)));
+test('a third is a new movement for its muscle: a fly beside the presses, never a pulldown beside a chin-up', () => {
+  const patterns = (id: string) => { const exercise = exerciseById(id)!; return [exercise.pattern, ...(exercise.secondaryPatterns ?? [])]; };
+  const repeats = added.filter(({ key, id }) => {
+    const trained = [...setsOf(now[key]).keys()].filter((other) => other !== id && exerciseById(other)!.muscles.includes(exerciseById(id)!.muscles[0]));
+    // A compound third adds a pattern none of them has; an isolation third copies none of them.
+    return isCompound(exerciseById(id)!)
+      ? patterns(id).every((pattern) => trained.some((other) => patterns(other).includes(pattern)))
+      : trained.some((other) => patterns(other).join() === patterns(id).join());
+  });
   assert.deepEqual(repeats, []);
 });
 
-test('every added exercise is a muscle\'s third, the one a shortened day drops first', () => {
+test('every added exercise is one of the thirds its day or program carries', () => {
+  assert.deepEqual(added.filter(({ key, id }) => !after.thirds[key].includes(id)), []);
+});
+
+test('every day runs lead, compounds, isolation, core (#133): a third sits by its own role', () => {
   const ids = (key: string) => now[key].split('|')[0].split(' ').filter(Boolean).map((item) => item.split(':')[0]);
-  assert.deepEqual(added.filter(({ key, id }) => !thirdsOf(ids(key)).has(id)), []);
+  const role = (id: string) => { const exercise = exerciseById(id)!; return exercise.muscles[0] === 'Core' ? 2 : isCompound(exercise) ? 0 : 1; };
+  // The lead may be any role; from the second exercise on, no role comes back after a later one.
+  const outOfOrder = keys.filter((key) => ids(key).slice(1).some((id, index, rest) => index > 0 && role(id) < role(rest[index - 1])));
+  assert.deepEqual(outOfOrder.slice(0, 5), [], `${outOfOrder.length} out of order`);
+});
+
+test('a saved day shortened for today drops exactly its program\'s thirds before cutting a set', () => {
+  const profile = profileOf('gym', 'Advanced', 3, 90);
+  const slot = planSlots(buildPlan(profile))[0];
+  const program = todayProgram(profile, slot, [], { minutes: 45 });
+  assert.ok((program.thirds ?? []).length > 0, 'the saved 90-minute Push carries a third');
+  const trim = (from: typeof program) => adaptWorkout(from, { ...defaultConstraints(profile), minutes: 45 }, [], profile.goal);
+  const without = { ...program, exercises: program.exercises.filter((exercise) => !program.thirds!.includes(exercise.exerciseId)), thirds: undefined };
+  const adapted = trim(program);
+  assert.deepEqual(adapted.skipped.filter((item) => item.reason === 'time').map((item) => item.exerciseId), program.thirds);
+  assert.deepEqual(listOf(adapted.exercises), listOf(trim(without).exercises), 'the rest trims as the day without its thirds');
+  // A program without `thirds` (legacy, or another caller) drops nothing extra: the fly stays at its floor.
+  assert.ok(trim({ ...program, thirds: undefined }).exercises.some((exercise) => exercise.exerciseId === program.thirds![0]));
 });
 
 test('the per-muscle cap: 2, or 3 on the focus day for advanced and for intermediate at 60+ minutes', () => {
