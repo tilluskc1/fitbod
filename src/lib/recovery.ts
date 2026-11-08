@@ -1,7 +1,11 @@
-import type { MuscleGroup, WorkoutRecord } from '../types.ts';
+import type { AppState, MuscleGroup, Profile, WorkoutRecord } from '../types.ts';
+import type { Constraints } from './adapt.ts';
 import { exerciseById } from '../data/exercises.ts';
 import { areasOf, worksSkipped } from './areas.ts';
+import { activeOverride, dayKey } from './plan.ts';
+import { currentSlot, planSlots } from './sequence.ts';
 import type { PlanSlot } from './sequence.ts';
+import { switchOptions } from './switchDay.ts';
 import type { SwitchOption } from './switchDay.ts';
 
 /** A muscle trained this recently is still recovering (#134). */
@@ -109,4 +113,25 @@ export function fresherDay(
 export function listAreas(areas: string[]): string {
   if (areas.length <= 1) return areas.join('');
   return `${areas.slice(0, -1).join(', ')} and ${areas[areas.length - 1]}`;
+}
+
+/** Keep holds for this slot on this day only: in memory, never stored. */
+export const keepKey = (slotId: string, now: Date) => `${dayKey(now)}|${slotId}`;
+
+/**
+ * Today's offer (#134): none while a session is open, on a described day, without a slot, or once
+ * Keep was tapped for this slot today. The Switch sheet's options are only priced when something
+ * was trained in the last 48 h.
+ */
+export function todayFresher(
+  profile: Profile | null,
+  state: AppState,
+  constraints: Constraints,
+  kept: string | null,
+  now: Date,
+): FresherDay | null {
+  const slot = currentSlot(state);
+  if (!profile || !slot || state.current || activeOverride(state, now)?.focus || kept === keepKey(slot.id, now)) return null;
+  if (recentlyTrained(state.history, now).size === 0) return null;
+  return fresherDay(planSlots(state.plan), switchOptions(profile, state, state.history, constraints), state.history, now);
 }
