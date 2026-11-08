@@ -190,6 +190,29 @@ export function loadState(): LoadedState {
   return { status: 'migrated', state: result.state, revision: 1, raw };
 }
 
+export type EraseResult = { ok: true } | { ok: false; error: string };
+
+const ERASE_REFUSED =
+  "This browser didn't let the app erase its data. Your plan and workouts are still here. Try again, or clear this site's data in your browser settings.";
+
+/**
+ * (#263) Start over on this device: remove the app's own two keys and nothing
+ * else. The legacy copy goes first, so a refusal never leaves the main record
+ * half-erased; each removal is read back, since a no-op is not an erase.
+ */
+export function eraseLocalData(store: Pick<Storage, 'getItem' | 'removeItem'> | null = storage()): EraseResult {
+  if (!store) return { ok: false, error: ERASE_REFUSED };
+  try {
+    for (const key of [LEGACY_BACKUP_KEY, STORAGE_KEY]) {
+      store.removeItem(key);
+      if (store.getItem(key) !== null) return { ok: false, error: ERASE_REFUSED };
+    }
+  } catch {
+    return { ok: false, error: ERASE_REFUSED };
+  }
+  return { ok: true };
+}
+
 /**
  * Save with an expected revision. A newer stored revision means another tab
  * (or a previous session) wrote data we have not seen; the write is refused
