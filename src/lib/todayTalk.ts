@@ -77,11 +77,11 @@ const NO_PAIN = new RegExp([
   `\\b(?:doesn['’]?t|does not|don['’]?t|do not|isn['’]?t|is not|didn['’]?t|did not)\\s+(?:\\w+\\s+)?(?:hurt\\w*|injured)\\b`,
 ].join('|'), 'gi');
 /**
- * (#241) "Nothing hurts except my knee", "no pain today but my knee": a denial with an exception later
- * in the same sentence names pain. Unsure reads as pain (lesson 3): "no pain, but legs are sore" stops,
- * and "It's only soreness" answers it. A full stop ends the denial's reach.
+ * (#241) "Nothing hurts except my knee", "nothing hurts. but my knee does": a denial with an exception
+ * word anywhere after it names pain. Deliberately blunt after two parser rounds (lesson 3): unsure reads
+ * as pain, so "no pain. Skip legs but train chest" stops too, and "It's only soreness" answers it.
  */
-const PAIN_EXCEPT = new RegExp(`(?:${NO_PAIN.source})[^.!?\\n]*?\\b(?:except|apart from|other than|besides|save for|but)\\b`, 'i');
+const PAIN_EXCEPT = new RegExp(`(?:${NO_PAIN.source})[\\s\\S]*?\\b(?:except|apart from|other than|besides|save for|but)\\b`, 'i');
 /** "No gym today", "not at home": a negated place selects nothing. */
 const NO_PLACE = /\b(?:no|not|without|skip(?:ping)?|instead of)\s+(?:(?:at|to|the|a|my)\s+)*(?:gym|hotel|travel|home|garage)\b/gi;
 
