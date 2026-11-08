@@ -273,3 +273,15 @@ test('#134 loop: 14 days of daily 3-day training after one skip, taking every of
     assert.ok(offers <= 1, `skip on day ${skipDay}: ${offers} offers in 14 days`);
   }
 });
+
+/* ---------- fix round 4: a fresher day must itself be fresh ---------- */
+
+test('#134 fresh: 3-day, Legs Mon, Push Tue, Pull skipped Wed 08:00: Push (trained 23 h ago) is not offered', () => {
+  const slots = planSlots(ppl as AppState['plan']);
+  const session = (index: number, h: number, seq: number) => ({
+    ...record(todayProgram(profile, slots[index], [], gym).exercises.map((exercise) => exercise.exerciseId), h),
+    slotId: slots[index].id, slotSeq: seq, planRevision: 1,
+  } as WorkoutRecord);
+  const result = offer(5, [session(2, 47, 2), session(0, 23, 3)], ppl, [skipAt(4, 1, 1, ppl)]);
+  assert.notEqual(result?.option.name, 'Push', `${result?.areas} trained ${result?.when}. ${result?.option.name} is fresher.`);
+});
