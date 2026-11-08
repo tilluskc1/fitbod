@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { fresherDay, listAreas, musclesWorked, nextRepeats, recentlyTrained, todayFresher } from '../src/lib/recovery.ts';
 import { buildPlan } from '../src/lib/generator.ts';
-import { planSlots, todayProgram } from '../src/lib/sequence.ts';
+import { advanceAfterFinish, planSlots, todayProgram } from '../src/lib/sequence.ts';
+import { skipForward } from '../src/lib/switchDay.ts';
 import { switchOptions } from '../src/lib/switchDay.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
 import type { AppState, Profile, WorkoutRecord } from '../src/types.ts';
@@ -37,10 +38,12 @@ function record(ids: string[], endedHoursAgo: number, { done = true, status = 'c
 const upperDay = (h: number) => record(['barbell-bench-press', 'barbell-row', 'overhead-press', 'lat-pulldown'], h);
 const lowerDay = (h: number) => record(['back-squat', 'romanian-deadlift', 'plank'], h);
 
-const skipAt = (seq: number, h = 10, revision = 1) =>
-  ({ id: `skip:${revision}:${seq}`, revision, seq, slotId: 'any', at: hoursAgo(h) });
+const skipAt = (seq: number, h = 10, revision = 1, plan = upperLower) => ({
+  id: `skip:${revision}:${seq}`, revision, seq, at: hoursAgo(h),
+  slotId: planSlots(plan as AppState['plan'])[((seq % plan.length) + plan.length) % plan.length].id,
+});
 /** Today's offer through the one public path; by default the slot before the cursor was skipped 10 h ago. */
-function offer(seq: number, history: WorkoutRecord[], plan = upperLower, slotSkips = [skipAt(seq - 1)]) {
+function offer(seq: number, history: WorkoutRecord[], plan = upperLower, slotSkips = [skipAt(seq - 1, 10, 1, plan)]) {
   return todayFresher(profile, { ...at(seq, plan), history, slotSkips }, gym, null, NOW);
 }
 
@@ -85,7 +88,7 @@ test('#134: no offer when the next day is fresh, nothing recent, or every day re
     { name: 'Full Body A', focus: ['Chest', 'Back', 'Quads', 'Hamstrings', 'Shoulders', 'Core'] },
     { name: 'Full Body B', focus: ['Back', 'Chest', 'Glutes', 'Hamstrings', 'Biceps', 'Triceps', 'Calves'] },
   ];
-  assert.equal(offer(0, [record(['barbell-bench-press', 'barbell-row', 'back-squat', 'romanian-deadlift'], 20)], fullBody), null,
+  assert.equal(offer(0, [record(['barbell-bench-press', 'barbell-row', 'back-squat', 'romanian-deadlift'], 20)], fullBody, [skipAt(0, 10, 1, fullBody)]), null,
     'Full Body days overlap alike: no nagging');
 });
 
@@ -215,4 +218,58 @@ test('#134 order: sweep, every split 2-6, 1 to 3 days done in the planned order 
 test('#134 lead: on 6-day Push B the lead repeats only when a done lift listed Shoulders first', () => {
   assert.equal(offer(3, [record(['face-pull'], 20)], sixDay), null, 'a face pull is back work that touches the shoulders');
   assert.equal(offer(3, [record(['overhead-press'], 20)], sixDay)?.option.name, 'Pull B');
+});
+
+/* ---------- fix round 3: never the day just skipped, never a loop ---------- */
+
+test('#134 skipped: 3-day, Push and Pull done, Legs skipped: Legs is never the offer', () => {
+  const push = record(['barbell-bench-press', 'overhead-press', 'triceps-pushdown'], 40);
+  const result = offer(3, [push, pullDay(20)], ppl, [skipAt(2, 10, 1, ppl)]);
+  assert.notEqual(result?.option.name, 'Legs');
+});
+
+test('#134 after: a skip before the last planned session no longer breaks the order', () => {
+  const planned = { ...upperDay(5), slotId: 'slot-0-upper-a', slotSeq: 4, planRevision: 1 } as WorkoutRecord;
+  assert.equal(offer(2, [planned], upperLower, [skipAt(1, 10)]), null, 'skip 10 h ago, planned session 5 h ago');
+  assert.ok(offer(2, [{ ...planned, endedAt: hoursAgo(20), date: hoursAgo(21) } as WorkoutRecord], upperLower, [skipAt(1, 10)]),
+    'the skip came after it');
+});
+
+test('#134 future: a skip stamped more than 10 minutes ahead is ignored', () => {
+  assert.equal(offer(2, [upperDay(20)], upperLower, [skipAt(1, -1)]), null, 'an hour ahead');
+  assert.ok(offer(2, [upperDay(20)], upperLower, [skipAt(1, -0.1)]), '6 minutes ahead is clock skew');
+});
+
+test('#134 loop: 14 days of daily 3-day training after one skip, taking every offer: at most one offer', () => {
+  const plan = buildPlan({ ...profile, daysPerWeek: 3 });
+  const day0 = new Date(2026, 10, 1);
+  const at = (day: number, hour: number) => new Date(day0.getTime() + day * 86_400_000 + hour * 3_600_000);
+  for (let skipDay = 0; skipDay <= 5; skipDay += 1) {
+    let state = { ...EMPTY_STATE, profile, plan, planRevision: 1, programCursor: { revision: 1, seq: 0 }, history: [], slotSkips: [] } as unknown as AppState;
+    const train = (day: number) => {
+      const slot = planSlots(state.plan)[state.programCursor!.seq % 3];
+      const ids = todayProgram(profile, slot, state.history, gym).exercises.map((exercise) => exercise.exerciseId);
+      const end = at(day, 10).toISOString();
+      const workout = {
+        id: `d${day}`, date: at(day, 9.5).toISOString(), endedAt: end, name: slot.name, dayIndex: slot.index, status: 'completed',
+        completedEarly: false, slotId: slot.id, slotSeq: state.programCursor!.seq, planRevision: 1,
+        exercises: ids.map((exerciseId) => ({ exerciseId, name: exerciseId, planned: [{ reps: 8, weight: 50 }],
+          performed: [{ weight: 50, reps: 8, done: true, completedAt: end }] })),
+      } as unknown as WorkoutRecord;
+      state = advanceAfterFinish({ ...state, history: [...state.history, workout] }, workout);
+    };
+    for (let day = 0; day < skipDay; day += 1) train(day);
+    state = skipForward(state, 1, at(skipDay, 8).toISOString());
+    let offers = 0;
+    for (let day = skipDay; day < skipDay + 14; day += 1) {
+      const now = at(day, 9);
+      const fresher = todayFresher(profile, state, gym, null, now);
+      if (fresher) {
+        offers += 1;
+        state = skipForward(state, fresher.option.offset, now.toISOString());
+      }
+      train(day);
+    }
+    assert.ok(offers <= 1, `skip on day ${skipDay}: ${offers} offers in 14 days`);
+  }
 });
