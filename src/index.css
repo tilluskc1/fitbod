@@ -1614,10 +1614,25 @@ textarea:focus-visible {
   margin-top: 22px;
 }
 
+/* #252: the one safety line, inside the sticky bar just above Build my plan. */
+.onboarding-actions.onboarding-actions--notice {
+  padding-top: 14px;
+  border-top: 1px solid var(--outline-variant);
+  background: var(--surface);
+}
+
+.onboarding-safety {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
 .onboarding-actions {
   margin-top: auto;
   padding-top: 18px;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   /* Continue stays in reach on every step; the step scrolls above it (#222). */
   position: sticky;
@@ -3519,6 +3534,11 @@ body {
   color: var(--accent-text);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+p.settings-row.settings-row__note {
+  margin: 0;
+  padding: 12px 16px;
 }
 
 .settings-row__note {
