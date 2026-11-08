@@ -49,6 +49,12 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: prefer one function over two kept in sync; test the claim from every starting point (saved
    45/60/90), not the one that happens to work. Check: `tests/shortSessions229.test.ts`.
 
+10. **Check what already ships before scoping.** #231 was filed as "loop the two frames instead of
+   videos", but `Demo.tsx` had looped them as a hard cut since #5, on every list row too. The real work
+   was the crossfade, timing and an off-screen pause, not a new feature.
+   Rule: before planning, grep `src/` for the feature's nouns and say in the brief what exists. Check:
+   the plan stop names the existing component or says none was found.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
