@@ -66,6 +66,11 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: assert the number one surface shows equals the number the next one uses (Today's last load =
    logger's previous; target load = set 1's prefilled weight). Check: `scripts/e2e/second-workout.mjs`.
 
+13. **A dismissal answers one thing, not a flag.** #236 kept "It's only soreness" as a boolean, and
+   "Nothing" set it too, so pain typed afterwards built a day. Rule: a safety override stores what it
+   answered (the text it saw) and lapses when that changes; only the explicit answer may set it.
+   Check: `tests/planToday236.test.ts` (pain stop test).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
