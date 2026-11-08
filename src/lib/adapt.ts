@@ -317,6 +317,13 @@ export function adaptWorkout(
     .sort((a, b) => role(a.exercise) - role(b.exercise) || b.index - a.index)
     .map((entry) => entry.exercise);
 
+  // 1b. Over the length: a muscle's third (#96) goes, the last first, before any set is cut.
+  const thirds = new Set(program.thirds);
+  for (const exercise of [...exercises].reverse()) {
+    if (seconds() <= budget) break;
+    if (thirds.has(exercise.exerciseId)) exercise.sets = 0;
+  }
+
   // 2. Over the length: every movement goes to its floor (two working sets on a lift, one on a
   //    hold), and step 4 hands sets back evenly. Trimming one movement at a time left the lead at
   //    five sets with everything else at two (#203).

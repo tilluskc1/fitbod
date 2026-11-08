@@ -100,6 +100,12 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Round 2: the lifted bar then covered the field the phone had already revealed. The app re-reveals the
    focused field after setting `--kb`; the e2e no longer scrolls for the app and also shifts `offsetTop`.
 
+17. **Carry what the generator added; don't infer it.** #96 failed review three times, each over how the
+   "third" exercise was identified (unmarked, then by its position after core).
+   Rule: when a later step must undo something the generator added, carry that fact on the in-memory
+   object that already flows to it (`Program.thirds`), never infer it from shape or position (lesson 1).
+   Check: `tests/muscleCap96.test.ts`, a trim drops exactly `program.thirds`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
