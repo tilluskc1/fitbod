@@ -72,6 +72,11 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: trigger only on the event that breaks the plan (a skip, a described day), then apply the
    heuristic. Check: the planned-order sweep in `tests/recovery134.test.ts` (splits 2-6, 1-3 days done).
 
+14. **Merge the SHA the review named.** #236 was merged at the WIP head 20cc161 while the reviewed head
+   was d020980, which shipped a known pain bug to production.
+   Rule: merge exactly the reviewed SHA (or a descendant that contains it). Check: before pushing main,
+   `git merge-base --is-ancestor <reviewed SHA> <merge commit>` exits 0.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
