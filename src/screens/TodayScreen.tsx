@@ -346,6 +346,17 @@ export default function TodayScreen({
           <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
         )}
 
+        {/* (#225) Not mid-session: a backup taken now would miss the open session. */}
+        {backup && onBackup && !current && (
+          <div className="feasibility backup-note" role="note">
+            <p className="feasibility__line">{backup}</p>
+            <button className="feasibility__alt" onClick={onBackup}>Back up now</button>
+          </div>
+        )}
+
+        {!current && composer}
+
+        {/* (#134) After the composer: "Plan today with me" stays above the fold (#236). */}
         {fresher && onPickFresher && onKeepNext && !current && (
           <div className="feasibility" role="note">
             <p className="feasibility__line">{listAreas(fresher.areas)} trained {fresher.when}. {fresher.option.name} is fresher.</p>
@@ -356,16 +367,6 @@ export default function TodayScreen({
             </div>
           </div>
         )}
-
-        {/* (#225) Not mid-session: a backup taken now would miss the open session. */}
-        {backup && onBackup && !current && (
-          <div className="feasibility backup-note" role="note">
-            <p className="feasibility__line">{backup}</p>
-            <button className="feasibility__alt" onClick={onBackup}>Back up now</button>
-          </div>
-        )}
-
-        {!current && composer}
 
         <section className="t7-card t7-workout" aria-label="The workout">
           <div className="list-head">

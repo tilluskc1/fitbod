@@ -73,6 +73,9 @@ test('#134 card: Today shows the offer with Switch and Keep, and hides it when n
     assert.match(shown, /Switch to Lower B Keep Upper B/);
     const twoSkips = render({ fresher: { ...fresher, option: { ...fresher.option, skips: ['Push', 'Pull'] } } });
     assert.match(twoSkips, /Switching skips Push and Pull\./);
+    // #236: the "Plan today with me" entry stays above the fold; the card sits after it.
+    const withComposer = render({ composer: createElement('p', null, 'COMPOSER ENTRY') });
+    assert.ok(withComposer.indexOf('COMPOSER ENTRY') < withComposer.indexOf('is fresher'), 'card after the composer');
     const none = render({ fresher: null });
     assert.doesNotMatch(none, /is fresher|Switch to|Keep Upper B/);
     const running = render({ current: { ...upperYesterday, id: 'open', status: 'active', endedAt: null } });
