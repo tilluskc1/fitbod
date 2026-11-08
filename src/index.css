@@ -1747,47 +1747,38 @@ textarea:focus-visible {
 
 .demo-frame-base {
   position: absolute;
-  animation: demo-frame-a 1.8s step-end infinite;
 }
 
+/* The end frame fades in and out over the start frame, which stays put, so the page never
+   shows through mid-fade. Each pose holds 0.75 s and each fade takes 0.25 s: ~1 s per pose (#231). */
 .demo-frame-alt {
   opacity: 0;
-  animation: demo-frame-b 1.8s step-end infinite;
+  animation: demo-crossfade 2s ease-in-out infinite;
+}
+
+.demo--paused .demo-frame-alt {
+  animation-play-state: paused;
 }
 
 .demo-video {
   position: absolute;
 }
 
-/* Hard alternation between the start and end frames: a rep, not a cross-fade. */
-@keyframes demo-frame-a {
+@keyframes demo-crossfade {
   0%,
-  49.9% {
-    opacity: 1;
-  }
-  50%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes demo-frame-b {
-  0%,
-  49.9% {
+  37.5% {
     opacity: 0;
   }
   50%,
-  100% {
+  87.5% {
     opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .demo-frame-base {
-    animation: none;
-    opacity: 1;
-  }
-
   .demo-frame-alt {
     animation: none;
     opacity: 0;

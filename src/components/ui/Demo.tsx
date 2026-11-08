@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { exerciseFrames, exerciseVideo } from '../../lib/media';
+import { watchOnScreen } from '../../lib/onScreen';
 
 interface Props {
   exerciseId: string;
@@ -10,15 +11,31 @@ interface Props {
 
 /**
  * Exercise demonstration. Plays a demo clip when the catalog has one, otherwise
- * loops the start → end frames so the movement reads as a demo rather than a
- * still. Respects prefers-reduced-motion through CSS (no JS branch, so the
- * server and client agree).
+ * loops the start → end frames as a crossfade, about 1 s per pose (#231), so the
+ * movement reads as a demo rather than a still. Respects prefers-reduced-motion
+ * through CSS (first frame only; no JS branch, so the server and client agree).
+ * The loop pauses while the demo is off screen; a closed sheet unmounts it.
  */
 export default function Demo({ exerciseId, name, className = '', eager = false }: Props) {
   const [failed, setFailed] = useState(false);
   const frames = exerciseFrames(exerciseId);
   const video = exerciseVideo(exerciseId);
   const [first, second] = frames;
+  const ref = useRef<HTMLSpanElement>(null);
+  const [onScreen, setOnScreen] = useState(true);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || failed || (!video && !second)) return;
+    return watchOnScreen(element, setOnScreen);
+  }, [failed, video, second]);
+
+  useEffect(() => {
+    const clip = ref.current?.querySelector('video');
+    if (!clip) return;
+    if (onScreen) void clip.play().catch(() => {});
+    else clip.pause();
+  }, [onScreen, video]);
 
   const fallback = (
     <span className="photo-fallback" aria-hidden="true">
@@ -27,7 +44,10 @@ export default function Demo({ exerciseId, name, className = '', eager = false }
   );
 
   return (
-    <span className={`photo demo ${className}`} role="img" aria-label={`${name} demonstration`}>
+    <span
+      ref={ref}
+      className={`photo demo${onScreen ? '' : ' demo--paused'} ${className}`}
+      role="img" aria-label={`${name} demonstration`}>
       {failed ? (
         fallback
       ) : video ? (
