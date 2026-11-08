@@ -79,8 +79,10 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
     for (const html of [limited.today, limited.plan]) {
       assert.match(plain(html), /Limited session · no calf work/);
       assert.match(html, /<button[^>]*>Add Machine<\/button>/);
-      // The Limited day still states its time: 11 sets take 33 of the 35 minutes (#200).
-      assert.match(html, /33 min/);
+      // The Limited day still states its time (#200): since #229 a 35-minute day is fitted
+      // movement-first, 13 sets in 35 minutes.
+      assert.match(plain(html), /35 min/);
+      assert.match(plain(html), /13 sets/);
     }
 
     const none = screens(Today, Plan, bodyweight, 'Pull');

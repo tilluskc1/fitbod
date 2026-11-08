@@ -36,6 +36,13 @@ export interface ProgramExercise {
   detail: string;
   /** Equipment family this movement needs; drives the adaptation engine. */
   requires: 'dumbbell' | 'bodyweight' | 'configured';
+  /**
+   * The only cover of a movement the day requires (#229): a shorter length drops it last, as the
+   * generator does, so a day shortened for today matches the same day saved at that length.
+   */
+  keep?: boolean;
+  /** The generator's priority (0 = first); a shorter length drops the highest rank first (#229). */
+  rank?: number;
 }
 
 export interface Program {

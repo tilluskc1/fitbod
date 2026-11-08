@@ -97,11 +97,12 @@ test('#197: no day promises more than its length, at any level, and a short day 
 test('#203: the review names the honest figure, not the asked length', async () => {
   const profile = profileFor(KITS.gym, 4, 60);
   const program = slotProgram(profile, planSlots(buildPlan(profile))[1], []);
-  const constraints = { ...defaultConstraints(profile), minutes: 20 };
+  // 15, not 20: since #229 a 20-minute Lower A fills exactly 20.
+  const constraints = { ...defaultConstraints(profile), minutes: 15 };
   const adapted = adaptWorkout(program, constraints, [], profile.goal);
   const before = todayGlance(adaptWorkout(program, defaultConstraints(profile), [], profile.goal), null, false, profile.goal);
   const after = todayGlance(adapted, null, false, profile.goal);
-  assert.ok(after.minutes !== 20 && before.minutes !== 60, `pick a case where the honest figure differs: ${before.minutes} → ${after.minutes}`);
+  assert.ok(after.minutes !== 15 && before.minutes !== 60, `pick a case where the honest figure differs: ${before.minutes} → ${after.minutes}`);
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: AdaptScreen } = await server.ssrLoadModule('/src/screens/AdaptScreen.tsx');
@@ -112,10 +113,10 @@ test('#203: the review names the honest figure, not the asked length', async () 
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     assert.match(text, new RegExp(`Start ${after.minutes}-min workout`));
     assert.match(text, new RegExp(`${before.minutes} min → ${after.minutes} min`));
-    assert.doesNotMatch(text, /Start 20-min workout/);
+    assert.doesNotMatch(text, /Start 15-min workout/);
     // The title names the length asked for as the setting it is, not as the session's duration.
-    assert.match(text, /Lower A, set to 20 min/);
-    assert.doesNotMatch(text, /20-minute version/);
+    assert.match(text, /Lower A, set to 15 min/);
+    assert.doesNotMatch(text, /15-minute version/);
   } finally {
     await server.close();
   }
@@ -281,7 +282,9 @@ test('#203: a trimmed day fits its length, cannot take one more set back, and ke
                 const isLead = exercise.exerciseId === lead;
                 // #133: the lead keeps the most sets, so a later movement stops at the lead's count.
                 if (!isLead && leadSets !== undefined && exercise.sets > leadSets) problems.push(`above the lead: ${where} ${exercise.exerciseId}`);
-                const cap = isLead || leadSets === undefined ? exercise.originalSets : Math.min(exercise.originalSets, leadSets);
+                // #229: under 45 minutes no movement passes 3 sets.
+                const most = minutes < 45 ? Math.min(3, exercise.originalSets) : exercise.originalSets;
+                const cap = isLead || leadSets === undefined ? most : Math.min(most, leadSets);
                 if (exercise.sets >= cap) return;
                 const more = work.map((item, k) => (k === index ? { ...item, sets: item.sets + 1 } : item));
                 if (seconds(more, profile.goal, minutes) <= minutes * 60) problems.push(`room for a set: ${where} ${exercise.exerciseId}`);
@@ -307,7 +310,7 @@ test('#203: the refill keeps the lead on top and the day even (#133)', () => {
   const strength15 = sets('Get Stronger', 60, 15);
   assert.ok(strength15['back-squat'] >= strength15['deadlift'], JSON.stringify(strength15));
   const muscle30 = sets('Build Muscle', 60, 30);
-  assert.ok(muscle30['back-squat'] >= muscle30['leg-curl'], JSON.stringify(muscle30));
+  for (const count of Object.values(muscle30)) assert.ok(muscle30['back-squat'] >= count, JSON.stringify(muscle30));
   // ...and filled the lead to 5 sets with every other movement left at 2.
   const muscle45 = Object.values(sets('Build Muscle', 60, 45));
   assert.ok(Math.max(...muscle45) - Math.min(...muscle45) <= 2, JSON.stringify(muscle45));

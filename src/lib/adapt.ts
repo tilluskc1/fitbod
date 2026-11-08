@@ -6,7 +6,7 @@ import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
 import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
 import { estimatedSeconds } from './generator.ts';
-import { sessionRests } from './sessionTime.ts';
+import { SHORT_SESSION_MAX_SETS, SHORT_SESSION_MINUTES, fitSets, leadFloorSets, sessionRests, warmUpSeconds } from './sessionTime.ts';
 import { liveExercises } from './liveProgression.ts';
 
 /**
@@ -298,14 +298,9 @@ export function adaptWorkout(
   // A length under the program's trims until the rest timer's model fits it (#203); at or over it,
   // the day stays as built (the generator already fitted it to its own length).
   const budget = minutes < program.minutes ? minutes * 60 : Infinity;
-  const seconds = () => {
-    const live = exercises.filter((exercise) => exercise.sets > 0);
-    const rests = sessionRests(live.map((exercise) => exercise.exerciseId), goal, minutes);
-    return estimatedSeconds(live.map((exercise) => exercise.sets), rests, minutes);
-  };
 
-  // Trim order: isolation first, then other compounds, the lead compound last;
-  // within a role, the later movement in the session goes first.
+  // Trim order of a program without a priority: isolation first, then other compounds, the lead
+  // compound last; within a role, the later movement in the session goes first.
   const leadId = leadCompoundId(exercises.map((exercise) => exercise.exerciseId));
   const role = (exercise: AdaptedExercise): number => {
     if (exercise.exerciseId === leadId) return 2;
@@ -316,36 +311,38 @@ export function adaptWorkout(
     .map((exercise, index) => ({ exercise, index }))
     .sort((a, b) => role(a.exercise) - role(b.exercise) || b.index - a.index)
     .map((entry) => entry.exercise);
+  // A generated day is cut from the end of its priority order, the order the generator cuts in, so a
+  // shorter length for today matches the same day saved at that length (#229). The lead goes last.
+  // Under 45 minutes (#229) a generated day is cut from the end of its priority order, the order the
+  // generator cuts a short day in, so a shorter length for today matches the same day saved at that
+  // length. The lead goes last. At 45 minutes and over, trimming is unchanged (#203).
+  const short = budget < Infinity && minutes < SHORT_SESSION_MINUTES;
+  const ranked = short && exercises.every((exercise) => exercise.rank !== undefined);
+  const dropOrder = ranked
+    ? exercises.map((_, index) => index).sort((a, b) =>
+      Number(exercises[a].exerciseId === leadId) - Number(exercises[b].exerciseId === leadId) || exercises[b].rank! - exercises[a].rank!)
+    : trimOrder.map((exercise) => exercises.indexOf(exercise));
 
-  // 2. Over the length: every movement goes to its floor (two working sets on a lift, one on a
-  //    hold), and step 4 hands sets back evenly. Trimming one movement at a time left the lead at
-  //    five sets with everything else at two (#203).
-  if (seconds() > budget) {
-    for (const exercise of exercises) exercise.sets = Math.min(exercise.sets, exercise.holdSeconds ? 1 : 2);
-  }
-
-  // 3. Still over: drop whole movements in the same order, never the last one.
-  while (seconds() > budget) {
-    const active = trimOrder.filter((exercise) => exercise.sets > 0);
-    if (active.length <= 1) break;
-    active[0].sets = 0;
-  }
-
-  // 4. Refill: round-robin in reverse trim order (lead, compounds, isolation), one set per
-  //    movement per pass while the day still fits, up to each movement's own sets. No movement
-  //    passes the lead's count (#133), and a dropped movement stays dropped (#203).
-  const leadExercise = exercises.find((exercise) => exercise.exerciseId === leadId);
-  const refill = [...trimOrder].reverse().filter((exercise) => exercise.sets > 0);
-  for (let added = true; added; ) {
-    added = false;
-    for (const exercise of refill) {
-      const cap = !leadExercise || exercise === leadExercise ? exercise.originalSets : Math.min(exercise.originalSets, leadExercise.sets);
-      if (exercise.sets >= cap) continue;
-      exercise.sets += 1;
-      if (seconds() > budget) exercise.sets -= 1;
-      else added = true;
-    }
-  }
+  // 2-4. Floor every movement, drop whole ones in drop order while still over, then hand sets back
+  //    evenly, lead first (#203). Under 45 minutes the generator fits a saved day by the same rule
+  //    (`fitSets`, #229): the lead floors at 3 from 30 minutes, nothing passes 3 sets, a day that
+  //    pulls keeps two presses, and a requirement's only cover drops last.
+  const rests = sessionRests(exercises.map((exercise) => exercise.exerciseId), goal, minutes);
+  const fitted = fitSets(
+    exercises.map((exercise, index) => ({
+      sets: exercise.sets,
+      rest: rests[index],
+      hold: Boolean(exercise.holdSeconds),
+      lead: exercise.exerciseId === leadId,
+      keep: short && exercise.keep,
+      pattern: exerciseById(exercise.exerciseId)?.pattern,
+    })),
+    dropOrder,
+    budget,
+    warmUpSeconds(minutes),
+    short ? { cap: SHORT_SESSION_MAX_SETS, twoPresses: true, leadFloor: leadFloorSets(minutes), keepIsSoft: true } : {},
+  );
+  exercises.forEach((exercise, index) => { exercise.sets = fitted[index]; });
 
   for (const exercise of exercises) {
     exercise.targetReps = exercise.targetReps?.slice(0, exercise.sets);

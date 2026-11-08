@@ -127,6 +127,8 @@ export function slotProgram(
       // excludes those movements when today's setup differs from home.
       requires: catalog?.needs.length === 0 ? 'bodyweight'
         : catalog?.equipment === 'Dumbbell' ? 'dumbbell' : 'configured',
+      ...(generated.held?.includes(entry.exerciseId) ? { keep: true } : {}),
+      ...(generated.priority?.includes(entry.exerciseId) ? { rank: generated.priority.indexOf(entry.exerciseId) } : {}),
     };
   });
   return {
