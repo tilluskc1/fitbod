@@ -50,14 +50,15 @@ test('a longer session adds volume on the day, never off it or onto an incompati
   for (const [muscle, count] of perMuscle) assert.ok(count <= 2, `${muscle} is not piled on`);
 });
 
-test('a Push day the caps fill at 6 spends extra time on sets, and is not called Limited', () => {
+test('a Push day the caps fill spends extra time on sets, and is not called Limited', () => {
   const push = (minutes: number) => shape(at(minutes, { daysPerWeek: 3 }));
   assert.deepEqual(push(45).sets, [5, 3, 3, 3]);
-  assert.deepEqual(push(60).sets, [5, 4, 4, 4, 4, 3], 'the caps fill at 6; spare time goes to fourth sets in order');
+  // At 60 minutes an intermediate's chest takes a third press (#96): an exercise before fourth sets.
+  assert.deepEqual(push(60).sets, [5, 3, 3, 3, 3, 3, 3]);
   const long = push(75);
-  assert.deepEqual(long.sets, [5, 4, 4, 4, 4, 4], 'the 3-set work behind the lead gets a fourth set');
+  assert.deepEqual(long.sets, [5, 4, 4, 3, 4, 4, 4, 3], 'the caps fill at 8; spare time goes to fourth sets in order, thirds last');
   assert.equal(long.feasibility.status, 'ok', 'no gap the user could close');
-  assert.equal(long.targetCount, 6);
+  assert.equal(long.targetCount, 8);
 });
 
 test("a 'more' preference reorders the fill without making a full day Limited", () => {
@@ -66,10 +67,10 @@ test("a 'more' preference reorders the fill without making a full day Limited", 
 });
 
 test("Plan's catalog row reads the sets the fitted day gives, not the bare prescription", () => {
-  const profile = at(60, { daysPerWeek: 3 });
+  const profile = at(75, { daysPerWeek: 3 });
   const day = slotProgram(profile, planSlots(buildPlan(profile))[0], []);
   const accessory = day.exercises[1];
-  assert.equal(accessory.sets, 4, 'the 60-minute Push gives its 3-set work a fourth set');
+  assert.equal(accessory.sets, 4, 'the 75-minute Push gives its 3-set work a fourth set');
   const row = catalogRowMeta(EXERCISES.find((exercise) => exercise.id === accessory.exerciseId)!, profile, [], 'kg',
     day.exercises.map((exercise) => exercise.exerciseId),
     Object.fromEntries(day.exercises.map((exercise) => [exercise.exerciseId, exercise.sets])));
@@ -87,7 +88,8 @@ test('a home day that fills its time is Ready; only gear that cannot fill half t
   }
   const thin = shape(at(60, { daysPerWeek: 3, equipment: ['Kettlebell'], support: [] }));
   assert.equal(thin.feasibility.status, 'limited');
-  assert.ok(thin.targetCount > thin.exercises.length && thin.targetCount <= 6, `${thin.exercises.length} of ${thin.targetCount}`);
+  // Named against what the caps hold with everything allowed: 7 for an intermediate's 60-minute Push (#96).
+  assert.ok(thin.targetCount > thin.exercises.length && thin.targetCount <= 7, `${thin.exercises.length} of ${thin.targetCount}`);
 });
 
 test('every generated day fits its labelled minutes, except a 20-minute floor by under a minute', () => {
