@@ -106,6 +106,12 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    object that already flows to it (`Program.thirds`), never infer it from shape or position (lesson 1).
    Check: `tests/muscleCap96.test.ts`, a trim drops exactly `program.thirds`.
 
+18. **"Can I close it?" is a question, not an order.** The owner asked whether they could close their
+   chats; I archived the "Photo frame loop" dev chat myself and the owner lost it mid-work (unarchived
+   the same turn). Rule: never archive, close or delete a chat, PR, branch or issue unless the owner
+   says to do it now; answer the question, say what is safe, and let the owner act. Check: the turn's
+   tool calls contain no archive/close/delete the owner did not ask for in that message.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
