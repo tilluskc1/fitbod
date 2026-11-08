@@ -92,22 +92,25 @@ try {
     await page.waitForSelector('.t7-hero');
     check(await page.locator('.t7-hero__title').innerText() === firstDay, `${where}: the week's first day is up again`);
     const card = (await page.locator('.t7-workout .compare-block').first().innerText()).replace(/\s+/g, ' ');
-    check(/Last session [\d · ]+ @ [\d.]+ lb (total|each)/.test(card), `${where}: Last session shows the load (${card})`);
-    check(/Today’s target [\d · ]+ @ [\d.]+ lb (total|each)/.test(card), `${where}: the target carries its load (${card})`);
+    const last = card.match(/Last session (\d+)[\d · ]* @ ([\d.]+) lb (?:total|each)/);
+    const target = card.match(/Today’s target (\d+)[\d · ]* @ ([\d.]+) lb (?:total|each)/);
+    check(Boolean(last), `${where}: Last session shows the load (${card})`);
+    check(Boolean(target), `${where}: the target carries its load (${card})`);
 
-    let taps = 0;
-    await page.getByRole('button', { name: 'Start workout' }).click(); taps += 1;
+    // Two taps and nothing in between: Start, then set 1's check, with no step and no typing.
+    await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     check(await page.getByRole('button', { name: 'Confirm' }).count() === 0, `${where}: no first-weight step the second time`);
-    const row = (await page.locator('td.lg-prev').first().innerText()).replace(/\s+/g, ' ');
-    check(/\d+(\.\d+)? × \d+/.test(row), `${where}: last week's load and reps shown as previous (${row})`);
+    const row = (await page.locator('td.lg-prev').first().innerText()).replace(/\s+/g, ' ').trim();
+    const weight = (await page.locator('table button.lg-cell').first().innerText()).trim();
+    if (last) check(row === `${last[2]} × ${last[1]}`, `${where}: previous is last week's ${last[2]} × ${last[1]} (${row})`);
+    if (target) check(weight === target[2], `${where}: set 1 is prefilled with the target's ${target[2]} (${weight})`);
     const log = page.getByRole('button', { name: 'Log set 1' }).first();
     check(await log.isEnabled(), `${where}: set 1 can be logged without typing`);
-    await log.click(); taps += 1;
+    await log.click();
     check(await page.getByRole('img', { name: 'Set 1 logged' }).count() === 1, `${where}: set 1 logged`);
-    check(taps === 2, `${where}: Start + Log set 1 is 2 taps (${taps})`);
     check(errors.length === 0, `${where}: no page errors (${errors.join('; ')})`);
-    console.log(`${where}: ${firstDay} again; ${lastWeek.name} last week ${lastWeek.done} sets @ ${lastWeek.kg} kg; card "${card}"; first row "${row}"; ${taps} taps`);
+    console.log(`${where}: ${firstDay} again; ${lastWeek.name} last week ${lastWeek.done} sets @ ${lastWeek.kg} kg; card "${card}"; previous "${row}"; set 1 "${weight}"`);
     await page.close();
   }
 } finally {

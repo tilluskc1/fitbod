@@ -24,6 +24,8 @@ test('the last session reads like the target line: reps @ load', () => {
 
 test('sets at different loads read per set, as the logger does', () => {
   assert.equal(lastSummary(total, [{ weight: 60, reps: 6 }, { weight: 62.5, reps: 5 }], 'kg'), '60 × 6 · 62.5 × 5 kg total');
+  // Loads that display the same are one load (review nit): compared as shown, not as stored.
+  assert.equal(lastSummary(total, [{ weight: 61.235, reps: 6 }, { weight: 61.24, reps: 5 }], 'lb', () => '135'), '6 · 5 @ 135 lb total');
 });
 
 test('bodyweight and holds keep reps or seconds only', () => {

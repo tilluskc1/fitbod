@@ -186,7 +186,8 @@ export function lastSummary(
   const reps = sets.map((set) => set.reps);
   if (exercise.load === 'none' || !sets.some((set) => set.weight > 0)) return setText(exercise.exerciseId, reps);
   const load = (weight: number) => loadLabel({ weight, load: exercise.load }, unit, format);
-  if (sets.every((set) => set.weight === sets[0].weight)) return `${reps.join(' · ')} @ ${load(sets[0].weight)}`;
+  // Same as displayed, not as stored: two kg values that show the same read as one load.
+  if (sets.every((set) => load(set.weight) === load(sets[0].weight))) return `${reps.join(' · ')} @ ${load(sets[0].weight)}`;
   const suffix = load(sets.find((set) => set.weight > 0)!.weight).replace(/^\S+ /, '');
   const number = (weight: number) => load(weight).split(' ')[0];
   return `${sets.map((set) => `${set.weight > 0 ? number(set.weight) : 'BW'} × ${set.reps}`).join(' · ')} ${suffix}`;
