@@ -75,12 +75,14 @@ async function finishToRecap(page) {
 
 const browser = await chromium.launch();
 try {
-  for (const [width, height] of [[390, 844], [360, 780]]) {
+  for (const [width, height] of [[390, 844], [360, 780], [390, 650]]) {
     const where = `${width}x${height}`;
 
     // 1. A browser tab: onboarding line, then the first recap offers a backup.
     const tab = await browser.newContext({ viewport: { width, height }, acceptDownloads: true });
     const page = await tab.newPage();
+    await page.goto(url);
+    const plainTitle = (await page.locator('.splash__title').boundingBox()).y;
     await page.clock.setFixedTime(day(0));
     await onboard(page, where);
     await finishToRecap(page);
@@ -111,16 +113,19 @@ try {
     await app.goto(url);
     const restore = app.getByText('Starting fresh? If you used the browser before, restore your backup here.');
     check(await restore.isVisible(), `${where}: installed app with no data does not offer a restore`);
+    // The headline keeps its place on the photo: within a line of where a plain tab shows it.
+    const title = await app.locator('.splash__title').boundingBox();
+    check(title && Math.abs(title.y - plainTitle) <= 24, `${where}: headline moved from y ${Math.round(plainTitle)} to ${title && Math.round(title.y)} with the restore offer`);
     const get = await app.getByRole('button', { name: 'Get started' }).boundingBox();
     check(get && get.y + get.height <= height, `${where}: Get started pushed off screen by the restore offer`);
     if (shots) await app.screenshot({ path: join(shots, `258-installed-${where}.png`) });
 
     // A bad file is rejected by the validated restore, and says so on this screen.
     const bad = join(work, 'bad.json');
-    writeFileSync(bad, '{"not":"a backup"}');
+    writeFileSync(bad, 'not json at all');
     await app.locator('.splash__restore input[type=file]').setInputFiles(bad);
-    const said = await app.locator('.app-alerts .banner').innerText().catch(() => '');
-    check(/Restore rejected|Restored 0 workouts/.test(said), `${where}: bad file not reported on the splash ("${said}")`);
+    const said = await app.locator('.app-alerts .banner').waitFor({ timeout: 3000 }).then(() => app.locator('.app-alerts .banner').innerText(), () => '');
+    check(/^Restore rejected/.test(said), `${where}: bad file not rejected on the splash ("${said}")`);
     check(await restore.isVisible(), `${where}: splash left after a file with no profile`);
 
     await app.locator('.splash__restore input[type=file]').setInputFiles(file);
@@ -143,4 +148,4 @@ if (failures.length) {
   console.error(`data-on-phone: ${failures.length} failure(s)\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('data-on-phone: pass at 390x844 and 360x780');
+console.log('data-on-phone: pass at 390x844, 360x780 and 390x650');

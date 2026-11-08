@@ -62,10 +62,14 @@ export default function SplashScreen({ onStart, installed = false, onRestore }: 
         </div>
 
         <div className="splash__foot">
-          {installed && onRestore && (
-            <div className="splash__restore" role="note">
-              <p>{INSTALLED_FRESH}</p>
-              <label className="secondary splash__restore-btn">
+          <button className="pill-primary" onClick={onStart}>
+            Get started
+          </button>
+          {installed && onRestore ? (
+            // (#258) In place of the note, so the headline above keeps its place on the photo.
+            <p className="splash__note splash__restore" role="note">
+              {INSTALLED_FRESH}{' '}
+              <label className="splash__restore-link">
                 Restore backup
                 <input
                   type="file"
@@ -77,12 +81,10 @@ export default function SplashScreen({ onStart, installed = false, onRestore }: 
                   }}
                 />
               </label>
-            </div>
+            </p>
+          ) : (
+            <span className="splash__note">No account. Nothing leaves this browser.</span>
           )}
-          <button className="pill-primary" onClick={onStart}>
-            Get started
-          </button>
-          <span className="splash__note">No account. Nothing leaves this browser.</span>
         </div>
       </div>
     </div>

@@ -1614,20 +1614,17 @@ textarea:focus-visible {
   margin-top: 22px;
 }
 
-/* #252: the one safety line, inside the sticky bar just above Build my plan. */
-/* #258: installed Home Screen app, no data yet: offer the restore above Get started. */
-.splash__restore {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 12px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--on-surface);
-  font-size: 14px;
-  line-height: 1.4;
+/* #258: installed Home Screen app, no data yet: the restore offer replaces the note under Get started. */
+.splash__restore { color: var(--on-surface); }
+.splash__restore-link {
+  position: relative;
+  display: inline-block;
+  min-height: 24px;
+  font-weight: 600;
+  text-decoration: underline;
+  color: var(--accent-text);
+  cursor: pointer;
 }
-.splash__restore-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; }
 
 /* #258: the first recap offers a backup once. */
 .recap-backup {
@@ -1644,6 +1641,7 @@ textarea:focus-visible {
 .recap-backup__actions .secondary { flex: 1; }
 .recap-backup__actions .text-link { flex: none; white-space: nowrap; padding: 0 8px; }
 
+/* #252: the one safety line, inside the sticky bar just above Build my plan. */
 .onboarding-actions.onboarding-actions--notice {
   padding-top: 14px;
   border-top: 1px solid var(--outline-variant);
