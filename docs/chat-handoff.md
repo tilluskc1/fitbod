@@ -110,7 +110,7 @@ public/                exercises/ (JPEG frames), hero/, icons/, manifest.webmani
 
 - Issues are the source of truth. Statuses: `Todo` → `In Progress` → `Review` → `Ready to merge` → `Done`.
 - Work happens on `work/<issue>-<slug>` with a draft PR; a **separate reviewer agent** checks each PR at a named SHA; checks (build, tests, lint) and a browser pass at 390×844 and 360×780 before merge.
-- **Only the owner approves merges to `main` and marks `Done`.** A merge to `main` is a production deploy.
+- **Merges to `main` follow the standing merge rule in `AGENTS.md`** (separate review passed, no stored-data/dependency/look change unless approved, checks green, `Vercel=success`); otherwise the owner approves. Only the owner marks `Done`. A merge to `main` is a production deploy.
 - Merging: merge PRs in order on a local `merge/*` branch, run all checks after each, push `main` once, confirm `Vercel=success`. Stacked PRs are marked merged by fast-forwarding their base branch to their head (no force push).
 - The cloud session cannot edit Project 11 fields (GraphQL blocked) or open `*.vercel.app`; it reads Vercel's result from the GitHub commit status.
 
