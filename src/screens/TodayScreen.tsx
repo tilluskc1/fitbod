@@ -16,6 +16,9 @@ import FeasibilityNote, { DescribedNote } from '../components/ui/FeasibilityNote
 import { missingFamilies } from '../lib/feasibility';
 import type { ProfileChange } from '../lib/preferences';
 import type { DayStatus } from '../lib/todayTalk';
+import { listAreas } from '../lib/recovery';
+import type { FresherDay } from '../lib/recovery';
+import type { SwitchOption } from '../lib/switchDay';
 import Icon from '../components/ui/Icon';
 
 interface Props {
@@ -63,6 +66,12 @@ interface Props {
   backup?: string | null;
   /** (#225) Back up now: the same action as Settings. */
   onBackup?: () => void;
+  /** (#134) The day up next repeats muscles trained in the last 48 h: a fresher day to switch to. */
+  fresher?: FresherDay | null;
+  /** (#134) Switch to the fresher day: the Switch sheet's own pick. */
+  onPickFresher?: (option: SwitchOption) => void;
+  /** (#134) Keep the day up next; the offer is dismissed for today. */
+  onKeepNext?: () => void;
 }
 
 function greeting(now: Date): string {
@@ -189,6 +198,9 @@ export default function TodayScreen({
   described,
   backup,
   onBackup,
+  fresher,
+  onPickFresher,
+  onKeepNext,
 }: Props) {
   const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
   const unit = unitOf(profile);
@@ -332,6 +344,17 @@ export default function TodayScreen({
         {described && <DescribedNote day={described} />}
         {!described && !current && !adjusted && (
           <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
+        )}
+
+        {fresher && onPickFresher && onKeepNext && !current && (
+          <div className="feasibility" role="note">
+            <p className="feasibility__line">{listAreas(fresher.areas)} trained {fresher.when}. {fresher.option.name} is fresher.</p>
+            <p className="feasibility__reason">Switching skips {fresher.option.skips.join(', ')}.</p>
+            <div className="feasibility__alts">
+              <button className="feasibility__alt" onClick={() => onPickFresher(fresher.option)}>Switch to {fresher.option.name}</button>
+              <button className="feasibility__alt feasibility__alt--text" onClick={onKeepNext}>Keep {fresher.nextName}</button>
+            </div>
+          </div>
         )}
 
         {/* (#225) Not mid-session: a backup taken now would miss the open session. */}
