@@ -588,14 +588,17 @@ export function restorePendingWorkout(
     if (slot >= 0) owner.set(index, slot);
   });
   // 2. Then, in session order, a replacement right after the half it replaced, by the swap split the
-  // session stores. 3. Last resort, by pattern: an entry with neither (a replacement swapped in before
+  // session stores: read on the raw entry, so a part-logged exercise never looks like a kept half.
+  // 3. Last resort, by pattern: an entry with neither (a replacement swapped in before
   // its slot logged a set) takes the first same-pattern exercise that has nothing logged; a legacy entry
   // with no stored requirement takes the first of that pattern, as before.
+  const continues = new Set<WorkoutExercise>();
   logged.forEach((entry, index) => {
     if (!entry || owner.has(index)) return;
-    const kept = logged[index - 1];
+    const kept = session.exercises[index - 1];
     if (kept && owner.has(index - 1) && swapContinues(kept, entry)) {
       owner.set(index, owner.get(index - 1)!);
+      continues.add(entry);
       return;
     }
     const owned = new Set(owner.values());
@@ -611,12 +614,17 @@ export function restorePendingWorkout(
     });
     const done = group.reduce((sum, exercise) => sum + exercise.performed.length, 0);
     const pending = prescribed.planned.slice(done);
-    // Pending sets join a segment on the same setup; a gear switch starts a new segment, so
-    // each set keeps the setup it ran on (#188).
-    const sameVariant = group.find((exercise) => exercise.exerciseId === prescribed.exerciseId && exercise.setup === prescribed.setup);
+    // A swapped slot's pending sets go to the last part of its swap chain, on that exercise's own
+    // prescription, so the kept half stays all done and the split survives the next restore.
+    // Otherwise pending sets join a segment on the same setup; a gear switch starts a new segment,
+    // so each set keeps the setup it ran on (#188).
+    const last = group.at(-1);
+    const swapTail = last && continues.has(last) && last.setup === prescribed.setup ? last : undefined;
+    const sameVariant = swapTail ?? group.find((exercise) => exercise.exerciseId === prescribed.exerciseId && exercise.setup === prescribed.setup);
     if (sameVariant) {
-      sameVariant.planned.push(...pending.map((set) => ({ ...set })));
-      sameVariant.performed.push(...pending.map((set) => ({ ...set, done: false, completedAt: null })));
+      const sets = swapTail ? pending.map(() => ({ ...swapTail.planned.at(-1)! })) : pending.map((set) => ({ ...set }));
+      sameVariant.planned.push(...sets);
+      sameVariant.performed.push(...sets.map((set) => ({ ...set, done: false, completedAt: null })));
     } else if (pending.length > 0) {
       group.push({
         ...prescribed,

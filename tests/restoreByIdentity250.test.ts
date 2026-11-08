@@ -136,9 +136,11 @@ test('#250: swap halves stay together and count once against their slot, swapped
     assert.equal(list[incline + 1], replacement.id, `${label}: the replacement follows the half it replaced: ${list.join(', ')}`);
     assert.equal(list.filter((id) => id === 'incline-dumbbell-press').length, 1, `${label}: ${list.join(', ')}`);
     assert.equal(list.filter((id) => id === 'barbell-bench-press').length, 1, `${label}: ${list.join(', ')}`);
-    // The slot's 4 sets: 1 incline + 1 replacement logged, 2 pending on the incline.
-    assert.equal(pendingOf(restored, 'incline-dumbbell-press'), 2, label);
-    assert.equal(pendingOf(restored, replacement.id), 0, label);
+    // The slot's 4 sets: 1 incline + 1 replacement logged, 2 pending on the replacement, at its own load.
+    assert.equal(pendingOf(restored, 'incline-dumbbell-press'), 0, label);
+    assert.equal(pendingOf(restored, replacement.id), 2, label);
+    assert.ok(restored.exercises.find((exercise) => exercise.exerciseId === replacement.id)!.performed
+      .filter((set) => !set.done).every((set) => set.weight === 30), `${label}: the replacement's own load`);
     assert.equal(pendingOf(restored, 'barbell-bench-press'), 4, `${label}: bench owes its own 5 minus its own 1`);
     assert.deepEqual(done(restored), done(shortened), `${label}: logged sets untouched`);
     assert.equal(sessionProgress(restored).total, full.totalSets, label);
@@ -214,5 +216,80 @@ test('#250: a described day (#193) shortened mid-session and lengthened back lis
     const shortened = restorePendingWorkout(running, described(minutes), gym, []);
     assertRestored(shortened, running, described(minutes), `described ${minutes}`);
     assertRestored(restorePendingWorkout(shortened, full, gym, []), running, full, `described back from ${minutes}`);
+  }
+});
+
+test('#250 review: a part-logged exercise is never read as the kept half of the next exercise\'s swap', () => {
+  const full = dayAt();
+  const replacement = replacementFor(full, 'incline-dumbbell-press');
+  let running = log(start(full), 'barbell-bench-press', 60);
+  running = log(running, 'overhead-press', 30);
+  // The incline is swapped before it has a set: nothing of it is kept, so nothing splits.
+  running = swap(running, 'incline-dumbbell-press', full);
+  running = log(running, replacement.id);
+  assert.deepEqual(ids(running).slice(0, 3), ['barbell-bench-press', 'overhead-press', replacement.id]);
+  const restored = restorePendingWorkout(running, full, gym, []);
+  assert.deepEqual(done(restored), done(running));
+  assert.equal(pendingOf(restored, 'overhead-press'), 3, 'overhead press owes its 4 minus its own 1');
+  assert.equal(pendingOf(restored, 'incline-dumbbell-press') + pendingOf(restored, replacement.id), 3,
+    'the incline slot owes 4 minus its replacement\'s 1');
+  const ohp = restored.exercises.find((exercise) => exercise.exerciseId === 'overhead-press')!;
+  assert.equal(ohp.originalPlannedSets, 4, 'overhead press is not read as cut short');
+});
+
+test('#250 review: swap, shorten, restore, shorten, restore keeps the swap chain', () => {
+  const full = dayAt();
+  const replacement = replacementFor(full, 'incline-dumbbell-press');
+  let running = log(start(full), 'barbell-bench-press', 60);
+  running = log(running, 'incline-dumbbell-press');
+  running = swap(running, 'incline-dumbbell-press', full);
+  running = log(running, replacement.id);
+  const logged = done(running);
+  for (const [step, minutes] of [[1, 30], [2, 60], [3, 20], [4, 60]] as const) {
+    running = restorePendingWorkout(running, minutes === 60 ? full : dayAt(push, { minutes }), gym, []);
+    const list = ids(running);
+    const label = `step ${step} (${minutes} min): ${list.join(', ')}`;
+    assert.deepEqual(done(running), logged, `${label}: logged sets untouched`);
+    assert.equal(list.filter((id) => id === 'incline-dumbbell-press').length, 1, label);
+    assert.equal(list.filter((id) => id === replacement.id).length, 1, label);
+    assert.equal(list[list.indexOf('incline-dumbbell-press') + 1], replacement.id, `${label}: the halves stay together`);
+    const inclineSets = (minutes === 60 ? full : dayAt(push, { minutes })).exercises.find((item) => item.exerciseId === 'incline-dumbbell-press')!.sets;
+    assert.equal(pendingOf(running, 'incline-dumbbell-press') + pendingOf(running, replacement.id), Math.max(0, inclineSets - 2),
+      `${label}: the slot owes its sets minus both halves' logged sets`);
+    assert.equal(pendingOf(running, 'barbell-bench-press'),
+      (minutes === 60 ? full : dayAt(push, { minutes })).exercises[0].sets - 1, `${label}: bench owes only its own`);
+  }
+});
+
+test('#250 fuzz guard: logs, swaps, shortens and restores never change a logged set or list an exercise twice', () => {
+  let seed = 250;
+  const random = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const pick = <T,>(items: T[]) => items[Math.floor(random() * items.length)];
+  const key = (session: WorkoutRecord) => done(session).map((item) => JSON.stringify(item)).sort();
+  for (let round = 0; round < 300; round += 1) {
+    const slot = pick(slots);
+    const full = dayAt(slot);
+    let running = start(full, slot);
+    for (let step = 0; step < 12; step += 1) {
+      const open = running.exercises.filter((exercise) => exercise.performed.some((set) => !set.done));
+      const roll = random();
+      if (roll < 0.5 && open.length) running = log(running, pick(open).exerciseId);
+      else if (roll < 0.65 && open.length) {
+        const target = pick(open);
+        const candidate = rankedReplacements(exerciseById(target.exerciseId)!, gym,
+          running.exercises.map((exercise) => exerciseById(exercise.exerciseId)!))[0];
+        if (candidate) {
+          const index = running.exercises.indexOf(target);
+          running = swapPendingExercise(running, index, { exerciseId: candidate.id, name: candidate.name, weight: 20, reps: 8 });
+        }
+      } else {
+        const before = key(running);
+        const minutes = pick([15, 20, 30, 45, 60]);
+        running = restorePendingWorkout(running, minutes === 60 ? full : dayAt(slot, { minutes }), gym, []);
+        const label = `round ${round} ${slot.name} to ${minutes}: ${ids(running).join(', ')}`;
+        assert.deepEqual(key(running), before, `${label}: logged sets untouched`);
+        assert.equal(new Set(ids(running)).size, ids(running).length, `${label}: listed twice`);
+      }
+    }
   }
 });
