@@ -4530,6 +4530,7 @@ button.aw-exercise__name-btn {
 .tt-say {
   /* (#256) Focus scrolling keeps the box above the planner's pinned action bar. */
   scroll-margin-bottom: calc(150px + var(--kb, 0px));
+  scroll-margin-top: calc(12px + var(--vv-top, 0px));
   width: 100%;
   min-height: 86px;
   resize: none;

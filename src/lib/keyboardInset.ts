@@ -19,7 +19,18 @@ export function trackKeyboardInset(win: Window = window): () => void {
   const vv = win.visualViewport;
   if (!vv) return () => undefined;
   const root = win.document.documentElement;
-  const update = () => root.style.setProperty('--kb', `${keyboardInset(win.innerHeight, vv)}px`);
+  const update = () => {
+    const inset = keyboardInset(win.innerHeight, vv);
+    root.style.setProperty('--kb', `${inset}px`);
+    // What the phone scrolled off the top to show the field (iPhone), for scroll-margin-top.
+    root.style.setProperty('--vv-top', `${Math.max(0, Math.round(vv.offsetTop))}px`);
+    // The phone revealed the focused field before the bar moved up; reveal it again so its
+    // scroll-margin (which includes --kb) keeps it above the lifted bar.
+    const field = win.document.activeElement;
+    if (inset > 0 && field && /^(TEXTAREA|INPUT)$/.test(field.tagName)) {
+      (field as HTMLElement).scrollIntoView({ block: 'nearest' });
+    }
+  };
   update();
   vv.addEventListener('resize', update);
   vv.addEventListener('scroll', update);

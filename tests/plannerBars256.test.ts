@@ -22,6 +22,7 @@ test("every planner step and the summary keep their actions in the pinned bar", 
   assert.match(bar, /bottom: var\(--kb, 0px\)/);
   assert.match(bar, /env\(safe-area-inset-bottom/);
   assert.match(rule('.tt-say'), /scroll-margin-bottom: calc\(150px \+ var\(--kb, 0px\)\)/);
+  assert.match(rule('.tt-say'), /scroll-margin-top: calc\(12px \+ var\(--vv-top, 0px\)\)/);
 });
 
 test('the entry comes before the backup note so the reminder cannot push it under the dock', () => {

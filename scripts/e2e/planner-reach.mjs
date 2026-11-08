@@ -105,23 +105,30 @@ async function walkPlanner(page, where) {
     await shot(page, `${where}-step${step}`);
     if (step === 1) {
       // Keyboard open, as a phone does it: the layout keeps its height and the keyboard covers the
-      // bottom 330px (the visual viewport shrinks). The browser then scrolls the focused box into
-      // the part still visible. Next and the box must both sit inside that visible band.
+      // bottom 330px; the visual viewport shrinks, and on iPhone may also shift up (offsetTop).
+      // The test does not scroll for the app: whatever reveals the box must be the app's own doing.
       const size = page.viewportSize();
-      const band = size.height - 330;
-      await page.locator('#tt-say').focus();
-      await page.evaluate((h) => window.__fakeKeyboard(h), band);
-      await page.locator('#tt-say').evaluate((el) => el.scrollIntoView({ block: 'nearest' }));
-      const say = await page.locator('#tt-say').boundingBox();
-      const bar = await page.locator('.tt-bar').boundingBox();
-      const nb = await next.boundingBox();
-      check(nb && nb.y >= 0 && nb.y + nb.height <= band, `${where}: Next under the keyboard (y ${nb && Math.round(nb.y)}-${nb && Math.round(nb.y + nb.height)}, visible to ${band})`);
-      check(say && bar && say.y >= 0 && say.y + say.height <= bar.y, `${where}: text box hidden behind the action bar with the keyboard open`);
-      const hit = await next.evaluate((el) => { const b = el.getBoundingClientRect(); const h = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return Boolean(h && (h === el || el.contains(h))); });
-      check(hit, `${where}: Next does not own its tap with the keyboard open`);
-      await shot(page, `${where}-step1-keyboard`);
-      await page.locator('#tt-say').blur();
-      await page.evaluate(() => window.__fakeKeyboard(null));
+      for (const shift of [0, 120]) {
+        const top = shift;
+        const bottom = size.height - 330 + shift;
+        await page.locator('#tt-say').focus();
+        await page.evaluate(([h, o]) => window.__fakeKeyboard(h, o), [size.height - 330, shift]);
+        await page.waitForTimeout(50);
+        const say = await page.locator('#tt-say').boundingBox();
+        const bar = await page.locator('.tt-bar').boundingBox();
+        const nb = await next.boundingBox();
+        const tag = `${where} keyboard (offsetTop ${shift})`;
+        check(nb && nb.y >= top && nb.y + nb.height <= bottom, `${tag}: Next outside the visible band (y ${nb && Math.round(nb.y)}-${nb && Math.round(nb.y + nb.height)}, band ${top}-${bottom})`);
+        check(say && say.y >= top && say.y + say.height <= bottom, `${tag}: text box outside the visible band (y ${say && Math.round(say.y)}-${say && Math.round(say.y + say.height)}, band ${top}-${bottom})`);
+        check(say && bar && say.y + say.height <= bar.y, `${tag}: text box behind the action bar`);
+        for (const [label, loc] of [['Next', next], ['text box', page.locator('#tt-say')]]) {
+          const own = await loc.evaluate((el) => { const b = el.getBoundingClientRect(); const h = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return Boolean(h && (h === el || el.contains(h))); });
+          check(own, `${tag}: ${label} does not own its tap`);
+        }
+        await shot(page, `${where}-step1-keyboard${shift ? '-shifted' : ''}`);
+        await page.locator('#tt-say').blur();
+        await page.evaluate(() => window.__fakeKeyboard(null, 0));
+      }
     }
     const heading = await page.locator('.tt h2').innerText();
     await next.click();
@@ -151,11 +158,12 @@ try {
       const real = window.visualViewport;
       const fake = new EventTarget();
       let covered = null;
+      let shifted = 0;
       Object.defineProperty(fake, 'height', { get: () => covered ?? window.innerHeight });
-      Object.defineProperty(fake, 'offsetTop', { get: () => 0 });
+      Object.defineProperty(fake, 'offsetTop', { get: () => shifted });
       Object.defineProperty(fake, 'width', { get: () => real?.width ?? window.innerWidth });
       Object.defineProperty(window, 'visualViewport', { get: () => fake });
-      window.__fakeKeyboard = (visible) => { covered = visible; fake.dispatchEvent(new Event('resize')); };
+      window.__fakeKeyboard = (visible, offsetTop = 0) => { covered = visible; shifted = offsetTop; fake.dispatchEvent(new Event('resize')); };
     });
     const errors = [];
     page.on('pageerror', (error) => errors.push(String(error)));
