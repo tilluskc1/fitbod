@@ -1,4 +1,4 @@
-import type { WorkoutRecord } from '../types';
+import type { WorkoutExercise, WorkoutRecord } from '../types';
 
 /**
  * What the exercise action sheet can offer, and why a control cannot run.
@@ -86,4 +86,13 @@ export function exerciseHistory(
     }
   }
   return entries;
+}
+
+/** The toast after "Remove today's remaining work": logged sets stay, so it never says nothing was recorded (#105). */
+export function removeTodayNotice(exercise: Pick<WorkoutExercise, 'name' | 'performed'> | undefined): string {
+  const name = exercise?.name ?? 'That exercise';
+  const done = exercise?.performed.filter((set) => set.done).length ?? 0;
+  return done === 0
+    ? `${name} skipped for today. Nothing was recorded for it.`
+    : `${name}: the remaining sets are removed for today. ${done} logged ${done === 1 ? 'set is' : 'sets are'} kept.`;
 }

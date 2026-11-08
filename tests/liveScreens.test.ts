@@ -146,9 +146,10 @@ test('Plan available rows show the live prescription, not the fixture', () => {
   const press = exerciseById('dumbbell-floor-press');
   const plank = exerciseById('plank');
   assert.ok(press && plank);
-  assert.equal(catalogRowMeta(press, profile, [], 'kg'), '3 sets · 8 reps', 'uncalibrated: no load');
-  assert.equal(catalogRowMeta(press, profile, earnedHistory(), 'kg'), '3 sets · 8 reps · 18 kg each');
-  assert.equal(catalogRowMeta(plank, profile, [], 'kg'), '2 sets · 45s', 'holds keep seconds');
+  // Off any day, a row takes its role's sets (#105): a compound with no lead ahead of it gets four, not the fixture's three.
+  assert.equal(catalogRowMeta(press, profile, [], 'kg'), '4 sets · 8 reps', 'uncalibrated: no load');
+  assert.equal(catalogRowMeta(press, profile, earnedHistory(), 'kg'), '4 sets · 8 reps · 18 kg each');
+  assert.equal(catalogRowMeta(plank, profile, [], 'kg'), '3 sets · 45s', 'holds keep seconds');
 });
 
 test('the logger names the equipment, not bodyweight, and shows the prescribed reps', async () => {
