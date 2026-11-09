@@ -4,10 +4,14 @@ import {
   calibrationInputValue, correctionBlur, correctionKeystroke, loadLimitMessage, repsLimitMessage, typedReps, unitLabel,
 } from '../lib/units';
 import { plannedLoad } from '../lib/liveProgression';
-import { bestCompletedSet, exerciseInWorkout, hasWork } from '../lib/plan';
+import { bestCompletedSet, exerciseInWorkout } from '../lib/plan';
+import { doneSets, progressTotals, trainedMinutes } from '../lib/progressTotals';
 import type { Profile, Unit, WorkoutFeedback, WorkoutRecord } from '../types';
 import { FEEDBACK_CHOICES, feedbackLabel } from '../lib/feedback';
-import { ArrowIcon, BarIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
+import { ArrowIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
+
+/** (#294) Session history with nothing in it. */
+export const NO_WORKOUTS_YET = 'No workouts yet. Your first one will appear here.';
 
 interface Props {
   history: WorkoutRecord[];
@@ -25,23 +29,16 @@ interface Props {
   ) => void;
   onDelete: (workoutId: string) => void;
   onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
-  onGoTrain: () => void;
+  /** (#294) A workout is under way: the empty state resumes it instead of starting today's. */
+  running?: boolean;
+  /** Opens today's preview (Today's Start), or resumes the running workout. */
+  onStartToday: () => void;
+  /** Today has nothing to start, as Today's own Preview button is then disabled. */
+  startDisabled?: boolean;
 }
 
-function minutesOf(workout: WorkoutRecord): number {
-  if (workout.endedAt) {
-    const span = (Date.parse(workout.endedAt) - Date.parse(workout.date)) / 60000;
-    if (Number.isFinite(span) && span > 0) return Math.max(1, Math.round(span));
-  }
-  return workout.durationMin ?? 0;
-}
-
-function setsOf(workout: WorkoutRecord): number {
-  return workout.exercises.reduce(
-    (sum, exercise) => sum + exercise.performed.filter((set) => set.done).length,
-    0,
-  );
-}
+const minutesOf = (workout: WorkoutRecord) => trainedMinutes(workout).minutes;
+const setsOf = doneSets;
 
 function dateParts(iso: string): { month: string; day: string } {
   const date = new Date(iso);
@@ -62,7 +59,9 @@ export default function ProgressScreen({
   onCorrect,
   onDelete,
   onFeedback,
-  onGoTrain,
+  running = false,
+  onStartToday,
+  startDisabled = false,
 }: Props) {
   const [tab, setTab] = useState<'overview' | 'history'>('overview');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -138,9 +137,7 @@ export default function ProgressScreen({
   const sessionLabel = (point: { date: string; workoutName: string }) =>
     `${dateParts(point.date).month} ${dateParts(point.date).day} · ${point.workoutName}`;
 
-  const worked = sessions.filter(hasWork);
-  const totalSets = worked.reduce((sum, workout) => sum + setsOf(workout), 0);
-  const totalMinutes = worked.reduce((sum, workout) => sum + minutesOf(workout), 0);
+  const totals = progressTotals(sessions);
 
   const max = Math.max(...series.map((point) => point.best), 1);
   const points = series.map((point, index) => {
@@ -181,22 +178,34 @@ export default function ProgressScreen({
         </button>
       </div>
 
-      {tab === 'overview' ? (
+      {tab === 'overview' && totals.workouts === 0 ? (
+        // (#294) No finished workout yet: say what is missing and the one action that fixes it.
+        <div className="empty-state progress-empty">
+          <h2 className="progress-empty__title">Your progress starts with your first workout.</h2>
+          <p>After it, you'll see your workouts, sets and minutes here, and a chart for each lift.</p>
+          <button className="primary" onClick={onStartToday} disabled={!running && startDisabled}>
+            {running ? 'Resume workout' : "Start today's workout"}
+            <ArrowIcon />
+          </button>
+        </div>
+      ) : tab === 'overview' ? (
         <>
           <div className="stats-3">
             <div className="stat">
-              <span className="stat-label">Sessions recorded</span>
-              <span className="stat-value">{worked.length}</span>
+              <span className="stat-label">Workouts</span>
+              <span className="stat-value">{totals.workouts}</span>
             </div>
             <div className="stat">
-              <span className="stat-label">Working sets</span>
-              <span className="stat-value">{totalSets}</span>
+              <span className="stat-label">Sets</span>
+              <span className="stat-value">{totals.sets}</span>
             </div>
             <div className="stat">
-              <span className="stat-label">Minutes invested</span>
-              <span className="stat-value">{totalMinutes}</span>
+              <span className="stat-label">Minutes</span>
+              <span className="stat-value">{totals.minutes}</span>
             </div>
           </div>
+          <p className="stats-note">all time</p>
+          {totals.approx && <p className="stats-note">≈ includes planned time for older workouts.</p>}
 
           <div className="card">
             <span className="kicker">ONE EXERCISE AT A TIME</span>
@@ -285,26 +294,12 @@ export default function ProgressScreen({
                   </div>
                 )}
               </>
-            ) : (
-              <div className="chart-empty">
-                <div className="bars">
-                  <BarIcon />
-                </div>
-                <h3>Your first session starts the story.</h3>
-                <p>Complete a set to see your own data here.</p>
-                <button className="text-link" onClick={onGoTrain}>
-                  Go to your workout
-                  <ArrowIcon />
-                </button>
-              </div>
-            )}
+            ) : null}
           </div>
         </>
       ) : (
         <div className="history-list">
-          {sessions.length === 0 && (
-            <p className="note-card">No sessions recorded yet. Finish a workout and it appears here.</p>
-          )}
+          {sessions.length === 0 && <p className="note-card">{NO_WORKOUTS_YET}</p>}
           {sessions.map((workout) => {
             const parts = dateParts(workout.date);
             const open = openId === workout.id;

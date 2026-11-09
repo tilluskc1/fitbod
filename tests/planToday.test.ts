@@ -43,8 +43,12 @@ async function surfaces({ who, program, focus, adapted, current, overridden, equ
       now, onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop })));
     const todayScreen = plain(renderToStaticMarkup(createElement(Today, { profile: who, program, adapted: live, equipment, adjusted: overridden, history: [], current, now,
       onPreview: noop, onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop, onOpenLength: noop })));
-    // App hands Coach the same glance as Plan and View session (#200).
-    const coach = plain(renderToStaticMarkup(createElement(Coach, { profile: who, history: [], program: today, onWhy: noop, onEdit: noop })));
+    // App hands Coach the same glance as Plan and View session (#200). A new user's Coach hides its
+    // context rows (#294), so Coach gets one finished workout to show its Next session row.
+    const past = { id: 'past', date: '2026-11-06T09:00:00Z', name: 'Earlier', dayIndex: 0, status: 'completed', completedEarly: false,
+      endedAt: '2026-11-06T09:30:00Z', exercises: [{ exerciseId: 'push-up', name: 'Push-up', planned: [{ weight: 0, reps: 8 }],
+        performed: [{ weight: 0, reps: 8, done: true, completedAt: '2026-11-06T09:10:00Z' }] }] };
+    const coach = plain(renderToStaticMarkup(createElement(Coach, { profile: who, history: [past], program: today, onWhy: noop, onEdit: noop })));
     const pick = (text: string, pattern: RegExp, label: string) => {
       const match = text.match(pattern);
       assert.ok(match, `${label}: ${text.slice(0, 400)}`);

@@ -1343,7 +1343,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onCorrect={correctSet}
             onDelete={(workoutId) => setSheet({ kind: 'delete-workout', workoutId })}
             onFeedback={saveFeedback}
-            onGoTrain={() => setTab('today')}
+            running={Boolean(current)}
+            // (#294) The empty state's one action: today's preview, as Today's Preview button, or resume.
+            onStartToday={current ? openWorkout : () => setSheet({ kind: 'preview' })}
+            startDisabled={liveProgram.exercises.length === 0}
           />
         )}
         {tab === 'coach' && (
