@@ -27,6 +27,12 @@ Repo: `tilluskc1/fitbod`. Board: GitHub Project 11. Design system: `DESIGN.md`. 
 
 **P0 queue after #309:** #307 iPhone Add to Home Screen, #295 notices by meaning, #298 today-only bar, #297 Plan page, #296 pick what to train. P1: #302 body map, #88 supersets, #9 catalog (free-exercise-db only; the Strength to Overcome xlsx is personal-use only, never import it), #301 cardio (needs stored-data approval).
 
+**Owner orders, 2026-11-09 23:00 UTC (product chat Prod 2):**
+- Archive each dev chat once it is done (stopped at its stop condition, final report posted, branch pushed). Product chat does this at its check-ins.
+- When the product chat nears compaction (or 400k tokens / $25), it updates this file, starts the next product chat on Opus, re-creates pending check-ins there, tells the owner the link, then archives itself.
+- #315 item 8 approved: merge 314, 311, 312, 308, 305, 313; PR 310 closes unmerged once PR 316 merges. Item 1: WhatsApp group (invite link pending on #255).
+- Running: #309 round 3 https://claude.ai/code/session_01LzbJh8SdpmgS7J4TJvAQ8G, #317 CI https://claude.ai/code/session_01LzbJhAL21kDuqDPuZuZSw3, merge run https://claude.ai/code/session_01LzbJhAZjGhHq5bYWQc892Q.
+
 **Workflow facts learned:** this environment refuses pushes to `main` without the allow rule; GraphQL is blocked (no Project 11 Status, use issue comments); a dev chat per story costs about $23 against $200 for long chats; product chat must hand off at 400k tokens.
 
 ---
