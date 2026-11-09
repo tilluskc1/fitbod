@@ -1,8 +1,9 @@
 import
- { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+ { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { backupReminder, shareBackup } from './lib/backup';
 import { offerFirstBackup } from './lib/dataHome';
 import { currentDevice } from './lib/install';
+import { noticeHome, screenKey } from './lib/noticeScreen';
 import
  { downloadText } from './lib/download';
 import
@@ -339,9 +340,28 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(null), 5000);
+    const timer = window.setTimeout(() => setNotice(null), 4000); // at most 4 s (#259)
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  // (#259) A message stays on the screen it was raised on. A new message is stamped with the screen
+  // it first shows on, so a handler that sets a message and moves screen in one update stamps the new
+  // screen; a later move clears it (or carries it, recap to Today). A layout effect, so a message
+  // leaving with the screen is gone before the next screen paints.
+  const screen = screenKey(view, tab);
+  const noticeScreenRef = useRef<string | null>(null);
+  const stampedNoticeRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (notice !== stampedNoticeRef.current) {
+      stampedNoticeRef.current = notice;
+      noticeScreenRef.current = notice ? screen : null;
+      return;
+    }
+    if (noticeScreenRef.current === null) return;
+    const home = noticeHome(noticeScreenRef.current, screen);
+    noticeScreenRef.current = home;
+    if (home === null) setNotice(null);
+  }, [notice, screen]);
 
   /* ---------- derived ---------- */
 
