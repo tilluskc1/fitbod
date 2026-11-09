@@ -116,6 +116,11 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    "Nothing" set it too, so pain typed afterwards built a day. Rule: a safety override stores what it
    answered (the text it saw) and lapses when that changes; only the explicit answer may set it.
    Check: `tests/planToday236.test.ts` (pain stop test).
+20. **Two reviewed PRs can each pass and still break each other.** #276's e2e asserted the old
+   "skipped for today" message after a logged set; #105, reviewed earlier, made that message say the
+   logged set is kept. Each passed alone; the merged result failed e2e. Rule: before each merge, run the
+   full suite on the merged result, not only on the branch, and when it fails fix it on the branch and
+   re-review at the new SHA. Check: `npm run e2e` on the local `merge/*` branch before pushing `main`.
 
 ## Recurring edge cases (put the relevant ones in every brief)
 
