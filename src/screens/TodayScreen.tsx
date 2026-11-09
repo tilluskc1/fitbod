@@ -267,7 +267,12 @@ export default function TodayScreen({
         <header className="today__greeting">
           <div>
             <p className="today__hello">{greeting(now)}</p>
-            <h1 className="today__name">{name}.</h1>
+            <h1 className="today__name">
+              {/* (#292) The name opens the same profile and settings as the avatar. */}
+              <button type="button" className="today__name-btn" onClick={onOpenSettings}>
+                {name}.
+              </button>
+            </h1>
           </div>
           <button className="avatar-btn" onClick={onOpenSettings} aria-label="Open profile and settings">
             {initials(name)}

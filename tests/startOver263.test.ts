@@ -164,13 +164,14 @@ async function sheets() {
   return { server, mod: await server.ssrLoadModule('/src/screens/Sheets.tsx') };
 }
 
-test('Settings → Data ends with Start over on this device and a one-line why', async () => {
+test('Settings opens on the name and Start over, with a one-line why (#292 moved it from Data)', async () => {
   const { server, mod } = await sheets();
   try {
     const text = plain(renderToStaticMarkup(createElement(mod.SettingsSheet, {
       profile, onChange: noop, onExport: noop, onBackup: noop, onRestore: noop, onStartOver: noop, onClose: noop, storageNote: 'Saved',
     })));
-    assert.match(text, /Restore from backup Start over on this device Erase this browser.s data and set up again\./);
+    assert.match(text, /^\s*Training settings .*Round trip Start over on this device No account to log out of: this erases this phone.s workouts\. Back up first\. Profile/);
+    assert.equal(text.match(/Start over on this device/g)?.length, 1, 'one way in, not two');
   } finally {
     await server.close();
   }
@@ -186,8 +187,8 @@ test('the sheet names what goes, spares backup files, and puts Back up now befor
     assert.match(text, /your plan, every logged workout, your preferences, your backup date and any older copies/i);
     assert.match(text, /this browser/i);
     assert.match(text, /backup file .*isn.t affected/i);
-    assert.match(text, /Not backed up yet\./);
-    assert.match(text, /Back up now .*Erase without a backup/, 'backing up comes first');
+    assert.match(text, /Last backup: never/);
+    assert.match(text, /Back up now .*Erase without saving/, 'backing up comes first');
     assert.match(html, /class="primary"[^>]*>Back up now/);
     assert.doesNotMatch(text, /log ?out|account/i, 'there is no account to leave');
   } finally {
@@ -202,7 +203,7 @@ test('an open workout blocks erasing and says why', async () => {
       sessionOpen: true, lastBackupAt: '2026-11-02T09:00:00.000Z', onBackup: async () => ({ ok: false, message: null }), onErase: () => ({ ok: true }), onClose: noop,
     })));
     assert.ok(text.includes(START_OVER_BLOCKED), 'the sheet shows the same message the guard returns');
-    assert.doesNotMatch(text, /Erase without a backup/);
+    assert.doesNotMatch(text, /Erase without saving|Erase this phone/);
     assert.match(text, /Last backup: /);
   } finally {
     await server.close();
