@@ -84,6 +84,15 @@ try {
       const chip = lengths.nth(index);
       await target(page, chip, (await chip.innerText()).trim(), `${where} Onboarding`);
       lengthTops.add(Math.round((await chip.boundingBox()).y));
+      // The label fits inside the pill's padding box (a padding rule that loses the cascade spills it).
+      const fit = await chip.evaluate((el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const style = getComputedStyle(el);
+        const inner = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        return { text: Math.ceil(range.getBoundingClientRect().width), inner };
+      });
+      check(fit.text <= fit.inner, `${where} Onboarding: "${await chip.innerText()}" label is ${fit.text}px in a ${fit.inner}px pill`);
     }
     check(lengthTops.size === 1, `${where} Onboarding: length chips sit on ${lengthTops.size} rows, expected 1`);
     await noOverflow(page, `${where} Onboarding`);

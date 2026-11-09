@@ -1625,6 +1625,7 @@ textarea:focus-visible {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.glass-scope .chip-wrap--even .chip,
 .chip-wrap--even .chip {
   padding: 0 6px;
   white-space: nowrap;
