@@ -227,7 +227,8 @@ try {
     await train.getByRole('button', { name: "Remove today's remaining work" }).click();
     await train.getByRole('button', { name: "Remove from today's workout" }).click();
     const where = `${width}x${height}-train-message`;
-    check(await train.getByText(/skipped for today/).isVisible(), `${where}: message not showing`);
+    // One set was logged first, so the message says it is kept (#105), not "skipped".
+    check(await train.getByText(/remaining sets are removed for today\. 1 logged set is kept/).isVisible(), `${where}: message not showing`);
     await reachable(train, train.locator('.finish-btn'), 'Finish', where);
     await reachable(train, train.getByRole('button', { name: 'Minimize workout' }), 'Minimize', where);
     await shot(train, where);

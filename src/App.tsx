@@ -47,6 +47,7 @@ import {
   goHeavierFloor,
 } from './lib/liveProgression';
 import { sessionRests } from './lib/sessionTime';
+import { removeTodayNotice } from './lib/exerciseActions';
 import { leadCompoundId, leadSlotIds, savedSetup } from './lib/progression';
 import { areasOf } from './lib/areas';
 import
@@ -1032,13 +1033,13 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   };
 
   const skipCurrentExercise = (exerciseIndex: number) => {
-    const name = current?.exercises[exerciseIndex]?.name ?? 'That exercise';
+    const notice = removeTodayNotice(current?.exercises[exerciseIndex]);
     setState((currentState) => {
       if (!currentState.current) return currentState;
       const skipped = skipExercise(currentState.current, exerciseIndex);
       return skipped === currentState.current ? currentState : { ...currentState, current: skipped };
     });
-    setNotice(`${name} skipped for today. Nothing was recorded for it.`);
+    setNotice(notice);
   };
 
   const returnToExercise = (exerciseIndex: number) => {
