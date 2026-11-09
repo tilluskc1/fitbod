@@ -290,6 +290,8 @@ export interface ExercisePerformance {
   plannedReps: number;
   /** Sets actually marked done in that session. */
   done: PerformanceSet[];
+  /** It held that session's lead slot (see `leadSlotIds`), read from the record's exercise order. */
+  lead: boolean;
 }
 
 /**
@@ -323,6 +325,7 @@ export function lastExercisePerformance(
       plannedWeight: found.firstPlanned?.weight ?? 0,
       plannedReps: found.firstPlanned?.reps ?? 0,
       done: found.done.map((set) => ({ weight: set.weight, reps: set.reps })),
+      lead: leadSlotIds(workout.exercises).includes(exerciseId),
     };
   }
   return latest ?? (setup === 'home' ? null : lastExercisePerformance(history, exerciseId, 'home'));
@@ -336,6 +339,8 @@ export type ProgressionBasis =
   | 'mixed-load'
   | 'hold'
   | 'go-heavier'
+  /** The rep range moved above the last session's planned reps: a lighter load for its minimum (#139). */
+  | 'range-reset'
   /** Already at or above a today-only rack's heaviest load: its top, one more rep (#188). */
   | 'rack-top';
 
@@ -480,6 +485,19 @@ function prescribeOn(
     };
   }
 
+  // The range moved above what was planned and lifted (#139: Face Pull 6–10 → 12–20): the planned reps
+  // already sat below today's minimum in the same role, so this is not a failed set. A lift that leads
+  // one day and follows on another changes range by role, not by a range change, so it never lowers.
+  // Lower to the Epley load for the minimum, rounded down to a step; never above the logged load.
+  const sameRole = last.lead === (lead && canLead(exercise));
+  if (sameRole && lowestReps < range.min && last.plannedReps > 0 && last.plannedReps < range.min && increment > 0) {
+    const estimate = (workingWeight * (1 + lowestReps / 30)) / (1 + range.min / 30);
+    const down = available.length > 0
+      ? atOrUnder(available, estimate) ?? available[0]
+      : Math.max(increment, round(Math.floor((estimate + 0.001) / increment) * increment));
+    return { ...base, weight: Math.min(down, workingWeight), reps: range.min, basis: 'range-reset' };
+  }
+
   if (lowestReps < range.max) {
     return {
       ...base,
@@ -550,6 +568,8 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
     }
     case 'rep-increase':
       return `${when}: ${logged(workWeight)}, lowest set ${lowestReps} reps. Add a rep before adding load.`;
+    case 'range-reset':
+      return `${when}: ${logged(workWeight)} × ${lowestReps}. The range is now ${range.min}–${range.max}, so the load drops to ${logged(weight)} for ${range.min} reps.`;
     case 'go-heavier':
       return `${when}: ${topped}, ${logged(workWeight)}. Ready to go heavier: use your next ${equipment.toLowerCase()} up; reps restart at ${range.min}.`;
     case 'mixed-load':
@@ -596,6 +616,8 @@ export function coachLine(prescription: Prescription, unit: Unit): string {
       return `You owned ${fmtLoad(owned, equipment, unit, available, typed)}. Today: ${today}.`;
     case 'rep-increase':
       return `Add a rep: ${today}.`;
+    case 'range-reset':
+      return `New rep range: ${today}.`;
     case 'go-heavier':
       return `Ready to go heavier: use your next ${equipment.toLowerCase()} up.`;
     case 'mixed-load':
