@@ -190,6 +190,66 @@ export function loadState(): LoadedState {
   return { status: 'migrated', state: result.state, revision: 1, raw };
 }
 
+export type EraseResult = { ok: true } | { ok: false; error: string; left: string[] };
+
+type EraseStore = Pick<Storage, 'key' | 'length' | 'removeItem'>;
+
+/** Every key this app owns: the record itself and its `fitbod-clone-v1:*` copies. Sorted. */
+function appKeys(store: EraseStore): string[] {
+  const keys: string[] = [];
+  for (let index = 0; index < store.length; index += 1) {
+    const key = store.key(index);
+    if (key === STORAGE_KEY || key?.startsWith(`${STORAGE_KEY}:`)) keys.push(key);
+  }
+  return keys.sort();
+}
+
+/**
+ * (#263) Start over on this device: remove every key the app owns (the record,
+ * its legacy and corrupt-data copies, any later `fitbod-clone-v1:*` key) and
+ * nothing else. Keys are collected before removing; the main record goes last,
+ * so a refusal never takes it while a copy of old data stays. What is still
+ * stored afterwards is read back and named, since a no-op is not an erase.
+ */
+export function eraseLocalData(store: EraseStore | null = storage()): EraseResult {
+  if (store) {
+    try {
+      const keys = appKeys(store);
+      for (const key of [...keys.filter((key) => key !== STORAGE_KEY), ...keys.filter((key) => key === STORAGE_KEY)]) {
+        store.removeItem(key);
+      }
+      if (appKeys(store).length === 0) return { ok: true };
+    } catch {
+      // Reported below with whatever is still readable.
+    }
+  }
+  let left: string[] = [STORAGE_KEY];
+  try {
+    if (store) left = appKeys(store);
+  } catch {
+    // Unreadable: assume the main record is still there.
+  }
+  const kept = left.includes(STORAGE_KEY)
+    ? 'Your plan and workouts are still here.'
+    : 'Your plan and workouts are erased, but an older copy of your data is still in this browser.';
+  return {
+    ok: false,
+    left,
+    error: `This browser didn't let the app erase its data. ${kept} Try again, or clear this site's data in your browser settings.`,
+  };
+}
+
+export const START_OVER_BLOCKED = 'A workout is in progress. Finish or discard it first, then start over.';
+
+/** (#263) The one start-over path: an open workout refuses it before any key is touched. */
+export function startOverErase(
+  state: Pick<AppState, 'current'>,
+  store?: EraseStore | null,
+): { ok: true } | { ok: false; error: string } {
+  if (state.current) return { ok: false, error: START_OVER_BLOCKED };
+  return store === undefined ? eraseLocalData() : eraseLocalData(store);
+}
+
 /**
  * Save with an expected revision. A newer stored revision means another tab
  * (or a previous session) wrote data we have not seen; the write is refused
