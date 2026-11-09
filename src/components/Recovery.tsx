@@ -3,6 +3,7 @@ import type { AppState } from '../types';
 import type { ImportSummary } from '../lib/storage';
 import { EMPTY_STATE, mergeImport } from '../lib/storage';
 import { parseState } from '../lib/validate';
+import { ConfirmSheet } from '../screens/Sheets';
 
 interface Props {
   error: string;
@@ -15,6 +16,7 @@ interface Props {
 export default function Recovery({ error, raw, onDownload, onRestore, onStartFresh }: Props) {
   const [pending, setPending] = useState<{ filename: string; state: AppState } | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [confirmFresh, setConfirmFresh] = useState(false);
 
   const chooseFile = async (file: File | undefined) => {
     if (!file) return;
@@ -110,16 +112,21 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
         )}
       </div>
 
-      <button
-        className="danger"
-        onClick={() => {
-          if (window.confirm('Start with empty data? The unreadable data is backed up first, but your app will look new.')) {
-            onStartFresh();
-          }
-        }}
-      >
+      <button className="danger" onClick={() => setConfirmFresh(true)}>
         Start fresh
       </button>
+
+      {confirmFresh && (
+        <ConfirmSheet
+          title="Start with empty data?"
+          confirmLabel="Start fresh"
+          cancelLabel="Cancel"
+          onConfirm={onStartFresh}
+          onCancel={() => setConfirmFresh(false)}
+        >
+          The unreadable data is backed up first, but your app will look new.
+        </ConfirmSheet>
+      )}
     </div>
   );
 }

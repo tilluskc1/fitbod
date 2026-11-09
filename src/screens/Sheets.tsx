@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
 import { dumbbellLoadsPatch, formatWeight, loadLimitMessage, loadsInputText, overLoadLimit, parseLoads, unitLabel, unitOf } from '../lib/units';
 import type { Profile, Unit, WorkoutExercise } from '../types';
@@ -318,7 +319,7 @@ export function ConfirmChange({
     <>
       <p className="sheet-copy">{change.detail}</p>
       <div className="sheet-actions">
-        <button className="primary" onClick={() => onConfirm(change.patch)}>
+        <button className={change.danger ? 'danger' : 'primary'} onClick={() => onConfirm(change.patch)}>
           Confirm
         </button>
         <button className="secondary" onClick={onCancel}>
@@ -542,7 +543,7 @@ export function ExerciseActionsSheet({
             exclusion and does not end the session.
           </p>
           <div className="sheet-actions">
-            <button className="primary" onClick={onRemoveToday}>
+            <button className="danger" onClick={onRemoveToday}>
               Remove from today's workout
             </button>
             <button className="secondary" onClick={back}>
@@ -605,14 +606,14 @@ export function DaySheet({
       </p>
 
       <div className="sheet-actions">
-        <button className="secondary" onClick={onClose}>
-          Close
-        </button>
         {onStart && (
           <button className="primary" onClick={onStart} disabled={exercises.length === 0}>
             Start workout
           </button>
         )}
+        <button className="secondary" onClick={onClose}>
+          Close
+        </button>
       </div>
     </Sheet>
   );
@@ -692,41 +693,66 @@ export function FinishSheet({
   );
 }
 
-/* ---------------- Replace active session ---------------- */
+/* ---------------- Destructive confirm ---------------- */
 
 /**
- * In-app confirm for starting a workout while one is open (#19). Confirming
- * discards the open session once; keeping it changes nothing.
+ * The in-app confirm for an action that takes something away (#19, #137); never window.confirm.
+ * Button order in every sheet: the action the sheet is for first, the way out (Cancel, Keep, Close, Back) below.
+ * Cancel and the close control change nothing.
  */
+export function ConfirmSheet({
+  title,
+  children,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  children: ReactNode;
+  confirmLabel: string;
+  cancelLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Sheet title={title} onClose={onCancel}>
+      <p className="sheet-copy">{children}</p>
+      <div className="sheet-actions">
+        <button className="danger" onClick={onConfirm}>
+          {confirmLabel}
+        </button>
+        <button className="secondary" onClick={onCancel}>
+          {cancelLabel}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+/** Starting a workout while one is open (#19): confirming discards the open session once. */
 export function DiscardSessionSheet({
   currentName,
   nextName,
   onDiscard,
   onKeep,
-  onClose,
 }: {
   currentName: string;
   nextName: string;
   onDiscard: () => void;
   onKeep: () => void;
-  onClose: () => void;
 }) {
   return (
-    <Sheet title="Replace your open session?" onClose={onClose}>
-      <p className="sheet-copy">
-        <strong>{currentName}</strong> is still in progress. Starting{' '}
-        <strong>{nextName}</strong> discards it — logged sets from the active session will be
-        lost.
-      </p>
-      <div className="sheet-actions">
-        <button className="primary" onClick={onDiscard}>
-          Discard and start {nextName}
-        </button>
-        <button className="secondary" onClick={onKeep}>
-          Keep current workout
-        </button>
-      </div>
-    </Sheet>
+    <ConfirmSheet
+      title="Replace your open session?"
+      confirmLabel={`Discard and start ${nextName}`}
+      cancelLabel="Keep current workout"
+      onConfirm={onDiscard}
+      onCancel={onKeep}
+    >
+      <strong>{currentName}</strong> is still in progress. Starting <strong>{nextName}</strong> discards it
+      — logged sets from the active session will be lost.
+    </ConfirmSheet>
   );
 }
 

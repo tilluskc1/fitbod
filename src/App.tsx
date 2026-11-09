@@ -134,6 +134,7 @@ import
   AdjustSheet,
   ConfirmChange,
   DaySheet,
+  ConfirmSheet,
   DiscardSessionSheet,
   ExerciseActionsSheet,
   FinishSheet,
@@ -159,7 +160,8 @@ type SheetState =
   | { kind: 'why'; exerciseId: string; exerciseIndex: number }
   | { kind: 'finish' }
   | { kind: 'swap'; exerciseIndex: number }
-  | { kind: 'confirm'; change: ProfileChange };
+  | { kind: 'confirm'; change: ProfileChange }
+  | { kind: 'delete-workout'; workoutId: string };
 
 interface SaveUi {
   kind: 'idle' | 'saved' | 'error';
@@ -940,7 +942,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   };
 
   const deleteWorkout = (id: string) => {
-    if (!window.confirm('Delete this workout? This cannot be undone.')) return;
+    closeSheet();
     setState((currentState) => ({
       ...currentState,
       history: currentState.history.filter((workout) => workout.id !== id),
@@ -1312,7 +1314,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             loads={profile?.loads}
             onExport={exportData}
             onCorrect={correctSet}
-            onDelete={deleteWorkout}
+            onDelete={(workoutId) => setSheet({ kind: 'delete-workout', workoutId })}
             onFeedback={saveFeedback}
             onGoTrain={() => setTab('today')}
           />
@@ -1448,6 +1450,18 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onCancel={closeSheet}
           />
         </Sheet>
+      )}
+
+      {sheet.kind === 'delete-workout' && (
+        <ConfirmSheet
+          title="Delete this workout?"
+          confirmLabel="Delete workout"
+          cancelLabel="Keep workout"
+          onConfirm={() => deleteWorkout(sheet.workoutId)}
+          onCancel={closeSheet}
+        >
+          It is removed from your history and progress. This cannot be undone.
+        </ConfirmSheet>
       )}
 
       {sheet.kind === 'settings' && state.profile && (
@@ -1599,7 +1613,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           nextName={adaptFor(replacePrompt).name}
           onDiscard={discardAndBegin}
           onKeep={() => setReplacePrompt(null)}
-          onClose={() => setReplacePrompt(null)}
         />
       )}
     </PhoneFrame>
