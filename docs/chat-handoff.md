@@ -9,6 +9,28 @@ Repo: `tilluskc1/fitbod`. Board: GitHub Project 11. Design system: `DESIGN.md`. 
 
 ---
 
+## 0. Latest product-chat handoff (2026-11-09, 21:30 UTC) — read this first
+
+**Product chat role:** product owner + UI/UX lead + strength coach. Writes stories, never code. Rules: AGENTS.md (story first with named defaults, screenshots on every UI story, one dev chat per story on Opus with routine work on Sonnet), `docs/agents/lessons.md` (22 lessons; 18 = never close or archive anything the owner didn't ask for).
+
+**State:** `main` at 9d4285a (Vercel success). Nothing merged on 2026-11-09 after that.
+
+**Waiting on the owner (all listed in #315, the decision queue, 24 h defaults):**
+1. Commit two files the agents may not edit themselves (refused as self-modification; do not route them through a dev chat, that was refused as a bypass): `.claude/settings.json` with push allow rules, and the "Owner time" section for AGENTS.md (decision queue, approve at the story, sweep after merge, beta freeze, product-chat handoff at 400k tokens or $25). Both texts are in the 2026-11-09 product chat and quoted in #315's comments.
+2. #315 item 8: approve merging the 7 reviewed PRs (310 #306, 314 #300, 311 #294, 312 #293, 308 #262, 305 #261, 313 #292 with defaults: dark button, keep the block).
+3. #315 item 1 (#255): where beta feedback goes. This is the only thing blocking the friends beta.
+4. #315 items 2 to 5: About/contact (#253), image rights (#254), stored-data approvals (#247, #301).
+
+**In flight:**
+- #309 (P0, edit sets in the row, includes #306): draft PR 316 at a469d89, unparked. Product decided a refused keystroke restores every carried set; five follow-ups in scope. **Next: round 3 dev chat (Opus) finishes it to Ready to merge.**
+- #317 (P1): GitHub Actions for tests, lint, build, e2e and screenshots, so agents stop running checks in chat. Small tier, Sonnet.
+
+**P0 queue after #309:** #307 iPhone Add to Home Screen, #295 notices by meaning, #298 today-only bar, #297 Plan page, #296 pick what to train. P1: #302 body map, #88 supersets, #9 catalog (free-exercise-db only; the Strength to Overcome xlsx is personal-use only, never import it), #301 cardio (needs stored-data approval).
+
+**Workflow facts learned:** this environment refuses pushes to `main` without the allow rule; GraphQL is blocked (no Project 11 Status, use issue comments); a dev chat per story costs about $23 against $200 for long chats; product chat must hand off at 400k tokens.
+
+---
+
 ## 1. Product
 
 **What it is.** A phone-first, local-first strength-training web app. It works with a full gym, a
