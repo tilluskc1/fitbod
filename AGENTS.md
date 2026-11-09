@@ -35,7 +35,7 @@ The five canonical roles, each label string equal to its role name. See `docs/ag
 
 ### Domain docs
 
-Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: `docs/adr/` at the repo root (no glossary file exists yet). See `docs/agents/domain.md`.
 
 ## Issue board
 
@@ -59,7 +59,7 @@ Each phase runs the skill that fits it, from `.agents/skills/`:
 
 | Phase | Skill |
 | --- | --- |
-| Requirements check | `grilling` (or `grill-with-docs` when `GLOSSARY.md`/ADRs decide it) |
+| Requirements check | `grilling` (or `grill-with-docs` when ADRs decide it) |
 | Goal loop | `orchestrate` (inside `orchestrate-github`; implementation and review dispatches are separate agents) |
 | Implementation | `tdd`, `diagnosing-bugs` when the defect is not yet reproduced |
 | Independent review | `code-review`, plus `ponytail-review` on the diff size |

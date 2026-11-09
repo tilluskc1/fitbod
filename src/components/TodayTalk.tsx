@@ -4,6 +4,7 @@ import type { EquipmentChoice } from '../lib/adapt';
 import { AREAS } from '../lib/areas';
 import type { Area } from '../lib/areas';
 import { noticeText } from '../lib/constraints';
+import { PAIN_CHECK } from '../lib/safety';
 import { restLabel } from '../lib/sessionTime';
 import { NO_TAPS, composeTalk, gearLabel, tapsAfterEdit } from '../lib/todayTalk';
 import type { CustomDayPreview, TalkState, Taps } from '../lib/todayTalk';
@@ -153,10 +154,13 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
             <span>Your weekly plan keeps every day; nothing is lost.</span>
           </div>
         )}
-        <button type="button" className="pill-primary" onClick={() => onStart(built.talk)} disabled={day.exercises.length === 0}>
-          Start this workout
-        </button>
-        <button type="button" className="secondary" onClick={() => go('time')}>Change answers</button>
+        {/* (#256) The planner's own action bar: pinned to the bottom while the tab bar steps aside. */}
+        <div className="tt-bar">
+          <button type="button" className="pill-primary" onClick={() => onStart(built.talk)} disabled={day.exercises.length === 0}>
+            Start this workout
+          </button>
+          <button type="button" className="secondary" onClick={() => go('time')}>Change answers</button>
+        </div>
       </section>
     );
   }
@@ -218,7 +222,7 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
           </div>
           {talk.pain ? (
             <p className="tt-stop" role="alert">
-              <b>You mentioned pain.</b> I can work around soreness, not pain. Skip today or check with someone who can look at it.
+              <b>You mentioned pain.</b> I can work around soreness, not pain. {PAIN_CHECK}
               <button type="button" className="secondary" onClick={() => answer('soreness')}>It's only soreness</button>
             </p>
           ) : left.length > 0 ? (
@@ -253,6 +257,7 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
         </div>
       )}
 
+      <div className="tt-bar">
       <div className="tt-nav">
         <button type="button" className="secondary" aria-label={index === 0 ? undefined : 'Previous question'}
           onClick={() => (index === 0 ? close() : go(QUESTIONS[index - 1]))}>
@@ -268,6 +273,7 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
           Build with these answers
         </button>
       )}
+      </div>
     </section>
   );
 }

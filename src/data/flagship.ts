@@ -52,6 +52,8 @@ export interface Program {
    * and the saved day's movements this day does not have, so the review can name what went.
    */
   shortenedFrom?: { minutes: number; dropped: { exerciseId: string; name: string; sets: number }[] };
+  /** Exercise ids that are a muscle's third (#96): a shorter length today drops them before any set. In memory only. */
+  thirds?: string[];
 }
 
 export const FULL_BODY_A: Program = {
@@ -170,6 +172,27 @@ export function targetSummary(
       ? repLabel(exercise, count)
       : `${repLabel(exercise, count)} reps`;
   return exercise.weight > 0 ? `${reps} @ ${loadLabel(exercise, unit, format)}` : reps;
+}
+
+/**
+ * "6 · 6 · 6 @ 60 kg total" for a last-session line, in the target line's format so a load step up
+ * cannot read as a rep drop (#245). Sets at different loads read per set, as the logger does:
+ * "60 × 6 · 62.5 × 5 kg total". Bodyweight and holds keep reps or seconds only.
+ */
+export function lastSummary(
+  exercise: Pick<ProgramExercise, 'exerciseId' | 'load'>,
+  sets: { weight: number; reps: number }[],
+  unit: Unit = 'kg',
+  format?: (kg: number) => string,
+): string {
+  const reps = sets.map((set) => set.reps);
+  if (exercise.load === 'none' || !sets.some((set) => set.weight > 0)) return setText(exercise.exerciseId, reps);
+  const load = (weight: number) => loadLabel({ weight, load: exercise.load }, unit, format);
+  // Same as displayed, not as stored: two kg values that show the same read as one load.
+  if (sets.every((set) => load(set.weight) === load(sets[0].weight))) return `${reps.join(' · ')} @ ${load(sets[0].weight)}`;
+  const suffix = load(sets.find((set) => set.weight > 0)!.weight).replace(/^\S+ /, '');
+  const number = (weight: number) => load(weight).split(' ')[0];
+  return `${sets.map((set) => `${set.weight > 0 ? number(set.weight) : 'BW'} × ${set.reps}`).join(' · ')} ${suffix}`;
 }
 
 export function programExercise(exerciseId: string): ProgramExercise | undefined {

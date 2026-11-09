@@ -31,6 +31,7 @@ import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 import { CheckIcon, LockIcon, PhoneIcon } from '../components/ui/Icons';
 import { currentDevice, installHint } from '../lib/install';
+import { SAFETY_NOTICE } from '../lib/safety';
 
 /* ---------------- Adjust today ---------------- */
 
@@ -986,6 +987,15 @@ export function SettingsSheet({
               </div>
             </div>
           )}
+        </section>
+
+        <section className="settings-group" aria-labelledby="settings-about">
+          <h3 className="settings-group__title" id="settings-about">
+            About
+          </h3>
+          <div className="settings-card">
+            <p className="settings-row settings-row__note">{SAFETY_NOTICE}</p>
+          </div>
         </section>
 
         <div className="sheet-actions">

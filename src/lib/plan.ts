@@ -64,6 +64,8 @@ export interface LastPerformance {
   /** Reps per set, completed sets only (falls back to the prescription). */
   reps: number[];
   weight: number;
+  /** Each completed set's load and reps, in order (#245). */
+  sets: { weight: number; reps: number }[];
 }
 
 export interface ExerciseInWorkout {
@@ -147,6 +149,7 @@ export function lastPerformance(
       workout,
       reps: found.done.map((set) => set.reps),
       weight: found.done[0].weight,
+      sets: found.done.map((set) => ({ weight: set.weight, reps: set.reps })),
     };
   }
   return null;
