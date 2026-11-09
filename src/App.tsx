@@ -123,7 +123,7 @@ import SwitchSheet from './components/SwitchSheet';
 import { skipForward, switchOptions, upcomingDays } from './lib/switchDay';
 import type { SwitchOption } from './lib/switchDay';
 import { keepKey, todayFresher } from './lib/recovery';
-import { opensOnSplash } from './lib/firstScreen';
+import { opensOnSplash, splashAfterAdopt } from './lib/firstScreen';
 import
  Onboarding from './components/Onboarding';
 import
@@ -312,6 +312,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           : open,
       );
       setState(loaded.state);
+      // A tab left on the splash follows another tab's onboarding to Today (#288).
+      setShowSplash((shown) => splashAfterAdopt(shown, loaded.state));
       setSaveUi({ kind: 'saved' });
     };
     window.addEventListener('storage', onStorage);
