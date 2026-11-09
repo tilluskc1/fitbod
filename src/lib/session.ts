@@ -138,6 +138,94 @@ export function logSet(
   return startRest(updated, now, seconds);
 }
 
+/** What an edit carried (#306): the later sets it changed and their values before, for Undo. */
+export interface CarryResult {
+  session: WorkoutRecord;
+  carried: number[];
+  previous: { index: number; weight: number; reps: number }[];
+}
+
+/**
+ * Edit one set and carry the change forward (#306). A later set not yet logged takes the new weight
+ * (or reps) when it was following: it still holds the edited set's old value. A set the lifter changed
+ * by hand to anything else keeps it, and so does a set an Undo put back (it no longer matches). Logged sets, `planned` and the done state
+ * are never touched. No stored flag: the rule reads the same after a reload.
+ */
+export function editSet(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  setIndex: number,
+  patch: Partial<PerformedSet>,
+  now: string,
+): CarryResult {
+  const before = session.exercises[exerciseIndex]?.performed[setIndex];
+  const edited = updatePerformedSet(session, exerciseIndex, setIndex, patch, now);
+  if (!before || edited === session) return { session, carried: [], previous: [] };
+  const after = edited.exercises[exerciseIndex].performed[setIndex];
+  const weightMoved = Math.abs(after.weight - before.weight) > 1e-9;
+  const repsMoved = after.reps !== before.reps;
+  const follows: Partial<PerformedSet>[] = edited.exercises[exerciseIndex].performed.map((set, i) => {
+    if (i <= setIndex || set.done) return {};
+    return {
+      ...(weightMoved && Math.abs(set.weight - before.weight) < 1e-9 ? { weight: after.weight } : {}),
+      ...(repsMoved && set.reps === before.reps ? { reps: after.reps } : {}),
+    };
+  });
+  return applyToSets(edited, exerciseIndex, follows, now);
+}
+
+/** "Set all remaining sets to…" (#306): every set not yet logged takes this weight and these reps. */
+export function setRemaining(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  value: { weight: number; reps: number },
+  now: string,
+): CarryResult {
+  const exercise = session.exercises[exerciseIndex];
+  if (!exercise) return { session, carried: [], previous: [] };
+  return applyToSets(session, exerciseIndex, exercise.performed.map((set) => (set.done ? {} : { ...value })), now);
+}
+
+function applyToSets(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  patches: Partial<PerformedSet>[],
+  now: string,
+): CarryResult {
+  let next = session;
+  const carried: number[] = [];
+  const previous: CarryResult['previous'] = [];
+  patches.forEach((patch, i) => {
+    if (patch.weight === undefined && patch.reps === undefined) return;
+    const set = next.exercises[exerciseIndex].performed[i];
+    const changed = updatePerformedSet(next, exerciseIndex, i, patch, now);
+    const out = changed.exercises[exerciseIndex].performed[i];
+    if (changed === next || (out.weight === set.weight && out.reps === set.reps)) return;
+    previous.push({ index: i, weight: set.weight, reps: set.reps });
+    carried.push(i);
+    next = changed;
+  });
+  return { session: next, carried, previous };
+}
+
+/** Undo a carry: the listed sets return to their earlier values unless they were logged since. */
+export function undoCarry(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  exerciseId: string,
+  previous: CarryResult['previous'],
+  now: string,
+): WorkoutRecord {
+  if (session.exercises[exerciseIndex]?.exerciseId !== exerciseId) return session;
+  let next = session;
+  for (const { index, weight, reps } of previous) {
+    if (next.exercises[exerciseIndex].performed[index]?.done === false) {
+      next = updatePerformedSet(next, exerciseIndex, index, { weight, reps }, now);
+    }
+  }
+  return next;
+}
+
 /** Confirming the first weight applies it to every set of the exercise not yet logged. */
 export function confirmWeight(
   session: WorkoutRecord,
