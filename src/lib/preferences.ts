@@ -31,6 +31,8 @@ export interface ProfileChange {
   title: string;
   detail: string;
   patch: Partial<Profile>;
+  /** Confirming takes something away (an exclusion), so the button is .danger (#137). */
+  danger?: boolean;
 }
 
 type Named = { id: string; name: string };
@@ -58,6 +60,7 @@ export function exclusionChange(profile: Profile, exercise: Named, excluded: boo
     title: excluded ? `Don't recommend ${exercise.name} again?` : `Allow ${exercise.name} again?`,
     detail: `${excluded ? 'It is never programmed; the generator reports a coverage gap instead of substituting silently.' : 'It can be programmed again.'} ${excluded && pref ? `It is also marked ${PREF_LABEL[pref].toLowerCase()}; you will be asked which to keep. ` : ''}${FUTURE}`,
     patch: withExclusion(profile, exercise.id, excluded),
+    danger: excluded,
   };
 }
 
