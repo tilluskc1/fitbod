@@ -753,7 +753,8 @@ export function SwapSheet({
           <p className="note-card">No other exercise trains the same pattern with your equipment.</p>
         )}
         {options.map((option) => (
-          <button key={option.id} className="context-row" style={{ width: '100%', textAlign: 'left' }} onClick={() => onPick(option.id)}>
+          // Name and meta keep one line each; a row too narrow for both puts the meta under the name (#136).
+          <button key={option.id} className="context-row" style={{ width: '100%', textAlign: 'left', flexWrap: 'wrap', rowGap: 2, whiteSpace: 'nowrap' }} onClick={() => onPick(option.id)}>
             <span>{option.name}</span>
             <span>{option.meta}</span>
           </button>

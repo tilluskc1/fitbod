@@ -670,6 +670,12 @@ textarea:focus-visible {
   color: #56615f;
 }
 
+/* The caption wraps at 360, never the link (#136). */
+.plan-foot .text-link {
+  flex: none;
+  white-space: nowrap;
+}
+
 .equipment-card {
   padding: 20px;
   border: 1px solid #e3eedc;
@@ -686,6 +692,12 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+/* "Edit" is narrower than a 44px target on its own (#136). */
+.equipment-card .text-link {
+  min-width: 44px;
+  justify-content: flex-end;
 }
 
 .equipment-name {
@@ -1392,7 +1404,7 @@ textarea:focus-visible {
   padding: 0;
   color: var(--accent-text);
   font-size: 13.5px;
-  min-height: 40px;
+  min-height: 44px;
 }
 
 /* ---------- Settings ---------- */
@@ -2311,11 +2323,17 @@ body {
 
 .coach-card__actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 18px;
+  column-gap: 18px;
   padding-left: 20px;
   border-top: 1px solid rgba(20, 26, 26, 0.045);
   padding-top: 6px;
+}
+
+/* Each action keeps its label on one line; one that does not fit moves to the next row (#136). */
+.coach-card__actions .text-action {
+  white-space: nowrap;
 }
 
 .list-head {
@@ -2956,6 +2974,11 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+/* A lone action (the set editor's Done) spans the row (#136). */
+.review-footer__row > :only-child {
+  grid-column: 1 / -1;
 }
 
 /* ---------- Active workout ---------- */
@@ -3761,9 +3784,12 @@ p.settings-row.settings-row__note {
 }
 
 button.aw-exercise__name-btn {
+  /* A 44px tap target around a 28px line, without moving the layout (#136). */
+  position: relative;
+  margin: -8px 0;
   background: none;
   border: 0;
-  padding: 0;
+  padding: 8px 0;
   text-align: left;
   color: inherit;
   font: inherit;
