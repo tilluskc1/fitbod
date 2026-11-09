@@ -1,8 +1,9 @@
 import
- { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+ { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { backupReminder, shareBackup } from './lib/backup';
 import { offerFirstBackup } from './lib/dataHome';
 import { currentDevice } from './lib/install';
+import { noticeHome, screenKey } from './lib/noticeScreen';
 import
  { downloadText } from './lib/download';
 import
@@ -342,6 +343,22 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const timer = window.setTimeout(() => setNotice(null), 5000);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  // (#259) A message stays on the screen it was raised on. Stamped after the commit that shows it,
+  // so a handler that sets a message and moves screen in one update stamps the new screen. Layout
+  // effects, so a message leaving with the screen is gone before the new screen paints.
+  const screen = screenKey(view, tab);
+  const noticeScreenRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    noticeScreenRef.current = notice ? screen : null;
+    // Only a new message restamps; a screen change alone must not.
+  }, [notice]);
+  useLayoutEffect(() => {
+    if (noticeScreenRef.current === null) return;
+    const home = noticeHome(noticeScreenRef.current, screen);
+    noticeScreenRef.current = home;
+    if (home === null) setNotice(null);
+  }, [screen]);
 
   /* ---------- derived ---------- */
 
