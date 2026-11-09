@@ -912,11 +912,12 @@ textarea:focus-visible {
 
 /* ---------- Coach ---------- */
 
+/* (#232) The same light card as "Your recent context"; the old dark radial gradient hid the dark text. */
 .big-card {
   padding: 26px 22px;
-  border-radius: 18px;
-  background: radial-gradient(120% 130% at 0% 0%, #eef6d6 0%, #1a2413 55%, #182014 100%);
-  border: 1px solid #dde8e6;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
   margin-top: 6px;
 }
 
