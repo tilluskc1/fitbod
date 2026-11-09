@@ -29,6 +29,15 @@ const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
 const KEY = 'fitbod-clone-v1';
 const failures = [];
+/** A screenshot once every sheet animation has settled, so shots never catch a slide-in. */
+async function shot(page, name) {
+  if (!shots) return;
+  // Finite animations only: a looping one (a pulse, a photo loop) never finishes.
+  await page.evaluate(() => Promise.all(document.getAnimations()
+    .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+    .map((animation) => animation.finished.catch(() => {}))));
+  await page.screenshot({ path: join(shots, name) });
+}
 const check = (ok, message) => { if (!ok) failures.push(message); };
 
 async function onboard(page, name) {
@@ -92,7 +101,7 @@ try {
     const rowText = await row.first().innerText().catch(() => '');
     check(/erases this phone's workouts/.test(rowText), `${where}: row subtitle does not say what gets erased ("${rowText}")`);
     check(!/(^|\. )(log|sign) ?out\b/i.test(rowText.replace("No account to log out of", '')), `${where}: row offers to log out`);
-    if (shots) await page.screenshot({ path: join(shots, `292-settings-${where}.png`) });
+    await shot(page, `292-settings-${where}.png`);
 
     // 2. The row opens the sheet that leads with saving.
     const before = await dump(page);
@@ -103,7 +112,7 @@ try {
     const backup = sheet.getByRole('button', { name: 'Back up now' });
     check(/\bprimary\b/.test(await backup.getAttribute('class')), `${where}: Back up now is not the primary button`);
     check(await sheet.getByRole('button', { name: 'Erase without saving' }).isVisible(), `${where}: no "Erase without saving" before a backup`);
-    if (shots) await page.screenshot({ path: join(shots, `292-sheet-${where}.png`) });
+    await shot(page, `292-sheet-${where}.png`);
 
     // 3. A cancelled backup says so and changes nothing stored.
     await page.evaluate(() => { window.__share = 'abort'; });
@@ -120,7 +129,7 @@ try {
     const failed = await sheet.innerText();
     check(/Backup not shared/.test(failed) && failed.includes('Nothing was erased.'), `${where}: a failed backup is not reported`);
     check(JSON.stringify(await dump(page)) === JSON.stringify(before), `${where}: a failed backup changed localStorage`);
-    if (shots) await page.screenshot({ path: join(shots, `292-sheet-failed-${where}.png`) });
+    await shot(page, `292-sheet-failed-${where}.png`);
 
     // 5. A backup that left the app is recorded; the erase button then says what it erases.
     await page.evaluate(() => { window.__share = 'ok'; });
@@ -129,14 +138,15 @@ try {
     await erase.waitFor({ timeout: 3000 }).catch(() => {});
     const saved = await stored(page);
     check(typeof saved?.lastBackupAt === 'string', `${where}: a shared backup was not recorded in localStorage`);
-    check(/Last backup: /.test(await sheet.innerText()) || /Backup shared\./.test(await sheet.innerText()), `${where}: sheet does not show the backup`);
+    const shared = await sheet.innerText();
+    check(/Last backup: (?!never)\S/.test(shared) && shared.includes('Backup shared.'), `${where}: sheet still reads "Last backup: never" or hides "Backup shared." after a backup`);
     check(await erase.isVisible(), `${where}: no "Erase this phone's data" after a backup`);
 
     // 6. Two taps: the first only asks; data is still stored.
     await erase.click();
     check(await page.getByRole('heading', { name: 'Erase everything?' }).isVisible(), `${where}: the red confirm did not follow`);
     check((await stored(page))?.profile?.name === 'Sam', `${where}: one tap erased data`);
-    if (shots) await page.screenshot({ path: join(shots, `292-confirm-${where}.png`) });
+    await shot(page, `292-confirm-${where}.png`);
     await page.getByRole('button', { name: 'Erase everything' }).click();
     await page.getByRole('button', { name: 'Get started' }).waitFor({ timeout: 5000 }).catch(() => {});
     check(await page.getByRole('button', { name: 'Get started' }).isVisible(), `${where}: erasing did not open onboarding`);
