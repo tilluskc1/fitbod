@@ -130,7 +130,9 @@ test('#219: Today and Plan show a described day\'s status and reasons as the pre
         const chip = chipOf(today);
         assert.ok(chip, at);
         assert.equal(chip[1], preview.status, `${at}: tone`);
-        assert.equal(chip[2].trim(), word, `${at}: chip`);
+        // (#260) Running, the chip counts the session's sets; the tone keeps the status.
+        if (current) assert.match(chip[2].trim(), /^In progress · 0 of \d+ sets$/, `${at}: chip`);
+        else assert.equal(chip[2].trim(), word, `${at}: chip`);
         const text = plain(today);
         for (const line of reasons) assert.ok(text.includes(`${line.label} ${line.text}`), `${at}: Today lacks ${line.label} ${line.text}`);
         assert.doesNotMatch(text, REQUIREMENT, at);

@@ -30,8 +30,10 @@ interface Props {
   history: WorkoutRecord[];
   current: WorkoutRecord | null;
   now: Date;
-  /** Opens the session's exercise list; Start/Resume lives in the tab bar. */
+  /** Opens the session's exercise list; Start lives in the tab bar. */
   onPreview: () => void;
+  /** (#260) Reopens the open session: the tab bar's own centre action, one handler. */
+  onResume: () => void;
   onAdjust: () => void;
   onWhy: () => void;
   onRestore: () => void;
@@ -180,6 +182,7 @@ export default function TodayScreen({
   current,
   now,
   onPreview,
+  onResume,
   onAdjust,
   onWhy,
   onRestore,
@@ -224,14 +227,19 @@ export default function TodayScreen({
     ? current.exercises.reduce((sum, exercise) => sum + exercise.performed.length, 0)
     : adapted.totalSets;
 
+  // (#220) A running described session is today's own: its name, "Today only", never a plan slot,
+  // and never the planned day's status once its ask has expired (App passes no status then).
+  const todayOnly = current ? isDescribedSession(current) : false;
   // Every day states its feasibility (story contract). The detail and alternatives stay in FeasibilityNote.
   const feasibility = program.feasibility;
   // A described day reads as its preview did (#219): Limited only for a gap it names.
-  const chip: { tone: 'ready' | 'limited' | 'none'; label: string; icon: string } = described
+  const status: { tone: 'ready' | 'limited' | 'none'; label: string; icon: string } = described
     ? described.status === 'none' ? { tone: 'none', label: 'Not enough equipment', icon: 'remove' }
       : described.status === 'limited' ? { tone: 'limited', label: 'Limited', icon: 'info' }
       : { tone: 'ready', label: 'Ready', icon: 'check' }
-    : adapted.exercises.length === 0 || feasibility?.status === 'infeasible'
+    : todayOnly
+      ? { tone: 'ready', label: 'Ready', icon: 'check' }
+      : adapted.exercises.length === 0 || feasibility?.status === 'infeasible'
       ? { tone: 'none', label: 'Not enough equipment', icon: 'remove' }
       : feasibility?.status === 'limited'
         ? {
@@ -243,9 +251,10 @@ export default function TodayScreen({
             icon: 'info',
           }
         : { tone: 'ready', label: 'Ready', icon: 'check' };
-  // (#220) A running described session is today's own: its name, "Today only", never a plan slot,
-  // and no chip once its ask has expired (App passes no status then).
-  const todayOnly = current ? isDescribedSession(current) : false;
+  // (#260) An open session shows its progress; the colour keeps its status, a Limited or Not-enough icon too.
+  const chip = current
+    ? { ...status, label: `In progress · ${progress} of ${total} sets`, icon: status.tone === 'ready' ? 'play_arrow' : status.icon }
+    : status;
   const heroName = todayOnly && current ? current.name : program.name;
   const heroSlot = todayOnly ? 'Today only' : slotLabel;
   const leadId = leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId));
@@ -332,12 +341,10 @@ export default function TodayScreen({
               </>
             )}
           </span>
-          {(!todayOnly || described) && (
-            <span className={`t7-state t7-state--${chip.tone}`}>
-              <Icon name={chip.icon} size={16} />
-              {chip.label}
-            </span>
-          )}
+          <span className={`t7-state t7-state--${chip.tone}`}>
+            <Icon name={chip.icon} size={16} />
+            {chip.label}
+          </span>
         </section>
 
         {/* A described day names its gaps, open or not (#219); otherwise the status describes the saved setup. */}
@@ -562,15 +569,22 @@ export default function TodayScreen({
       </div>
 
       <div className="flow-dock" hidden={composing && !current}>
-        <button className="text-action" onClick={onAdjust}>
-          <Icon name="tune" size={16} />
-          Short on time or gear?
-        </button>
-        {!current && (
-          <button className="pill-primary" onClick={onPreview} disabled={adapted.exercises.length === 0}>
-            Preview workout
+        {current ? (
+          <button className="pill-primary" onClick={onResume}>
+            Resume workout
             <Icon name="arrow_forward" size={20} />
           </button>
+        ) : (
+          <>
+            <button className="text-action" onClick={onAdjust}>
+              <Icon name="tune" size={16} />
+              Short on time or gear?
+            </button>
+            <button className="pill-primary" onClick={onPreview} disabled={adapted.exercises.length === 0}>
+              Preview workout
+              <Icon name="arrow_forward" size={20} />
+            </button>
+          </>
         )}
       </div>
     </div>

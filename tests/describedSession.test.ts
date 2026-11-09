@@ -84,6 +84,7 @@ const heroOf = (html: string) => /<section class="t7-hero"[\s\S]*?<\/section>/.e
 const chipOf = (html: string) => /<span class="t7-state t7-state--(\w+)"><span [^>]*>\w+<\/span>([^<]+)<\/span>/.exec(html);
 /** A planned day the generator rates "Limited · x of y": what Today falls back to after midnight. */
 const shortDay = todayProgram(gym, slots[0], [], { equipment: 'bodyweight', minutes: 30 });
+const total = (record: typeof session) => record.exercises.reduce((sum, exercise) => sum + exercise.performed.length, 0);
 
 test('#220: Today names a running described session, "Today only", and its status follows the session until midnight', async () => {
   await withServer(async (load) => {
@@ -100,25 +101,26 @@ test('#220: Today names a running described session, "Today only", and its statu
     assert.match(plain(hero), /Today only/);
     assert.doesNotMatch(hero, /Slot/);
     assert.match(hero, /aria-label="Legs, /);
-    assert.equal(chipOf(running)?.[2].trim(), 'Ready');
+    // (#260) Running, the chip counts sets; its tone is still the session's status.
+    assert.deepEqual([chipOf(running)?.[1], chipOf(running)?.[2].trim()], ['ready', `In progress · 0 of ${total(session)} sets`]);
 
     const afterSwap = render(swapped, describedSessionStatus(swapped, override(TODAY), gym));
     assert.equal(chipOf(afterSwap)?.[1], 'limited');
     assert.match(plain(afterSwap), /\bhamstring\b/);
 
-    // Midnight: the ask is gone. No chip, no note, never the generator's "x of y" for the planned day.
+    // Midnight: the ask is gone. No status, no note, never the generator's "x of y" for the planned day;
+    // (#260) the chip still counts the session's sets, as live.
     assert.equal(shortDay.feasibility?.status, 'limited');
     assert.ok((shortDay.feasibility?.selectedCount ?? 0) < (shortDay.feasibility?.targetCount ?? 0));
     const rolled = render(session, describedSessionStatus(session, override(TOMORROW), gym), shortDay);
-    assert.equal(chipOf(rolled), null);
-    assert.doesNotMatch(rolled, /t7-state/);
+    assert.deepEqual([chipOf(rolled)?.[1], chipOf(rolled)?.[2].trim()], ['ready', `In progress · 0 of ${total(session)} sets`]);
     assert.doesNotMatch(rolled, /role="note"/);
-    assert.doesNotMatch(plain(heroOf(rolled)), / of \d|Slot/);
+    assert.doesNotMatch(plain(heroOf(rolled)), /Limited|Slot/);
     assert.match(plain(heroOf(rolled)), /Legs in progress.*Today only/);
   });
 });
 
-test('#220: a planned running session keeps its slot and the generator\'s chip', async () => {
+test('#220: a planned running session keeps its slot and the generator\'s chip tone', async () => {
   await withServer(async (load) => {
     const { default: Today } = await load('/src/screens/TodayScreen.tsx');
     const html = renderToStaticMarkup(createElement(Today as never, { profile: gym, program: shortDay, adapted: live, equipment: 'home',
@@ -127,7 +129,9 @@ test('#220: a planned running session keeps its slot and the generator\'s chip',
     const hero = plain(heroOf(html));
     assert.match(hero, /Day 1 of 4/);
     assert.doesNotMatch(hero, /Today only/);
-    assert.match(chipOf(html)?.[2] ?? '', /^Limited · \d+ of \d+$/);
+    // (#260) Running, the chip counts sets; the generator's Limited stays as its tone.
+    assert.equal(chipOf(html)?.[1], 'limited');
+    assert.match(chipOf(html)?.[2] ?? '', /^In progress · 0 of \d+ sets$/);
   });
 });
 
@@ -142,6 +146,8 @@ test('#220: a legacy running session (no slot link, no plan revision) still read
     const hero = plain(heroOf(html));
     assert.match(hero, /Day 1 of 4/);
     assert.doesNotMatch(hero, /Today only/);
-    assert.match(chipOf(html)?.[2] ?? '', /^Limited · \d+ of \d+$/);
+    // (#260) Running, the chip counts sets; the generator's Limited stays as its tone.
+    assert.equal(chipOf(html)?.[1], 'limited');
+    assert.match(chipOf(html)?.[2] ?? '', /^In progress · 0 of \d+ sets$/);
   });
 });

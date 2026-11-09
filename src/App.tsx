@@ -550,6 +550,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const startWorkout = () => {
     startSession(constraints);
   };
+  // (#260) The tab bar's centre button and Today's Resume: one handler (lesson 9).
+  const openWorkout = current ? () => setView('train') : startWorkout;
 
   /**
    * Skip the slot on offer. Explicit only: nothing skips because a date passed,
@@ -1249,6 +1251,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             current={current}
             now={today}
             onPreview={() => setSheet({ kind: 'preview' })}
+            onResume={openWorkout}
             onAdjust={() => setSheet({ kind: 'adjust' })}
             onOpenLength={() => setSheet({ kind: 'length' })}
             onOpenGym={() => setSheet({ kind: 'gym' })}
@@ -1334,7 +1337,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           }}
           workoutAction={{
             ...tabBarAction(current, adapted),
-            onActivate: current ? () => setView('train') : startWorkout,
+            onActivate: openWorkout,
             progress: current
               ? (() => {
                   const sets = current.exercises.flatMap((exercise) => exercise.performed);

@@ -105,7 +105,8 @@ test('"Why this target" keeps the precise reason', async () => {
 const startControls = (html: string) =>
   (html.match(/<button[\s\S]*?<\/button>/g) ?? []).filter((button) => /Start|Resume/.test(button));
 
-test('Today has exactly one Start/Resume: the tab action; the dock is Preview', async () => {
+// (#260) A running session also offers Resume in the dock: the tab bar's own handler (tests/resumeToday260.test.ts).
+test('Today has one Start (the tab action) before a session and Resume in tab and dock during one; Preview only before', async () => {
   await withServer(async (load) => {
     const { default: Today } = await load('/src/screens/TodayScreen.tsx');
     const { TabBar } = await load('/src/components/ui/Chrome.tsx');
@@ -113,7 +114,7 @@ test('Today has exactly one Start/Resume: the tab action; the dock is Preview', 
     for (const current of [null, liveSession([])]) {
       const html = renderToday(Today, profile, [], current) + renderToStaticMarkup(createElement(TabBar as never,
         { active: 'today', onChange: noop, workoutAction: { ...tabBarAction(current, live), onActivate: noop } }));
-      assert.equal(startControls(html).length, 1, current ? 'resume' : 'start');
+      assert.equal(startControls(html).length, current ? 2 : 1, current ? 'resume' : 'start');
       assert.equal(html.includes('Preview workout'), !current, 'preview only before a session opens');
     }
   });
