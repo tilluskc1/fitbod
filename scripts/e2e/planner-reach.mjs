@@ -1,7 +1,9 @@
 // The planner reach check (#256): the "Plan today with me" entry and every planner step's main
 // action are fully on screen and take the tap themselves (nothing from the nav or dock on top),
-// at 390x844, 360x780 and 390x650 (iPhone Chrome's visible area), with and without the backup
-// reminder, and with the keyboard open on the text box.
+// at 390x844, 360x780, 390x650 (iPhone Chrome's visible area) and 360x650, with and without the backup
+// reminder, and with the keyboard open on the text box. Also (#279): with nothing started, the
+// dock's "Preview workout" label is one line and "Short on time or gear?" keeps its whole text and a
+// 44px target, at those sizes and 360x650.
 //
 //   npm run e2e        (builds, then runs every scripts/e2e check against the built app)
 //
@@ -83,6 +85,41 @@ async function reachable(page, locator, label, where) {
   check(ok.inside && ok.hits, `${where}: ${label} not reachable (y ${ok.top}-${ok.bottom} of ${ok.vh}, centre hits ${ok.on})`);
 }
 
+/**
+ * (#279) Nothing started: the dock's primary label sits on one line (distinct line tops of its text),
+ * and the adjust action shows its whole text (no clipping or ellipsis) with a 44px target.
+ */
+async function dockLabels(page, where) {
+  const got = await page.locator('.flow-dock').evaluate((dock) => {
+    const lines = (el) => {
+      const tops = new Set();
+      const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let node = walk.nextNode(); node; node = walk.nextNode()) {
+        if (!node.textContent.trim() || node.parentElement.closest('.ms')) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const rect of range.getClientRects()) if (rect.width > 0) tops.add(Math.round(rect.top));
+      }
+      return tops.size;
+    };
+    const primary = dock.querySelector('.pill-primary');
+    const adjust = dock.querySelector('.text-action');
+    const a = adjust.getBoundingClientRect();
+    return {
+      label: primary ? [...primary.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim() : 'none',
+      primaryLines: primary ? lines(primary) : 0,
+      adjust: adjust.textContent.trim(),
+      adjustClipped: adjust.scrollWidth > adjust.clientWidth || getComputedStyle(adjust).textOverflow === 'ellipsis',
+      adjustHeight: Math.round(a.height),
+      overflowX: document.documentElement.scrollWidth > window.innerWidth,
+    };
+  });
+  check(got.primaryLines === 1, `${where}: dock primary "${got.label}" takes ${got.primaryLines} lines, want 1`);
+  check(/Short on time or gear\?/.test(got.adjust) && !got.adjustClipped, `${where}: adjust action clipped ("${got.adjust}")`);
+  check(got.adjustHeight >= 44, `${where}: adjust action ${got.adjustHeight}px tall, want 44`);
+  check(!got.overflowX, `${where}: page scrolls sideways`);
+}
+
 async function shot(page, name) {
   if (shots) await page.screenshot({ path: join(shots, `256-${name}.png`) });
 }
@@ -151,7 +188,7 @@ async function walkPlanner(page, where) {
 
 const browser = await chromium.launch();
 try {
-  for (const [width, height] of [[390, 844], [360, 780], [390, 650]]) {
+  for (const [width, height] of [[390, 844], [360, 780], [390, 650], [360, 650]]) {
     const page = await browser.newPage({ viewport: { width, height } });
     // Chromium cannot shrink the visual viewport without shrinking the layout, so stand in a
     // controllable visualViewport; the app reads only height, offsetTop and its events.
@@ -170,6 +207,7 @@ try {
     page.on('pageerror', (error) => errors.push(String(error)));
     await page.clock.setFixedTime(day(0));
     await onboard(page);
+    await dockLabels(page, `${width}x${height}`);
     await walkPlanner(page, `${width}x${height}`);
 
     // With the backup reminder: one finished workout, then the next day.
@@ -179,6 +217,7 @@ try {
     await page.waitForSelector('.t7-hero');
     const reminder = await page.getByText(/back up/i).first().isVisible().catch(() => false);
     check(reminder, `${width}x${height}: backup reminder did not show after a finished workout`);
+    await dockLabels(page, `${width}x${height}-reminder`);
     await walkPlanner(page, `${width}x${height}-reminder`);
     check(errors.length === 0, `${width}x${height}: page errors: ${errors.join(' | ')}`);
     await page.close();
@@ -192,4 +231,4 @@ if (failures.length) {
   console.error(`planner-reach: ${failures.length} failure(s)\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('planner-reach: pass at 390x844, 360x780 and 390x650, with and without the backup reminder');
+console.log('planner-reach: pass at 390x844, 360x780, 390x650 and 360x650, with and without the backup reminder');

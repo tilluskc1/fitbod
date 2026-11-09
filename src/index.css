@@ -2019,7 +2019,8 @@ body {
 @media (max-height: 700px) {
   /* (#256) Short visible area: the dock's two actions share one row so the planner entry stays above it. */
   .flow-dock.flow-dock { flex-direction: row; align-items: center; gap: 8px; padding-top: 4px; padding-bottom: 8px; }
-  .flow-dock.flow-dock > .pill-primary { flex: 1; }
+  /* (#279) The primary never gets narrower than its one-line label; the adjust action wraps instead. */
+  .flow-dock.flow-dock > .pill-primary { flex: 1 0 auto; width: auto; }
 }
 
 .flow-dock--edge {
