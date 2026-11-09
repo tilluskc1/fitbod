@@ -130,6 +130,12 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    written; a better idea goes in the issue comment as a question, not in the code. Check: every
    "default picked by product" line in the issue matches the diff, or the issue is parked `needs-info`.
 
+22. **A UI bug report shows the screen.** I filed UI stories from the owner's screenshots as text only;
+   the owner had to ask to see what I meant. Rule: every UI story product files carries current-state
+   screenshots from `main` at 390x844 (and 360x780 when width matters), shown to the owner in chat and
+   linked in the issue body under `docs/product/screens/<story>/`. Check: the issue body has an image
+   link and the chat reply sent the file.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
