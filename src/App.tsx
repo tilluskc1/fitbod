@@ -71,7 +71,7 @@ import
   type CarryResult,
   type Followers,
 } from './lib/session';
-import { bigJumpNote, carryMessage, setAllMessage } from './lib/carry';
+import { bigJumpNote, burstLive, burstMark, carryMessage, setAllMessage } from './lib/carry';
 import { loadModeOf, setUnit } from './data/flagship';
 import { lastExercisePerformance } from './lib/progression';import { setWorkoutFeedback } from './lib/feedback';
 import
@@ -241,7 +241,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     exerciseId: string;
     previous: CarryResult['previous'];
     followers: Followers;
+    /** The exercise's sets as this burst left them; see `burstLive`. */
+    mark: string;
   } | null>(null);
+  // A burst whose exercise changed by any other path is over: no Undo, no fixed followers.
+  const liveCarry = carryUndo !== null && burstLive(state.current, carryUndo.exerciseIndex, carryUndo.mark) ? carryUndo : null;
   const jumpWarned = useRef(new Map<string, string>());
   const jumpBase = useRef(new Map<string, number>());
   const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(initial));
@@ -880,7 +884,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const burstKey = (session: WorkoutRecord, exerciseIndex: number, burst: string) =>
     `${session.id}:${exerciseIndex}:${session.exercises[exerciseIndex]?.exerciseId}:${burst}`;
   /** The open burst for this key. Every edit opens its own burst and ends any other (#306 review 2). */
-  const openBurst = (key: string) => (carryUndo !== null && carryUndo.key === key ? carryUndo : null);
+  const openBurst = (key: string) => (liveCarry !== null && liveCarry.key === key ? liveCarry : null);
 
   const announceCarry = (
     session: WorkoutRecord,
@@ -901,7 +905,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       ? [...open.previous, ...result.previous.filter((p) => !open.previous.some((q) => q.index === p.index))]
       : result.previous;
     const followers = result.followers ?? { weight: [], reps: [] };
-    const entry = { key, sessionId: session.id, exerciseIndex, exerciseId: exercise.exerciseId, previous, followers };
+    const entry = { key, sessionId: session.id, exerciseIndex, exerciseId: exercise.exerciseId, previous, followers, mark: burstMark(result.session, exerciseIndex) };
     let text = message(previous.map((p) => p.index));
     if (result.carried.length === 0 || text === null) {
       // Nothing to say, but the burst still opens (its followers fixed now, even if none), so a later
@@ -966,7 +970,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   };
 
   const undoLastCarry = () => {
-    const undo = carryUndo;
+    const undo = liveCarry;
     if (!undo) return;
     const stamp = new Date().toISOString();
     setState((currentState) =>
@@ -1503,7 +1507,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         <div className={view === 'tabs' && tab === 'today' && !conflict && saveUi.kind !== 'error' ? 'app-alerts app-alerts--toast' : 'app-alerts'} role="status">
           <div className="banner" style={{ margin: '8px 0 0' }}>
             <span>{notice}</span>
-            {carryUndo !== null && carryUndo.message === notice && (
+            {liveCarry !== null && liveCarry.message === notice && (
               <button onClick={undoLastCarry}>Undo</button>
             )}
             <button onClick={() => setNotice(null)} aria-label="Dismiss message">

@@ -1,5 +1,5 @@
 import { formatActualWeight } from './units.ts';
-import type { Unit } from '../types.ts';
+import type { Unit, WorkoutRecord } from '../types.ts';
 
 /** "set 3", "sets 2 to 4", "sets 2 and 4", "sets 2, 3 and 5" (indices are 0-based). */
 export function setsPhrase(indices: number[]): string {
@@ -40,4 +40,18 @@ export function setAllMessage(args: { kg: number; reps: number; carried: number[
 export function bigJumpNote(firstTime: boolean, startKg: number, kg: number, unit: Unit, mode: 'each' | 'total' | 'none'): string | null {
   if (!firstTime || startKg <= 0 || kg <= startKg * 2) return null;
   return `Big jump from the starting load. Make sure ${formatActualWeight(kg, unit, { perSide: mode === 'each' })} moves well for all sets.`;
+}
+
+/** What an exercise's sets look like right after a carry burst's latest edit (#306). */
+export function burstMark(session: WorkoutRecord, exerciseIndex: number): string {
+  const exercise = session.exercises[exerciseIndex];
+  return `${session.id}:${exercise?.exerciseId}:${JSON.stringify(exercise?.performed ?? null)}`;
+}
+
+/**
+ * A burst (its Undo and its fixed followers) is live only while the exercise's sets are exactly what
+ * the burst left. Any other change (Confirm, a logged set, restore, swap, another tab) ends it.
+ */
+export function burstLive(session: WorkoutRecord | null | undefined, exerciseIndex: number, mark: string): boolean {
+  return Boolean(session) && burstMark(session as WorkoutRecord, exerciseIndex) === mark;
 }

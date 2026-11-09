@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createSession, editSet, logSet, setRemaining, swapPendingExercise, undoCarry } from '../src/lib/session.ts';
-import { carryMessage, setsPhrase } from '../src/lib/carry.ts';
+import { confirmWeight, createSession, editSet, logSet, setRemaining, swapPendingExercise, undoCarry } from '../src/lib/session.ts';
+import { burstLive, burstMark, carryMessage, setsPhrase } from '../src/lib/carry.ts';
 import type { WorkoutRecord } from '../src/types.ts';
 import { toKg } from '../src/lib/units.ts';
 
@@ -186,4 +186,17 @@ test('the owner\'s case: set 1 typed 135 x 5 then logged leaves sets 2 to 4 at 1
   assert.deepEqual(weights(s), [LB135, LB135, LB135, LB135]);
   assert.deepEqual(reps(s), [5, 5, 5, 5]);
   assert.deepEqual(s.exercises[0].planned.map((set) => set.reps), [8, 8, 8, 8], 'the target stays 4 x 8');
+});
+
+test('review 3 probe: a burst ends when its exercise changes by any other path (Confirm, log, swap)', () => {
+  const carry = editSet(bench(), 0, 0, { weight: LB135 }, NOW);
+  const mark = burstMark(carry.session, 0);
+  assert.ok(burstLive(carry.session, 0, mark), 'live right after the edit');
+  // The same edit re-run on the same state (as App's setState does) leaves the same mark.
+  assert.ok(burstLive(editSet(bench(), 0, 0, { weight: LB135 }, NOW).session, 0, mark));
+  assert.ok(!burstLive(confirmWeight(carry.session, 0, toKg(95, 'lb'), NOW), 0, mark), 'Confirm ends it, so Undo cannot revert 95');
+  assert.ok(!burstLive(logSet(carry.session, 0, 0, NOW, 90), 0, mark), 'a logged set ends it');
+  assert.ok(!burstLive(swapPendingExercise(carry.session, 0, { exerciseId: 'dumbbell-bench-press', name: 'Dumbbell Bench Press', weight: 0, reps: 10 }), 0, mark), 'a swap ends it');
+  assert.ok(burstLive(editSet(carry.session, 1, 0, { weight: 12 }, NOW).session, 0, mark), 'another exercise leaves it alone');
+  assert.ok(!burstLive(null, 0, mark));
 });
