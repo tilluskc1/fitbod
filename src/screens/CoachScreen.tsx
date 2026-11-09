@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Profile, WorkoutRecord } from '../types';
 import { feedbackLabel, latestFeedback } from '../lib/feedback';
+import { equipmentTitle, sessionLength } from '../lib/coachLabels';
 import { ArrowIcon, DumbbellIcon, EditIcon, GoalIcon, ClockIcon } from '../components/ui/Icons';
 
 interface Props {
@@ -121,7 +122,7 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
               <DumbbellIcon />
             </span>
             <span>
-              <span className="memory-title">Home equipment</span>
+              <span className="memory-title">{equipmentTitle(profile)}</span>
               <span className="memory-value">{equipment}</span>
               <span className="pill">Confirmed</span>
             </span>
@@ -136,7 +137,7 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
             </span>
             <span>
               <span className="memory-title">Session preference</span>
-              <span className="memory-value">Under {profile.sessionMinutes ?? 35} minutes</span>
+              <span className="memory-value">{sessionLength(profile)}</span>
               <span className="pill">Confirmed</span>
             </span>
             <button className="icon-btn" onClick={() => onEdit('minutes')} aria-label="Edit session length">
