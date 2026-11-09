@@ -588,17 +588,17 @@ function SetAllForm({ exerciseId, pending, unit, start, onApply, onBack }: {
   const ready = kg !== null && !tooHeavy && !(kg <= 0 && needsLoad(exerciseId)) && reps > 0 && reps <= MAX_REPS;
   const loadLabel = `Weight (${unitLabel(unit)}${mode === 'each' ? ' each' : mode === 'total' ? ' total' : ''})`;
   return (
-    <div className="lg-editor" role="group" aria-label="Set all remaining sets">
+    <div className="set-all" role="group" aria-label="Set all remaining sets">
       <p className="sheet-copy">
         Every set not yet logged ({pending}) takes these values. Logged sets stay as they are.
       </p>
       {mode !== 'none' && (
-        <label className="aw-field">
-          <span className="aw-field__label"><span>{loadLabel}</span></span>
+        <div className="aw-field">
+          <span className="aw-field__label" aria-hidden="true"><span>{loadLabel}</span></span>
           <input type="number" min="0" step="any" inputMode="decimal" aria-label={loadLabel} aria-invalid={tooHeavy || undefined}
             value={weightText} onChange={(event) => setWeightText(event.target.value)} />
           {tooHeavy && <span className="error-text" role="alert">{loadLimitMessage(unit)}</span>}
-        </label>
+        </div>
       )}
       <div className="reps-field">
         <div className="reps-field__label">{seconds ? 'Seconds' : 'Reps'}</div>

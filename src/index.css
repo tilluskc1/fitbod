@@ -4173,6 +4173,15 @@ button.aw-exercise__name-btn {
   text-align: left;
 }
 
+.set-all {
+  display: grid;
+  gap: 12px;
+}
+
+.set-all .sheet-copy {
+  margin: 0;
+}
+
 .lg-editor {
   margin: 0;
 }
