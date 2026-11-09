@@ -171,12 +171,33 @@ test('restored legacy history: tiles at once, with the planned-time footnote', a
   assert.match(progressText, /≈ includes planned time for older workouts\./);
 });
 
-test('Session history with no workouts says so in the new words', async () => {
+async function renderHistory(history: WorkoutRecord[]) {
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
-    const { NO_WORKOUTS_YET } = await server.ssrLoadModule('/src/screens/ProgressScreen.tsx');
-    assert.equal(NO_WORKOUTS_YET, 'No workouts yet. Your first one will appear here.');
+    const { default: Progress } = await server.ssrLoadModule('/src/screens/ProgressScreen.tsx');
+    const noop = () => {};
+    return renderToStaticMarkup(createElement(Progress, {
+      history, unit: 'kg', initialTab: 'history', onExport: noop, onCorrect: noop, onDelete: noop, onFeedback: noop, onStartToday: noop,
+    })).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   } finally {
     await server.close();
   }
+}
+
+for (const [label, history] of [
+  ['no workouts', [] as WorkoutRecord[]],
+  ['only an empty record', [finished('e', [0], 4)]],
+  ['only a skipped workout', [finished('s', [0, 0], 9, [0, 1])]],
+] as const) {
+  test(`Session history with ${label}: the empty line, no "0 sets" row (#294)`, async () => {
+    const text = await renderHistory(history);
+    assert.match(text, /No workouts yet\. Your first one will appear here\./);
+    assert.doesNotMatch(text, /0 sets|Upper A/);
+  });
+}
+
+test('Session history with one finished workout lists it, and no empty line', async () => {
+  const text = await renderHistory([finished('w1', [3], 25), finished('empty', [0], 3)]);
+  assert.match(text, /Upper A/);
+  assert.doesNotMatch(text, /No workouts yet/);
 });

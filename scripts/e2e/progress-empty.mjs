@@ -116,7 +116,7 @@ try {
     await page.getByRole('button', { name: 'Coach' }).click();
     check(await page.locator('.context-row').count() === 0, `${where}: Coach hides its context rows for a new user`);
     const coachText = flat(await page.locator('.screen').innerText());
-    check(coachText.includes('After your first workout I’ll show what changed and why.'), `${where}: Coach's one line`);
+    check(coachText.includes("After your first workout I'll show what changed and why."), `${where}: Coach's one line`);
     check(!/\b0\b/.test(coachText), `${where}: Coach shows no "0"`);
     if (shots) {
       await page.locator('.card', { hasText: 'Your recent context' }).scrollIntoViewIfNeeded();

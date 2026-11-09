@@ -78,7 +78,7 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
             <span className="kicker">OBSERVE → REVIEW → ADAPT</span>
             <h2 className="card-title">Your recent context</h2>
             {finished.length === 0 ? (
-              <p className="big-copy" style={{ marginTop: 10 }}>After your first workout I’ll show what changed and why.</p>
+              <p className="big-copy" style={{ marginTop: 10 }}>After your first workout I'll show what changed and why.</p>
             ) : (
             <div className="context-list">
               <div className="context-row">

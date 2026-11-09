@@ -35,6 +35,8 @@ interface Props {
   onStartToday: () => void;
   /** Today has nothing to start, as Today's own Preview button is then disabled. */
   startDisabled?: boolean;
+  /** Which view opens first; tests render Session history directly. */
+  initialTab?: 'overview' | 'history';
 }
 
 const minutesOf = (workout: WorkoutRecord) => trainedMinutes(workout).minutes;
@@ -62,8 +64,9 @@ export default function ProgressScreen({
   running = false,
   onStartToday,
   startDisabled = false,
+  initialTab = 'overview',
 }: Props) {
-  const [tab, setTab] = useState<'overview' | 'history'>('overview');
+  const [tab, setTab] = useState<'overview' | 'history'>(initialTab);
   const [openId, setOpenId] = useState<string | null>(null);
   /** The weight a history field held when focused; a refused load reverts to it (#101). */
   const focusedLoad = useRef<number | null>(null);
@@ -299,8 +302,9 @@ export default function ProgressScreen({
         </>
       ) : (
         <div className="history-list">
-          {sessions.length === 0 && <p className="note-card">{NO_WORKOUTS_YET}</p>}
-          {sessions.map((workout) => {
+          {/* (#294) Empty or all-skipped records count as none, here as on Overview: no "0 sets" row. */}
+          {totals.workouts === 0 && <p className="note-card">{NO_WORKOUTS_YET}</p>}
+          {(totals.workouts === 0 ? [] : sessions).map((workout) => {
             const parts = dateParts(workout.date);
             const open = openId === workout.id;
             return (

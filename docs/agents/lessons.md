@@ -130,6 +130,13 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    written; a better idea goes in the issue comment as a question, not in the code. Check: every
    "default picked by product" line in the issue matches the diff, or the issue is parked `needs-info`.
 
+22. **One "counts as none" rule covers every view of the same records.** #294 hid Progress's zero tiles
+   for users whose only record was empty or all-skipped, but Session history still checked
+   `sessions.length` and listed a "0 sets" row; review 1 failed it. Rule: when a story defines what counts
+   (a finished workout, a logged set), grep every surface that lists or counts those records and use the
+   one helper (`finishedWorkouts` in `src/lib/progressTotals.ts`). Check: `tests/progressEmpty294.test.ts`
+   renders Overview, Session history and Coach for the same empty-record fixture.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
