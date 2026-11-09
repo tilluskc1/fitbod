@@ -6,6 +6,7 @@ import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shou
 import { exerciseInWorkout, lastPerformance } from '../lib/plan';
 import { firstTimeLoaded, plannedLoad } from '../lib/liveProgression';
 import { nearestLoad, suggestedFirstLoad } from '../lib/firstLoad';
+import { readCleared, writeCleared } from '../lib/clearedCells';
 import { availableLoads } from '../lib/progression';
 import { calibrationInputValue, loadLimitMessage, loadValue, repsLimitMessage, typedLoad, typedReps, unitLabel } from '../lib/units';
 import { restLabel } from '../lib/sessionTime';
@@ -34,7 +35,7 @@ interface Props {
   goHeavier?: Record<string, number>;
   onMinimize: () => void;
   onFinish: () => void;
-  onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => void;
+  onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>, how?: SetEdit) => void;
   /**
    * The exercise id lets the handler refuse a tap rendered against a since-changed session. `weight`:
    * the suggested start the empty cell showed (#309), written to that set before it is logged.
@@ -74,30 +75,61 @@ function shortTarget(entry: WorkoutExercise): string {
 }
 
 /**
+ * `revert`: the keystroke was refused or emptied the cell; the handler undoes its burst (#309 review 2).
+ * `prefill`: the suggested start the empty cell showed, the base of the "Big jump" heads-up (#306).
+ */
+export interface SetEdit {
+  revert?: 'refused' | 'emptied';
+  prefill?: number;
+}
+
+/**
+ * What a cell does with a keystroke: null keeps the typed text; 'block' ignores the keystroke (the text
+ * stays as it was, nothing is saved); 'reset' shows the stored value again, selected, so the next key
+ * replaces it rather than appending to it (#309 review 2).
+ */
+type CellAnswer = null | 'block' | 'reset';
+
+/**
  * A set's weight or reps, typed in its own cell (#309). Away from focus it shows the stored value;
  * while focused it shows exactly what was typed, so a value is never reformatted mid-keystroke.
- * `onText` saves a keystroke and returns the text to show instead, when it refused it.
+ * `typed` is true for a key typed on the keyboard, false for a paste, autofill or drop.
  */
-function SetCell({ id, label, shown, inputMode, enterKeyHint, empty, onFocus, onText, onEnter }: {
+function SetCell({ id, label, shown, inputMode, enterKeyHint, empty, onText, onEnter }: {
   id: string;
   label: string;
   shown: string;
   inputMode: 'decimal' | 'numeric';
   enterKeyHint: 'next' | 'done';
   empty: boolean;
-  onFocus: () => void;
-  onText: (text: string) => string | null;
+  onText: (text: string, typed: boolean) => CellAnswer;
   onEnter: (input: HTMLInputElement) => void;
 }) {
   const [text, setText] = useState<string | null>(null);
+  /** Set by a reset; the render it causes selects the stored value it shows. */
+  const selectNext = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!selectNext.current) return;
+    selectNext.current = false;
+    input.current?.select();
+  });
   return (
-    <input id={id} className={empty ? 'lg-cell lg-input lg-cell--empty' : 'lg-cell lg-input'} type="text"
+    <input ref={input} id={id} className={empty ? 'lg-cell lg-input lg-cell--empty' : 'lg-cell lg-input'} type="text"
       inputMode={inputMode} enterKeyHint={enterKeyHint} autoComplete="off" aria-label={label}
       placeholder="—" value={text ?? shown}
-      onFocus={(event) => { onFocus(); setText(shown); event.currentTarget.select(); }}
+      onFocus={(event) => { setText(shown); event.currentTarget.select(); }}
       onChange={(event) => {
         const typed = event.target.value.replace(',', '.');
-        setText(onText(typed) ?? typed);
+        const answer = onText(typed, (event.nativeEvent as InputEvent).inputType === 'insertText');
+        if (answer === 'block') return;
+        if (answer === 'reset') {
+          // While focused the cell shows `text`, so drop it to show the stored value, then select it.
+          selectNext.current = true;
+          setText(null);
+          return;
+        }
+        setText(typed);
       }}
       onBlur={() => setText(null)}
       onKeyDown={(event) => {
@@ -129,12 +161,10 @@ export default function TrainScreen({
   onReplace,
   onReturn,
 }: Props) {
-  /** Set cells (`calibrationKey:setIndex`) whose suggested start the lifter cleared: they stay empty. */
-  const [cleared, setCleared] = useState<string[]>([]);
+  /** Set cells (`calibrationKey:setIndex`) whose suggested start the lifter cleared: they stay empty, across a reload. */
+  const [cleared, setCleared] = useState<string[]>(() => readCleared(session.id));
   /** A refused keystroke's message, under the row it was typed in. */
   const [refusal, setRefusal] = useState<{ key: string; text: string } | null>(null);
-  /** The stored value when a cell took focus: a refused keystroke falls back to it (#101, #109). */
-  const focusedValue = useRef(0);
   /** After the focused control unmounts, focus moves here (an element id, or 'log' for the next open ✓) instead of <body>. */
   const focusNext = useRef<string | null>(null);
   useEffect(() => {
@@ -332,37 +362,44 @@ export default function TrainScreen({
       : targetNotes?.[exercise.exerciseId]);
   const unitWord = `${unit === 'kg' ? 'kilograms' : 'pounds'}${perSide}`;
 
-  /** A weight keystroke. A logged set never stores an empty load (#103); it shows the last saved one on blur. */
-  const typeWeight = (set: PerformedSet, setIndex: number, key: string, text: string): string | null => {
-    const next = typedLoad(text, unit, focusedValue.current);
-    if (!next) return calibrationInputValue(set.weight, unit);
-    if (next.refused) {
-      // The load held at focus goes back into the record, so the keystroke before the refused one
-      // is never left stored under a "not saved" message (#101).
-      setRefusal({ key, text: loadLimitMessage(unit) });
-      onUpdateSet(index, setIndex, { weight: next.kg });
-      return calibrationInputValue(next.kg, unit);
-    }
+  /**
+   * A value past the limit (#101, #109). A typed key is capped at the cell: it is never typed, so nothing
+   * changes (#309 review 2). Anything else (a paste) is refused, and the burst it ended is undone: every
+   * set it carried goes back to what Undo restores, and the cell shows its value again, selected.
+   */
+  const refuse = (setIndex: number, key: string, message: string, patch: Partial<PerformedSet>, typed: boolean): CellAnswer => {
+    setRefusal({ key, text: message });
+    if (typed) return 'block';
+    onUpdateSet(index, setIndex, patch, { revert: 'refused' });
+    return 'reset';
+  };
+  /** A weight keystroke. An emptied cell undoes its burst; a logged set keeps its load (#103). */
+  const typeWeight = (set: PerformedSet, setIndex: number, key: string, text: string, typed: boolean): CellAnswer => {
+    const next = typedLoad(text, unit, set.weight);
+    if (!next) return 'block';
+    if (next.refused) return refuse(setIndex, key, loadLimitMessage(unit), { weight: set.weight }, typed);
     setRefusal(null);
     if (next.kg <= 0) {
       // Clearing a cell drops the suggested start from that cell only: an emptied cell stays empty.
-      if (prefill !== null) setCleared((keys) => [...keys, `${calibrationKey}:${setIndex}`]);
-      if (set.done && needsLoad(exercise.exerciseId)) return null;
+      const cell = `${calibrationKey}:${setIndex}`;
+      if (prefill !== null && !cleared.includes(cell)) {
+        const keys = [...cleared.filter((k) => k.startsWith(`${session.id}:`)), cell];
+        setCleared(keys);
+        writeCleared(session.id, keys);
+      }
+      onUpdateSet(index, setIndex, { weight: 0 }, { revert: 'emptied' });
+      return null;
     }
-    onUpdateSet(index, setIndex, { weight: next.kg });
+    onUpdateSet(index, setIndex, { weight: next.kg }, { prefill: prefill ?? 0 });
     return null;
   };
-  /** A reps (or seconds) keystroke; above the limit it is refused, as a load is. */
-  const typeReps = (setIndex: number, key: string, text: string): string | null => {
-    if (!/^\d*$/.test(text)) return String(focusedValue.current);
-    const next = typedReps(text, focusedValue.current);
-    if (next.refused) {
-      setRefusal({ key, text: repsLimitMessage(holdUnit) });
-      onUpdateSet(index, setIndex, { reps: next.reps });
-      return String(next.reps);
-    }
+  /** A reps (or seconds) keystroke; above the limit it is capped or refused, as a load is. */
+  const typeReps = (set: PerformedSet, setIndex: number, key: string, text: string, typed: boolean): CellAnswer => {
+    if (!/^\d*$/.test(text)) return 'block';
+    const next = typedReps(text, set.reps);
+    if (next.refused) return refuse(setIndex, key, repsLimitMessage(holdUnit), { reps: set.reps }, typed);
     setRefusal(null);
-    onUpdateSet(index, setIndex, { reps: next.reps });
+    onUpdateSet(index, setIndex, { reps: next.reps }, next.reps <= 0 ? { revert: 'emptied' } : {});
     return null;
   };
 
@@ -392,16 +429,14 @@ export default function TrainScreen({
           ) : (
             <SetCell id={`${key}:weight`} label={`Set ${n} weight, ${unitWord}`} shown={weightShown}
               empty={set.weight <= 0} inputMode="decimal" enterKeyHint="next"
-              onFocus={() => { focusedValue.current = set.weight; }}
-              onText={(text) => typeWeight(set, setIndex, key, text)}
+              onText={(text, typed) => typeWeight(set, setIndex, key, text, typed)}
               onEnter={() => document.getElementById(`${key}:reps`)?.focus()} />
           )}
         </td>
         <td>
           <SetCell id={`${key}:reps`} label={`Set ${n} ${holdUnit ? 'seconds' : 'reps'}`}
             shown={String(set.reps)} empty={false} inputMode="numeric" enterKeyHint="done"
-            onFocus={() => { focusedValue.current = set.reps; }}
-            onText={(text) => typeReps(setIndex, key, text)}
+            onText={(text, typed) => typeReps(set, setIndex, key, text, typed)}
             onEnter={(input) => input.blur()} />
         </td>
         <td>

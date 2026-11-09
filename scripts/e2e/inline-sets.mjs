@@ -226,36 +226,39 @@ try {
     check(r[0].weight === '' && r.slice(1).every((row) => row.weight === hint), `${where} D4: one cleared cell blanks only itself (${JSON.stringify(r)})`);
     check(!(await logButton(page, 2).isDisabled()), `${where} D4: set 2 still logs at the suggestion`);
 
-    // D3: logging set 2 first leaves set 1 at the suggestion, still one tap.
+    // D3: logging set 2 first leaves the empty sets at the suggestion, still one tap. After the reload
+    // the cleared set 1 is still empty (review 2, follow-up 3), so it shows nothing and cannot log.
     await page.reload();
     await page.waitForSelector('.lg-ex').catch(() => {});
     const resume = page.getByRole('button', { name: 'Resume workout', exact: true });
     if (!(await page.locator('.lg-ex').count())) await resume.click();
     await page.waitForSelector('.lg-ex');
+    r = await rows(page);
+    check(r[0].weight === '' && await logButton(page, 1).isDisabled(), `${where} R3: a cleared cell stays empty after a reload (${JSON.stringify(r)})`);
     await logButton(page, 2).click();
     r = await rows(page);
-    check(r[1].logged && r[0].weight === hint && !(await logButton(page, 1).isDisabled()),
-      `${where} D3: set 1 keeps ${hint} and its ✓ after set 2 logs first (${JSON.stringify(r)})`);
+    check(r[1].logged && r[2].weight === hint && !(await logButton(page, 3).isDisabled()),
+      `${where} D3: set 3 keeps ${hint} and its ✓ after set 2 logs first (${JSON.stringify(r)})`);
 
-    // D1: an over-limit keystroke is refused and the load held at focus is what stays stored.
+    // D1: an over-limit key is capped at the cell (review 2): it is never typed, and nothing changes.
     await weightCell(page, 1).click();
     await page.keyboard.type('135');
     await weightCell(page, 1).blur();
     await weightCell(page, 1).click();
     await page.keyboard.press('End');
-    await page.keyboard.type('99'); // 1359, then 13599 lb: over the limit
-    check(await weightCell(page, 1).inputValue() === '135', `${where} D1: the cell falls back to 135 at the refusal`);
+    await page.keyboard.type('99'); // 1359, then 13599 lb: over the limit, so the second 9 is not typed
+    check(await weightCell(page, 1).inputValue() === '1359', `${where} D1: the cell keeps 1359 when 13599 is capped`);
     const alert = await page.getByRole('alert').innerText().catch(() => '');
     check(/not saved/.test(alert), `${where} D1: the refusal says so (${alert})`);
     await weightCell(page, 1).blur();
     r = await rows(page);
-    check(r[0].weight === '135', `${where} D1: a refused load leaves the focus value 135 stored (${r[0].weight})`);
+    check(r[0].weight === '1359', `${where} D1: the capped key leaves 1359 stored (${r[0].weight})`);
     await page.getByLabel('Set 1 reps').click();
     await page.keyboard.press('End');
-    await page.keyboard.type('999'); // 89, 899, then 8999: over the limit
+    await page.keyboard.type('999'); // 89, 899, then 8999: over the limit, so the last 9 is not typed
     await page.getByLabel('Set 1 reps').blur();
     r = await rows(page);
-    check(r[0].reps === '8', `${where} D1: refused reps leave 8 stored (${r[0].reps})`);
+    check(r[0].reps === '899', `${where} D1: capped reps leave 899 stored (${r[0].reps})`);
 
     // D2: an emptied reps cell cannot be logged.
     await page.getByLabel('Set 3 reps').click();
@@ -264,6 +267,89 @@ try {
     await page.keyboard.type('8');
     await page.getByLabel('Set 3 reps').blur();
     check(!(await logButton(page, 3).isDisabled()), `${where} D2: typed reps re-enable the ✓`);
+    await page.close();
+  }
+
+  // Review 2 (a469d89): a refusal or an emptied cell undoes the whole burst, and five follow-ups.
+  {
+    const where = 'review-2';
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(url).origin });
+    const page = await context.newPage();
+    await onboard(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForSelector('.lg-ex');
+    const hint = (await page.locator('.lg-coach').innerText()).match(/Suggested start (\d+)/)?.[1];
+    const toast = page.locator('.app-alerts .banner');
+    const toastText = async () => (await toast.count()) ? (await toast.innerText()).replace(/\s+/g, ' ') : '';
+    const paste = async (text) => {
+      await page.evaluate((value) => navigator.clipboard.writeText(value), text);
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.press('ControlOrMeta+V');
+    };
+
+    // R0, the blocker: set 1 empty (showing the suggestion); 1, 3, 5, 9 carry 1359 to every set.
+    await weightCell(page, 1).click();
+    await page.keyboard.type('1359');
+    let r = await rows(page);
+    check(r.every((row) => row.weight === '1359'), `${where} R0: the burst carries 1359 (${JSON.stringify(r)})`);
+    // A typed 9 is capped; a pasted 13599 is refused and puts back every set the burst carried.
+    await page.keyboard.type('9');
+    r = await rows(page);
+    check(r.every((row) => row.weight === '1359'), `${where} R0: a capped key changes nothing (${JSON.stringify(r)})`);
+    await paste('13599');
+    const alert = await page.getByRole('alert').innerText().catch(() => '');
+    check(/not saved/.test(alert), `${where} R0: the refused paste says so (${alert})`);
+    r = await rows(page);
+    check(r.every((row) => row.weight === hint), `${where} R0: no set holds the refused burst's load (${JSON.stringify(r)})`);
+    check(!/applied/.test(await toastText()), `${where} R0: no carry toast is left up (${await toastText()})`);
+    // Follow-up 2: the restored value is selected, so the next key replaces it rather than appending.
+    await page.keyboard.type('2');
+    check(await weightCell(page, 1).inputValue() === '2', `${where} R2: the next key starts a new value (${await weightCell(page, 1).inputValue()})`);
+    // An emptied set 1 puts back every set the burst carried.
+    await page.keyboard.press('Backspace');
+    r = await rows(page);
+    check(r[0].weight === '' && r.slice(1).every((row) => row.weight === hint), `${where} R0: an emptied cell puts the carried sets back (${JSON.stringify(r)})`);
+    await weightCell(page, 1).blur();
+
+    // Follow-up 1: a refused first keystroke on a logged set says nothing was updated.
+    await logButton(page, 2).click();
+    await page.getByLabel('Set 2 reps').click();
+    await paste('99999');
+    check(!/updated|applied/.test(await toastText()), `${where} R1: a refused keystroke on a logged set shows no update toast (${await toastText()})`);
+    // Follow-up 2 with a value in the cell: the 8 it shows again is selected, so 6 replaces it (not 86).
+    await page.keyboard.type('6');
+    check(await page.getByLabel('Set 2 reps').inputValue() === '6', `${where} R2: the next key replaces the restored 8 (${await page.getByLabel('Set 2 reps').inputValue()})`);
+    await page.getByLabel('Set 2 reps').blur();
+    // Follow-up 5: a logged set's reps cannot be emptied to 0.
+    await page.getByLabel('Set 2 reps').click();
+    await page.keyboard.press('Backspace');
+    await page.getByLabel('Set 2 reps').blur();
+    r = await rows(page);
+    check(r[1].logged && r[1].reps === '8', `${where} R5: a logged set keeps its reps when emptied (${JSON.stringify(r[1])})`);
+    check(!/updated/.test(await toastText()), `${where} R5: and says nothing was updated (${await toastText()})`);
+
+    await context.close();
+  }
+
+  // Review 2, follow-up 4: logging keeps the "Big jump" heads-up on screen; only its Undo goes. The jump
+  // is measured from the suggested start the empty cell showed, not from a half-typed keystroke.
+  {
+    const where = 'review-2 R4';
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await onboard(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForSelector('.lg-ex');
+    const toast = page.locator('.app-alerts .banner');
+    const toastText = async () => (await toast.count()) ? (await toast.innerText()).replace(/\s+/g, ' ') : '';
+    await weightCell(page, 1).click();
+    await page.keyboard.type('13');
+    check(!/Big jump/.test(await toastText()), `${where}: 13 lb from a 45 lb suggestion is no jump (${await toastText()})`);
+    await page.keyboard.type('5');
+    check(/Big jump/.test(await toastText()), `${where}: 135 lb from a 45 lb suggestion says heads-up (${await toastText()})`);
+    await logButton(page, 1).click();
+    check(/Big jump/.test(await toastText()), `${where}: the heads-up stays after logging (${await toastText()})`);
+    check(await toast.getByRole('button', { name: 'Undo' }).count() === 0, `${where}: its Undo is gone`);
     await page.close();
   }
 

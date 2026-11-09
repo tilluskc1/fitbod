@@ -170,6 +170,10 @@ export function editSet(
   fixed?: Followers,
 ): CarryResult {
   const before = session.exercises[exerciseIndex]?.performed[setIndex];
+  // A logged set never takes 0 reps (or seconds): it would read as a set never done (#309 review 2).
+  if (before?.done && patch.reps !== undefined && patch.reps <= 0) {
+    patch = { ...patch, reps: undefined };
+  }
   const edited = updatePerformedSet(session, exerciseIndex, setIndex, patch, now);
   const none = { weight: [], reps: [] };
   if (!before || edited === session) return { session, carried: [], previous: [], followers: fixed ?? none };
@@ -251,6 +255,26 @@ export function undoCarry(
     }
   }
   return next;
+}
+
+/**
+ * A refused or emptied keystroke ends what its burst did (#309 review 2): every set the burst carried
+ * returns to exactly what Undo would put back, and the edited set takes `target` (the value it held when
+ * the burst began, or 0 for an emptied cell not yet logged). Nothing is left holding a load the screen
+ * calls "not saved".
+ */
+export function revertBurst(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  exerciseId: string,
+  setIndex: number,
+  target: Partial<Pick<PerformedSet, 'weight' | 'reps'>>,
+  previous: CarryResult['previous'],
+  now: string,
+): WorkoutRecord {
+  if (session.exercises[exerciseIndex]?.exerciseId !== exerciseId) return session;
+  const restored = undoCarry(session, exerciseIndex, exerciseId, previous, now);
+  return updatePerformedSet(restored, exerciseIndex, setIndex, target, now);
 }
 
 /** Confirming the first weight applies it to every set of the exercise not yet logged. */

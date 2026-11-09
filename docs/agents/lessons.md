@@ -152,6 +152,15 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    it rendered; test the stored value after the keystroke, in the e2e. Check: "review-1" block in
    `scripts/e2e/inline-sets.mjs`.
 
+24. **A refusal undoes the burst, not just the cell.** #309 review 2: set 1 empty, typing 1, 3, 5, 9
+   carried 1359 lb to sets 2 to 4; the next 9 was refused and only set 1 went back, so "That load was not
+   saved" sat over three sets holding 1359, and set 2 logged it in one tap. The cause was #306's rule that a
+   0 is never carried, applied to the fallback too.
+   Rule: when an edit fans out, a refusal or an emptied field reverts everything the edit fanned out to (what
+   Undo restores), and a typed key past a limit is capped at the field so it never fans out at all. Check:
+   `tests/inlineSets309review2.test.ts` and the "review-2" blocks in `scripts/e2e/inline-sets.mjs` (they paste
+   to reach the refusal, since typing is capped; each step was run against a469d89 and failed there).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
