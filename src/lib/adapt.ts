@@ -585,13 +585,26 @@ export function restorePendingWorkout(
       performed: indices.map((index) => ({ ...exercise.performed[index] })),
     }] : [];
   });
-  const kept = new Set<WorkoutExercise>();
+  const prescription = profile ? liveExercises(original, profile, history) : toWorkoutExercises(original);
+  const inSession = new Set(session.exercises.map((exercise) => exercise.exerciseId));
+  // Which prescribed exercise a logged entry counts against (#250), by identity, never by position:
+  // 1. the same exercise, every setup segment of it (#188);
+  // 2. an exercise the day does not prescribe (a replacement) only when its pattern leaves one choice:
+  //    the day's only exercise of that pattern, or the only one with no entry in the session (the one
+  //    swapped away). Replacements of one pattern share that choice.
+  // 3. anything else is ambiguous and stays its own entry, owing nothing (#247 owns swap identity).
+  const slotOf = (entry: WorkoutExercise): number => {
+    const own = prescription.findIndex((prescribed) => prescribed.exerciseId === entry.exerciseId);
+    if (own >= 0) return own;
+    const same = prescription.flatMap((prescribed, slot) => pattern(prescribed.exerciseId) === pattern(entry.exerciseId) ? [slot] : []);
+    const missing = same.filter((slot) => !inSession.has(prescription[slot].exerciseId));
+    return same.length === 1 ? same[0] : missing.length === 1 ? missing[0] : -1;
+  };
+  const owner = new Map(completed.map((exercise) => [exercise, slotOf(exercise)]));
   const exercises: WorkoutExercise[] = [];
-  // shortcut: flagship has one slot per primary pattern; add slot identity before multi-slot programs.
-  for (const prescribed of profile ? liveExercises(original, profile, history) : toWorkoutExercises(original)) {
-    const group = completed.filter((exercise) => pattern(exercise.exerciseId) === pattern(prescribed.exerciseId));
+  prescription.forEach((prescribed, slot) => {
+    const group = completed.filter((exercise) => owner.get(exercise) === slot);
     group.forEach((exercise) => {
-      kept.add(exercise);
       exercise.originalPlannedSets = Math.max(exercise.originalPlannedSets ?? 0, prescribed.planned.length);
     });
     const done = group.reduce((sum, exercise) => sum + exercise.performed.length, 0);
@@ -611,9 +624,9 @@ export function restorePendingWorkout(
       });
     }
     exercises.push(...group);
-  }
+  });
   // Completed work stays even when the restored equipment/exclusions no longer prescribe it.
-  exercises.push(...completed.filter((exercise) => !kept.has(exercise)));
+  exercises.push(...completed.filter((exercise) => owner.get(exercise) === -1));
   return { ...session, durationMin: original.minutes, exercises };
 }
 
