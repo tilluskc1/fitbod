@@ -290,6 +290,8 @@ export interface ExercisePerformance {
   plannedReps: number;
   /** Sets actually marked done in that session. */
   done: PerformanceSet[];
+  /** It held that session's lead slot (see `leadSlotIds`), read from the record's exercise order. */
+  lead: boolean;
 }
 
 /**
@@ -323,6 +325,7 @@ export function lastExercisePerformance(
       plannedWeight: found.firstPlanned?.weight ?? 0,
       plannedReps: found.firstPlanned?.reps ?? 0,
       done: found.done.map((set) => ({ weight: set.weight, reps: set.reps })),
+      lead: leadSlotIds(workout.exercises).includes(exerciseId),
     };
   }
   return latest ?? (setup === 'home' ? null : lastExercisePerformance(history, exerciseId, 'home'));
@@ -483,9 +486,11 @@ function prescribeOn(
   }
 
   // The range moved above what was planned and lifted (#139: Face Pull 6–10 → 12–20): the planned reps
-  // already sat below today's minimum, so this is not a failed set. Lower to the Epley load for the
-  // minimum, rounded down to a step; never above the logged load.
-  if (lowestReps < range.min && last.plannedReps > 0 && last.plannedReps < range.min && increment > 0) {
+  // already sat below today's minimum in the same role, so this is not a failed set. A lift that leads
+  // one day and follows on another changes range by role, not by a range change, so it never lowers.
+  // Lower to the Epley load for the minimum, rounded down to a step; never above the logged load.
+  const sameRole = last.lead === (lead && canLead(exercise));
+  if (sameRole && lowestReps < range.min && last.plannedReps > 0 && last.plannedReps < range.min && increment > 0) {
     const estimate = (workingWeight * (1 + lowestReps / 30)) / (1 + range.min / 30);
     const down = available.length > 0
       ? atOrUnder(available, estimate) ?? available[0]

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { exerciseById } from '../src/data/exercises.ts';
+import { buildPlan } from '../src/lib/generator.ts';
+import { liveExercises } from '../src/lib/liveProgression.ts';
 import { coachLine, describePrescription, prescribeExercise } from '../src/lib/progression.ts';
+import { planSlots, slotProgram } from '../src/lib/sequence.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
 const profile: Profile = {
@@ -74,4 +77,65 @@ test('#139: barbell and dumbbell loads round down to their step', () => {
 test('#139: a bodyweight exercise is unchanged', () => {
   const prescription = prescribe('push-up', history('push-up', 0, 8, 8));
   assert.deepEqual([prescription.weight, prescription.reps, prescription.basis], [0, 10, 'rep-increase']);
+});
+
+test('#139: a lift that leads one day and follows on another never loses load (36-session rotation)', () => {
+  // The lifter does exactly each target; only the role changes between days (#97 lead ranges).
+  const start: Partial<Record<string, number>> = { Barbell: 60, Dumbbell: 15, Cable: 25, Machine: 50, Kettlebell: 16 };
+  const drops: string[] = [];
+  for (const goal of ['Build Muscle', 'Get Stronger', 'Lose Fat'] as const) {
+    for (const experience of ['Beginner', 'Intermediate', 'Advanced'] as const) {
+      for (const daysPerWeek of [2, 3, 4, 5]) {
+        for (const kit of ['gym', 'home'] as const) {
+          const lifter: Profile = {
+            ...profile, goal, experience, daysPerWeek, sessionMinutes: 60,
+            equipment: kit === 'gym' ? ['Barbell', 'Dumbbell', 'Cable', 'Machine'] : ['Dumbbell', 'Kettlebell'],
+            support: ['Bench', 'Rack', 'Pull-up bar'],
+            loads: kit === 'gym' ? {} : {
+              Dumbbell: [5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 32.5, 35],
+              Kettlebell: [8, 12, 16, 20, 24, 28, 32],
+            },
+          };
+          const slots = planSlots(buildPlan(lifter));
+          const rows: WorkoutRecord[] = [];
+          const lastLoad: Record<string, number> = {};
+          for (let n = 0; n < 36; n += 1) {
+            const slot = slots[n % slots.length];
+            const exercises = liveExercises(slotProgram(lifter, slot, rows), lifter, rows);
+            for (const exercise of exercises) {
+              const equipment = exerciseById(exercise.exerciseId)?.equipment;
+              const planned = exercise.planned[0]?.weight ?? 0;
+              const weight = planned > 0 ? planned : (equipment && start[equipment]) || 0;
+              exercise.performed = exercise.planned.map((set) => ({ weight, reps: set.reps, done: true, completedAt: null }));
+              const before = lastLoad[exercise.exerciseId];
+              if (before !== undefined && weight < before) {
+                drops.push(`${goal}/${experience}/${daysPerWeek}/${kit} ${exercise.exerciseId}: ${before} → ${weight} at session ${n}`);
+              }
+              lastLoad[exercise.exerciseId] = weight;
+            }
+            rows.push({
+              id: `w${n}`, date: new Date(Date.UTC(2026, 0, 1 + n * 2)).toISOString(), name: slot.name, dayIndex: slot.index,
+              status: 'completed', completedEarly: false, endedAt: null, exercises,
+            });
+          }
+        }
+      }
+    }
+  }
+  assert.deepEqual(drops.slice(0, 5), [], `${drops.length} load drops`);
+});
+
+test('#139: a goal change from strength to muscle resets the lead to its new minimum', () => {
+  // Bench led at 100 × 3 under Get Stronger (3–5); as a Build Muscle lead (4–6): 110 / (34/30) = 97.06 → 95 × 4.
+  const bench = exerciseById('barbell-bench-press')!;
+  const prescription = prescribeExercise(bench, { ...profile, goal: 'Build Muscle' }, history(bench.id, 100, 3, 3), true);
+  assert.deepEqual([prescription.weight, prescription.reps, prescription.basis], [95, 4, 'range-reset']);
+});
+
+test('#139: a lead last time that follows today keeps its load (a role change is not a range change)', () => {
+  // The record holds bench alone, so it led; today it follows in a 6–10-style range.
+  const bench = exerciseById('barbell-bench-press')!;
+  const prescription = prescribeExercise(bench, profile, history(bench.id, 60, 4, 4), false);
+  assert.equal(prescription.weight, 60);
+  assert.notEqual(prescription.basis, 'range-reset');
 });
