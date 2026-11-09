@@ -123,6 +123,7 @@ import SwitchSheet from './components/SwitchSheet';
 import { skipForward, switchOptions, upcomingDays } from './lib/switchDay';
 import type { SwitchOption } from './lib/switchDay';
 import { keepKey, todayFresher } from './lib/recovery';
+import { opensOnSplash } from './lib/firstScreen';
 import
  Onboarding from './components/Onboarding';
 import
@@ -227,7 +228,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const [now, setNow] = useState(() => Date.now());
   // A stored profile means onboarding already happened: a reload must never
   // drop a resumed or just-finished session behind the splash again.
-  const [showSplash, setShowSplash] = useState(() => initial.state.profile === null);
+  const [showSplash, setShowSplash] = useState(() => opensOnSplash(initial.state));
   const [recovery, setRecovery] = useState<{ message: string; raw: string } | null>(
     initial.status === 'corrupt'
       ? { message: initial.error ?? 'Saved data could not be read.', raw: initial.raw ?? '' }
@@ -1081,6 +1082,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           onDownload={() => downloadText(recovery.raw, 'strength-original-state.json')}
           onRestore={(next: AppState, summary: ImportSummary) => {
             setState(next);
+            // Corrupt data loads with no profile, so the splash was armed; a restored profile
+            // opens straight on Today (#285).
+            setShowSplash(opensOnSplash(next));
             setRecovery(null);
             setNotice(`Restored ${summary.newWorkouts} workouts.`);
           }}
@@ -1089,6 +1093,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             revisionRef.current = 0;
             forceSaveRef.current = true;
             setState({ ...EMPTY_STATE });
+            setShowSplash(opensOnSplash(EMPTY_STATE));
             setRecovery(null);
             setNotice('Started with empty data.');
           }}
