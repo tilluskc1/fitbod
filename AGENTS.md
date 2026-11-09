@@ -46,10 +46,10 @@ The board is GitHub Project 11 ("Fitbod", owner `tilluskc1`). Its issues are the
 - `Review` means built on a feature branch and being verified at a named SHA. `Ready to merge` means verified at that SHA; it merges under the standing merge rule below, otherwise it waits on a human.
 - Never mark `Done` from a feature branch, a passing helper test, or a screenshot that has not been reproduced at 390×844 and 360×780.
 - **Every UI story shows screenshots (owner, 2026-11-09).** Any story whose change can be seen on screen (copy, layout, a new state, a new step in a flow) posts screenshots on its issue before it reaches `Ready to merge`:
-  - Sizes: 390×844 and 360×780, plus 390×650 when Today changes.
+  - Sizes: 390×844 and 360×780, plus 390×650 when the Today screen changes.
   - Taken at the reviewed SHA. Show before and after when something already on screen changes; a new screen shows only after.
-  - Linked in the PR body and in the end-of-run report, so the owner sees them without hunting.
-  - A story with nothing visible says "no UI change" in its issue comment instead.
+  - Linked in the PR body (edit the draft PR once they exist) and in the end-of-run report, so the owner sees them without hunting.
+  - A story with nothing visible says "no UI change" in its issue comment instead, and the reviewer agent confirms that claim from the diff.
   - Check: before pushing `main`, the issue has a screenshot comment that names the reviewed SHA (or the "no UI change" line). If it does not, do not merge.
 - Work left uncommitted, unmerged or unverified keeps its issue open and says so in the comment. Reopening is cheaper than a false `Done`.
 - New scope found mid-task gets its own issue; do not quietly widen the one being worked.
@@ -83,4 +83,4 @@ Inside this envelope the loop acts without asking. Outside it, it parks the issu
 - Keep going: when an issue reaches `Review`, start the next eligible issue in the same turn. Do not ask for permission between issues.
 - Park, don't stall: a decision the repository cannot answer becomes a `needs-info` park on that issue, and the next issue starts.
 - **Story first, no ask (owner, 2026-11-08):** when the owner raises an idea or a problem and no open issue covers it, write the story in the same turn. Pick the recommended default for every open choice, name it in the story as "default picked by product, owner can override", and label it `ready-for-agent` when nothing else is open. A look or flow change still ends with screenshots for owner sign-off before merge. Never reply "pick one and I'll write it".
-- One run reports once, at the end: issues moved with their SHAs, checks actually run, what parked and why.
+- One run reports once, at the end: issues moved with their SHAs, checks actually run, screenshot links for each UI story, what parked and why.
