@@ -76,6 +76,19 @@ try {
     await page.getByRole('button', { name: /Intermediate/ }).click();
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('button', { name: /^4\s*days$/ }).click();
+    // #262: the four session lengths share one row (60 min never wraps alone), each a 44px target.
+    const lengths = page.getByRole('group', { name: 'Session length' }).getByRole('button');
+    check((await lengths.count()) === 4, `${where} Onboarding: ${await lengths.count()} length chips, expected 4`);
+    const lengthTops = new Set();
+    for (let index = 0; index < (await lengths.count()); index += 1) {
+      const chip = lengths.nth(index);
+      await target(page, chip, (await chip.innerText()).trim(), `${where} Onboarding`);
+      lengthTops.add(Math.round((await chip.boundingBox()).y));
+    }
+    check(lengthTops.size === 1, `${where} Onboarding: length chips sit on ${lengthTops.size} rows, expected 1`);
+    await noOverflow(page, `${where} Onboarding`);
+    await lengths.first().scrollIntoViewIfNeeded();
+    await shot(page, 'onboarding-length', where);
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('button', { name: 'Build my plan' }).click();
     await page.waitForSelector('.t7-hero');
