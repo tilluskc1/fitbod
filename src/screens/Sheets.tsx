@@ -14,7 +14,7 @@ import {
   type Constraints,
   type EquipmentChoice,
 } from '../lib/adapt';
-import { loadModeOf, repsTarget, setText, setUnit } from '../data/flagship';
+import { loadModeOf, needsLoad, repsTarget, setText, setUnit } from '../data/flagship';
 import {
   MINUTE_OPTIONS,
   PRESETS,
@@ -584,7 +584,8 @@ function SetAllForm({ exerciseId, pending, unit, start, onApply, onBack }: {
   const typed = Number(weightText);
   const kg = mode === 'none' ? 0 : weightText === '' || !Number.isFinite(typed) || typed < 0 ? null : toKg(typed, unit);
   const tooHeavy = kg !== null && overLoadLimit([kg]);
-  const ready = kg !== null && !tooHeavy && reps > 0 && reps <= MAX_REPS;
+  // A loaded movement can't be logged at 0, so it can't be set to 0 for every remaining set either.
+  const ready = kg !== null && !tooHeavy && !(kg <= 0 && needsLoad(exerciseId)) && reps > 0 && reps <= MAX_REPS;
   const loadLabel = `Weight (${unitLabel(unit)}${mode === 'each' ? ' each' : mode === 'total' ? ' total' : ''})`;
   return (
     <div className="lg-editor" role="group" aria-label="Set all remaining sets">

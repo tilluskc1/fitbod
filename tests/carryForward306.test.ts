@@ -42,10 +42,34 @@ test('set 1 to 135 carries to sets 2 to 4 at once, and only performed changes', 
   assert.deepEqual(weights(session, 1), [10, 10], 'the next exercise (or a superset partner) is untouched');
 });
 
-test('per-keystroke typing (1, 13, 135) follows through, and a cleared field still chains', () => {
-  let s = bench();
-  for (const kg of [0, 0.45, 5.9, LB135]) s = editSet(s, 0, 0, { weight: kg }, NOW).session;
+/** One keystroke burst, as App runs it: the following sets are fixed by the first keystroke. */
+function burst(s: WorkoutRecord, set: number, patches: Partial<{ weight: number; reps: number }>[]) {
+  let followers;
+  for (const patch of patches) {
+    const result = editSet(s, 0, set, patch, NOW, followers);
+    followers = result.followers;
+    s = result.session;
+  }
+  return s;
+}
+
+test('per-keystroke typing (clear, 1, 13, 135) follows through; a cleared field carries nothing', () => {
+  const cleared = editSet(bench(), 0, 0, { weight: 0 }, NOW);
+  assert.deepEqual(weights(cleared.session), [0, LB45, LB45, LB45], 'clearing set 1 never wipes the prefills');
+  assert.deepEqual(cleared.followers?.weight, [1, 2, 3]);
+  const s = burst(bench(), 0, [{ weight: 0 }, { weight: toKg(1, 'lb') }, { weight: toKg(13, 'lb') }, { weight: LB135 }]);
   assert.deepEqual(weights(s), [LB135, LB135, LB135, LB135]);
+});
+
+test('review probe: a burst passing through a hand-edited value leaves that set alone (weight)', () => {
+  const s = burst(editSet(bench(), 0, 3, { weight: toKg(10, 'lb') }, NOW).session, 0,
+    [{ weight: toKg(1, 'lb') }, { weight: toKg(10, 'lb') }, { weight: toKg(100, 'lb') }]);
+  assert.deepEqual(weights(s), [toKg(100, 'lb'), toKg(100, 'lb'), toKg(100, 'lb'), toKg(10, 'lb')]);
+});
+
+test('review probe: stepping reps 8 to 5 on set 1 leaves a hand-set 6 on set 4', () => {
+  const s = burst(editSet(bench(), 0, 3, { reps: 6 }, NOW).session, 0, [{ reps: 7 }, { reps: 6 }, { reps: 5 }]);
+  assert.deepEqual(reps(s), [5, 5, 5, 6]);
 });
 
 test('a hand-edited later set keeps its value', () => {

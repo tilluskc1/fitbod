@@ -138,17 +138,26 @@ export function logSet(
   return startRest(updated, now, seconds);
 }
 
+/** The later sets that follow an edited set, per field (#306). */
+export interface Followers {
+  weight: number[];
+  reps: number[];
+}
+
 /** What an edit carried (#306): the later sets it changed and their values before, for Undo. */
 export interface CarryResult {
   session: WorkoutRecord;
   carried: number[];
   previous: { index: number; weight: number; reps: number }[];
+  /** Which sets followed, so the rest of a keystroke burst moves the same sets and no others. */
+  followers?: Followers;
 }
 
 /**
  * Edit one set and carry the change forward (#306). A later set not yet logged takes the new weight
- * (or reps) when it was following: it still holds the edited set's old value. A set the lifter changed
- * by hand to anything else keeps it, and so does a set an Undo put back (it no longer matches). Logged sets, `planned` and the done state
+ * (or reps) when it was following: it held the edited set's value when the edit (or keystroke burst)
+ * began. A set the lifter changed by hand to anything else keeps it, even if a keystroke passes through
+ * its value, and so does a set an Undo put back (it no longer matches). Logged sets, `planned` and the done state
  * are never touched. No stored flag: the rule reads the same after a reload.
  */
 export function editSet(
@@ -157,21 +166,32 @@ export function editSet(
   setIndex: number,
   patch: Partial<PerformedSet>,
   now: string,
+  /** A burst's followers, fixed at its first keystroke; omitted, they are read from this edit. */
+  fixed?: Followers,
 ): CarryResult {
   const before = session.exercises[exerciseIndex]?.performed[setIndex];
   const edited = updatePerformedSet(session, exerciseIndex, setIndex, patch, now);
-  if (!before || edited === session) return { session, carried: [], previous: [] };
+  const none = { weight: [], reps: [] };
+  if (!before || edited === session) return { session, carried: [], previous: [], followers: fixed ?? none };
   const after = edited.exercises[exerciseIndex].performed[setIndex];
   const weightMoved = Math.abs(after.weight - before.weight) > 1e-9;
   const repsMoved = after.reps !== before.reps;
+  const later = edited.exercises[exerciseIndex].performed
+    .map((set, i) => ({ set, i }))
+    .filter(({ set, i }) => i > setIndex && !set.done);
+  const followers: Followers = fixed ?? {
+    weight: later.filter(({ set }) => Math.abs(set.weight - before.weight) < 1e-9).map(({ i }) => i),
+    reps: later.filter(({ set }) => set.reps === before.reps).map(({ i }) => i),
+  };
   const follows: Partial<PerformedSet>[] = edited.exercises[exerciseIndex].performed.map((set, i) => {
     if (i <= setIndex || set.done) return {};
     return {
-      ...(weightMoved && Math.abs(set.weight - before.weight) < 1e-9 ? { weight: after.weight } : {}),
-      ...(repsMoved && set.reps === before.reps ? { reps: after.reps } : {}),
+      // A cleared field (0) carries nothing: the prefills wait for the first typed value.
+      ...(weightMoved && after.weight > 0 && followers.weight.includes(i) ? { weight: after.weight } : {}),
+      ...(repsMoved && after.reps > 0 && followers.reps.includes(i) ? { reps: after.reps } : {}),
     };
   });
-  return applyToSets(edited, exerciseIndex, follows, now);
+  return { ...applyToSets(edited, exerciseIndex, follows, now), followers };
 }
 
 /** "Set all remaining sets to…" (#306): every set not yet logged takes this weight and these reps. */
