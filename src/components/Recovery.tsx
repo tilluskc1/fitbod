@@ -59,11 +59,12 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
           <button className="secondary" onClick={onDownload}>
             Download original
           </button>
-          <label className="secondary" style={{ position: 'relative', cursor: 'pointer' }}>
+          <label className="secondary recovery-restore">
             Restore backup
             <input
               type="file"
               accept="application/json,.json"
+              className="settings-row__file"
               onChange={(event) => {
                 void chooseFile(event.target.files?.[0]);
                 event.target.value = '';
