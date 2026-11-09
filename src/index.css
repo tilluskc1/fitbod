@@ -1737,6 +1737,15 @@ textarea:focus-visible {
   padding: 0 17px;
 }
 
+/* (#276) On Today a passing message floats over the top instead of pushing the entry under the dock. */
+.app-alerts--toast {
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 35;
+}
+
 .photo {
   display: block;
   position: relative;
@@ -4323,8 +4332,8 @@ button.aw-exercise__name-btn {
   background: #56706f;
 }
 @media (max-height: 700px) {
-  /* (#256) iPhone Chrome's ~650px visible area: a shorter hero keeps the planner entry above the dock. */
-  .t7-hero.t7-hero { min-height: 0; padding: 16px; gap: 6px; }
+  /* (#256, #276) iPhone Chrome's ~650px visible area: a shorter hero keeps the planner entry 8px+ above the dock. */
+  .t7-hero.t7-hero { min-height: 0; padding: 12px 16px; gap: 4px; }
   .t7-hero .t7-hero__title { font-size: 24px; max-width: 16ch; }
 }
 
