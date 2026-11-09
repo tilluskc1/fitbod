@@ -122,6 +122,12 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    full suite on the merged result, not only on the branch, and when it fails fix it on the branch and
    re-review at the new SHA. Check: `npm run e2e` on the local `merge/*` branch before pushing `main`.
 
+21. **Apply the product default; the owner overrides, not the dev.** #259's story said toasts last
+   "at most 4 s"; the build kept 5 s on the dev's own reading-time argument and left it "for the owner
+   to override", which flips the rule. Review flagged it. Rule: a default picked by product ships as
+   written; a better idea goes in the issue comment as a question, not in the code. Check: every
+   "default picked by product" line in the issue matches the diff, or the issue is parked `needs-info`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

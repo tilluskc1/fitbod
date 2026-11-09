@@ -81,7 +81,7 @@ try {
     const confirmDiscard = page.getByRole('dialog').getByRole('button', { name: /Discard/ }).first();
     if (await confirmDiscard.count()) await confirmDiscard.click();
     await page.waitForSelector('.t7-hero');
-    check((await messages(page)).length > 0, `${where}: leaving the logger for Today lost its message`);
+    check(await showing(page, /discarded|skipped/i), `${where}: leaving the logger for Today lost its message`);
 
     // A recap message does not follow the user into Coach.
     await page.getByRole('button', { name: /Start workout/ }).first().click();
