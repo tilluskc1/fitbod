@@ -1,6 +1,6 @@
 import
  { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { backupReminder, shareBackup } from './lib/backup';
+import { backupCount, backupReminder, shareBackup } from './lib/backup';
 import { offerFirstBackup } from './lib/dataHome';
 import { currentDevice } from './lib/install';
 import { noticeHome, screenKey } from './lib/noticeScreen';
@@ -142,6 +142,7 @@ import
   FinishSheet,
   SettingsSheet,
   StartOverSheet,
+  BackupSheet,
   SwapSheet,
   WhySheet,
 } from './screens/Sheets';
@@ -156,6 +157,7 @@ type SheetState =
   | { kind: 'switch' }
   | { kind: 'settings' }
   | { kind: 'startOver' }
+  | { kind: 'backup' }
   | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' | 'history' }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
@@ -1339,7 +1341,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             history={state.history}
             unit={unit}
             loads={profile?.loads}
-            onExport={exportData}
+            onBackup={() => setSheet({ kind: 'backup' })}
             onCorrect={correctSet}
             onDelete={(workoutId) => setSheet({ kind: 'delete-workout', workoutId })}
             onFeedback={saveFeedback}
@@ -1502,6 +1504,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           onClose={closeSheet}
           storageNote={storageNote}
         />
+      )}
+
+      {sheet.kind === 'backup' && (
+        <BackupSheet workouts={backupCount(state.history)} onBackup={backupNow} onClose={closeSheet} />
       )}
 
       {sheet.kind === 'startOver' && (
