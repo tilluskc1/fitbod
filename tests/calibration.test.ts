@@ -10,7 +10,6 @@ import { HOME_DUMBBELLS } from '../src/data/flagship.ts';
 import { liveExercises, needsCalibration } from '../src/lib/liveProgression.ts';
 import { prescribeExercise } from '../src/lib/progression.ts';
 import { applyCorrection, applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
-import { openDraft, applyDraft, saveDraft } from '../src/lib/editDraft.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
@@ -214,11 +213,10 @@ test('editing or correcting a logged loaded set cannot store weight 0', async ()
   const start = liveSession([]);
   // Logging carries the load to every later set (#182); clear set 3 so the no-load case still exists.
   const logged = updatePerformedSet(logSet(updatePerformedSet(start, 0, 0, { weight: 15 }, at(1)), 0, 0, at(1)), 0, 2, { weight: 0 }, at(1));
-  const set = logged.exercises[0].performed[0];
-  const zeroed = saveDraft(applyDraft(openDraft(0, 0, set), { weight: 0 }), set);
-  assert.equal(updatePerformedSet(logged, 0, 0, zeroed, at(2)), logged, 'Save set at 0 writes nothing');
-  assert.equal(updatePerformedSet(logged, 0, 0, saveDraft(applyDraft(openDraft(0, 0, set), { weight: 18 }), set), at(2))
-    .exercises[0].performed[0].weight, 18, 'a real load still saves');
+  // (#309) A logged set is edited in its row; the record still refuses a logged loaded set at 0.
+  assert.equal(updatePerformedSet(logged, 0, 0, { weight: 0 }, at(2)), logged, 'an edit to 0 writes nothing');
+  assert.equal(updatePerformedSet(logged, 0, 0, { weight: 18 }, at(2)).exercises[0].performed[0].weight, 18,
+    'a real load still saves');
   assert.equal(updatePerformedSet(start, 0, 1, { weight: 0 }, at(2)).exercises[0].performed[1].weight, 0,
     'a pending set may still be cleared');
 

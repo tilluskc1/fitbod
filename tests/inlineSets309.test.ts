@@ -117,3 +117,23 @@ test('firstTimeLoaded keeps the hint while set 1 is typed; needsCalibration stil
   assert.equal(needsCalibration(typed, []), false);
   assert.equal(firstTimeLoaded(logSet(bench(toKg(135, 'lb')), 0, 0, at(1)).exercises[0], []), false, 'a logged set ends it');
 });
+
+test('review 1: a set logged out of order keeps the suggestion on the empty cells; the hint goes', async () => {
+  const second = logSet(updatePerformedSet(bench(), 0, 1, { weight: toKg(45, 'lb') }, at(1)), 0, 1, at(1));
+  assert.equal(firstTimeLoaded(second.exercises[0], [], { evenIfLogged: true }), true);
+  await withTrain((render) => {
+    const html = render(second);
+    assert.equal(cell(html, 'Set 1 weight, pounds'), '45', 'set 1 still offers the suggestion');
+    assert.match(html, /aria-label="Log set 1">/, 'and logs in one tap');
+    assert.doesNotMatch(plain(html), /Suggested start/, 'the "adjust set 1" hint is over once a set is logged');
+  });
+});
+
+test('review 1: a set with no reps (or seconds) cannot be logged, and says why', async () => {
+  await withTrain((render) => {
+    const html = render(updatePerformedSet(bench(toKg(135, 'lb')), 0, 0, { reps: 0 }, at(1)));
+    assert.match(html, /aria-label="Log set 1" disabled=""/);
+    assert.match(plain(html), /Enter reps to log this set/);
+    assert.match(html, /aria-label="Log set 2">/, 'the other sets are unaffected');
+  });
+});

@@ -18,8 +18,6 @@ interface Props {
   session: WorkoutRecord;
   history: WorkoutRecord[];
   now: number;
-  /** Confirmed dumbbell weights for the chosen setup. */
-  loadOptions: number[];
   /** The profile's confirmed loads by equipment: the rack a logged load is compared with. */
   profileLoads?: Profile['loads'];
   /** Only the user's confirmed loads; the first-weight step never offers the example rack. */
@@ -131,7 +129,7 @@ export default function TrainScreen({
   onReplace,
   onReturn,
 }: Props) {
-  /** Exercises (by calibration key) whose suggested start the lifter cleared: their empty cells stay empty. */
+  /** Set cells (`calibrationKey:setIndex`) whose suggested start the lifter cleared: they stay empty. */
   const [cleared, setCleared] = useState<string[]>([]);
   /** A refused keystroke's message, under the row it was typed in. */
   const [refusal, setRefusal] = useState<{ key: string; text: string } | null>(null);
@@ -314,14 +312,17 @@ export default function TrainScreen({
     && !exercise.performed.some((set) => set.done);
   // First time on a loaded lift (#116): empty weight cells show a suggested start (#309), in the
   // user's own dumbbells when they listed them. It reaches the record only when a set is logged with it.
+  // The suggestion stays on empty cells after a set is logged out of order (#309 review 1); the hint
+  // line, which talks about set 1, only until the first set is logged.
+  const neverLogged = firstTimeLoaded(exercise, history, { evenIfLogged: true });
   const firstTime = firstTimeLoaded(exercise, history);
   const definition = exerciseById(exercise.exerciseId);
-  const table = firstTime && !raising && experience && definition ? suggestedFirstLoad(definition, experience, unit) : 0;
+  const table = neverLogged && !raising && experience && definition ? suggestedFirstLoad(definition, experience, unit) : 0;
   const ownDumbbells = equipment === 'Dumbbell' ? calibrationLoads : [];
   const suggested = table > 0 ? (ownDumbbells.length > 0 ? nearestLoad(ownDumbbells, table) ?? table : table) : null;
-  const prefill = suggested !== null && !cleared.includes(calibrationKey) ? suggested : null;
+  const prefill = suggested;
   const perSide = mode === 'each' ? ' each' : '';
-  const hint = suggested !== null
+  const hint = suggested !== null && firstTime
     ? `Suggested start ${calibrationInputValue(suggested, unit)} ${unitLabel(unit)}${perSide}. Do 5 easy reps with it, then adjust set 1.`
     : null;
   const coach = raising
@@ -336,13 +337,16 @@ export default function TrainScreen({
     const next = typedLoad(text, unit, focusedValue.current);
     if (!next) return calibrationInputValue(set.weight, unit);
     if (next.refused) {
+      // The load held at focus goes back into the record, so the keystroke before the refused one
+      // is never left stored under a "not saved" message (#101).
       setRefusal({ key, text: loadLimitMessage(unit) });
+      onUpdateSet(index, setIndex, { weight: next.kg });
       return calibrationInputValue(next.kg, unit);
     }
     setRefusal(null);
     if (next.kg <= 0) {
-      // Clearing a cell drops the suggested start for this exercise: an emptied cell stays empty.
-      if (prefill !== null) setCleared((keys) => [...keys, calibrationKey]);
+      // Clearing a cell drops the suggested start from that cell only: an emptied cell stays empty.
+      if (prefill !== null) setCleared((keys) => [...keys, `${calibrationKey}:${setIndex}`]);
       if (set.done && needsLoad(exercise.exerciseId)) return null;
     }
     onUpdateSet(index, setIndex, { weight: next.kg });
@@ -354,6 +358,7 @@ export default function TrainScreen({
     const next = typedReps(text, focusedValue.current);
     if (next.refused) {
       setRefusal({ key, text: repsLimitMessage(holdUnit) });
+      onUpdateSet(index, setIndex, { reps: next.reps });
       return String(next.reps);
     }
     setRefusal(null);
@@ -366,9 +371,12 @@ export default function TrainScreen({
     const n = setIndex + 1;
     const before = previous[setIndex];
     // The suggested start shows in every empty weight cell still to log; logging writes it to that set.
-    const shownPrefill = !set.done && set.weight <= 0 && prefill !== null ? prefill : null;
+    const shownPrefill = !set.done && set.weight <= 0 && prefill !== null && !cleared.includes(`${calibrationKey}:${setIndex}`)
+      ? prefill : null;
     const noLoad = needsLoad(exercise.exerciseId) && set.weight <= 0 && shownPrefill === null;
-    const reason = !set.done && noLoad && setIndex === activeSet ? `${key}:reason` : undefined;
+    // An emptied reps (or seconds) cell is never logged as 0 either (#309 review 1).
+    const noReps = set.reps <= 0;
+    const reason = !set.done && (noLoad || noReps) && setIndex === activeSet ? `${key}:reason` : undefined;
     const refused = refusal?.key === key ? `${key}:refused` : undefined;
     const weightShown = set.weight > 0 ? showPending(set.weight, setIndex)
       : shownPrefill !== null ? showActual(shownPrefill) : '';
@@ -402,7 +410,7 @@ export default function TrainScreen({
               <Icon name="check" size={20} />
             </span>
           ) : (
-            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={noLoad}
+            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={noLoad || noReps}
               aria-describedby={reason}
               // Keep the keyboard's field focused through the tap, so the row does not jump first.
               onPointerDown={(event) => event.preventDefault()}
@@ -418,7 +426,11 @@ export default function TrainScreen({
         </td>
       </tr>
     );
-    const note = reason && <tr key={reason} className="lg-note"><td colSpan={5} id={reason}>{NEEDS_LOAD_REASON}</td></tr>;
+    const note = reason && (
+      <tr key={reason} className="lg-note">
+        <td colSpan={5} id={reason}>{noLoad ? NEEDS_LOAD_REASON : `Enter ${holdUnit ? 'seconds' : 'reps'} to log this set`}</td>
+      </tr>
+    );
     const error = refused && (
       <tr key={refused} className="lg-note"><td colSpan={5} id={refused} className="error-text" role="alert">{refusal?.text}</td></tr>
     );

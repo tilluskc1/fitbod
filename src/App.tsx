@@ -17,7 +17,6 @@ import
   setupOptions,
   EQUIPMENT_OPTIONS as SETUPS,
   DEFAULT_CONSTRAINTS,
-  loadOptions,
   restorePendingWorkout,
   swapCandidateFor,
   toWorkoutExercises,
@@ -992,6 +991,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const logOneSet = (exerciseIndex: number, setIndex: number, exerciseId: string, weight?: number) => {
     const stamp = new Date().toISOString();
     // A logged set ends any carry burst: Undo must not reverse the reps #182 carries on log (#306).
+    // Its toast goes with it, rather than staying up without the Undo it offered (#309 review 1).
+    if (liveCarry !== null && notice === liveCarry.message) setNotice(null);
     setCarryUndo(null);
     setState((currentState) => {
       const session = currentState.current;
@@ -1285,7 +1286,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         session={current}
         history={state.history}
         now={now}
-        loadOptions={loadOptions(constraints.equipment, constraints.loads)}
         profileLoads={profile?.loads}
         calibrationLoads={confirmedLoads(constraints.equipment, constraints.loads)}
         experience={state.profile?.experience}

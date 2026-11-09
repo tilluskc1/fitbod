@@ -209,6 +209,64 @@ try {
     await page.close();
   }
 
+  // Review 1 (705c827): refusals, an emptied reps cell, logging out of order, one cleared cell.
+  {
+    const where = 'review-1';
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await onboard(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForSelector('.lg-ex');
+    const hint = (await page.locator('.lg-coach').innerText()).match(/Suggested start (\d+)/)?.[1];
+
+    // D4: clearing set 1 empties set 1 only; the others keep the suggestion and their ✓.
+    await weightCell(page, 1).click();
+    await page.keyboard.press('Backspace');
+    await weightCell(page, 1).blur();
+    let r = await rows(page);
+    check(r[0].weight === '' && r.slice(1).every((row) => row.weight === hint), `${where} D4: one cleared cell blanks only itself (${JSON.stringify(r)})`);
+    check(!(await logButton(page, 2).isDisabled()), `${where} D4: set 2 still logs at the suggestion`);
+
+    // D3: logging set 2 first leaves set 1 at the suggestion, still one tap.
+    await page.reload();
+    await page.waitForSelector('.lg-ex').catch(() => {});
+    const resume = page.getByRole('button', { name: 'Resume workout', exact: true });
+    if (!(await page.locator('.lg-ex').count())) await resume.click();
+    await page.waitForSelector('.lg-ex');
+    await logButton(page, 2).click();
+    r = await rows(page);
+    check(r[1].logged && r[0].weight === hint && !(await logButton(page, 1).isDisabled()),
+      `${where} D3: set 1 keeps ${hint} and its ✓ after set 2 logs first (${JSON.stringify(r)})`);
+
+    // D1: an over-limit keystroke is refused and the load held at focus is what stays stored.
+    await weightCell(page, 1).click();
+    await page.keyboard.type('135');
+    await weightCell(page, 1).blur();
+    await weightCell(page, 1).click();
+    await page.keyboard.press('End');
+    await page.keyboard.type('99'); // 1359, then 13599 lb: over the limit
+    check(await weightCell(page, 1).inputValue() === '135', `${where} D1: the cell falls back to 135 at the refusal`);
+    const alert = await page.getByRole('alert').innerText().catch(() => '');
+    check(/not saved/.test(alert), `${where} D1: the refusal says so (${alert})`);
+    await weightCell(page, 1).blur();
+    r = await rows(page);
+    check(r[0].weight === '135', `${where} D1: a refused load leaves the focus value 135 stored (${r[0].weight})`);
+    await page.getByLabel('Set 1 reps').click();
+    await page.keyboard.press('End');
+    await page.keyboard.type('999'); // 89, 899, then 8999: over the limit
+    await page.getByLabel('Set 1 reps').blur();
+    r = await rows(page);
+    check(r[0].reps === '8', `${where} D1: refused reps leave 8 stored (${r[0].reps})`);
+
+    // D2: an emptied reps cell cannot be logged.
+    await page.getByLabel('Set 3 reps').click();
+    await page.keyboard.press('Backspace');
+    check(await logButton(page, 3).isDisabled(), `${where} D2: a set with no reps can be logged`);
+    await page.keyboard.type('8');
+    await page.getByLabel('Set 3 reps').blur();
+    check(!(await logButton(page, 3).isDisabled()), `${where} D2: typed reps re-enable the ✓`);
+    await page.close();
+  }
+
   // A 390x500 window (a phone that resizes for its keyboard): the edited row and ✓ clear the dock.
   {
     const where = '390x500';

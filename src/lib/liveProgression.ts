@@ -168,10 +168,15 @@ export function needsCalibration(exercise: WorkoutExercise, history: WorkoutReco
  * The same first-time loaded lift, whatever set 1 holds now (#309): the logger keeps its
  * "Suggested start" hint while the lifter types set 1, so the table never jumps mid-edit.
  */
-export function firstTimeLoaded(exercise: WorkoutExercise, history: WorkoutRecord[]): boolean {
+export function firstTimeLoaded(
+  exercise: WorkoutExercise,
+  history: WorkoutRecord[],
+  /** Also true once a set of this session is logged: only completed history counts (#309 review 1). */
+  { evenIfLogged = false }: { evenIfLogged?: boolean } = {},
+): boolean {
   return loadModeOf(exercise.exerciseId) !== 'none' && holdSeconds(exercise.exerciseId) === null
     && !lastExercisePerformance(history, exercise.exerciseId, exercise.setup)?.done.length
-    && exercise.performed.length > 0 && !exercise.performed.some((set) => set.done);
+    && exercise.performed.length > 0 && (evenIfLogged || !exercise.performed.some((set) => set.done));
 }
 
 function livePrescription(exerciseId: string, profile: Profile, history: WorkoutRecord[], lead: boolean, setup: SetupChoice = 'home') {

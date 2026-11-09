@@ -139,6 +139,19 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    `scripts/e2e/carry-forward.mjs`, which types one key at a time and backspaces (a cleared field
    alone hid the bug); confirm a new e2e step fails on the old code before trusting it.
 
+23. **A removed control takes its tests with it.** #309 replaced the logger's set editor with inputs in
+   the row; 19 tests then failed, every one asserting the old panel's markup (pills, Confirm, Skip,
+   `Edit weight for set N`) rather than a value the lifter sees.
+   Rule: when a UI story removes a control, list the tests and e2e scripts that name it before building
+   (`grep -rn "<control text>" tests scripts`), and put that list in the brief; assert the value a cell
+   shows, not the element that showed it. Check: `tests/inlineSets309.test.ts` reads cell values by
+   accessible name, so the next markup change does not move it.
+   Review 1 found the other half: the removed `LoadEntry` wrote the focus value back on a refused
+   keystroke, the new cell did not, and only the pure `typedLoad` was tested, so a "not saved" load
+   stayed stored. Rule: when a control is replaced, carry over what its handlers *did*, not only what
+   it rendered; test the stored value after the keystroke, in the e2e. Check: "review-1" block in
+   `scripts/e2e/inline-sets.mjs`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
@@ -154,11 +167,3 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
 - Reviewers should reuse committed sweep tests instead of rewriting sweep scripts each round. When a
   reviewer's probe finds a bug, turn the probe into a test in the fix.
 - Briefs should point to this file and `AGENTS.md` instead of repeating global constraints in full.
-
-22. **A removed control takes its tests with it.** #309 replaced the logger's set editor with inputs in
-   the row; 19 tests then failed, every one asserting the old panel's markup (pills, Confirm, Skip,
-   `Edit weight for set N`) rather than a value the lifter sees.
-   Rule: when a UI story removes a control, list the tests and e2e scripts that name it before building
-   (`grep -rn "<control text>" tests scripts`), and put that list in the brief; assert the value a cell
-   shows, not the element that showed it. Check: `tests/inlineSets309.test.ts` reads cell values by
-   accessible name, so the next markup change does not move it.
