@@ -111,6 +111,8 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    the same turn). Rule: never archive, close or delete a chat, PR, branch or issue unless the owner
    says to do it now; answer the question, say what is safe, and let the owner act. Check: the turn's
    tool calls contain no archive/close/delete the owner did not ask for in that message.
+   Exception (owner, 2026-11-09): a dev chat archives itself after it has started the next dev session
+   and everything is pushed (AGENTS.md, "Sessions and models"). Nothing else changes.
 
 19. **A dismissal answers one thing, not a flag.** #236 kept "It's only soreness" as a boolean, and
    "Nothing" set it too, so pain typed afterwards built a day. Rule: a safety override stores what it
