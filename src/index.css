@@ -1687,6 +1687,18 @@ textarea:focus-visible {
   letter-spacing: -0.045em;
 }
 
+/* #127: the pill is the visible control; the file input covers it, invisible but still focusable. */
+.recovery-restore {
+  position: relative;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.recovery-restore:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
 .error-detail {
   margin: 0;
   padding: 12px;
