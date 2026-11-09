@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { INSTALLED_FRESH } from '../lib/dataHome';
 
 const HERO_VIDEO = '/hero/splash.mp4';
 const HERO_POSTER = '/hero/splash-poster.jpg';
@@ -28,13 +29,17 @@ export function SplashHero({ reduceMotion }: { reduceMotion: boolean }) {
 
 interface Props {
   onStart: () => void;
+  /** (#258) Running as an installed Home Screen app: its storage starts empty, so offer a restore. */
+  installed?: boolean;
+  /** (#258) The validated restore Settings uses. */
+  onRestore?: (file: File | undefined) => void;
 }
 
 /**
  * Cold-open screen. One action and one honest promise: the app starts working
  * before an account, a plan or a single logged set exists.
  */
-export default function SplashScreen({ onStart }: Props) {
+export default function SplashScreen({ onStart, installed = false, onRestore }: Props) {
   const [reduceMotion] = useState(
     () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true,
   );
@@ -60,7 +65,26 @@ export default function SplashScreen({ onStart }: Props) {
           <button className="pill-primary" onClick={onStart}>
             Get started
           </button>
-          <span className="splash__note">No account. Nothing leaves this browser.</span>
+          {installed && onRestore ? (
+            // (#258) In place of the note, so the headline above keeps its place on the photo.
+            <p className="splash__note splash__restore" role="note">
+              {INSTALLED_FRESH}{' '}
+              <label className="splash__restore-link">
+                Restore backup
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="settings-row__file"
+                  onChange={(event) => {
+                    onRestore(event.target.files?.[0]);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+            </p>
+          ) : (
+            <span className="splash__note">No account. Nothing leaves this browser.</span>
+          )}
         </div>
       </div>
     </div>

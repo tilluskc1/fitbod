@@ -1,6 +1,8 @@
 import
  { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { backupReminder, shareBackup } from './lib/backup';
+import { offerFirstBackup } from './lib/dataHome';
+import { currentDevice } from './lib/install';
 import
  { downloadText } from './lib/download';
 import
@@ -31,7 +33,7 @@ import
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A } from './data/flagship';
-import { cursorFor, isDescribedSession, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
+import { cursorFor, dayCounter, isDescribedSession, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
 import { withoutCustomDay } from './lib/plan';
 import { baseTalk, customDayPreview, describedDayStatus, describedSessionStatus, talkConstraints } from './lib/todayTalk';
 import type { TalkState } from './lib/todayTalk';
@@ -119,6 +121,7 @@ import GymSheet from './components/GymSheet';
 import SwitchSheet from './components/SwitchSheet';
 import { skipForward, switchOptions, upcomingDays } from './lib/switchDay';
 import type { SwitchOption } from './lib/switchDay';
+import { keepKey, todayFresher } from './lib/recovery';
 import
  Onboarding from './components/Onboarding';
 import
@@ -232,6 +235,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const [replacePrompt, setReplacePrompt] = useState<Constraints | null>(null);
   /** First-weight steps skipped in this tab; in memory only, never stored. */
   const [calibrationSkips, setCalibrationSkips] = useState<string[]>([]);
+  /** (#134) Keep tapped on the fresher-day offer: this slot, today. In memory only, never stored. */
+  const [keptFresher, setKeptFresher] = useState<string | null>(null);
   /** (#193) The Today composer is open or previewing; it clears this when it closes or unmounts. */
   const [composing, setComposing] = useState(false);
 
@@ -317,6 +322,15 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     return () => window.clearInterval(timer);
   }, [sessionRunning]);
 
+  // (#134) Outside a session `now` does not tick: coming back to the app refreshes it.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now());
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(null), 5000);
@@ -355,9 +369,17 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     () => (profile && slot ? upcomingDays(profile, state.plan, slot, state.history) : []),
     [profile, slot, state.plan, state.history],
   );
+  /**
+   * (#134) A fresher day than the one up next. `now` only ticks while a session is open, and then
+   * the gate returns before pricing any day, so following `today` stays cheap.
+   */
+  const fresher = useMemo(
+    () => todayFresher(profile, state, plainConstraints, keptFresher, today),
+    [profile, state, plainConstraints, keptFresher, today],
+  );
   const slotLabel = useMemo(() => {
     const slots = planSlots(state.plan);
-    return slot && slots.length > 1 ? `Slot ${slot.index + 1} of ${slots.length}` : undefined;
+    return slot ? dayCounter(slot.index, slots.length) : undefined;
   }, [slot, state.plan]);
   /**
    * The slot's own program, prescribed from this user's plan and history. One
@@ -534,12 +556,12 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
    */  const skipTodaySlot = () => {
     if (!slot) return;
     if (current) {
-      setNotice('Finish or discard the open session before skipping to the next slot.');
+      setNotice('Finish or discard the open session before skipping this one.');
       return;
     }
     const offered = cursorFor(state);
     setState((currentState) => skipCurrentSlot(currentState, new Date().toISOString(), offered));
-    setNotice('Slot skipped. A skip is not a workout and earns no progression.');
+    setNotice('Session skipped. A skip is not a workout and earns no progression.');
   };
 
   /** Explicit discard consent from the in-app sheet (#19) runs the replacement once. */
@@ -958,18 +980,18 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   };
 
   const restoreFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file) return false;
     let text: string;
     try {
       text = await file.text();
     } catch {
       setNotice('The file could not be read. Nothing changed.');
-      return;
+      return false;
     }
     const parsed = parseState(text);
     if (!parsed.ok) {
       setNotice(`Restore rejected: ${parsed.error}`);
-      return;
+      return false;
     }
     const merged = mergeImport(state, parsed.state);
     setState({ ...merged.state, todayOverride: state.todayOverride ?? null });
@@ -986,6 +1008,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             } the backup did not contain.`
           : ''),
     );
+    return Boolean(merged.state.profile);
   };
 
   const swapExercise = (exerciseIndex: number, nextExerciseId: string) => {
@@ -1073,7 +1096,22 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   if (showSplash && !current) {
     return (
       <PhoneFrame>
-        <SplashScreen onStart={() => setShowSplash(false)} />
+        {/* (#258) A rejected restore from the installed-app prompt must say why. */}
+        {notice && (
+          <div className="app-alerts" role="status">
+            <div className="banner" style={{ margin: '8px 0 0' }}>
+              <span>{notice}</span>
+              <button onClick={() => setNotice(null)} aria-label="Dismiss message">
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+        <SplashScreen
+          onStart={() => setShowSplash(false)}
+          installed={typeof window !== 'undefined' && currentDevice().standalone}
+          onRestore={(file) => void restoreFile(file).then((restored) => { if (restored) setShowSplash(false); })}
+        />
       </PhoneFrame>
     );
   }
@@ -1153,6 +1191,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           setView('tabs');
           setTab('today');
         }}
+        offerBackup={offerFirstBackup(state) && state.history.some((workout) => workout.id === recap.id)}
+        onBackup={backupNow}
       />
     ) : view === 'library' ? (
       <LibraryScreen
@@ -1238,6 +1278,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
             backup={backupReminder(state, today)}
             onBackup={backupNow}
+            fresher={fresher}
+            onPickFresher={pickDay}
+            onKeepNext={() => slot && setKeptFresher(keepKey(slot.id, today))}
           />
         )}
         {tab === 'plan' && (            <PlanScreen
@@ -1281,7 +1324,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onEdit={() => setSheet({ kind: 'settings' })}
           />
         )}
-        <TabBar
+        {/* (#256) While the planner is open, its own action bar replaces the tab bar, as a sheet would. */}
+        {!(tab === 'today' && composing && !current) && <TabBar
           active={tab}
           onChange={(next) => {
             setTab(next);
@@ -1297,14 +1341,16 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
                 })()
               : undefined,
           }}
-        />
+        />}
       </>
     );
 
   return (
     <PhoneFrame>
       {notice && (
-        <div className="app-alerts" role="status">
+        // (#276) Float only on Today, where it would push the planner entry under the dock, and
+        // never over a save-error or conflict alert's buttons.
+        <div className={view === 'tabs' && tab === 'today' && !conflict && saveUi.kind !== 'error' ? 'app-alerts app-alerts--toast' : 'app-alerts'} role="status">
           <div className="banner" style={{ margin: '8px 0 0' }}>
             <span>{notice}</span>
             <button onClick={() => setNotice(null)} aria-label="Dismiss message">

@@ -32,7 +32,10 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: a fix round may not change an owner-approved rule; ask instead.
 
 6. **Never commit while a check is red.** I chained `commit` after a failing `npm test`.
-   Rule: commit only in a separate step after reading the counts. Check: `scripts`/merge helpers stop on
+   Repeated on #271 (2026-11-08): `npm test ...; git commit` in one command pushed f704f2a with one
+   stale test red.
+   Rule: commit only in a separate step after reading the counts; never put `git commit` in the same
+   command as a check. Check: `scripts`/merge helpers stop on
    `# fail` > 0 (see `.scratch/orchestrate/audit-fixes/m.sh` pattern: commit is the merge itself; re-run tests before `git push`).
 
 7. **Push only the ref you mean.** Fast-forwarding stacked PR bases, I moved a PR's own head branch.
@@ -66,6 +69,54 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: assert the number one surface shows equals the number the next one uses (Today's last load =
    logger's previous; target load = set 1's prefilled weight). Check: `scripts/e2e/second-workout.mjs`.
 
+13. **Test offline as a first-time visitor, through the real worker.** #251: the app went blank offline
+   after one visit because JS and CSS were cached only on a second visit; once precached, the scripts
+   still missed because hosts answer `Vary: Origin` and module scripts send an Origin header.
+   Rule: any service-worker change runs the offline e2e in a fresh browser context (one online visit,
+   then offline reload); cache lookups use `ignoreVary`. Check: `scripts/e2e/offline-first-visit.mjs`,
+   `tests/offlineShell251.test.ts`.
+   Review also caught two PNGs the e2e had written into the repo root and a cache name that wiped viewed
+   photos on every deploy. Rule: e2e scripts write screenshots only when `E2E_SHOTS` is set; runtime
+   media lives in its own cache that deploys keep. Check: `git status` is clean after `npm run e2e`.
+
+14. **Anchor a nudge on the event that breaks the plan.** #134's "a fresher day is up" offer counted
+   recently trained muscles; two review rounds found it flagging the split's own planned order (a
+   hinge marks the back; Pull then Legs repeats two areas before Upper).
+   Rule: trigger only on the event that breaks the plan (a skip, a described day), then apply the
+   heuristic. Check: the planned-order sweep in `tests/recovery134.test.ts` (splits 2-6, 1-3 days done).
+
+15. **Merge only what a review passed.** #236 was merged at WIP 20cc161 without review ("owner: merge
+   without review"); a review then found a pain bug, and the fix that passed review (d020980) came after
+   the merge, so production carried the bug.
+   Rule: merge only a SHA a separate review passed, and name it in the merge commit. Check: before
+   pushing main, `git merge-base --is-ancestor <reviewed SHA> <merge commit>` exits 0.
+
+16. **A shrunk viewport is not a phone keyboard.** #256's first e2e "opened the keyboard" with
+   `setViewportSize(h - 330)`, which shrinks the layout; iPhone (and Android without
+   `interactive-widget=resizes-content`) keeps the layout and covers it, so the pinned bar sat under
+   the keyboard and review failed it. Rule: keyboard checks keep the layout height and shrink only the
+   visual viewport, and assert the action sits inside the visible band. Check:
+   `scripts/e2e/planner-reach.mjs` (fake `visualViewport`), `src/lib/keyboardInset.ts`.
+   Round 2: the lifted bar then covered the field the phone had already revealed. The app re-reveals the
+   focused field after setting `--kb`; the e2e no longer scrolls for the app and also shifts `offsetTop`.
+
+17. **Carry what the generator added; don't infer it.** #96 failed review three times, each over how the
+   "third" exercise was identified (unmarked, then by its position after core).
+   Rule: when a later step must undo something the generator added, carry that fact on the in-memory
+   object that already flows to it (`Program.thirds`), never infer it from shape or position (lesson 1).
+   Check: `tests/muscleCap96.test.ts`, a trim drops exactly `program.thirds`.
+
+18. **"Can I close it?" is a question, not an order.** The owner asked whether they could close their
+   chats; I archived the "Photo frame loop" dev chat myself and the owner lost it mid-work (unarchived
+   the same turn). Rule: never archive, close or delete a chat, PR, branch or issue unless the owner
+   says to do it now; answer the question, say what is safe, and let the owner act. Check: the turn's
+   tool calls contain no archive/close/delete the owner did not ask for in that message.
+
+19. **A dismissal answers one thing, not a flag.** #236 kept "It's only soreness" as a boolean, and
+   "Nothing" set it too, so pain typed afterwards built a day. Rule: a safety override stores what it
+   answered (the text it saw) and lapses when that changes; only the explicit answer may set it.
+   Check: `tests/planToday236.test.ts` (pain stop test).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
@@ -73,6 +124,7 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
 - **Time:** shorter and longer than the saved length; 15/20 min floors; ≈ when under half.
 - **Days:** planned vs described; empty days; Limited must name its reason.
 - **Data:** older data without a new field; export/restore round trip; validate rejects bad values.
+- **Offline:** first visit then offline; a new deploy replacing cached assets; photos never loaded online.
 - **Phones:** 390×844 and 360×780; a 650px-tall visible area (iPhone Chrome); keyboard open; iPhone Home Screen app has its own storage.
 
 ## Efficiency

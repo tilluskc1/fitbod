@@ -912,11 +912,12 @@ textarea:focus-visible {
 
 /* ---------- Coach ---------- */
 
+/* (#232) The same light card as "Your recent context"; the old dark radial gradient hid the dark text. */
 .big-card {
   padding: 26px 22px;
-  border-radius: 18px;
-  background: radial-gradient(120% 130% at 0% 0%, #eef6d6 0%, #1a2413 55%, #182014 100%);
-  border: 1px solid #dde8e6;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
   margin-top: 6px;
 }
 
@@ -1614,10 +1615,52 @@ textarea:focus-visible {
   margin-top: 22px;
 }
 
+/* #258: installed Home Screen app, no data yet: the restore offer replaces the note under Get started. */
+.splash__restore { color: var(--on-surface); }
+.splash__restore-link {
+  position: relative;
+  display: inline-block;
+  min-height: 24px;
+  font-weight: 600;
+  text-decoration: underline;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+/* #258: the first recap offers a backup once. */
+.recap-backup {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--surface-container-high);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.recap-backup__actions { display: flex; align-items: center; gap: 12px; }
+.recap-backup__actions .secondary { flex: 1; }
+.recap-backup__actions .text-link { flex: none; white-space: nowrap; padding: 0 8px; }
+
+/* #252: the one safety line, inside the sticky bar just above Build my plan. */
+.onboarding-actions.onboarding-actions--notice {
+  padding-top: 14px;
+  border-top: 1px solid var(--outline-variant);
+  background: var(--surface);
+}
+
+.onboarding-safety {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
 .onboarding-actions {
   margin-top: auto;
   padding-top: 18px;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   /* Continue stays in reach on every step; the step scrolls above it (#222). */
   position: sticky;
@@ -1692,6 +1735,15 @@ textarea:focus-visible {
 .app-alerts {
   flex: none;
   padding: 0 17px;
+}
+
+/* (#276) On Today a passing message floats over the top instead of pushing the entry under the dock. */
+.app-alerts--toast {
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 35;
 }
 
 .photo {
@@ -1972,6 +2024,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+@media (max-height: 700px) {
+  /* (#256) Short visible area: the dock's two actions share one row so the planner entry stays above it. */
+  .flow-dock.flow-dock { flex-direction: row; align-items: center; gap: 8px; padding-top: 4px; padding-bottom: 8px; }
+  .flow-dock.flow-dock > .pill-primary { flex: 1; }
 }
 
 .flow-dock--edge {
@@ -3521,6 +3579,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+p.settings-row.settings-row__note {
+  margin: 0;
+  padding: 12px 16px;
+}
+
 .settings-row__note {
   font-size: 12.5px;
   line-height: 1.45;
@@ -4268,6 +4331,12 @@ button.aw-exercise__name-btn {
   color: #ffffff;
   background: #56706f;
 }
+@media (max-height: 700px) {
+  /* (#256, #276) iPhone Chrome's ~650px visible area: a shorter hero keeps the planner entry 8px+ above the dock. */
+  .t7-hero.t7-hero { min-height: 0; padding: 12px 16px; gap: 4px; }
+  .t7-hero .t7-hero__title { font-size: 24px; max-width: 16ch; }
+}
+
 .t7-hero__photo {
   position: absolute;
   inset: 0;
@@ -4498,10 +4567,27 @@ button.aw-exercise__name-btn {
 .tt-open .ms { flex: none; color: var(--accent-text); }
 .tt-line { font-size: 15px; font-weight: 500; color: var(--on-surface); }
 .tt-tell { display: grid; gap: 8px; }
+/* (#256) The planner's action bar: always the bottom-most, fully visible buttons while it is open. */
+.tt-bar {
+  position: sticky;
+  /* --kb: the part of the screen an on-screen keyboard covers (src/lib/keyboardInset.ts). */
+  bottom: var(--kb, 0px);
+  z-index: 16;
+  display: grid;
+  gap: 8px;
+  margin: 0 -20px -20px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  background: var(--surface-container-lowest, #ffffff);
+  box-shadow: 0 -10px 18px -14px rgba(20, 40, 40, 0.35);
+}
 .tt-nav { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 8px; align-items: center; }
 .tt-skip { justify-self: center; min-height: 44px; }
 .tt-hint { color: var(--muted); font-size: 13px; }
 .tt-say {
+  /* (#256) Focus scrolling keeps the box above the planner's pinned action bar. */
+  scroll-margin-bottom: calc(150px + var(--kb, 0px));
+  scroll-margin-top: calc(12px + var(--vv-top, 0px));
   width: 100%;
   min-height: 86px;
   resize: none;

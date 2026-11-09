@@ -50,6 +50,21 @@ function unSore(base: TalkState, text: string, taps: Taps, areas: Area[]): Taps 
   return next;
 }
 
+/** Q2's pain answers: "It hurts" tapped, and the text "It's only soreness" answered (null: none). */
+export interface PainAnswer { hurts: boolean; soreFor: string | null }
+export const NO_PAIN_ANSWER: PainAnswer = { hurts: false, soreFor: null };
+
+/** "Nothing" and "It hurts" set only the tap; just "It's only soreness" answers the text's pain, as it reads now. */
+export function answerPain(answer: PainAnswer, tap: 'nothing' | 'hurts' | 'soreness', text: string): PainAnswer {
+  if (tap === 'soreness') return { hurts: false, soreFor: text };
+  return { ...answer, hurts: tap === 'hurts' && !answer.hurts };
+}
+
+/** Pain stops the build: a tapped "It hurts", or text pain that "It's only soreness" did not answer (new or changed text). */
+export function painStops(answer: PainAnswer, text: string, textPain: boolean): boolean {
+  return answer.hurts || (textPain && text !== answer.soreFor);
+}
+
 /** Q3 "My planned day": the planned day's areas, minus anything sore or skipped (sore wins). */
 export function pickPlanned(base: TalkState, text: string, taps: Taps, plannedAreas: Area[]): Taps {
   const talk = composeTalk(base, text, taps);
