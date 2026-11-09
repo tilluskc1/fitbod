@@ -31,6 +31,8 @@ import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 import { CheckIcon, LockIcon, PhoneIcon } from '../components/ui/Icons';
 import { currentDevice, installHint } from '../lib/install';
+import { START_OVER_BLOCKED } from '../lib/storage';
+import { SAFETY_NOTICE } from '../lib/safety';
 
 /* ---------------- Adjust today ---------------- */
 
@@ -728,6 +730,95 @@ export function DiscardSessionSheet({
   );
 }
 
+/* ---------------- Start over (#263) ---------------- */
+
+/**
+ * The honest "log out" for an app with no sign-in: erase this browser's data
+ * and land on first launch. Backing up comes first; erasing without one takes
+ * a second confirm, and an open workout blocks it.
+ */
+export function StartOverSheet({
+  sessionOpen,
+  lastBackupAt,
+  onBackup,
+  onErase,
+  onClose,
+}: {
+  sessionOpen: boolean;
+  lastBackupAt?: string;
+  /** The #225 backup flow; resolves to whether a file left the app and the message it showed, if any. */
+  onBackup: () => Promise<{ ok: boolean; message: string | null }>;
+  /** Erase and restart; only a failure comes back, and it is shown here. */
+  onErase: () => { ok: true } | { ok: false; error: string };
+  onClose: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  // A backup made in this sheet: the erase no longer says "without a backup".
+  const [backedUp, setBackedUp] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const backup = async () => {
+    const result = await onBackup();
+    setBackupStatus(result.message);
+    if (result.ok) setBackedUp(true);
+  };
+  const erase = () => {
+    const result = onErase();
+    if (!result.ok) setError(result.error);
+  };
+
+  if (confirming) {
+    return (
+      <Sheet key="confirm" title="Erase everything?" onClose={onClose}>
+        <p className="sheet-copy">
+          {backedUp ? 'Your' : 'Without a backup, your'} plan, every logged workout, your preferences and your backup
+          date leave this browser for good. This can't be undone.
+        </p>
+        {error && <p className="error-text" role="alert">{error}</p>}
+        <div className="sheet-actions">
+          <button className="danger" onClick={erase}>
+            Erase everything
+          </button>
+          <button className="secondary" onClick={() => setConfirming(false)}>
+            Keep my data
+          </button>
+        </div>
+      </Sheet>
+    );
+  }
+
+  return (
+    <Sheet key="choose" title="Start over?" subtitle="On this device" onClose={onClose}>
+      <p className="sheet-copy">
+        This erases your plan, every logged workout, your preferences, your backup date and any older copies the
+        app kept in this browser, then opens the app as new. A backup file you already saved isn't affected; you
+        can restore it after you set up again.
+      </p>
+      <p className="settings-row__note" role="status" style={{ marginTop: 10 }}>
+        {backupStatus ??
+          (lastBackupAt
+            ? `Last backup: ${new Date(lastBackupAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}.`
+            : 'Not backed up yet.')}
+      </p>
+      {sessionOpen && (
+        <p className="note-card" role="note" style={{ marginTop: 12 }}>
+          {START_OVER_BLOCKED}
+        </p>
+      )}
+      <div className="sheet-actions">
+        <button className="primary" onClick={backup}>
+          Back up now
+        </button>
+        {!sessionOpen && (
+          <button className="danger" onClick={() => setConfirming(true)}>
+            {backedUp ? 'Erase this device' : 'Erase without a backup'}
+          </button>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
 /* ---------------- Swap exercise ---------------- */
 
 export function SwapSheet({
@@ -776,6 +867,8 @@ interface SettingsProps {
   /** (#225) Share the backup file, or download it where sharing files is unsupported. */
   onBackup: () => void;
   onRestore: (file: File | undefined) => void;
+  /** (#263) Open the Start over sheet. */
+  onStartOver: () => void;
   onClose: () => void;
   storageNote: string;
 }
@@ -786,6 +879,7 @@ export function SettingsSheet({
   onExport,
   onBackup,
   onRestore,
+  onStartOver,
   onClose,
   storageNote,
 }: SettingsProps) {
@@ -968,6 +1062,10 @@ export function SettingsSheet({
                 }}
               />
             </label>
+            <button className="settings-row settings-row--action settings-row--stack" style={{ gap: 2 }} onClick={onStartOver}>
+              <span style={{ color: 'var(--danger)' }}>Start over on this device</span>
+              <span className="settings-row__note">Erase this browser's data and set up again.</span>
+            </button>
           </div>
           <p className="settings-group__foot">{storageNote}</p>
           <div className="settings-card settings-lock">
@@ -986,6 +1084,15 @@ export function SettingsSheet({
               </div>
             </div>
           )}
+        </section>
+
+        <section className="settings-group" aria-labelledby="settings-about">
+          <h3 className="settings-group__title" id="settings-about">
+            About
+          </h3>
+          <div className="settings-card">
+            <p className="settings-row settings-row__note">{SAFETY_NOTICE}</p>
+          </div>
         </section>
 
         <div className="sheet-actions">

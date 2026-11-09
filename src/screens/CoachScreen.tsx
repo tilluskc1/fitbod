@@ -11,54 +11,17 @@ interface Props {
   onEdit: (section: 'equipment' | 'minutes' | 'goal' | 'units') => void;
 }
 
-type CoachTab = 'review' | 'memory' | 'talk';
-
-interface Message {
-  from: 'you' | 'coach';
-  text: string;
-}
-
-function reply(question: string, history: WorkoutRecord[]): string {
-  const text = question.toLowerCase();
-  if (text.includes('progress') || text.includes('target')) {
-    return history.length === 0
-      ? 'There is no history yet. Complete one session and the next target comes from what you actually lifted.'
-      : `You have ${history.length} recorded session${history.length === 1 ? '' : 's'}. The next load for each exercise comes from its own last completed sets, not from a general formula.`;
-  }
-  if (text.includes('equipment') || text.includes('dumbbell') || text.includes('kettlebell')) {
-    return 'Equipment is part of the plan, not a suggestion. If a movement family cannot be trained with what you own, the app says so and names what would unlock it.';
-  }
-  if (text.includes('pain') || text.includes('hurt') || text.includes('injur')) {
-    return 'This demo cannot assess an injury. Stop the movement that hurts and speak to a qualified professional; nothing here is medical advice.';
-  }
-  return 'This is a scripted demo reply, not a live model. Use Progress for recorded loads, and Coach → What I know to change equipment or session length.';
-}
+// (#257) The scripted "Talk to coach" demo is gone for launch; "Plan today with me" (#236) is the
+// conversational path, and a real chat returns only with the cloud track (#42-#44).
+type CoachTab = 'review' | 'memory';
 
 export default function CoachScreen({ profile, history, program, onWhy, onEdit }: Props) {
   const [tab, setTab] = useState<CoachTab>('review');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      from: 'coach',
-      text: 'Demo coach. I can explain how targets work, but I am not connected to a model and I never change your plan without you approving it.',
-    },
-  ]);
-  const [draft, setDraft] = useState('');
 
   const last = history[0];
   const equipment = profile.equipment.length > 0 ? profile.equipment.join(' · ') : 'Bodyweight only';
   // Only an answer the user actually gave, with the workout it belongs to.
   const felt = latestFeedback(history);
-
-  const send = () => {
-    const text = draft.trim();
-    if (!text) return;
-    setMessages((current) => [
-      ...current,
-      { from: 'you', text },
-      { from: 'coach', text: reply(text, history) },
-    ]);
-    setDraft('');
-  };
 
   return (
     <div className="screen">
@@ -85,14 +48,6 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
           onClick={() => setTab('memory')}
         >
           What I know
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'talk'}
-          className={tab === 'talk' ? 'on' : ''}
-          onClick={() => setTab('talk')}
-        >
-          Talk to coach
         </button>
       </div>
 
@@ -224,56 +179,6 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
         </>
       )}
 
-      {tab === 'talk' && (
-        <>
-          <div className="banner" role="note" style={{ marginTop: 12 }}>
-            <div>
-              <strong>Scripted demo reply.</strong> No model or API is connected. Answers are fixed
-              guidance rules, and nothing you type changes your plan.
-            </div>
-          </div>
-
-          <div className="card" style={{ marginTop: 12 }}>
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                style={{
-                  padding: '10px 0',
-                  borderBottom: index === messages.length - 1 ? 0 : '1px solid #262e20',
-                }}
-              >
-                <span className="kicker" style={{ marginBottom: 4 }}>
-                  {message.from === 'you' ? 'YOU' : 'COACH DEMO'}
-                </span>
-                <p style={{ color: message.from === 'you' ? 'var(--text)' : 'var(--secondary)', fontSize: 14.5 }}>
-                  {message.text}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="field" style={{ borderBottom: 0, marginTop: 8 }}>
-            <input
-              className="search"
-              style={{ marginTop: 0 }}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') send();
-              }}
-              placeholder="Ask about targets, equipment…"
-              aria-label="Message the demo coach"
-            />
-          </div>
-          <button className="secondary" onClick={send} disabled={!draft.trim()}>
-            Send to demo
-          </button>
-          <p className="data-note">
-            Live coaching arrives in a later milestone: server-side intent parsing, validated
-            constraints, and an explicit preview before anything changes.
-          </p>
-        </>
-      )}
     </div>
   );
 }

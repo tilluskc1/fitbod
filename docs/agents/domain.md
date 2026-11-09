@@ -38,7 +38,7 @@ Multi-context repo (presence of `GLOSSARY-MAP.md` at the root):
         └── docs/adr/
 ```
 
-This repo is **single-context**: root `GLOSSARY.md` and `docs/adr/`.
+This repo is **single-context**: `docs/adr/` at the root. No `GLOSSARY.md` exists yet; create one at the root before relying on it.
 
 ## Use the glossary's vocabulary
 

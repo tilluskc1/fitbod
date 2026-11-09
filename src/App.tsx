@@ -1,6 +1,8 @@
 import
  { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { backupReminder, shareBackup } from './lib/backup';
+import { offerFirstBackup } from './lib/dataHome';
+import { currentDevice } from './lib/install';
 import
  { downloadText } from './lib/download';
 import
@@ -31,7 +33,7 @@ import
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A } from './data/flagship';
-import { cursorFor, isDescribedSession, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
+import { cursorFor, dayCounter, isDescribedSession, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
 import { withoutCustomDay } from './lib/plan';
 import { baseTalk, customDayPreview, describedDayStatus, describedSessionStatus, talkConstraints } from './lib/todayTalk';
 import type { TalkState } from './lib/todayTalk';
@@ -66,6 +68,7 @@ import
 } from './lib/session';import { setWorkoutFeedback } from './lib/feedback';
 import
  { EMPTY_STATE,
+  startOverErase,
   STORAGE_KEY,
   exportFilename,
   loadState,
@@ -119,6 +122,7 @@ import GymSheet from './components/GymSheet';
 import SwitchSheet from './components/SwitchSheet';
 import { skipForward, switchOptions, upcomingDays } from './lib/switchDay';
 import type { SwitchOption } from './lib/switchDay';
+import { keepKey, todayFresher } from './lib/recovery';
 import
  Onboarding from './components/Onboarding';
 import
@@ -134,6 +138,7 @@ import
   ExerciseActionsSheet,
   FinishSheet,
   SettingsSheet,
+  StartOverSheet,
   SwapSheet,
   WhySheet,
 } from './screens/Sheets';
@@ -147,6 +152,7 @@ type SheetState =
   | { kind: 'gym' }
   | { kind: 'switch' }
   | { kind: 'settings' }
+  | { kind: 'startOver' }
   | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' | 'history' }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
@@ -185,8 +191,23 @@ function backupRaw(raw: string): boolean {
   }
 }
 
+/**
+ * (#263) Starting over remounts the app from storage, exactly as a first
+ * launch reads it, so no in-memory screen, sheet or session survives an erase.
+ */
 export default function App() {
-  const [state, setState] = useState<AppState>(INITIAL.state);
+  const [boot, setBoot] = useState({ run: 0, initial: INITIAL });
+  return (
+    <AppRun
+      key={boot.run}
+      initial={boot.initial}
+      onStartOver={() => setBoot((current) => ({ run: current.run + 1, initial: loadState() }))}
+    />
+  );
+}
+
+function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: () => void }) {
+  const [state, setState] = useState<AppState>(initial.state);
   const [view, setView] = useState<View>('tabs');
   const [tab, setTab] = useState<Tab>('today');
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' });
@@ -194,7 +215,7 @@ export default function App() {
   const [pendingNotices, setPendingNotices] = useState<ConstraintNotice[]>([]);
   const [recapId, setRecapId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(INITIAL));
+  const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(initial));
   // The one feedback write the screens can speak about. It only becomes "saved"
   // when saveState verified the write that carried this answer.
   const [feedbackWrite, setFeedbackWrite] = useState<
@@ -204,10 +225,10 @@ export default function App() {
   const [now, setNow] = useState(() => Date.now());
   // A stored profile means onboarding already happened: a reload must never
   // drop a resumed or just-finished session behind the splash again.
-  const [showSplash, setShowSplash] = useState(() => INITIAL.state.profile === null);
+  const [showSplash, setShowSplash] = useState(() => initial.state.profile === null);
   const [recovery, setRecovery] = useState<{ message: string; raw: string } | null>(
-    INITIAL.status === 'corrupt'
-      ? { message: INITIAL.error ?? 'Saved data could not be read.', raw: INITIAL.raw ?? '' }
+    initial.status === 'corrupt'
+      ? { message: initial.error ?? 'Saved data could not be read.', raw: initial.raw ?? '' }
       : null,
   );
   // Active-session replacement asks in-app (#19); the native prompt blocked
@@ -215,16 +236,17 @@ export default function App() {
   const [replacePrompt, setReplacePrompt] = useState<Constraints | null>(null);
   /** First-weight steps skipped in this tab; in memory only, never stored. */
   const [calibrationSkips, setCalibrationSkips] = useState<string[]>([]);
+  /** (#134) Keep tapped on the fresher-day offer: this slot, today. In memory only, never stored. */
+  const [keptFresher, setKeptFresher] = useState<string | null>(null);
   /** (#193) The Today composer is open or previewing; it clears this when it closes or unmounts. */
   const [composing, setComposing] = useState(false);
 
   const appliedProposalRef = useRef<string | null>(null);
   const proposalRevisionRef = useRef(0);
-  const revisionRef = useRef(INITIAL.revision);
+  const revisionRef = useRef(initial.revision);
   const pendingWriteRef = useRef<string | undefined>(undefined);
-  const skipSaveRef = useRef(true);
   const adoptingRef = useRef(false);
-  const forceSaveRef = useRef(INITIAL.status === 'corrupt');
+  const forceSaveRef = useRef(initial.status === 'corrupt');
 
   /* ---------- persistence ---------- */
 
@@ -254,20 +276,15 @@ export default function App() {
   }, [state]);
 
   useEffect(() => {
-    if (recovery) {
-      skipSaveRef.current = false;
-      return;
-    }
-    if (skipSaveRef.current) {
-      skipSaveRef.current = false;
-      return;
-    }
+    // Never write back what was just loaded. An identity check, not a one-shot flag: StrictMode
+    // re-runs this on mount, and a spent flag wrote an empty record over a start over (#263).
+    if (recovery || state === initial.state) return;
     if (adoptingRef.current) {
       adoptingRef.current = false;
       return;
     }
     attemptSave();
-  }, [state, recovery, attemptSave]);
+  }, [state, initial.state, recovery, attemptSave]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -305,6 +322,15 @@ export default function App() {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [sessionRunning]);
+
+  // (#134) Outside a session `now` does not tick: coming back to the app refreshes it.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now());
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   useEffect(() => {
     if (!notice) return;
@@ -344,9 +370,17 @@ export default function App() {
     () => (profile && slot ? upcomingDays(profile, state.plan, slot, state.history) : []),
     [profile, slot, state.plan, state.history],
   );
+  /**
+   * (#134) A fresher day than the one up next. `now` only ticks while a session is open, and then
+   * the gate returns before pricing any day, so following `today` stays cheap.
+   */
+  const fresher = useMemo(
+    () => todayFresher(profile, state, plainConstraints, keptFresher, today),
+    [profile, state, plainConstraints, keptFresher, today],
+  );
   const slotLabel = useMemo(() => {
     const slots = planSlots(state.plan);
-    return slot && slots.length > 1 ? `Slot ${slot.index + 1} of ${slots.length}` : undefined;
+    return slot ? dayCounter(slot.index, slots.length) : undefined;
   }, [slot, state.plan]);
   /**
    * The slot's own program, prescribed from this user's plan and history. One
@@ -523,12 +557,12 @@ export default function App() {
    */  const skipTodaySlot = () => {
     if (!slot) return;
     if (current) {
-      setNotice('Finish or discard the open session before skipping to the next slot.');
+      setNotice('Finish or discard the open session before skipping this one.');
       return;
     }
     const offered = cursorFor(state);
     setState((currentState) => skipCurrentSlot(currentState, new Date().toISOString(), offered));
-    setNotice('Slot skipped. A skip is not a workout and earns no progression.');
+    setNotice('Session skipped. A skip is not a workout and earns no progression.');
   };
 
   /** Explicit discard consent from the in-app sheet (#19) runs the replacement once. */
@@ -927,32 +961,38 @@ export default function App() {
   };
 
   /** (#225) Same file as Export, through the Share sheet; a cancel or failure records nothing. */
-  const backupNow = async () => {
+  const backupNow = async (): Promise<{ ok: boolean; message: string | null }> => {
     const result = await shareBackup(serializeExport(state), exportFilename(), {
       nav: typeof navigator === 'undefined' ? undefined : navigator,
       download: downloadText,
     });
-    if (result.ok) {
-      recordBackup();
-      setNotice(result.via === 'share' ? 'Backup shared.' : 'Backup downloaded.');
-    } else if (result.message) {
-      setNotice(result.message);
-    }
+    // Returned too, for a sheet that covers the notice (#263).
+    const message = result.ok ? (result.via === 'share' ? 'Backup shared.' : 'Backup downloaded.') : result.message ?? null;
+    if (result.ok) recordBackup();
+    if (message) setNotice(message);
+    return { ok: result.ok, message };
+  };
+
+  /** (#263) Erase this browser's data, then boot as a first launch; a refusal is returned to the sheet. */
+  const startOver = () => {
+    const result = startOverErase(state);
+    if (result.ok) onStartOver();
+    return result;
   };
 
   const restoreFile = async (file: File | undefined) => {
-    if (!file) return;
+    if (!file) return false;
     let text: string;
     try {
       text = await file.text();
     } catch {
       setNotice('The file could not be read. Nothing changed.');
-      return;
+      return false;
     }
     const parsed = parseState(text);
     if (!parsed.ok) {
       setNotice(`Restore rejected: ${parsed.error}`);
-      return;
+      return false;
     }
     const merged = mergeImport(state, parsed.state);
     setState({ ...merged.state, todayOverride: state.todayOverride ?? null });
@@ -969,6 +1009,7 @@ export default function App() {
             } the backup did not contain.`
           : ''),
     );
+    return Boolean(merged.state.profile);
   };
 
   const swapExercise = (exerciseIndex: number, nextExerciseId: string) => {
@@ -1056,7 +1097,22 @@ export default function App() {
   if (showSplash && !current) {
     return (
       <PhoneFrame>
-        <SplashScreen onStart={() => setShowSplash(false)} />
+        {/* (#258) A rejected restore from the installed-app prompt must say why. */}
+        {notice && (
+          <div className="app-alerts" role="status">
+            <div className="banner" style={{ margin: '8px 0 0' }}>
+              <span>{notice}</span>
+              <button onClick={() => setNotice(null)} aria-label="Dismiss message">
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+        <SplashScreen
+          onStart={() => setShowSplash(false)}
+          installed={typeof window !== 'undefined' && currentDevice().standalone}
+          onRestore={(file) => void restoreFile(file).then((restored) => { if (restored) setShowSplash(false); })}
+        />
       </PhoneFrame>
     );
   }
@@ -1136,6 +1192,8 @@ export default function App() {
           setView('tabs');
           setTab('today');
         }}
+        offerBackup={offerFirstBackup(state) && state.history.some((workout) => workout.id === recap.id)}
+        onBackup={backupNow}
       />
     ) : view === 'library' ? (
       <LibraryScreen
@@ -1221,6 +1279,9 @@ export default function App() {
             onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
             backup={backupReminder(state, today)}
             onBackup={backupNow}
+            fresher={fresher}
+            onPickFresher={pickDay}
+            onKeepNext={() => slot && setKeptFresher(keepKey(slot.id, today))}
           />
         )}
         {tab === 'plan' && (            <PlanScreen
@@ -1264,7 +1325,8 @@ export default function App() {
             onEdit={() => setSheet({ kind: 'settings' })}
           />
         )}
-        <TabBar
+        {/* (#256) While the planner is open, its own action bar replaces the tab bar, as a sheet would. */}
+        {!(tab === 'today' && composing && !current) && <TabBar
           active={tab}
           onChange={(next) => {
             setTab(next);
@@ -1280,14 +1342,16 @@ export default function App() {
                 })()
               : undefined,
           }}
-        />
+        />}
       </>
     );
 
   return (
     <PhoneFrame>
       {notice && (
-        <div className="app-alerts" role="status">
+        // (#276) Float only on Today, where it would push the planner entry under the dock, and
+        // never over a save-error or conflict alert's buttons.
+        <div className={view === 'tabs' && tab === 'today' && !conflict && saveUi.kind !== 'error' ? 'app-alerts app-alerts--toast' : 'app-alerts'} role="status">
           <div className="banner" style={{ margin: '8px 0 0' }}>
             <span>{notice}</span>
             <button onClick={() => setNotice(null)} aria-label="Dismiss message">
@@ -1390,8 +1454,19 @@ export default function App() {
           onExport={exportData}
           onBackup={backupNow}
           onRestore={restoreFile}
+          onStartOver={() => setSheet({ kind: 'startOver' })}
           onClose={closeSheet}
           storageNote={storageNote}
+        />
+      )}
+
+      {sheet.kind === 'startOver' && (
+        <StartOverSheet
+          sessionOpen={Boolean(state.current)}
+          lastBackupAt={state.lastBackupAt}
+          onBackup={backupNow}
+          onErase={startOver}
+          onClose={() => setSheet({ kind: 'settings' })}
         />
       )}
 

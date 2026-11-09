@@ -8,15 +8,16 @@ web
 
 ## Users
 
-- **Primary:** one lifter training mostly at home with a specific, limited kit (for example dumbbells
-  plus a bench, or a kettlebell only). Uses the app mid-session, on a phone, one hand free, with no
-  patience for a setup flow that asks the same questions twice.
-- **Secondary:** people reviewing the repository as a work sample. They read the README, AUDIT and
-  HANDOFF before running it, and judge the documented decisions as much as the screen.
+- **Primary:** one lifter training at a gym, at home with a specific, limited kit (for example dumbbells
+  plus a bench, or a kettlebell only), or with nothing. Uses the app mid-session, on a phone, one hand
+  free, with no patience for a setup flow that asks the same questions twice.
+- **Secondary:** people reviewing the repository. They read the README and `docs/chat-handoff.md`
+  before running it, and judge the documented decisions as much as the screen.
 
 ## Product Purpose
 
-A local-first strength-training app: onboarding → split → generated workout → set logging → history.
+Home Strength: a phone-first, local-first strength-training app: onboarding → split → today's workout
+→ set logging → progress.
 It exists so one lifter can walk into a session knowing exactly what to do with the equipment they
 actually own, and leave with a record that survives a reload.
 
@@ -39,52 +40,59 @@ exercise list.
 - A session is planned, performed and reviewed in one browser on one device; there is no account to
   sign into and no second device to reconcile.
 - Used in a gym or home gym, often on flaky or no connectivity. Offline reopen is a real path, not a
-  marketing line; media that was never loaded falls back to a labeled placeholder.
-- Data lives in `localStorage` under one versioned key, roughly 5 MB, with no cloud copy. Exporting
-  JSON is the only backup, and the app says so.
-- Weights, volume and PRs are read after the fact in History, including correcting a set logged wrong.
+  marketing line; media that was never loaded falls back to a placeholder named for screen readers.
+- Data lives in `localStorage` under one versioned key, roughly 5 MB, with no cloud copy. Back up now
+  (Share sheet or download) and JSON export are the only backups, and the app says so. On iPhone a Home
+  Screen app has its own storage.
+- Logged weights and reps are read after the fact in Progress, and a set logged wrong can be corrected.
 
 ## Capabilities and Constraints
 
 Confirmed and shipped:
 
-- Onboarding: goal, experience, days per week, primary equipment, support equipment, exclusions.
+- Onboarding: name, units (lb default, kg available), goal, experience, days per week, session length,
+  and gym or home kit (support equipment included). Exclusions live in the Library.
 - Deterministic seeded generation that must cover the day's movement families (press, pull, squat,
   hinge, calf, core as applicable) and hard-stops when no required family can be performed.
 - Equipment capabilities are separate from equipment types: owning dumbbells does not imply a bench; a
   barbell does not imply a rack.
-- Double progression inside movement-specific rep ranges, with load steps taken from a recorded
-  inventory when present and documented per-equipment defaults otherwise. An unfinished session
-  repeats its load rather than advancing.
+- Goal and experience change programming: intermediate and advanced lifters who want muscle or
+  strength get a five-set heavy lead; "Get stronger" uses strength ranges and rests.
+- Double progression inside movement-specific rep ranges. Barbell, machine and cable step by documented
+  per-equipment defaults; at home, dumbbells step to the next listed pair (onboarding or Settings); with no
+  list a topped-out dumbbell or kettlebell lift asks the lifter to pick the next one up. An unfinished
+  exercise repeats its target rather than advancing.
+- Today-only changes (length, gear, switch day) and "Plan today with me", built through the same
+  generator; the planned day stays next.
 - Immutable `planned` sets; `performed` weight/reps/done saved on every edit; pause, resume after
   reload, finish, finish early, cancel, add/remove sets, correct history afterward.
 - Versioned storage envelope with revision checks, v1 migration, validated restore with merge/dedupe,
   corrupt-data download and a recovery screen. Writes are verified, and failures are surfaced.
-- Production-only service worker for the app shell and already-loaded media.
-- 51-exercise catalog; 50 have photography from free-exercise-db (public domain), `nordic-curl`
-  deliberately falls back to the placeholder.
+- Installable (manifest, icons, iOS standalone); production-only service worker that precaches the
+  built app, so one online visit is enough to open offline.
+- 62-exercise catalog, every exercise with two photographs from free-exercise-db (public domain).
 
 Hard constraints:
 
-- **No backend, no accounts, no cloud storage — permanently.** JSON export/restore is the only
-  transfer and backup mechanism, and no feature may depend on a server.
+- **Local-first today; the cloud track is parked, not dropped.** The owner recorded a Supabase /
+  Vercel decision on 2026-10-29 (`docs/agents/story-contract.md`); until the owner restarts that track,
+  no shipped feature may depend on a server, and offline logging plus portable export stay. Backup and
+  restore are the only transfer mechanism.
 - No URL router or per-screen deep links; one browser profile, one user.
-- Kilograms only today; every stored weight is kg.
+- Weights are stored in kg and shown in the user's unit (lb or kg).
 - No fabricated product evidence: no invented testimonials, user counts, or benchmarks.
 
 Explicitly open (do not treat as decided):
 
-- Load-inventory editing in the UI: `loads` is read for steps and rounding but can only arrive through
-  a restored profile.
 - Bodyweight progression beyond the rep ceiling: the model has no added-load field.
-- Whether goal and experience should change programming rather than only copy and session length.
-- Deload or autoregulation: a stalled lift repeats its load; no back-off week is scheduled.
-- Units beyond kg.
+- Deload or autoregulation: a stalled lift repeats its target; no back-off week is scheduled.
+- Supersets (#88) and exercise videos.
+- When and how the cloud track (accounts, sync, AI coach) restarts.
 
 ## Brand Commitments
 
-- **Name and tagline are placeholders.** `FITBOD·CLONE` and “Train Smarter. Live Better.” are not
-  binding and must be replaced before anything ships publicly; “Fitbod” is a registered trademark.
+- **Public name: Home Strength.** The trademarked working name was removed (#145); a further rename is
+  the owner's open choice.
 - The durable brand commitment is the **voice**: plain, specific, and honest about limits. The app
   states what it cannot do (missing equipment, capped progression, no cloud copy) rather than hiding
   it, and it never fixes a shortfall silently.
@@ -92,10 +100,11 @@ Explicitly open (do not treat as decided):
 ## Evidence on Hand
 
 - Working app and source in this repository; `npm run dev` runs it with no configuration.
-- `README.md` (capabilities, storage contract, known limitations), `AUDIT.md` (reproduced Phase 1
-  defects and their resolutions), `HANDOFF.md` (architecture, guarantees, verification results, Phase 2
-  decisions), `tests/` (41 passing regression tests).
-- `public/exercises/` — 100 photographs (two frames each) for 50 exercises, from free-exercise-db.
+- `README.md` (capabilities, storage, known limitations), `docs/chat-handoff.md` (current product and
+  tech handoff), `tests/` (unit tests, `npm test`) and `scripts/e2e/` (browser checks, `npm run e2e`).
+  `AUDIT.md` and `HANDOFF.md` are Phase 1 history.
+- `public/exercises/`: 122 photographs for 62 exercises (two frames each; the goblet squat pair is
+  shared by its dumbbell and kettlebell versions), from free-exercise-db.
 - No real user base, usage data, testimonials, pricing, or third-party validation exists. Future work
   must not imply any.
 
