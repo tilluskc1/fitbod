@@ -228,16 +228,23 @@ function applyToSets(
   return { session: next, carried, previous };
 }
 
-/** Undo a carry: the listed sets return to their earlier values unless they were logged since. */
+/**
+ * Undo a carry: the listed sets return to their earlier values unless they were logged since.
+ * `edited`: a logged set the edit itself changed (#309); it returns to its earlier values too.
+ */
 export function undoCarry(
   session: WorkoutRecord,
   exerciseIndex: number,
   exerciseId: string,
   previous: CarryResult['previous'],
   now: string,
+  edited?: CarryResult['previous'][number],
 ): WorkoutRecord {
   if (session.exercises[exerciseIndex]?.exerciseId !== exerciseId) return session;
   let next = session;
+  if (edited && next.exercises[exerciseIndex].performed[edited.index]?.done) {
+    next = updatePerformedSet(next, exerciseIndex, edited.index, { weight: edited.weight, reps: edited.reps }, now);
+  }
   for (const { index, weight, reps } of previous) {
     if (next.exercises[exerciseIndex].performed[index]?.done === false) {
       next = updatePerformedSet(next, exerciseIndex, index, { weight, reps }, now);

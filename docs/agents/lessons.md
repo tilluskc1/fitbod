@@ -154,3 +154,11 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
 - Reviewers should reuse committed sweep tests instead of rewriting sweep scripts each round. When a
   reviewer's probe finds a bug, turn the probe into a test in the fix.
 - Briefs should point to this file and `AGENTS.md` instead of repeating global constraints in full.
+
+22. **A removed control takes its tests with it.** #309 replaced the logger's set editor with inputs in
+   the row; 19 tests then failed, every one asserting the old panel's markup (pills, Confirm, Skip,
+   `Edit weight for set N`) rather than a value the lifter sees.
+   Rule: when a UI story removes a control, list the tests and e2e scripts that name it before building
+   (`grep -rn "<control text>" tests scripts`), and put that list in the brief; assert the value a cell
+   shows, not the element that showed it. Check: `tests/inlineSets309.test.ts` reads cell values by
+   accessible name, so the next markup change does not move it.

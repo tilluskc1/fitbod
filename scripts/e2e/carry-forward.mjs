@@ -45,23 +45,23 @@ async function onboard(page, unit) {
   await page.waitForSelector('.t7-hero');
 }
 
-/** Each set row as { weight, reps }, read from the cells the lifter sees. */
+/** Each set row as { weight, reps }, read from the cells the lifter sees (inputs since #309). */
 async function rows(page) {
   const out = [];
-  for (const row of await page.locator('table.lg-table tbody tr:not(.lg-edit):not(.lg-note)').all()) {
-    const cells = row.locator('button.lg-cell');
-    out.push({ weight: (await cells.nth(0).innerText()).trim(), reps: (await cells.nth(1).innerText()).trim() });
+  for (const row of await page.locator('table.lg-table tbody tr:not(.lg-note)').all()) {
+    const cells = row.locator('input.lg-cell');
+    out.push({ weight: (await cells.nth(0).inputValue()).trim(), reps: (await cells.nth(1).inputValue()).trim() });
   }
   return out;
 }
 
-/** Type into a set's weight one key at a time, as a phone keyboard does, then close the editor. */
+/** Tap a set's weight cell, type one key at a time as a phone keyboard does, then leave the cell. */
 async function typeWeight(page, set, value) {
-  await page.getByRole('button', { name: `Edit weight for set ${set}` }).click();
-  const input = page.getByLabel(new RegExp(`^Set ${set} load`));
+  const input = page.getByLabel(new RegExp(`^Set ${set} weight`));
+  await input.click();
   await input.fill('');
   await input.pressSequentially(String(value));
-  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await input.blur();
 }
 
 const browser = await chromium.launch();
@@ -81,8 +81,6 @@ try {
     const name = (await page.locator('.aw-exercise__name').innerText()).trim();
     const target = (await page.locator('.lg-ex__meta').innerText()).match(/Target (\d+) × (\d+)/);
     check(Boolean(target), `${where}: the header names a sets × reps target`);
-    const confirm = page.getByRole('button', { name: 'Confirm' });
-    if (await confirm.count()) await confirm.click();
 
     // The prefilled reps equal the target's reps (the "4 × 8 vs 5" check), and every set starts alike.
     let r = await rows(page);
@@ -147,14 +145,13 @@ try {
     if (unit === 'lb') {
       await typeWeight(page, 3, '95');
       await typeWeight(page, 4, '10');
-      await page.getByRole('button', { name: 'Edit weight for set 2' }).click();
-      const input = page.getByLabel(/^Set 2 load/);
+      const input = page.getByLabel(/^Set 2 weight/);
       await input.focus();
       await input.press('End');
       await input.press('Backspace');
       await input.press('Backspace');
       await input.pressSequentially('00');
-      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await input.blur();
       r = await rows(page);
       check(r[1].weight === '100' && r[2].weight === '95' && r[3].weight === '10',
         `${where}: backspacing set 2 to 100 leaves hand-typed 95 and 10 (${JSON.stringify(r)})`);

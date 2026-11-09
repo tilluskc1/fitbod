@@ -22,6 +22,8 @@ const profile: Profile = {
 const adapted = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home', loads: RACK }, [], undefined);
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const noop = () => {};
+/** A set cell's value (#309): the cells are inputs, read by their accessible name. */
+const cell = (html: string, label: string) => html.match(new RegExp(`aria-label="${label}"[^>]*value="([^"]*)"`))?.[1];
 const at = (minute: number) => `2026-11-04T10:${String(minute).padStart(2, '0')}:00.000Z`;
 // The calibration asks for the set's own target reps with headroom (the floor press starts at 8).
 const RULE = /Pick a weight you could lift for 8 reps with 2–3 to spare/;
@@ -90,35 +92,28 @@ test('the step offers only confirmed loads, never the example rack', async () =>
   assert.deepEqual(confirmedLoads('home', [18, 10]), [10, 18]);
   assert.deepEqual(confirmedLoads('hotel', [18, 10]), [], 'a home rack is not the hotel rack');
   await withTrain((render) => {
-    assert.doesNotMatch(plain(render(liveSession([]), [], { calibrationLoads: [] })), RULE, 'unconfirmed rack');
-    assert.match(plain(render(liveSession([]), [])), RULE, 'confirmed rack');
+    // (#309) Every loaded lift types its first weight in set 1's cell; no rack is offered above the table.
+    for (const calibrationLoads of [[], RACK]) {
+      const html = render(liveSession([]), [], { calibrationLoads });
+      assert.match(plain(html), RULE);
+      assert.doesNotMatch(html, /role="group" aria-label="Your dumbbells/);
+      assert.doesNotMatch(html, new RegExp(HOME_DUMBBELLS.map((kg) => `>${kg}<`).join('|')), 'no example rack');
+    }
   });
 });
 
-test('a skipped step stays skipped for the open session, and Skip has its own name', async () => {
-  const session = liveSession([]);
-  await withTrain((render) => {
-    assert.match(render(session, []), /aria-label="Skip first-weight help"/);
-    const key = `${session.id}:0:${session.exercises[0].exerciseId}`;
-    assert.doesNotMatch(plain(render(session, [], { skippedCalibrations: [key] })), RULE);
-  });
-});
 
-test('the logger shows the calibration step with nothing pre-selected, only for an uncalibrated loaded variant', async () => {
+test('#309: a first-time lift with no profile level types its weight in set 1; nothing is pre-filled', async () => {
   await withTrain((render) => {
     const html = render(liveSession([]), []);
     const text = plain(html);
     assert.match(text, RULE);
-    assert.match(text, /Do 5 easy reps with it, then confirm or change/);
-    assert.match(html, />Skip</);
-    // A load pill still confirms with its own tap; Confirm is for a typed weight off the rack (#129).
-    assert.match(html, /<button class="pill-primary" disabled=""[^>]*>Confirm</, 'nothing typed yet');
-    assert.match(html, /aria-label="Enter dumbbell load \(kg each\)"/);
-    assert.match(html, /role="group" aria-label="Your dumbbells \(kg each\)"/);
-    for (const weight of RACK) assert.match(html, new RegExp(`aria-pressed="false"[^>]*>${weight}<`));
-    assert.doesNotMatch(html, /aria-pressed="true"/, 'no load pre-selected or suggested');
+    assert.doesNotMatch(text, /Suggested start/, 'no level, no suggestion');
+    for (const word of ['Confirm', 'Skip', 'Save set', 'Cancel', 'Done']) assert.doesNotMatch(html, new RegExp(`>${word}<`), word);
+    assert.doesNotMatch(html, /aria-pressed/, 'no load pills');
     for (const n of [1, 2, 3]) {
-      assert.match(html, new RegExp(`aria-label="Log set ${n}" disabled=""`), 'logging waits for a choice or Skip');
+      assert.equal(cell(html, `Set ${n} weight, kilograms each`), '', `set ${n} is empty`);
+      assert.match(html, new RegExp(`aria-label="Log set ${n}" disabled=""`), 'an empty load cannot be logged');
     }
 
     const history = pressHistory();
@@ -133,6 +128,22 @@ test('the logger shows the calibration step with nothing pre-selected, only for 
   });
 });
 
+test('#309: with a profile level, every empty weight cell shows the suggested start and the hint names it', async () => {
+  await withTrain((render) => {
+    const html = render(liveSession([]), [], { experience: 'Beginner' });
+    const text = plain(html);
+    const hint = text.match(/Suggested start (\d+(?:\.\d+)?) kg each\. Do 5 easy reps with it, then adjust set 1\./);
+    assert.ok(hint, text);
+    assert.ok(RACK.includes(Number(hint[1])), 'the suggestion is one of the lifter\'s own dumbbells');
+    for (const n of [1, 2, 3]) {
+      assert.equal(cell(html, `Set ${n} weight, kilograms each`), hint[1], `set ${n} shows the suggestion`);
+      assert.match(html, new RegExp(`aria-label="Log set ${n}">`), `set ${n} logs in one tap`);
+    }
+    assert.doesNotMatch(text, /First time on this one/, 'one line, not two');
+  });
+});
+
+
 test('confirm pre-fills set 1 only; the ramp set is never recorded and progression is unchanged', async () => {
   const start = liveSession([]);
   // Confirm is the same single patch a weight pill sends: set 1's pending weight.
@@ -144,10 +155,8 @@ test('confirm pre-fills set 1 only; the ramp set is never recorded and progressi
 
   await withTrain((render) => {
     const html = render(confirmed, []);
-    assert.doesNotMatch(plain(html), RULE);
-    assert.match(html, /aria-pressed="true"[^>]*>15</);
-    assert.match(html, /aria-label="Edit weight for set 1"[^>]*>15</);
-    assert.match(html, /aria-label="Edit reps for set 1"[^>]*>8</);
+    assert.equal(cell(html, 'Set 1 weight, kilograms each'), '15');
+    assert.equal(cell(html, 'Set 1 reps'), '8');
     assert.match(html, /aria-label="Log set 1">/, 'one tap logs it');
   });
 
@@ -168,41 +177,9 @@ test('confirm pre-fills set 1 only; the ramp set is never recorded and progressi
   assert.equal(prescribeExercise(definition, profile, []).basis, 'first-time');
 });
 
-test('calibration step: Skip, Confirm and a load pill call only their own handlers', async () => {
-  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
-  try {
-    const { CalibrationStep, WeightRow } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
-    const calls: unknown[][] = [];
-    const buttonsOf = (tree: unknown) => {
-      const buttons: any[] = [];
-      const visit = (node: any) => {
-        if (!node || typeof node !== 'object') return;
-        if (node.type === 'button') buttons.push(node);
-        for (const child of [node.props?.children].flat(Infinity)) visit(child);
-      };
-      visit(tree);
-      return (text: string) => buttons.find((button) => [button.props.children].flat().join('') === text);
-    };
-    const step = buttonsOf(CalibrationStep({ selected: 15,
-      onConfirm: (...args: unknown[]) => calls.push(['confirm', ...args]),
-      onSkip: (...args: unknown[]) => calls.push(['skip', ...args]) }));
-    step('Skip').props.onClick();
-    assert.deepEqual(calls, [['skip']], 'skip writes nothing');
-    step('Confirm').props.onClick();
-    assert.deepEqual(calls.at(-1), ['confirm', 15]);
-    assert.equal(buttonsOf(CalibrationStep({ onSkip: noop }))('Confirm'), undefined, 'pills need no Confirm');
 
-    // One tap on a load is the whole confirm: it hands that load to confirmWeight, nothing else.
-    const row = buttonsOf(WeightRow({ label: 'Your dumbbells', unitText: 'kg each', loads: RACK, selected: null,
-      show: String, onPick: (...args: unknown[]) => calls.push(['pick', ...args]) }));
-    row('15').props.onClick();
-    assert.deepEqual(calls.at(-1), ['pick', 15]);
-    assert.equal(calls.length, 3);
-  } finally { await server.close(); }
-});
-
-// #103: Skip only hides the help; a loaded set still needs a load before it can be logged.
-test('after Skip a loaded set cannot be logged at 0; bodyweight and timed sets still log', async () => {
+// #103: a loaded set still needs a load before it can be logged.
+test('a loaded set with no load cannot be logged at 0; bodyweight and timed sets still log', async () => {
   const session = liveSession([]);
   assert.equal(session.exercises[0].performed[0].weight, 0, 'first-time press has no load yet');
   assert.equal(logSet(session, 0, 0, at(1)), session, 'logSet stores nothing at weight 0');
@@ -219,12 +196,10 @@ test('after Skip a loaded set cannot be logged at 0; bodyweight and timed sets s
   assert.equal(logSet(bench, 0, 0, at(1)), bench, 'a barbell set needs a load too');
 
   await withTrain((render) => {
-    const skipped = [`${session.id}:0:${session.exercises[0].exerciseId}`];
-    const html = render(session, [], { skippedCalibrations: skipped });
-    assert.doesNotMatch(plain(html), RULE, 'the help is gone');
+    const html = render(session, []);
     for (const n of [1, 2, 3]) assert.match(html, new RegExp(`aria-label="Log set ${n}"[^>]*disabled=""`), `set ${n} waits for a load`);
     assert.match(plain(html), /Enter a weight to log this set/);
-    const ready = render(updatePerformedSet(session, 0, 0, { weight: 15 }, at(1)), [], { skippedCalibrations: skipped });
+    const ready = render(updatePerformedSet(session, 0, 0, { weight: 15 }, at(1)), []);
     assert.match(ready, /aria-label="Log set 1">/, 'a load enables the ✓');
     assert.doesNotMatch(plain(ready), /Enter a weight to log this set/);
     const atPlank = { ...session, exercises: session.exercises.map((entry, i) => i < plankIndex ? { ...entry, skipped: true } : entry) };
@@ -258,13 +233,4 @@ test('editing or correcting a logged loaded set cannot store weight 0', async ()
   assert.equal(applyCorrection(state, id, plankIndex, 0, { done: true }, at(40)).history[0].exercises[plankIndex].performed[0].done,
     true, 'a hold needs no load');
 
-  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
-  try {
-    const { SaveSetRow } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
-    const html = (needsWeight: boolean) => renderToStaticMarkup(createElement(SaveSetRow, { needsWeight, onCancel: noop, onSave: noop }));
-    assert.match(html(true), /disabled=""[^>]*>Save set</);
-    assert.match(plain(html(true)), /Enter a weight to log this set/);
-    assert.match(html(false), /class="pill-primary">Save set</);
-    assert.doesNotMatch(plain(html(false)), /Enter a weight/);
-  } finally { await server.close(); }
 });

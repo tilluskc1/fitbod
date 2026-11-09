@@ -10,8 +10,8 @@ const RACK = [10, 15, 18];
 const noop = () => {};
 const at = (minute: number) => `2026-11-04T10:${String(minute).padStart(2, '0')}:00.000Z`;
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-/** The visible text of the control with this accessible name. */
-const cell = (html: string, label: string) => html.match(new RegExp(`aria-label="${label}"[^>]*>([^<]*)<`))?.[1];
+/** A set cell's value (#309): the cells are inputs, read by their accessible name. */
+const cell = (html: string, label: string) => html.match(new RegExp(`aria-label="${label}"[^>]*value="([^"]*)"`))?.[1];
 
 const sets = (weight: number, reps: number, count = 3) => ({
   planned: Array.from({ length: count }, () => ({ weight, reps })),
@@ -62,8 +62,8 @@ test('the logger is one row per set, pre-filled from the prescription, one ✓ e
     assert.match(html, /aria-label="Dumbbell Floor Press demo and instructions"/);
     assert.match(text, /Set Previous kg each Reps/);
     for (const n of [1, 2, 3]) {
-      assert.equal(cell(html, `Edit weight for set ${n}`), '15', `set ${n} weight`);
-      assert.equal(cell(html, `Edit reps for set ${n}`), '8', `set ${n} reps`);
+      assert.equal(cell(html, `Set ${n} weight, kilograms each`), '15', `set ${n} weight`);
+      assert.equal(cell(html, `Set ${n} reps`), '8', `set ${n} reps`);
       assert.match(html, new RegExp(`aria-label="Log set ${n}"`), `one ✓ for set ${n}`);
     }
     assert.match(text, /Up next · Goblet Squat 2 × 10/);
@@ -89,11 +89,11 @@ test('holds show seconds and bodyweight shows BW', async () => {
   await withTrain((render) => {
     const plank = render(day);
     assert.match(plain(plank), /Target 2 × 45s/);
-    assert.equal(cell(plank, 'Edit seconds for set 1'), '45s');
+    assert.equal(cell(plank, 'Set 1 seconds'), '45');
     assert.match(plain(plank), /Set Previous Load Secs/);
     assert.match(plank, /<span class="lg-cell lg-cell--bw">BW</);
     const pushUp = render(skipExercise(day, 0));
-    assert.equal(cell(pushUp, 'Edit reps for set 1'), '10');
+    assert.equal(cell(pushUp, 'Set 1 reps'), '10');
     assert.match(pushUp, />BW</);
   });
 });
@@ -107,14 +107,15 @@ test('#80: switching exercise through a skip or a swap never shows the previous 
   for (const set of day.exercises[0].performed) set.weight = 42.3;
   await withTrain((render) => {
     const row = render(day, { loadOptions: [], calibrationLoads: [], profileLoads: {} });
-    assert.equal(cell(row, 'Edit weight for set 1'), '42.3');
+    assert.equal(cell(row, 'Set 1 weight, kilograms'), '42.3');
     assert.match(row, /id="barbell-row:0:0:weight"/, 'rows are keyed by exercise, segment and set');
 
     // Skip: the press is calibrating; its typed entry is its own, empty, and keyed to it.
     const skipped = skipExercise(day, 0);
     const press = render(skipped, { loadOptions: [], calibrationLoads: [], profileLoads: {} });
-    assert.match(press, /id="overhead-press:1:first"/);
-    assert.match(press, /aria-label="Enter barbell load \(kg total\)"[^>]*value=""/);
+    // #309: the typed first-weight field is gone; the press's own set cells are empty and keyed to it.
+    assert.match(press, /id="overhead-press:1:0:weight"/);
+    assert.equal(cell(press, 'Set 1 weight, kilograms'), '');
     assert.doesNotMatch(press, /barbell-row:0|42\.3/, 'nothing of the skipped exercise is rendered');
 
     // Swap the press for a bench press with its own 30 kg: new key, its own value.
@@ -122,7 +123,7 @@ test('#80: switching exercise through a skip or a swap never shows the previous 
       { exerciseId: 'barbell-bench-press', name: 'Barbell Bench Press', weight: 30, reps: 8 });
     const bench = render(swapped, { loadOptions: [], calibrationLoads: [], profileLoads: {} });
     assert.match(bench, /id="barbell-bench-press:1:0:weight"/);
-    assert.equal(cell(bench, 'Edit weight for set 1'), '30');
+    assert.equal(cell(bench, 'Set 1 weight, kilograms'), '30');
     assert.doesNotMatch(bench, /overhead-press:1|42\.3/);
   });
 });
@@ -134,7 +135,7 @@ test('Mute reads Muted while pressed, and Up next skips set-aside or finished wo
     const { setRestMuted } = await server.ssrLoadModule('/src/lib/restCue.ts');
     const render = (session: WorkoutRecord) => renderToStaticMarkup(createElement(Train, { session, history: [],
       now: Date.parse(at(1)), loadOptions: RACK, unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop,
-      onConfirmWeight: noop, onLogSet: noop, onToggleRestPause: noop, onExtendRest: noop, onOpenActions: noop, onReturn: noop }));
+      onLogSet: noop, onToggleRestPause: noop, onExtendRest: noop, onOpenActions: noop, onReturn: noop }));
     const rested = logSet(pressDay(), 0, 0, at(1));
     assert.match(render(rested), /<button aria-pressed="false" aria-label="Mute rest cue">Mute</);
     setRestMuted(rested.id, true);

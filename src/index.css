@@ -3833,6 +3833,8 @@ button.aw-exercise__name-btn {
 .lg-body {
   gap: 12px;
   padding-top: 12px;
+  /* (#309) Room to scroll the edited row above an on-screen keyboard that covers the page. */
+  padding-bottom: calc(20px + var(--kb, 0px));
 }
 
 .lg-ex {
@@ -3912,31 +3914,6 @@ button.aw-exercise__name-btn {
   color: var(--on-surface-variant);
 }
 
-.lg-first {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.lg-quick {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  /* The right-edge fade says more loads scroll in; the end padding lets the last one clear it. */
-  padding-right: 28px;
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-}
-
-.lg-quick__label {
-  flex: none;
-  font-size: 12px;
-  color: var(--on-surface-variant);
-}
-
-.lg-quick button,
 .lg-rest button {
   flex: none;
   min-width: 44px;
@@ -3950,7 +3927,6 @@ button.aw-exercise__name-btn {
   font-variant-numeric: tabular-nums;
 }
 
-.lg-quick button[aria-pressed='true'],
 .lg-rest button[aria-pressed='true'] {
   background: var(--primary);
   border-color: transparent;
@@ -3958,28 +3934,7 @@ button.aw-exercise__name-btn {
   font-weight: 700;
 }
 
-/* The load the first-weight step suggests (#116): marked, not chosen. */
-.lg-quick button.is-suggested[aria-pressed='false'] {
-  border: 1px dashed var(--primary);
-  color: var(--accent-text);
-}
-
-.lg-first__typed {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--on-surface-variant);
-}
-
-.lg-first__typed .error-text {
-  flex-basis: 100%;
-  margin-top: 0;
-}
-
-/* The set editor's typed load reads like the first-load field (#129). */
-.lg-first__typed input,
+/* A typed load in a sheet is a pill, like the logger's cells (#129). */
 .aw-field input {
   flex: 1;
   min-width: 0;
@@ -4000,27 +3955,6 @@ button.aw-exercise__name-btn {
 
 .aw-field .weight-pills + input {
   margin-top: 8px;
-}
-
-.lg-first__step {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.lg-first__step .data-note {
-  flex: 1;
-  margin: 0;
-}
-
-.lg-first__actions {
-  display: flex;
-  gap: 8px;
-}
-
-.lg-first__actions .pill-primary {
-  width: auto;
-  min-height: 44px;
 }
 
 .lg-table {
@@ -4131,11 +4065,6 @@ button.aw-exercise__name-btn {
   opacity: 0.4;
 }
 
-.lg-save-reason {
-  grid-column: 1 / -1;
-  text-align: right;
-}
-
 .lg-table .lg-note td {
   height: auto;
   padding: 0 14px 4px;
@@ -4159,18 +4088,40 @@ button.aw-exercise__name-btn {
   background: none;
 }
 
+/* (#309) The weight and reps cells are the inputs: tap, type, tap the check. */
+.lg-input {
+  width: 100%;
+  max-width: 76px;
+  box-sizing: border-box;
+  text-align: center;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  -webkit-appearance: none;
+  appearance: none;
+  /* Focus scrolling keeps the row clear of the header and of the dock or keyboard below it. */
+  scroll-margin-top: calc(72px + var(--vv-top, 0px));
+  scroll-margin-bottom: calc(132px + var(--kb, 0px));
+}
+
+.lg-input::placeholder {
+  color: var(--on-surface-variant);
+  font-weight: 500;
+  opacity: 1;
+}
+
+.lg-input:focus,
+.lg-row--done .lg-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--surface-container-lowest, #ffffff);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
 .lg-row--done .lg-check {
   border-color: transparent;
   background: var(--primary);
   color: var(--on-primary);
-}
-
-.lg-edit td,
-.lg-edit td:first-child {
-  height: auto;
-  padding: 0;
-  background: none;
-  text-align: left;
 }
 
 .set-all {
@@ -4179,10 +4130,6 @@ button.aw-exercise__name-btn {
 }
 
 .set-all .sheet-copy {
-  margin: 0;
-}
-
-.lg-editor {
   margin: 0;
 }
 
@@ -4274,11 +4221,6 @@ button.aw-exercise__name-btn {
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .lg-quick {
-    -webkit-mask-image: none;
-    mask-image: none;
-  }
-
   .lg-rest {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;

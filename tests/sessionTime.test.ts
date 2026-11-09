@@ -63,7 +63,7 @@ test('the rest timer starts with the seconds it is given', () => {
 test('the app logs sets with the role rest and the logger shows it', () => {
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   assert.match(app, /const rest = sessionRests\(/);
-  assert.match(app, /logSet\(session, exerciseIndex, setIndex, stamp, rest\)/);
+  assert.match(app, /logSet\(filled, exerciseIndex, setIndex, stamp, rest\)/);
   const train = readFileSync(new URL('../src/screens/TrainScreen.tsx', import.meta.url), 'utf8');
   assert.match(train, /Rest \{restLabel\(rests\[index\]\)\}/);
   assert.equal(restLabel(150), '2:30');

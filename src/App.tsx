@@ -58,7 +58,7 @@ import
   applyFinish,
   createSession,
   extendRest,
-  confirmWeight,
+  updatePerformedSet,
   logSet,
   sessionProgress,
   skipExercise,
@@ -243,6 +243,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     followers: Followers;
     /** The exercise's sets as this burst left them; see `burstLive`. */
     mark: string;
+    /** A logged set this burst edited (#309), as it was before the burst: Undo puts it back. */
+    edited?: CarryResult['previous'][number];
   } | null>(null);
   // A burst whose exercise changed by any other path is over: no Undo, no fixed followers.
   const liveCarry = carryUndo !== null && burstLive(state.current, carryUndo.exerciseIndex, carryUndo.mark) ? carryUndo : null;
@@ -268,7 +270,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   // automated renderers and deadlocked a tab.
   const [replacePrompt, setReplacePrompt] = useState<Constraints | null>(null);
   /** First-weight steps skipped in this tab; in memory only, never stored. */
-  const [calibrationSkips, setCalibrationSkips] = useState<string[]>([]);
   /** (#134) Keep tapped on the fresher-day offer: this slot, today. In memory only, never stored. */
   const [keptFresher, setKeptFresher] = useState<string | null>(null);
   /** (#193) The Today composer is open or previewing; it clears this when it closes or unmounts. */
@@ -893,6 +894,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     result: CarryResult,
     message: (carried: number[]) => string | null,
     jump?: { startKg: number; kg: number },
+    edited?: CarryResult['previous'][number],
   ) => {
     const exercise = session.exercises[exerciseIndex];
     if (!exercise) return;
@@ -905,9 +907,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       ? [...open.previous, ...result.previous.filter((p) => !open.previous.some((q) => q.index === p.index))]
       : result.previous;
     const followers = result.followers ?? { weight: [], reps: [] };
-    const entry = { key, sessionId: session.id, exerciseIndex, exerciseId: exercise.exerciseId, previous, followers, mark: burstMark(result.session, exerciseIndex) };
+    const self = open ? open.edited : edited;
+    const entry = { key, sessionId: session.id, exerciseIndex, exerciseId: exercise.exerciseId, previous, followers, mark: burstMark(result.session, exerciseIndex), edited: self };
     let text = message(previous.map((p) => p.index));
-    if (result.carried.length === 0 || text === null) {
+    if ((result.carried.length === 0 && !self) || text === null) {
       // Nothing to say, but the burst still opens (its followers fixed now, even if none), so a later
       // keystroke can never re-read them from a half-typed value. A cleared field drops a stale toast.
       setCarryUndo({ ...entry, message: open !== null && text !== null ? open.message : '' });
@@ -929,10 +932,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const updateSet = (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => {
     const stamp = stampNow();
     const session = state.current;
-    // A Save set correction is one edit; typing and stepper taps on one field of one set are a burst
-    // whose following sets were fixed at its first keystroke (#306).
-    const field = patch.done !== undefined ? 'save' : patch.weight !== undefined ? 'weight' : 'reps';
-    const fixed = session && field !== 'save' ? openBurst(burstKey(session, exerciseIndex, `${setIndex}:${field}`))?.followers : undefined;
+    // Typing into one field of one set is a burst whose following sets were fixed at its first keystroke (#306).
+    const field = patch.weight !== undefined ? 'weight' : 'reps';
+    const fixed = session ? openBurst(burstKey(session, exerciseIndex, `${setIndex}:${field}`))?.followers : undefined;
     setState((currentState) =>
       currentState.current
         ? { ...currentState, current: editSet(currentState.current, exerciseIndex, setIndex, patch, stamp, fixed).session }
@@ -945,11 +947,15 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const after = result.session.exercises[exerciseIndex].performed[setIndex];
     const moved = Math.abs(after.weight - before.weight) > 1e-9 ? 'weight' : 'reps';
     const exerciseId = session.exercises[exerciseIndex].exerciseId;
-    announceCarry(session, exerciseIndex, field === 'save' ? `${setIndex}:save:${stamp}` : `${setIndex}:${field}`, result, (carried) =>
+    // An edit to a logged set says so, with Undo, even when nothing follows it (#309).
+    const edited = before.done ? { index: setIndex, weight: before.weight, reps: before.reps } : undefined;
+    announceCarry(session, exerciseIndex, `${setIndex}:${field}`, result, (carried) => {
       // A cleared field keeps its burst but says nothing until a value is typed.
-      (moved === 'weight' ? after.weight : after.reps) <= 0 ? null
-        : carryMessage({ field: moved, kg: after.weight, reps: after.reps, carried, unit, mode: loadModeOf(exerciseId), seconds: setUnit(exerciseId) === 'seconds' }),
-      moved === 'weight' ? { startKg: before.weight, kg: after.weight } : undefined);
+      const carriedText = (moved === 'weight' ? after.weight : after.reps) <= 0 ? null
+        : carryMessage({ field: moved, kg: after.weight, reps: after.reps, carried, unit, mode: loadModeOf(exerciseId), seconds: setUnit(exerciseId) === 'seconds' });
+      if (!before.done) return carriedText;
+      return `Set ${setIndex + 1} updated${carriedText && carried.length > 0 ? `. ${carriedText}` : ''}`;
+    }, moved === 'weight' ? { startKg: before.weight, kg: after.weight } : undefined, edited);
   };
 
   /** "Set all remaining sets to…" from the exercise menu (#306). */
@@ -975,23 +981,15 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const stamp = new Date().toISOString();
     setState((currentState) =>
       currentState.current?.id === undo.sessionId
-        ? { ...currentState, current: undoCarry(currentState.current, undo.exerciseIndex, undo.exerciseId, undo.previous, stamp) }
+        ? { ...currentState, current: undoCarry(currentState.current, undo.exerciseIndex, undo.exerciseId, undo.previous, stamp, undo.edited) }
         : currentState,
     );
     setCarryUndo(null);
     setNotice(null);
   };
 
-  const confirmFirstWeight = (exerciseIndex: number, weight: number) => {
-    const stamp = new Date().toISOString();
-    setState((currentState) =>
-      currentState.current
-        ? { ...currentState, current: confirmWeight(currentState.current, exerciseIndex, weight, stamp) }
-        : currentState,
-    );
-  };
-
-  const logOneSet = (exerciseIndex: number, setIndex: number, exerciseId: string) => {
+  /** `weight`: the suggested start an empty cell showed (#309); it is written to that set as it is logged. */
+  const logOneSet = (exerciseIndex: number, setIndex: number, exerciseId: string, weight?: number) => {
     const stamp = new Date().toISOString();
     // A logged set ends any carry burst: Undo must not reverse the reps #182 carries on log (#306).
     setCarryUndo(null);
@@ -1002,7 +1000,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       if (!session || exercise?.exerciseId !== exerciseId || exercise.skipped) return currentState;
       // Rest by the exercise's role in the day, the same seconds the minutes were fitted with (#132).
       const rest = sessionRests(session.exercises.map((item) => item.exerciseId), currentState.profile?.goal, session.durationMin)[exerciseIndex];
-      const logged = logSet(session, exerciseIndex, setIndex, stamp, rest);
+      // Only an empty load takes the suggestion; logSet then carries it to later empty sets (#182).
+      const filled = weight !== undefined && weight > 0 && exercise.performed[setIndex]?.weight === 0
+        ? updatePerformedSet(session, exerciseIndex, setIndex, { weight }, stamp) : session;
+      const logged = logSet(filled, exerciseIndex, setIndex, stamp, rest);
       return logged === session ? currentState : { ...currentState, current: logged };
     });
   };
@@ -1288,8 +1289,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         profileLoads={profile?.loads}
         calibrationLoads={confirmedLoads(constraints.equipment, constraints.loads)}
         experience={state.profile?.experience}
-        skippedCalibrations={calibrationSkips}
-        onSkipCalibration={(key) => setCalibrationSkips((keys) => [...keys, key])}
         targetNotes={targetNotes}
         rests={current ? sessionRests(current.exercises.map((item) => item.exerciseId), profile?.goal, current.durationMin) : []}
         goHeavier={goHeavier}
@@ -1300,7 +1299,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         }}
         onFinish={requestFinish}
         onUpdateSet={updateSet}
-        onConfirmWeight={confirmFirstWeight}
         onLogSet={logOneSet}
         onToggleRestPause={() => {
           const stamp = new Date().toISOString();

@@ -21,7 +21,8 @@ test('calibrated barbell actuals retain fractional kg and lb in the CTA and comp
       const props = { history: [], now: Date.parse('2026-11-03T10:01:00.000Z'), loadOptions: [], unit,
         onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {},
         onExtendRest() {}, onReturn() {} };
-      const weightOf = (html: string) => html.match(/aria-label="Edit weight for set 1"[^>]*>([^<]*)</)?.[1];
+      const label = `Set 1 weight, ${unit === 'kg' ? 'kilograms' : 'pounds'}`;
+      const weightOf = (html: string) => html.match(new RegExp(`aria-label="${label}"[^>]*value="([^"]*)"`))?.[1];
       const before = renderToStaticMarkup(createElement(TrainScreen, { ...props, session }));
       assert.equal(weightOf(before), String(entered), 'the row the ✓ logs');
       assert.match(before, new RegExp(`>${unit} total<`));
@@ -33,7 +34,7 @@ test('calibrated barbell actuals retain fractional kg and lb in the CTA and comp
   } finally { await server.close(); }
 });
 
-test('a dumbbell with no confirmed loads takes typed entry; a confirmed rack keeps its pills', async () => {
+test('a dumbbell set takes typed entry in its cell, with or without a confirmed rack; no pills (#309)', async () => {
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: TrainScreen } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
@@ -44,12 +45,14 @@ test('a dumbbell with no confirmed loads takes typed entry; a confirmed rack kee
       const props = { session, history: [], now: Date.parse('2026-11-03T10:01:00.000Z'), unit,
         onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {},
         onExtendRest() {}, onReturn() {} };
+      const word = unit === 'kg' ? 'kilograms' : 'pounds';
       const blank = renderToStaticMarkup(createElement(TrainScreen, { ...props, loadOptions: [] }));
-      assert.match(blank, new RegExp(`aria-label="Enter dumbbell load \\(${unit} `));
-      assert.doesNotMatch(blank, /lg-quick/);
+      assert.match(blank, new RegExp(`aria-label="Set 1 weight, ${word} each"[^>]*value=""`));
+      // #309: the confirmed rack's pill row (lg-quick) is gone; a rack changes nothing in the cell.
+      assert.doesNotMatch(blank, /lg-quick|aria-pressed|Enter dumbbell load/);
       const rack = renderToStaticMarkup(createElement(TrainScreen, { ...props, loadOptions: [10, 15, 18] }));
-      assert.match(rack, /class="lg-quick" role="group"/);
-      assert.doesNotMatch(rack, /Enter dumbbell load/);
+      assert.match(rack, new RegExp(`aria-label="Set 1 weight, ${word} each"[^>]*value=""`));
+      assert.doesNotMatch(rack, /lg-quick|aria-pressed|Enter dumbbell load/);
     }
   } finally { await server.close(); }
 });

@@ -164,7 +164,9 @@ test('the logger names the equipment, not bodyweight, and shows the prescribed r
       onReturn: noop })));
     const press = render(session);
     assert.doesNotMatch(press, /\bBW\b|Load Reps/, 'a dumbbell press is not bodyweight');
-    assert.match(press, /Dumbbells 10 15 18 Set Previous kg each Reps/);
+    // #309: the "Dumbbells 10 15 18" pill row is gone; the table header still names the equipment's unit.
+    assert.doesNotMatch(press, /Dumbbells 10 15 18/);
+    assert.match(press, /Set Previous kg each Reps/);
     for (let index = 0; index < 3; index += 1) session = logSet(session, 0, index, `2026-11-02T10:0${index + 1}:00.000Z`);
     const squat = render(session);
     assert.match(squat, /Goblet squat/i);

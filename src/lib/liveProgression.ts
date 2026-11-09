@@ -161,10 +161,17 @@ export function liveExercises(
  * never reached it does not calibrate it) whose first set has no load yet and nothing logged. Holds and bodyweight never ask.
  */
 export function needsCalibration(exercise: WorkoutExercise, history: WorkoutRecord[]): boolean {
-  const first = exercise.performed[0];
+  return firstTimeLoaded(exercise, history) && exercise.performed[0]?.weight === 0;
+}
+
+/**
+ * The same first-time loaded lift, whatever set 1 holds now (#309): the logger keeps its
+ * "Suggested start" hint while the lifter types set 1, so the table never jumps mid-edit.
+ */
+export function firstTimeLoaded(exercise: WorkoutExercise, history: WorkoutRecord[]): boolean {
   return loadModeOf(exercise.exerciseId) !== 'none' && holdSeconds(exercise.exerciseId) === null
     && !lastExercisePerformance(history, exercise.exerciseId, exercise.setup)?.done.length
-    && first !== undefined && first.weight === 0 && !exercise.performed.some((set) => set.done);
+    && exercise.performed.length > 0 && !exercise.performed.some((set) => set.done);
 }
 
 function livePrescription(exerciseId: string, profile: Profile, history: WorkoutRecord[], lead: boolean, setup: SetupChoice = 'home') {
