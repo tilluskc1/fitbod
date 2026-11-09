@@ -7,6 +7,7 @@ import { exerciseById } from '../src/data/exercises.ts';
 import { createSession, logSet, swapPendingExercise, updatePerformedSet, sessionProgress } from '../src/lib/session.ts';
 import { createProposal, decideProposalApproval } from '../src/lib/proposal.ts';
 import { EMPTY_STATE, STORAGE_KEY, saveState, loadState } from '../src/lib/storage.ts';
+import { splashAfterAdopt } from '../src/lib/firstScreen.ts';
 
 // Exercise the actual storage event boundary with the real persisted revision/Undo flow.
 // App currently owns this event callback; extracting its body keeps this regression on its real path.
@@ -40,16 +41,21 @@ test('adopting another tab closes prescription sheets even when duplicate IDs su
         let sheet = { kind, exerciseId: 'dumbbell-floor-press', exerciseIndex };
         let adopted = state;
         const revisionRef = { current: 1 }, adoptingRef = { current: false };
+        let splash = true;
         const onStorage = new Function('STORAGE_KEY', 'recovery', 'loadState', 'revisionRef', 'saveUi',
-          'setConflict', 'adoptingRef', 'setState', 'setSaveUi', 'setSheet', 'proposalRevisionRef', 'return (event)=>{' + body + '}')(
+          'setConflict', 'adoptingRef', 'setState', 'setSaveUi', 'setSheet', 'proposalRevisionRef',
+          'setShowSplash', 'splashAfterAdopt', 'return (event)=>{' + body + '}')(
           STORAGE_KEY, null, loadState, revisionRef, { kind: 'saved' }, noop, adoptingRef,
           (next: typeof state) => { adopted = next; }, noop,
-          (update: (open: typeof sheet) => typeof sheet) => { sheet = update(sheet); }, { current: 0 });
+          (update: (open: typeof sheet) => typeof sheet) => { sheet = update(sheet); }, { current: 0 },
+          (update: (shown: boolean) => boolean) => { splash = update(splash); }, splashAfterAdopt);
         onStorage({ key: 'unrelated' });
         assert.equal(sheet.kind, kind, 'unrelated storage changes preserve open UI');
+        assert.equal(splash, true, 'unrelated storage changes leave the splash alone');
         onStorage({ key: STORAGE_KEY });
         assert.equal(revisionRef.current, 2);
         assert.equal(adoptingRef.current, true);
+        assert.equal(splash, false, 'adopting a profile lifts the splash (#288)');
         assert.equal(adopted.current?.durationMin, 35);
         assert.equal(adopted.current?.exercises[1].exerciseId, 'goblet-squat');
         assert.equal(adopted.current?.exercises[0].performed[0].weight, 20);
@@ -99,10 +105,12 @@ test('accepted cross-tab pending-work adoption invalidates old previews but igno
       const oldPreview = createProposal({ minutes: 20, equipment: 'home' }, context(), 'before-adoption');
       const noop = () => {};
       const onStorage = new Function('STORAGE_KEY', 'recovery', 'loadState', 'revisionRef', 'saveUi', 'setConflict',
-        'adoptingRef', 'setState', 'setSaveUi', 'setSheet', 'proposalRevisionRef', 'return(event)=>{' + body + '}')(
+        'adoptingRef', 'setState', 'setSaveUi', 'setSheet', 'proposalRevisionRef', 'setShowSplash', 'splashAfterAdopt',
+        'return(event)=>{' + body + '}')(
         STORAGE_KEY, null, loadState, revisionRef, { kind: scenario === 'conflict' ? 'error' : 'saved' }, noop,
         adoptingRef, (next: typeof before) => { state = next; }, noop,
-        (update: (open: typeof sheet) => typeof sheet) => { sheet = update(sheet); }, proposalRevisionRef);
+        (update: (open: typeof sheet) => typeof sheet) => { sheet = update(sheet); }, proposalRevisionRef,
+        noop, splashAfterAdopt);
       onStorage({ key: scenario === 'wrong-key' ? 'unrelated' : STORAGE_KEY });
       const accepted = scenario === 'accepted';
       assert.equal(sessionProgress(state.current).total, accepted ? 11 : 8, scenario); // 20 min: 8 sets by the timer (#203)

@@ -8,3 +8,11 @@ import type { AppState } from '../types.ts';
 export function opensOnSplash(state: AppState): boolean {
   return state.profile === null;
 }
+
+/**
+ * (#288) The splash after this tab adopts another tab's newer data: it lifts once that data has a
+ * profile, and is never raised again by an adoption, so a tab mid-onboarding or on Today stays put.
+ */
+export function splashAfterAdopt(shown: boolean, adopted: AppState): boolean {
+  return shown && opensOnSplash(adopted);
+}
