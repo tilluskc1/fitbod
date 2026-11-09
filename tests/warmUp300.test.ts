@@ -68,6 +68,9 @@ test('pound lifters ramp in whole 5 lb steps, ties going down', () => {
   close(rampSets({ equipment: 'Barbell', working: lb(135), unit: 'lb' }).map((set) => set.weight), [lb(65), lb(100)]);
   close(rampSets({ equipment: 'Barbell', working: lb(225), unit: 'lb' }).map((set) => set.weight), [lb(110), lb(170)]);
   close(rampSets({ equipment: 'Barbell', working: lb(55), unit: 'lb' }).map((set) => set.weight), [lb(45), lb(45)]);
+  // Review 1: exact pound conversion, so 377 and 397 lb round to the nearest step.
+  close(rampSets({ equipment: 'Barbell', working: lb(377), unit: 'lb' }).map((set) => set.weight), [lb(190), lb(285)]);
+  close(rampSets({ equipment: 'Barbell', working: lb(397), unit: 'lb' }).map((set) => set.weight), [lb(200), lb(300)]);
 });
 
 test('dumbbells ramp from the rack: none at the lightest, never above the working load', () => {
@@ -119,6 +122,16 @@ test('a swap of the lead follows the new lead before a working set, never after'
   const before = swapPendingExercise(session, 0, { exerciseId: 'barbell-row', name: 'Barbell Row', weight: 50, reps: 6 } as never);
   assert.equal(before.exercises[0].exerciseId, 'barbell-row');
   assert.equal(rampExerciseIndex(before), 0);
+  // Swapped to a lift that cannot lead: no rows anywhere, never on a lift further down (review 1).
+  for (const exerciseId of ['cable-fly', 'push-up']) {
+    const swapped = swapPendingExercise(session, 0, { exerciseId, name: exerciseId, weight: 0, reps: 12 } as never);
+    assert.equal(swapped.exercises[0].exerciseId, exerciseId);
+    assert.equal(rampExerciseIndex(swapped), -1, exerciseId);
+  }
+  // A day that opens on push-ups: general warm-up only, even with a loaded press behind it.
+  const pushUpsFirst = createSession({ id: 'p', name: 'P', dayIndex: 0, now: '2026-11-09T08:00:00.000Z',
+    exercises: [entry('push-up', 0, 3, 12), entry('dumbbell-bench-press', 20, 3, 10)] });
+  assert.equal(rampExerciseIndex(pushUpsFirst), -1);
   const after = swapPendingExercise(logSet(session, 0, 0, '2026-11-09T08:10:00.000Z'), 0, { exerciseId: 'dumbbell-bench-press', name: 'DB', weight: 20, reps: 8 } as never);
   assert.equal(rampExerciseIndex(after), -1);
 });

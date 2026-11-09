@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { HOTEL_DUMBBELLS, loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
+import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
 import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
@@ -228,11 +228,12 @@ export default function TrainScreen({
   const patchDraft = (patch: Partial<Pick<EditDraft, 'reps' | 'weight'>>) =>
     setEditing((draft) => (draft ? applyDraft(draft, patch) : draft));
   // #300: warm-up checks live in memory for the session; nothing reaches the record.
-  const [warm, setWarm] = useState<WarmUpChecks>(() => warmUpChecks(session.id));
+  // Read by session id every render, so a session replaced under a mounted logger never shows another's checks.
+  const [, setWarmTick] = useState(0);
+  const warm = warmUpChecks(session.id);
   const updateWarm = (patch: Partial<WarmUpChecks>) => {
-    const nextWarm = { ...warmUpChecks(session.id), ...patch };
-    setWarmUpChecks(session.id, nextWarm);
-    setWarm(nextWarm);
+    setWarmUpChecks(session.id, { ...warmUpChecks(session.id), ...patch });
+    setWarmTick((tick) => tick + 1);
   };
   const warmMinutes = generalWarmUpMinutes(session.durationMin);
   const warmLeft = warm.timerStartedAt === null ? null
@@ -559,10 +560,9 @@ export default function TrainScreen({
   });
 
   // #300: two ramp sets before the lead's working sets, from the load set 1 shows. Not sets: never
-  // logged, counted or stored. A dumbbell ramps on today's rack (Travel's own), else plate steps.
-  const rampRack = equipment === 'Dumbbell'
-    ? (exercise.setup === 'hotel' ? [...HOTEL_DUMBBELLS] : calibrationLoads)
-    : rack;
+  // logged, counted or stored. A dumbbell ramps on the rack the logger's own picker offers (Travel's
+  // hotel rack on a today-only day), else plate steps.
+  const rampRack = equipment === 'Dumbbell' ? loadOptions : rack;
   const ramps = mode !== 'none' && index === rampExerciseIndex(session)
     ? rampSets({ equipment, working: exercise.performed[0]?.weight ?? 0, unit, rack: rampRack })
     : [];

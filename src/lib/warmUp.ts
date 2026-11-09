@@ -1,7 +1,7 @@
 import type { Equipment, Unit, WorkoutRecord } from '../types.ts';
 import { leadCompoundId } from './progression.ts';
 import { warmUpSeconds } from './sessionTime.ts';
-import { toKg } from './units.ts';
+import { toDisplay, toKg } from './units.ts';
 
 /**
  * The warm-up shown at the top of a session (#300). Everything here is derived from the open
@@ -57,7 +57,7 @@ export function rampSets(args: { equipment: Equipment; working: number; unit: Un
   const step = STEPS[unit][equipment];
   if (!step) return [];
   // In the display unit, so a pound lifter's ramp reads in whole plates.
-  const shown = unit === 'lb' ? working / toKg(1, 'lb') : working;
+  const shown = toDisplay(working, unit);
   const floor = equipment === 'Barbell' ? BAR[unit] : step;
   if (shown <= floor + EPSILON) return [];
   return RAMP_STEPS.map(({ share, reps }) => {
@@ -77,16 +77,15 @@ function nearest(loads: number[], kg: number): number {
 }
 
 /**
- * The session index whose exercise carries the ramp rows: the day's lead compound in session
- * order (its first segment), while none of its sets is logged. A swap before the first working
- * set moves the rows to the new lead; after it, the logged segment keeps the slot and nothing ramps.
+ * The session index whose exercise carries the ramp rows: the lead slot, which is the session's
+ * first exercise, and only while it is a loaded compound with nothing logged. A swap before the
+ * first working set hands the rows to the new lead if it can lead (a fly or a push-up gets none);
+ * after it, the logged segment keeps the slot and nothing ramps. Never a lift further down.
  */
 export function rampExerciseIndex(session: Pick<WorkoutRecord, 'exercises'>): number {
-  const id = leadCompoundId(session.exercises.map((exercise) => exercise.exerciseId));
-  if (id === undefined) return -1;
-  const index = session.exercises.findIndex((exercise) => exercise.exerciseId === id);
-  const lead = session.exercises[index];
-  return lead.skipped || lead.performed.some((set) => set.done) ? -1 : index;
+  const lead = session.exercises[0];
+  if (!lead || leadCompoundId([lead.exerciseId]) === undefined) return -1;
+  return lead.skipped || lead.performed.some((set) => set.done) ? -1 : 0;
 }
 
 /** The general warm-up shows until the session's first set is logged (a started session never shows it). */
