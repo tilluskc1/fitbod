@@ -879,9 +879,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   /** Show what a carry changed, with Undo; typing 1, 13, 135 into one set is one burst with one Undo. */
   const burstKey = (session: WorkoutRecord, exerciseIndex: number, burst: string) =>
     `${session.id}:${exerciseIndex}:${session.exercises[exerciseIndex]?.exerciseId}:${burst}`;
-  /** The open burst for this key: its toast is still up, or it is silent (a cleared field). */
-  const openBurst = (key: string) =>
-    carryUndo !== null && carryUndo.key === key && (carryUndo.message === '' || notice === carryUndo.message) ? carryUndo : null;
+  /** The open burst for this key. Every edit opens its own burst and ends any other (#306 review 2). */
+  const openBurst = (key: string) => (carryUndo !== null && carryUndo.key === key ? carryUndo : null);
 
   const announceCarry = (
     session: WorkoutRecord,
@@ -905,12 +904,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const entry = { key, sessionId: session.id, exerciseIndex, exerciseId: exercise.exerciseId, previous, followers };
     let text = message(previous.map((p) => p.index));
     if (result.carried.length === 0 || text === null) {
-      // Nothing to say. A burst with followers stays open silently (a cleared field keeps its sets);
-      // any other edit ends the burst, so Undo can never reach past a value typed by hand since.
-      const silent = text === null && followers.weight.length + followers.reps.length > 0;
-      if (open) setCarryUndo({ ...entry, message: text === null ? '' : open.message });
-      else if (silent) setCarryUndo({ ...entry, message: '' });
-      else if (carryUndo !== null) setCarryUndo(null);
+      // Nothing to say, but the burst still opens (its followers fixed now, even if none), so a later
+      // keystroke can never re-read them from a half-typed value. A cleared field drops a stale toast.
+      setCarryUndo({ ...entry, message: open !== null && text !== null ? open.message : '' });
+      if (text === null && open !== null && open.message !== '' && notice === open.message) setNotice(null);
       return;
     }
     const mode = loadModeOf(exercise.exerciseId);

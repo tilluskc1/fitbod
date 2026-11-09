@@ -72,6 +72,14 @@ test('review probe: stepping reps 8 to 5 on set 1 leaves a hand-set 6 on set 4',
   assert.deepEqual(reps(s), [5, 5, 5, 6]);
 });
 
+test('review 2 probe: a first keystroke with no followers keeps none for the whole burst', () => {
+  const w = [45, 60, 60, 10].map((v) => toKg(v, 'lb'));
+  const start = createSession({ id: 'p', name: 'P', dayIndex: 0, now: NOW, exercises: [{ exerciseId: 'barbell-bench-press', name: 'B',
+    planned: w.map((weight) => ({ weight, reps: 8 })), performed: w.map((weight) => ({ weight, reps: 8, done: false, completedAt: null })) }] });
+  const s = burst(start, 0, [{ weight: toKg(1, 'lb') }, { weight: toKg(10, 'lb') }, { weight: toKg(100, 'lb') }]);
+  assert.deepEqual(weights(s), [toKg(100, 'lb'), w[1], w[2], w[3]]);
+});
+
 test('a hand-edited later set keeps its value', () => {
   let s = editSet(bench(), 0, 3, { weight: LB115 }, NOW).session;
   const result = editSet(s, 0, 0, { weight: LB135 }, NOW);

@@ -142,6 +142,23 @@ try {
     r = await rows(page);
     check(r[0].weight === heavier, `${where}: logged set 1 keeps ${heavier} (${r[0].weight})`);
     check(r.slice(1).every((row) => row.weight === heavy && row.reps === '6'), `${where}: every unlogged set reads ${heavy} × 6 (${JSON.stringify(r)})`);
+    // (review 2) Sets 3 and 4 typed by hand, then set 2 edited with backspaces, 135 → 13 → 1 → 10 → 100,
+    // passing through set 4's value: the first keystroke follows nobody, so nobody follows for the burst.
+    if (unit === 'lb') {
+      await typeWeight(page, 3, '95');
+      await typeWeight(page, 4, '10');
+      await page.getByRole('button', { name: 'Edit weight for set 2' }).click();
+      const input = page.getByLabel(/^Set 2 load/);
+      await input.focus();
+      await input.press('End');
+      await input.press('Backspace');
+      await input.press('Backspace');
+      await input.pressSequentially('00');
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      r = await rows(page);
+      check(r[1].weight === '100' && r[2].weight === '95' && r[3].weight === '10',
+        `${where}: backspacing set 2 to 100 leaves hand-typed 95 and 10 (${JSON.stringify(r)})`);
+    }
     check(errors.length === 0, `${where}: no page errors (${errors.join('; ')})`);
     console.log(`${where}: ${name}, target ${target?.[1]} × ${target?.[2]}, start ${start}; after set-all ${JSON.stringify(r)}`);
     await page.close();

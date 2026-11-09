@@ -134,8 +134,10 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    keystroke and stepper tap, so typing 1, 10, 100 (or stepping reps 8, 7, 6, 5) passed through a
    hand-typed value and took that set along; review 1 failed it. Rule: when an input writes per
    keystroke, decide anything that depends on "the value before" once, at the start of the burst, and
-   carry that decision through the burst. Check: `tests/carryForward306.test.ts` (review probes) and
-   `scripts/e2e/carry-forward.mjs`, which types one key at a time.
+   carry that decision through the burst, even when the first keystroke decides "nobody" (review 2
+   found that case still leaked). Check: `tests/carryForward306.test.ts` (review probes) and
+   `scripts/e2e/carry-forward.mjs`, which types one key at a time and backspaces (a cleared field
+   alone hid the bug); confirm a new e2e step fails on the old code before trusting it.
 
 ## Recurring edge cases (put the relevant ones in every brief)
 
