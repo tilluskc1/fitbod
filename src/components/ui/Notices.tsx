@@ -1,6 +1,18 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { noticeRole, type Notice } from '../../lib/notices';
 
+/** Each raised message gets its own id, so the same words raised again restart the toast's fade. */
+const ids = new WeakMap<Notice, number>();
+let nextId = 0;
+function idOf(notice: Notice): number {
+  let id = ids.get(notice);
+  if (id === undefined) {
+    id = (nextId += 1);
+    ids.set(notice, id);
+  }
+  return id;
+}
+
 /**
  * (#295) The three kinds of message. Done is a dark toast that passes on its own; Heads-up and
  * Problem are cards that wait for the user. Colours come from DESIGN.md tokens only.
@@ -52,7 +64,8 @@ function toastBottom(host: HTMLElement): number {
 }
 
 /** A Done toast: one at a time, 4 s (App's timer), no Dismiss link; taps pass through it except its action. */
-export function DoneToast({ text, screen, action }: { text: string; screen: string; action?: { label: string; onClick: () => void } }) {
+export function DoneToast({ notice, screen, action }: { notice: Notice; screen: string; action?: { label: string; onClick: () => void } }) {
+  const text = notice.text;
   const ref = useRef<HTMLDivElement>(null);
   const [bottom, setBottom] = useState<number | null>(null);
   useLayoutEffect(() => {
@@ -64,17 +77,20 @@ export function DoneToast({ text, screen, action }: { text: string; screen: stri
     // Controls settle a frame after a screen change (a sheet closing, the dock lifting for a keyboard).
     const frame = window.requestAnimationFrame(place);
     window.addEventListener('resize', place);
+    // A scrolled screen brings in-flow controls (the recap's buttons) up under the toast.
+    document.addEventListener('scroll', place, true);
     window.visualViewport?.addEventListener('resize', place);
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', place);
+      document.removeEventListener('scroll', place, true);
       window.visualViewport?.removeEventListener('resize', place);
     };
     // A toast carried to the next screen (recap to Today) is placed again against that screen's controls.
-  }, [text, screen]);
+  }, [notice, screen]);
   return (
     <div ref={ref} className="done-toast" role="status" style={bottom === null ? { visibility: 'hidden' } : { bottom }}>
-      <div className="done-toast__pill" key={text}>
+      <div className="done-toast__pill" key={idOf(notice)}>
         <CheckGlyph />
         <span className="done-toast__text">{text}</span>
         {action && (

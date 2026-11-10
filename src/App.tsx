@@ -400,7 +400,12 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
   // (#295) Only a Done toast passes on its own, 4 s from when it shows; one fired during a sheet
   // waits for the sheet to close. Heads-up and Problem cards wait for the user.
-  const toastUp = toastShows(notice, sheet.kind !== 'none');
+  const problemUp = saveUi.kind === 'error' || conflict !== null;
+  const toastUp = toastShows(notice, sheet.kind !== 'none') && !problemUp;
+  // A Problem while a toast shows: the toast goes, the Problem stays (#295).
+  useEffect(() => {
+    if (problemUp && notice?.kind === 'done') setNotice(null);
+  }, [problemUp, notice]);
   useEffect(() => {
     if (!toastUp) return;
     const timer = window.setTimeout(() => setNotice(null), TOAST_MS);
@@ -648,7 +653,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
    */  const skipTodaySlot = () => {
     if (!slot) return;
     if (current) {
-      setNotice(headsUp('Finish or discard the open session before skipping.'));
+      setNotice(headsUp('Finish or discard the open session before skipping this one.'));
       return;
     }
     const offered = cursorFor(state);
@@ -973,7 +978,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       text = `${text}. ${note}`;
     }
     setCarryUndo({ ...entry, message: text, note: warned ? note : undefined });
-    setNotice(done(text));
+    if (warned) setNotice(headsUp(text));
+    else setNotice(done(text));
   };
 
   /**
@@ -1346,7 +1352,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             <MessageCard notice={notice} onDismiss={() => setNotice(null)} />
           </div>
         )}
-        {toastUp && notice && <DoneToast text={notice.text} screen="splash" />}
+        {toastUp && notice && <DoneToast notice={notice} screen="splash" />}
         <SplashScreen
           onStart={() => setShowSplash(false)}
           installed={typeof window !== 'undefined' && currentDevice().standalone}
@@ -1634,7 +1640,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             </NoticeCard>
           )}
           {notice && (notice.kind === 'problem' || (notice.kind === 'headsUp' && !onToday)) && (
-            <MessageCard notice={notice} onDismiss={() => setNotice(null)} />
+            <MessageCard
+              notice={notice}
+              onDismiss={() => setNotice(null)}
+              actions={liveCarry !== null && liveCarry.message === notice.text ? <button className="notice-card__fix" onClick={undoLastCarry}>Undo</button> : undefined}
+            />
           )}
         </div>
       )}
@@ -1643,7 +1653,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
       {toastUp && notice && (
         <DoneToast
-          text={notice.text}
+          notice={notice}
           screen={screen}
           action={liveCarry !== null && liveCarry.message === notice.text ? { label: 'Undo', onClick: undoLastCarry } : undefined}
         />

@@ -59,7 +59,7 @@ test('Today shows at most one Heads-up card: install, then backup, then the rest
  */
 const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> = [
   ['problem', "'No movement in this workout can be done with that setup.'"],
-  ['headsUp', "'Finish or discard the open session before skipping.'"],
+  ['headsUp', "'Finish or discard the open session before skipping this one.'"],
   ['done', "'Session skipped. Skips earn no progression.'"],
   ['problem', "'That preview is out of date. Preview again to approve it.'"],
   ['problem', "'No movement in this workout can be done with that setup.'"],
@@ -71,6 +71,7 @@ const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> 
   ['headsUp', "'Finish or discard the open session before switching days.'"],
   ['done', '`${option.name} is up.'],
   ['done', 'message'],
+  ['headsUp', 'text'],
   ['done', 'text'],
   ['headsUp', 'liveCarry.note'],
   ['done', "'No sets logged, so nothing was saved.'"],

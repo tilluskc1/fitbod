@@ -141,12 +141,16 @@ try {
     await shot(page, 'done-logger', where);
 
     // Problem: a failed save is a red card with Retry, and stays until Retry succeeds.
+    const toastBefore = await toast.count();
     await page.evaluate(() => { window.__failSaves = true; });
     await page.locator('button.lg-check:not([disabled])').first().click();
     const card = page.locator('.app-alerts .notice-card--problem');
     await card.waitFor({ timeout: 3000 }).catch(() => {});
     check(await card.getByText('Not saved.').isVisible().catch(() => false), `${where}: no Problem card on a failed save`);
     check(await card.getAttribute('role') === 'alert', `${where}: the Problem card is not role=alert`);
+    // A Problem while a toast shows: the toast goes, the Problem stays (review 1).
+    check(toastBefore === 1, `${where}: no toast was up before the failed save, so the check below proves nothing`);
+    check(!(await toast.count()), `${where}: a Done toast still shows beside the Problem card`);
     const title = await card.locator('.notice-card__title').evaluate((n) => getComputedStyle(n).color);
     check(title === 'rgb(160, 50, 36)', `${where}: Problem title is ${title}, not --danger`);
     await shot(page, 'problem', where);
@@ -160,6 +164,13 @@ try {
     // Heads-up: after the workout, Today shows one card, the install note, white with an amber title.
     await page.locator('.finish-btn').click();
     await page.getByRole('button', { name: /Save completed work|Finish workout/ }).first().click();
+    // On the recap, scrolling its buttons up never puts them under the toast (review 1).
+    await page.locator('.recap-actions').waitFor({ timeout: 3000 });
+    await toast.waitFor({ timeout: 3000 }).catch(() => {});
+    check(await toast.count() === 1, `${where}: no toast on the recap`);
+    await page.locator('.recap-actions').evaluate((n) => n.scrollIntoView({ block: 'end' }));
+    await page.waitForTimeout(150);
+    await clearOf(page, page.locator('.recap-actions'), 'the recap buttons', where);
     await page.getByRole('button', { name: 'Back to Today' }).click();
     await page.waitForSelector('.t7-hero');
     await page.waitForTimeout(100);

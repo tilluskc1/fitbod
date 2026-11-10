@@ -194,6 +194,13 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    skipped too). Check: `settle` in `scripts/e2e/notice-kinds.mjs` and the sheet shot in
    `scripts/e2e/install-note.mjs`.
 
+30. **A rule about "a Problem" covers every place a Problem comes from.** #295 review 1: "a Problem
+   removes the toast" was built into the one message slot, but a failed save and a tab conflict live in
+   their own state, so "Workout saved." showed beside "Not saved." Rule: when a story states a rule
+   about a kind of message, grep every state that renders that kind (`notice`, `saveUi`, `conflict`) and
+   apply it to each. Check: "toast goes, Problem stays" in `scripts/e2e/notice-kinds.mjs` (it fails on
+   c5c05cf).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
