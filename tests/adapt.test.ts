@@ -13,7 +13,7 @@ const home = (minutes: number) =>
 test('20 minutes with home dumbbells fits 8 sets by the timer', () => {
   const adapted = home(20);
 
-  assert.equal(adapted.minutes, 21);
+  assert.equal(adapted.minutes, 20);
   assert.equal(adapted.originalMinutes, 35);
   assert.equal(adapted.originalSets, 11);
   assert.equal(adapted.totalSets, 8);
