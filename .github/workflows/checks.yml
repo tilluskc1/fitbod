@@ -1,0 +1,110 @@
+name: checks
+
+# One required status, `checks`: unit tests, lint, build, e2e, and phone screenshots.
+# Playwright is not a repo dependency (issue #317, option A): the e2e scripts load a global
+# install, so CI installs a pinned copy globally. Bump PLAYWRIGHT_VERSION here, nowhere else.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PLAYWRIGHT_VERSION: 1.63.0
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright (global, pinned)
+        run: npm install --global "playwright@${PLAYWRIGHT_VERSION}"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
+
+      - name: Install Chromium
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            playwright install-deps chromium
+          else
+            playwright install --with-deps chromium
+          fi
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: E2E (with screenshots)
+        env:
+          E2E_SHOTS: ${{ runner.temp }}/shots
+        run: |
+          mkdir -p "$E2E_SHOTS"
+          npm run e2e
+
+      - name: Upload screenshots
+        id: shots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.sha }}
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Comment screenshot link on the PR
+        if: >-
+          always() && github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          steps.shots.outputs.artifact-url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          SHOTS_URL: ${{ steps.shots.outputs.artifact-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          marker='<!-- checks-screenshots -->'
+          body="${marker}
+          **checks** ${JOB_STATUS} at \`${SHA:0:7}\`
+
+          - [Screenshots (390x844, 360x780, 390x650, artifact zip)](${SHOTS_URL})
+          - [Run log](${RUN_URL})"
+          id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
+            --jq "[.[] | select(.body | startswith(\"${marker}\"))][0].id // empty")"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -f body="$body" >/dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -f body="$body" >/dev/null
+          fi

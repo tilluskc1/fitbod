@@ -18,7 +18,7 @@ test('history editor identifies recorded holds as seconds while ordinary kg/lb r
   const before = structuredClone(state);
   const server = await createServer({ plugins: [{ name: 'history-view-fixture', enforce: 'pre', transform(code, id) {
     if (id.endsWith('/src/screens/ProgressScreen.tsx')) return code
-      .replace("useState<'overview' | 'history'>('overview')", "useState<'overview' | 'history'>('history')")
+      .replace("useState<'overview' | 'history'>(initialTab)", "useState<'overview' | 'history'>('history')")
       .replace('useState<string | null>(null)', "useState<string | null>('history-units')");
   } }], server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
@@ -26,7 +26,7 @@ test('history editor identifies recorded holds as seconds while ordinary kg/lb r
     const noop = () => {};
     for (const unit of ['kg', 'lb']) {
       const html = renderToStaticMarkup(createElement(Progress, { history: state.history, unit,
-        onExport: noop, onCorrect: noop, onDelete: noop, onGoTrain: noop }));
+        onBackup: noop, onCorrect: noop, onDelete: noop, onGoTrain: noop }));
       const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
       assert.match(html, /aria-label="Correct seconds for set 1 of Plank"[^>]*value="45"/);
       assert.doesNotMatch(html, /Correct (?:reps|weight) for set 1 of Plank/);
@@ -54,14 +54,14 @@ test('history correction keeps a no-load loaded set unmarkable and says why', as
     { early: true, now: '2026-10-31T10:06:00.000Z' });
   const server = await createServer({ plugins: [{ name: 'history-view-fixture', enforce: 'pre', transform(code, id) {
     if (id.endsWith('/src/screens/ProgressScreen.tsx')) return code
-      .replace("useState<'overview' | 'history'>('overview')", "useState<'overview' | 'history'>('history')")
+      .replace("useState<'overview' | 'history'>(initialTab)", "useState<'overview' | 'history'>('history')")
       .replace('useState<string | null>(null)', "useState<string | null>('history-units')");
   } }], server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: Progress } = await server.ssrLoadModule('/src/screens/ProgressScreen.tsx');
     const noop = () => {};
     const html = renderToStaticMarkup(createElement(Progress, { history: state.history, unit: 'kg',
-      onExport: noop, onCorrect: noop, onDelete: noop, onGoTrain: noop }));
+      onBackup: noop, onCorrect: noop, onDelete: noop, onGoTrain: noop }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     assert.match(html, /disabled=""[^>]*aria-label="Mark set 3 of Floor Press complete"/);
     assert.doesNotMatch(html, /disabled=""[^>]*aria-label="Mark set 2 of Floor Press complete"/, 'set 2 has a load');

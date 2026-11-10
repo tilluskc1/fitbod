@@ -73,3 +73,8 @@ export function lastBackupLine(lastBackupAt?: string): string {
   if (!lastBackupAt) return 'Last backup: never';
   return `Last backup: ${new Date(lastBackupAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`;
 }
+
+/** (#293) The workouts a backup sheet names: completed ones, as the reminder counts them. */
+export function backupCount(history: AppState['history']): number {
+  return history.filter((workout) => workout.status === 'completed').length;
+}
