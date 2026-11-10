@@ -96,6 +96,7 @@ try {
 
       await finishWorkout(page);
       if (shots && name === 'safari') {
+        await page.waitForTimeout(300); // (#295) past the Done toast's fade-in
         await page.screenshot({ path: join(shots, `307-${before ? 'before' : 'after'}-today-${width}x${height}.png`) });
         if (!before) {
           // Centre the note, clear of the dock and the passing message.
