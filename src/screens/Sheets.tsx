@@ -845,6 +845,60 @@ export function StartOverSheet({
   );
 }
 
+/* ---------------- Progress backup (#293) ---------------- */
+
+/**
+ * The Progress download icon asks first. Back up now runs the same backup as
+ * Settings (Share sheet, else a download); a backup that left the app closes
+ * the sheet, a cancel leaves it open and records nothing, a failure says why here.
+ */
+export function BackupSheet({
+  workouts,
+  onBackup,
+  onClose,
+}: {
+  /** Completed workouts the file will hold. */
+  workouts: number;
+  onBackup: () => Promise<{ ok: boolean; message: string | null }>;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const backup = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const result = await onBackup();
+    setBusy(false);
+    if (result.ok) onClose();
+    else if (result.message) setError(result.message);
+  };
+
+  return (
+    <Sheet title="Back up your workouts?" onClose={onClose}>
+      {workouts === 0 ? (
+        <p className="sheet-copy">Nothing to back up yet.</p>
+      ) : (
+        <>
+          <p className="sheet-copy">
+            Saves a file with your {workouts} {workouts === 1 ? 'workout' : 'workouts'} and settings. Keep it somewhere
+            safe: Files, iCloud, Drive or email. You'll need it to restore on another phone.
+          </p>
+          {error && <p className="error-text" role="alert">{error}</p>}
+          <div className="sheet-actions">
+            <button className="primary" onClick={backup} disabled={busy}>
+              Back up now
+            </button>
+            <button className="secondary" onClick={onClose}>
+              Not now
+            </button>
+          </div>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
 /* ---------------- Swap exercise ---------------- */
 
 export function SwapSheet({

@@ -58,3 +58,8 @@ export async function shareBackup(
   }
   return { ok: true, via: 'download' };
 }
+
+/** (#293) The workouts a backup sheet names: completed ones, as the reminder counts them. */
+export function backupCount(history: AppState['history']): number {
+  return history.filter((workout) => workout.status === 'completed').length;
+}

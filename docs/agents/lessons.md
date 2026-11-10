@@ -130,6 +130,25 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    written; a better idea goes in the issue comment as a question, not in the code. Check: every
    "default picked by product" line in the issue matches the diff, or the issue is parked `needs-info`.
 
+22. **A UI bug report shows the screen.** I filed UI stories from the owner's screenshots as text only;
+   the owner had to ask to see what I meant. Rule: every UI story product files carries current-state
+   screenshots from `main` at 390x844 (and 360x780 when width matters), shown to the owner in chat and
+   linked in the issue body under `docs/product/screens/<story>/`. Check: the issue body has an image
+   link and the chat reply sent the file.
+
+23. **A slot is a position, not a search.** #300's first build gave ramp sets to `leadCompoundId` of the
+   whole session, so a lead swapped to a fly or push-up before set 1 handed the ramp rows to a lift
+   further down; review 1 failed it. Rule: when a rule applies to "the day's lead", read the slot itself
+   (the session's first exercise and whether it can lead), never the first match further down. Check:
+   `tests/warmUp300.test.ts` (swap to `cable-fly` and `push-up`, push-up-first day).
+
+24. **One "counts as none" rule covers every view of the same records.** #294 hid Progress's zero tiles
+   for users whose only record was empty or all-skipped, but Session history still checked
+   `sessions.length` and listed a "0 sets" row; review 1 failed it. Rule: when a story defines what counts
+   (a finished workout, a logged set), grep every surface that lists or counts those records and use the
+   one helper (`finishedWorkouts` in `src/lib/progressTotals.ts`). Check: `tests/progressEmpty294.test.ts`
+   renders Overview, Session history and Coach for the same empty-record fixture.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
