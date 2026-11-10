@@ -130,7 +130,34 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    written; a better idea goes in the issue comment as a question, not in the code. Check: every
    "default picked by product" line in the issue matches the diff, or the issue is parked `needs-info`.
 
-22. **A keystroke is not an edit.** #306's carry decided "which later sets follow set 1" on every
+22. **A UI bug report shows the screen.** I filed UI stories from the owner's screenshots as text only;
+   the owner had to ask to see what I meant. Rule: every UI story product files carries current-state
+   screenshots from `main` at 390x844 (and 360x780 when width matters), shown to the owner in chat and
+   linked in the issue body under `docs/product/screens/<story>/`. Check: the issue body has an image
+   link and the chat reply sent the file.
+
+23. **A slot is a position, not a search.** #300's first build gave ramp sets to `leadCompoundId` of the
+   whole session, so a lead swapped to a fly or push-up before set 1 handed the ramp rows to a lift
+   further down; review 1 failed it. Rule: when a rule applies to "the day's lead", read the slot itself
+   (the session's first exercise and whether it can lead), never the first match further down. Check:
+   `tests/warmUp300.test.ts` (swap to `cable-fly` and `push-up`, push-up-first day).
+
+24. **One "counts as none" rule covers every view of the same records.** #294 hid Progress's zero tiles
+   for users whose only record was empty or all-skipped, but Session history still checked
+   `sessions.length` and listed a "0 sets" row; review 1 failed it. Rule: when a story defines what counts
+   (a finished workout, a logged set), grep every surface that lists or counts those records and use the
+   one helper (`finishedWorkouts` in `src/lib/progressTotals.ts`). Check: `tests/progressEmpty294.test.ts`
+   renders Overview, Session history and Coach for the same empty-record fixture.
+
+25. **Screenshots on the issue are not screenshots shown.** Prod 3 merged #298 (PR 320) and queued six
+   more UI PRs without sending the owner a single image; the shots were only linked on the issues. It
+   had also skipped reading this file at start-up, so lesson 22 never applied. Rule: product reads this
+   file before its first action. Before it merges a UI story, or reports one as merged, it sends the
+   before/after images to the owner in chat (SendUserFile, rendered) with one line per problem it sees.
+   A dev chat's report of a UI story isn't passed on without the images. Check: the chat turn that
+   reports a UI merge contains a file send of that story's screenshots.
+
+26. **A keystroke is not an edit.** #306's carry decided "which later sets follow set 1" on every
    keystroke and stepper tap, so typing 1, 10, 100 (or stepping reps 8, 7, 6, 5) passed through a
    hand-typed value and took that set along; review 1 failed it. Rule: when an input writes per
    keystroke, decide anything that depends on "the value before" once, at the start of the burst, and
@@ -139,7 +166,7 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    `scripts/e2e/carry-forward.mjs`, which types one key at a time and backspaces (a cleared field
    alone hid the bug); confirm a new e2e step fails on the old code before trusting it.
 
-23. **A removed control takes its tests with it.** #309 replaced the logger's set editor with inputs in
+27. **A removed control takes its tests with it.** #309 replaced the logger's set editor with inputs in
    the row; 19 tests then failed, every one asserting the old panel's markup (pills, Confirm, Skip,
    `Edit weight for set N`) rather than a value the lifter sees.
    Rule: when a UI story removes a control, list the tests and e2e scripts that name it before building
@@ -152,7 +179,7 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    it rendered; test the stored value after the keystroke, in the e2e. Check: "review-1" block in
    `scripts/e2e/inline-sets.mjs`.
 
-24. **A refusal undoes the burst, not just the cell.** #309 review 2: set 1 empty, typing 1, 3, 5, 9
+28. **A refusal undoes the burst, not just the cell.** #309 review 2: set 1 empty, typing 1, 3, 5, 9
    carried 1359 lb to sets 2 to 4; the next 9 was refused and only set 1 went back, so "That load was not
    saved" sat over three sets holding 1359, and set 2 logged it in one tap. The cause was #306's rule that a
    0 is never carried, applied to the fallback too.

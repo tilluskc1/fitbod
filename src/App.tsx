@@ -1,6 +1,6 @@
 import
  { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { backupReminder, shareBackup } from './lib/backup';
+import { backupCount, backupReminder, shareBackup } from './lib/backup';
 import { offerFirstBackup } from './lib/dataHome';
 import { currentDevice } from './lib/install';
 import { noticeHome, screenKey } from './lib/noticeScreen';
@@ -17,6 +17,7 @@ import
   setupOptions,
   EQUIPMENT_OPTIONS as SETUPS,
   DEFAULT_CONSTRAINTS,
+  loadOptions,
   restorePendingWorkout,
   swapCandidateFor,
   toWorkoutExercises,
@@ -35,6 +36,7 @@ import
 import  { FULL_BODY_A } from './data/flagship';
 import { cursorFor, dayCounter, isDescribedSession, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
 import { withoutCustomDay } from './lib/plan';
+import { todayOnly, undoToast, usualGear } from './lib/todayOnly';
 import { baseTalk, customDayPreview, describedDayStatus, describedSessionStatus, talkConstraints } from './lib/todayTalk';
 import type { TalkState } from './lib/todayTalk';
 import TodayTalk from './components/TodayTalk';
@@ -151,6 +153,7 @@ import
   FinishSheet,
   SettingsSheet,
   StartOverSheet,
+  BackupSheet,
   SwapSheet,
   WhySheet,
 } from './screens/Sheets';
@@ -165,6 +168,7 @@ type SheetState =
   | { kind: 'switch' }
   | { kind: 'settings' }
   | { kind: 'startOver' }
+  | { kind: 'backup' }
   | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' | 'history' }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
@@ -803,7 +807,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   })();
 
   /** (#193) The composer's chips before anything is said: today's gear and time, the planned day's areas. */
-  const talkBase = useMemo(() => (slot ? baseTalk(constraints, slot.focus) : null), [slot, constraints]);
+  const talkBase = useMemo(() => (slot ? baseTalk(constraints, slot.focus, profile ? isGymKit(profile) : false) : null), [slot, constraints, profile]);
 
   /** (#193) The day the chips build, from the same adaptation Start runs. */
   const talkPreview = (talk: TalkState) => {
@@ -861,7 +865,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   /** A described session (#193) has no planned work to restore into; it is finished or discarded instead. */
   const describedSession = Boolean(current && isDescribedSession(current));
 
-  const restoreOriginal = () => {
+  const restoreOriginal = (message = 'Original remaining work restored. Logged sets were kept.') => {
     if (describedSession) return;
     setState((currentState) => {
       const original = adaptWorkout(
@@ -883,7 +887,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setPending(null);
     setPendingNotices([]);
     setSheet({ kind: 'none' });
-    setNotice('Original remaining work restored. Logged sets were kept.');
+    setNotice(message);
   };
 
   /** Show what a carry changed, with Undo; typing 1, 13, 135 into one set is one burst with one Undo. */
@@ -1338,6 +1342,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         history={state.history}
         now={now}
         profileLoads={profile?.loads}
+        rampLoads={loadOptions(constraints.equipment, constraints.loads)}
         calibrationLoads={confirmedLoads(constraints.equipment, constraints.loads)}
         experience={state.profile?.experience}
         targetNotes={targetNotes}
@@ -1475,7 +1480,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onWhy={() =>
               setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
             }
-            onRestore={restoreOriginal}
+            onRestore={() => restoreOriginal()}
+            todayBar={todayOnly(state, today)}
+            usualGear={usualGear(profile)}
+            onUndo={() => restoreOriginal(undoToast(profile))}
             onOpenSettings={() => setSheet({ kind: 'settings' })}
             onOpenExercise={(exerciseId, exerciseIndex) => setSheet({ kind: 'actions', exerciseId, exerciseIndex })}
             onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
@@ -1509,11 +1517,14 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             history={state.history}
             unit={unit}
             loads={profile?.loads}
-            onExport={exportData}
+            onBackup={() => setSheet({ kind: 'backup' })}
             onCorrect={correctSet}
             onDelete={(workoutId) => setSheet({ kind: 'delete-workout', workoutId })}
             onFeedback={saveFeedback}
-            onGoTrain={() => setTab('today')}
+            running={Boolean(current)}
+            // (#294) The empty state's one action: today's preview, as Today's Preview button, or resume.
+            onStartToday={current ? openWorkout : () => setSheet({ kind: 'preview' })}
+            startDisabled={liveProgram.exercises.length === 0}
           />
         )}
         {tab === 'coach' && (
@@ -1605,6 +1616,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           dayName={program.name}
           savedGear={isGymKit(profile) ? 'full gym' : [...profile.equipment, ...profile.support].join(', ') || 'none'}
           gymKit={isGymKit(profile)}
+          usual={savedSetup(profile)}
           onPick={pickSetup}
           onEditSaved={() => setSheet({ kind: 'settings' })}
           onClose={closeSheet}
@@ -1675,6 +1687,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           onClose={closeSheet}
           storageNote={storageNote}
         />
+      )}
+
+      {sheet.kind === 'backup' && (
+        <BackupSheet workouts={backupCount(state.history)} onBackup={backupNow} onClose={closeSheet} />
       )}
 
       {sheet.kind === 'startOver' && (

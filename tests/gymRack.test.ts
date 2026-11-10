@@ -75,7 +75,7 @@ test('with a listed rack, the first-load suggestion is the owned dumbbell, in th
   assert.match(html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '), /Suggested start 10 lb each\. Do 5 easy reps with it, then adjust set 1\./);
   assert.match(html, /<input[^>]*aria-label="Set 1 weight, pounds each"/, 'any other weight is typed in the cell');
   // #309: the one-tap rack pills and Confirm are gone; the owned dumbbell is the prefilled cell value.
-  assert.doesNotMatch(html, /aria-pressed|suggested"|>Confirm</);
+  assert.doesNotMatch(html, /<button(?![^>]*lg-wcheck)[^>]*aria-pressed|suggested"|>Confirm</);
 });
 
 test('a gym user is never asked for an owned rack: onboarding hides it, Settings says leave it blank (#180)', async () => {

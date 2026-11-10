@@ -137,3 +137,20 @@ test('review 1: a set with no reps (or seconds) cannot be logged, and says why',
     assert.match(html, /aria-label="Log set 2">/, 'the other sets are unaffected');
   });
 });
+
+test('#300 ramp rows sit above the working sets and stay tick-only; only working sets edit in the row', async () => {
+  await withTrain((render) => {
+    const html = render(bench(toKg(135, 'lb')));
+    const warm = html.match(/<tr[^>]*lg-row--warm[^>]*>[\s\S]*?<\/tr>/g) ?? [];
+    assert.ok(warm.length > 0, 'the lead shows W rows before set 1');
+    for (const row of warm) {
+      assert.doesNotMatch(row, /<input/, 'a W row has no input');
+      assert.match(row, /class="lg-wcheck" aria-pressed="false"/, 'a W row keeps its tick');
+    }
+    const body = html.match(/<tbody>([\s\S]*)<\/tbody>/)?.[1] ?? '';
+    assert.ok(body.indexOf('lg-row--warm') < body.indexOf('aria-label="Set 1 weight, pounds"'), 'W rows come first');
+    assert.equal(html.split('<input').length - 1, 8, 'weight and reps inputs for the four working sets only');
+    for (const n of [1, 2, 3, 4]) assert.equal(cell(html, `Set ${n} weight, pounds`), '135');
+    assert.doesNotMatch(render(logSet(bench(toKg(135, 'lb')), 0, 0, at(1))), /lg-row--warm/, 'W rows leave once set 1 is logged');
+  });
+});

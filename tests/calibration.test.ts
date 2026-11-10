@@ -109,7 +109,7 @@ test('#309: a first-time lift with no profile level types its weight in set 1; n
     assert.match(text, RULE);
     assert.doesNotMatch(text, /Suggested start/, 'no level, no suggestion');
     for (const word of ['Confirm', 'Skip', 'Save set', 'Cancel', 'Done']) assert.doesNotMatch(html, new RegExp(`>${word}<`), word);
-    assert.doesNotMatch(html, /aria-pressed/, 'no load pills');
+    assert.doesNotMatch(html, /<button(?![^>]*lg-wcheck)[^>]*aria-pressed/, 'no load pills');
     for (const n of [1, 2, 3]) {
       assert.equal(cell(html, `Set ${n} weight, kilograms each`), '', `set ${n} is empty`);
       assert.match(html, new RegExp(`aria-label="Log set ${n}" disabled=""`), 'an empty load cannot be logged');

@@ -190,7 +190,7 @@ export default function Onboarding({ onComplete }: Props) {
           <p className="muted">
             Your first plan is built for the length you pick. Pick it here, change it any time.
           </p>
-          <div className="chip-wrap">
+          <div className="chip-wrap chip-wrap--even" role="group" aria-label="Session length">
             {[20, 30, 45, 60].map((value) => (
               <button
                 key={value}

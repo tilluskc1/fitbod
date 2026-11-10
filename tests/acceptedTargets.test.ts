@@ -95,7 +95,7 @@ test('barbell logger offers calibration without fixture dumbbell weights', async
     // #309: the typed first-weight field and its Weight (kg total) label are gone; the weight is typed in set 1's cell.
     assert.match(html, /aria-label="Set 1 weight, kilograms"/, 'a barbell cell is total, not each');
     assert.doesNotMatch(html, /Weight \(kg total\)|Enter barbell load/);
-    assert.doesNotMatch(html, /lg-quick|weight-pills|aria-pressed/);
+    assert.doesNotMatch(html, /lg-quick|weight-pills|<button(?![^>]*lg-wcheck)[^>]*aria-pressed/);
     assert.doesNotMatch(html, /Dumbbell/);
     assert.match(html, /aria-label="Set 1 weight, kilograms"[^>]*value=""/, 'load not set');
     assert.doesNotMatch(html, />BW</, 'a barbell is not bodyweight');

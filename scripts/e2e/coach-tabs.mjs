@@ -70,6 +70,28 @@ try {
     check(memory.length > 120, `${where}: What I know is empty`);
     check(!/demo|scripted|server-side/i.test(memory), `${where}: What I know mentions a demo`);
     if (shots) await page.screenshot({ path: join(shots, `257-memory-${where}.png`) });
+
+    // #261: the equipment label follows the saved setup and the length reads "N min sessions".
+    for (const [kind, equipment, support, title, value] of [
+      ['gym', ['Barbell', 'Dumbbell', 'Machine', 'Cable'], ['Bench', 'Rack'], 'Gym equipment', /Barbell/],
+      ['home', ['Dumbbell'], ['Bench'], 'Home equipment', /Dumbbell/],
+      ['none', [], [], 'Bodyweight', /Bodyweight only/],
+    ]) {
+      await page.evaluate(({ key, equipment, support }) => {
+        const data = JSON.parse(localStorage.getItem(key));
+        Object.assign(data.state.profile, { equipment, support, sessionMinutes: 30 });
+        localStorage.setItem(key, JSON.stringify(data));
+      }, { key: 'fitbod-clone-v1', equipment, support });
+      await page.reload();
+      await page.waitForSelector('.t7-hero');
+      await page.getByRole('button', { name: 'Coach' }).click();
+      await page.getByRole('tab', { name: 'What I know' }).click();
+      const rows = await page.locator('.memory-row').allInnerTexts();
+      const gear = rows[0] ?? '';
+      check(gear.startsWith(title) && value.test(gear), `${where} ${kind}: equipment row reads ${JSON.stringify(gear)}`);
+      check(/30 min sessions/.test(rows[1] ?? '') && !/Under/.test(rows[1] ?? ''), `${where} ${kind}: length row reads ${JSON.stringify(rows[1])}`);
+      if (shots) await page.screenshot({ path: join(shots, `261-memory-${kind}-${where}.png`) });
+    }
     check(errors.length === 0, `${where}: page errors: ${errors.join(' | ')}`);
     await page.close();
   }
@@ -82,4 +104,4 @@ if (failures.length) {
   console.error(`coach-tabs: ${failures.length} failure(s)\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('coach-tabs: pass at 390x844 and 360x780');
+console.log('coach-tabs: pass at 390x844 and 360x780 (gym, home and no-gear What I know labels)');

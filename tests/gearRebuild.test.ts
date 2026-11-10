@@ -244,7 +244,7 @@ test('#188: a load under the lightest travel dumbbell keeps the exercise and ask
     assert.match(html, /<button[^>]*aria-label="Log set 1"[^>]*disabled=""|<button[^>]*disabled=""[^>]*aria-label="Log set 1"/);
     // #309: the travel rack is no longer offered as pills; the pick is typed in the (empty) set cells.
     for (const n of [1, 2, 3]) assert.match(html, new RegExp(`aria-label="Set ${n} weight, kilograms"[^>]*value=""`));
-    assert.doesNotMatch(html, /aria-pressed|Your dumbbells/);
+    assert.doesNotMatch(html, /<button(?![^>]*lg-wcheck)[^>]*aria-pressed|Your dumbbells/);
   } finally {
     await server.close();
   }

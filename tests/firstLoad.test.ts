@@ -98,7 +98,7 @@ test('owned loads: the suggestion is the nearest one owned, shown in the cells; 
   assert.equal(cell(html, 'Set 1 weight, kilograms each'), '10', '6 kg snaps to the nearest owned dumbbell');
   assert.match(plain(html), /Suggested start 10 kg each\./);
   // #309: the load-pill row (is-suggested / aria-pressed) is gone; the nearest owned load is the cell value.
-  assert.doesNotMatch(html, /aria-pressed|is-suggested|Your dumbbells/);
+  assert.doesNotMatch(html, /<button(?![^>]*lg-wcheck)[^>]*aria-pressed|is-suggested|Your dumbbells/);
 });
 
 test('without a profile level nothing is suggested: cells blank, ✓ waits for a weight', async () => {

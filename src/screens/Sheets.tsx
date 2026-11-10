@@ -34,6 +34,7 @@ import Icon from '../components/ui/Icon';
 import { CheckIcon, LockIcon, PhoneIcon } from '../components/ui/Icons';
 import { currentDevice, installHint } from '../lib/install';
 import { START_OVER_BLOCKED } from '../lib/storage';
+import { lastBackupLine, startOverBackupNote } from '../lib/backup';
 import { SAFETY_NOTICE } from '../lib/safety';
 
 /* ---------------- Adjust today ---------------- */
@@ -854,7 +855,8 @@ export function StartOverSheet({
   const [error, setError] = useState<string | null>(null);
   const backup = async () => {
     const result = await onBackup();
-    setBackupStatus(result.message);
+    // A cancel or failure says so here and erases nothing (#292).
+    setBackupStatus(startOverBackupNote(result));
     if (result.ok) setBackedUp(true);
   };
   const erase = () => {
@@ -883,18 +885,20 @@ export function StartOverSheet({
   }
 
   return (
-    <Sheet key="choose" title="Start over?" subtitle="On this device" onClose={onClose}>
+    <Sheet key="choose" title="Save your progress first?" subtitle="Start over on this device" onClose={onClose}>
       <p className="sheet-copy">
-        This erases your plan, every logged workout, your preferences, your backup date and any older copies the
-        app kept in this browser, then opens the app as new. A backup file you already saved isn't affected; you
-        can restore it after you set up again.
+        Starting over erases your plan, every logged workout, your preferences, your backup date and any older
+        copies the app kept in this browser, then opens the app as new. A backup file you already saved isn't
+        affected; you can restore it after you set up again.
       </p>
-      <p className="settings-row__note" role="status" style={{ marginTop: 10 }}>
-        {backupStatus ??
-          (lastBackupAt
-            ? `Last backup: ${new Date(lastBackupAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}.`
-            : 'Not backed up yet.')}
+      <p className="settings-row__note" style={{ marginTop: 10 }}>
+        {lastBackupLine(lastBackupAt)}
       </p>
+      {backupStatus && (
+        <p className="settings-row__note" role="status" style={{ marginTop: 4 }}>
+          {backupStatus}
+        </p>
+      )}
       {sessionOpen && (
         <p className="note-card" role="note" style={{ marginTop: 12 }}>
           {START_OVER_BLOCKED}
@@ -906,10 +910,64 @@ export function StartOverSheet({
         </button>
         {!sessionOpen && (
           <button className="danger" onClick={() => setConfirming(true)}>
-            {backedUp ? 'Erase this device' : 'Erase without a backup'}
+            {backedUp ? "Erase this phone's data" : 'Erase without saving'}
           </button>
         )}
       </div>
+    </Sheet>
+  );
+}
+
+/* ---------------- Progress backup (#293) ---------------- */
+
+/**
+ * The Progress download icon asks first. Back up now runs the same backup as
+ * Settings (Share sheet, else a download); a backup that left the app closes
+ * the sheet, a cancel leaves it open and records nothing, a failure says why here.
+ */
+export function BackupSheet({
+  workouts,
+  onBackup,
+  onClose,
+}: {
+  /** Completed workouts the file will hold. */
+  workouts: number;
+  onBackup: () => Promise<{ ok: boolean; message: string | null }>;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const backup = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const result = await onBackup();
+    setBusy(false);
+    if (result.ok) onClose();
+    else if (result.message) setError(result.message);
+  };
+
+  return (
+    <Sheet title="Back up your workouts?" onClose={onClose}>
+      {workouts === 0 ? (
+        <p className="sheet-copy">Nothing to back up yet.</p>
+      ) : (
+        <>
+          <p className="sheet-copy">
+            Saves a file with your {workouts} {workouts === 1 ? 'workout' : 'workouts'} and settings. Keep it somewhere
+            safe: Files, iCloud, Drive or email. You'll need it to restore on another phone.
+          </p>
+          {error && <p className="error-text" role="alert">{error}</p>}
+          <div className="sheet-actions">
+            <button className="primary" onClick={backup} disabled={busy}>
+              Back up now
+            </button>
+            <button className="secondary" onClick={onClose}>
+              Not now
+            </button>
+          </div>
+        </>
+      )}
     </Sheet>
   );
 }
@@ -1028,6 +1086,18 @@ export function SettingsSheet({
   return (
     <Sheet title="Training settings" onClose={onClose} variant="settings">
       <div className="glass-scope settings">
+        {/* (#292) The name tap lands here: who this is, and the honest "log out" in view. */}
+        <section className="settings-group settings-profile" aria-label="This device">
+          <p className="settings-profile__name">{profile.name?.trim() || 'You'}</p>
+          <div className="settings-card">
+            <button className="settings-row settings-row--action settings-row--stack" style={{ gap: 2 }} onClick={onStartOver}>
+              <span style={{ color: 'var(--danger)' }}>Start over on this device</span>
+              <span className="settings-row__note">
+                No account to log out of: this erases this phone's workouts. Back up first.
+              </span>
+            </button>
+          </div>
+        </section>
         <section className="settings-group" aria-labelledby="settings-profile">
           <h3 className="settings-group__title" id="settings-profile">
             Profile
@@ -1158,10 +1228,6 @@ export function SettingsSheet({
                 }}
               />
             </label>
-            <button className="settings-row settings-row--action settings-row--stack" style={{ gap: 2 }} onClick={onStartOver}>
-              <span style={{ color: 'var(--danger)' }}>Start over on this device</span>
-              <span className="settings-row__note">Erase this browser's data and set up again.</span>
-            </button>
           </div>
           <p className="settings-group__foot">{storageNote}</p>
           <div className="settings-card settings-lock">

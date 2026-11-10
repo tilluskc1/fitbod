@@ -49,10 +49,10 @@ test('a dumbbell set takes typed entry in its cell, with or without a confirmed 
       const blank = renderToStaticMarkup(createElement(TrainScreen, { ...props, loadOptions: [] }));
       assert.match(blank, new RegExp(`aria-label="Set 1 weight, ${word} each"[^>]*value=""`));
       // #309: the confirmed rack's pill row (lg-quick) is gone; a rack changes nothing in the cell.
-      assert.doesNotMatch(blank, /lg-quick|aria-pressed|Enter dumbbell load/);
+      assert.doesNotMatch(blank, /lg-quick|<button(?![^>]*lg-wcheck)[^>]*aria-pressed|Enter dumbbell load/);
       const rack = renderToStaticMarkup(createElement(TrainScreen, { ...props, loadOptions: [10, 15, 18] }));
       assert.match(rack, new RegExp(`aria-label="Set 1 weight, ${word} each"[^>]*value=""`));
-      assert.doesNotMatch(rack, /lg-quick|aria-pressed|Enter dumbbell load/);
+      assert.doesNotMatch(rack, /lg-quick|<button(?![^>]*lg-wcheck)[^>]*aria-pressed|Enter dumbbell load/);
     }
   } finally { await server.close(); }
 });

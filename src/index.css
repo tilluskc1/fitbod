@@ -790,29 +790,42 @@ textarea:focus-visible {
   margin-top: 16px;
 }
 
-.chart-empty {
-  padding: 26px 8px 8px;
-  text-align: center;
+/* (#294) Progress for a user with no finished workout: one dashed card and its one action. */
+.progress-empty {
+  margin-top: 4px;
+  padding: 28px 18px;
 }
 
-.chart-empty .bars {
-  color: var(--accent-text);
+.progress-empty__title {
+  font-size: 20px;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.progress-empty p {
+  margin: 8px 0 18px;
+}
+
+/* (#294) One-word tile labels sit on one line; "all time" and the planned-time note under the row. */
+.stats-3 {
+  margin-bottom: 6px;
+}
+
+.stats-3 .stat-label {
+  min-height: 0;
+  white-space: nowrap;
+}
+
+.stats-note {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+  margin: 0 0 4px;
+}
+
+.stats-note:last-of-type {
   margin-bottom: 14px;
-}
-
-.chart-empty h3 {
-  font-size: 22px;
-  letter-spacing: -0.04em;
-}
-
-.chart-empty p {
-  margin-top: 8px;
-  color: var(--secondary);
-  font-size: 14px;
-}
-
-.chart-empty .text-link {
-  margin-top: 12px;
 }
 
 .history-list {
@@ -1617,6 +1630,18 @@ textarea:focus-visible {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+}
+
+/* #262: session lengths share one row of equal chips, so "60 min" never wraps alone at 360px. */
+.chip-wrap--even {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.glass-scope .chip-wrap--even .chip,
+.chip-wrap--even .chip {
+  padding: 0 6px;
+  white-space: nowrap;
 }
 
 .setup-label {
@@ -4487,6 +4512,35 @@ button.aw-exercise__name-btn {
   font-weight: 500;
 }
 .t7-pill .ms { color: var(--muted); }
+/* (#298) Today's gear differs from the saved setup: a small dot beside the saved name. */
+.t7-pill__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-text); flex: 0 0 auto; }
+/* (#298) The today-only bar: white card under the hero, one line, Undo a 44px underlined text button. */
+.t7-today-only {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px 0 14px;
+  border-radius: 12px;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font-size: 14px;
+  font-weight: 500;
+}
+.t7-today-only > .ms { color: var(--muted); flex: 0 0 auto; }
+.t7-today-only__l { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t7-today-only__undo {
+  flex: 0 0 auto;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  color: var(--on-surface);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+}
 .t7-pill:disabled { opacity: 0.55; }
 .len-scope {
   display: grid;
@@ -4626,3 +4680,127 @@ button.aw-exercise__name-btn {
 /* (#193) While the composer is open or previewing, its button is the screen's one primary. */
 .flow-dock[hidden] { display: none; }
 .tt-stop .secondary { margin-top: 10px; min-height: 44px; background: var(--card); }
+
+/* #300: the warm-up block and ramp rows. Muted, labelled Warm-up, never counted as sets. */
+.lg-warm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 12px 14px;
+  border-radius: 16px;
+  background: rgba(20, 26, 26, 0.036);
+  border: 1px dashed rgba(20, 26, 26, 0.16);
+}
+
+.lg-warm__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.lg-warm__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.lg-warm__title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.01em;
+}
+
+.lg-warm__note {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--on-surface-variant);
+}
+
+.lg-warm--done {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.lg-warm--done .lg-warm__head {
+  align-items: center;
+}
+
+.lg-warm--done .lg-warm__title {
+  color: var(--on-surface-variant);
+}
+
+.lg-warm__timer {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lg-wcheck {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  border: 1.5px dashed rgba(20, 26, 26, 0.198);
+  color: var(--on-surface-variant);
+}
+
+.lg-wcheck[aria-pressed='true'] {
+  border-style: solid;
+  border-color: transparent;
+  background: rgba(20, 26, 26, 0.12);
+  color: var(--on-surface);
+}
+
+.lg-table .lg-row--warm td {
+  height: 48px;
+  background: none;
+  box-shadow: inset 0 1px 0 rgba(20, 26, 26, 0.06), inset 0 -1px 0 rgba(20, 26, 26, 0.06);
+  color: var(--on-surface-variant);
+}
+
+.lg-row--warm abbr {
+  text-decoration: none;
+}
+
+.lg-warm-tag {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lg-cell--warm {
+  border-color: transparent;
+  background: none;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+}
+
+/* (#292) The name on Today is a plain-looking button into Settings. */
+.today__name-btn {
+  all: unset;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.today__name-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+/* (#292) Settings opens on the name and Start over, in view without scrolling. */
+.settings-profile__name {
+  margin: 0 0 8px 16px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--on-surface);
+}

@@ -9,6 +9,8 @@ import { nearestLoad, suggestedFirstLoad } from '../lib/firstLoad';
 import { availableLoads } from '../lib/progression';
 import { calibrationInputValue, loadLimitMessage, loadValue, repsLimitMessage, typedLoad, typedReps, unitLabel } from '../lib/units';
 import { restLabel } from '../lib/sessionTime';
+import { GENERAL_WARM_UP_TEXT, generalWarmUpMinutes, rampExerciseIndex, rampSets, setWarmUpChecks, showsGeneralWarmUp, warmUpChecks } from '../lib/warmUp';
+import type { WarmUpChecks } from '../lib/warmUp';
 import type { Experience, PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
@@ -20,6 +22,8 @@ interface Props {
   now: number;
   /** The profile's confirmed loads by equipment: the rack a logged load is compared with. */
   profileLoads?: Profile['loads'];
+  /** The setup's dumbbell rack (a hotel gym's on Travel); only the #300 ramp rows read it, never the set cells. */
+  rampLoads?: number[];
   /** Only the user's confirmed loads; the first-weight step never offers the example rack. */
   calibrationLoads?: number[];
   /** The profile's level: the first-weight step starts from a load suggested for it (#116). Absent, it suggests nothing. */
@@ -144,6 +148,7 @@ export default function TrainScreen({
   history,
   now,
   profileLoads = {},
+  rampLoads = [],
   calibrationLoads = [],
   experience,
   unit,
@@ -183,6 +188,19 @@ export default function TrainScreen({
       : element?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? element?.querySelector<HTMLElement>('button, input'))?.focus();
   });
 
+  // #300: warm-up checks live in memory for the session; nothing reaches the record.
+  // Read by session id every render, so a session replaced under a mounted logger never shows another's checks.
+  const [, setWarmTick] = useState(0);
+  const warm = warmUpChecks(session.id);
+  const updateWarm = (patch: Partial<WarmUpChecks>) => {
+    setWarmUpChecks(session.id, { ...warmUpChecks(session.id), ...patch });
+    setWarmTick((tick) => tick + 1);
+  };
+  const warmMinutes = generalWarmUpMinutes(session.durationMin);
+  const warmLeft = warm.timerStartedAt === null ? null
+    : Math.max(0, Math.ceil(warmMinutes * 60 - (now - warm.timerStartedAt) / 1000));
+  // The optional timer running out ticks the warm-up done, derived from the tick like "Rest over".
+  if (warmLeft === 0 && !warm.general) updateWarm({ general: true });
   const progress = sessionProgress(session);
   const rest = restRemaining(session, now);
   const restPaused = Boolean(session.restPausedAt);
@@ -471,11 +489,62 @@ export default function TrainScreen({
     return [row, note, error].filter(Boolean);
   });
 
+  // #300: two ramp sets before the lead's working sets, from the load set 1 shows. Not sets: never
+  // logged, counted or stored. A dumbbell ramps on the rack the logger's own picker offers (Travel's
+  // hotel rack on a today-only day), else plate steps.
+  const rampRack = equipment === 'Dumbbell' ? rampLoads : rack;
+  const ramps = mode !== 'none' && index === rampExerciseIndex(session)
+    ? rampSets({ equipment, working: exercise.performed[0]?.weight ?? 0, unit, rack: rampRack })
+    : [];
+  const rampRows = ramps.map((ramp, rampIndex) => {
+    const key = `${exercise.exerciseId}:${rampIndex}`;
+    const ticked = warm.ramps.includes(key);
+    return (
+      <tr key={`${exerciseKey}:warm-${rampIndex}`} className={ticked ? 'lg-row--warm lg-row--warm-done' : 'lg-row--warm'}>
+        <td><abbr title="Warm-up">W</abbr></td>
+        <td className="lg-warm-tag">Warm-up</td>
+        <td><span className="lg-cell lg-cell--warm">{loadValue(ramp.weight, unit, rampRack)}</span></td>
+        <td><span className="lg-cell lg-cell--warm">{ramp.reps}</span></td>
+        <td>
+          <button type="button" className="lg-wcheck" aria-pressed={ticked}
+            aria-label={`Warm-up set ${rampIndex + 1}, ${loadValue(ramp.weight, unit, rampRack)} ${weightLabel} × ${ramp.reps}, done`}
+            onClick={() => updateWarm({ ramps: ticked ? warm.ramps.filter((item) => item !== key) : [...warm.ramps, key] })}>
+            <Icon name="check" size={20} />
+          </button>
+        </td>
+      </tr>
+    );
+  });
+
   return (
     <div className="screen flow-screen">
       {header}
 
       <div className="flow-body lg-body">
+        {showsGeneralWarmUp(session) && (
+          <section className={warm.general ? 'lg-warm lg-warm--done' : 'lg-warm'} aria-label="Warm-up">
+            <div className="lg-warm__head">
+              <div className="lg-warm__text">
+                <h2 className="lg-warm__title">Warm-up · {warmMinutes} min</h2>
+                {!warm.general && <p className="lg-warm__note">{GENERAL_WARM_UP_TEXT}</p>}
+              </div>
+              <button type="button" className="lg-wcheck" aria-pressed={warm.general}
+                aria-label={`Warm-up, ${warmMinutes} min easy cardio, done`}
+                onClick={() => updateWarm({ general: !warm.general, timerStartedAt: null })}>
+                <Icon name="check" size={20} />
+              </button>
+            </div>
+            {!warm.general && (
+              <button type="button" className="pill-quiet lg-warm__timer"
+                aria-label={warmLeft === null ? `Start ${warmMinutes}-minute warm-up timer` : 'Stop warm-up timer'}
+                onClick={() => updateWarm({ timerStartedAt: warmLeft === null ? Date.now() : null })}>
+                <Icon name="timer" size={16} />
+                {warmLeft === null ? `Start ${warmMinutes}:00 timer` : restClock(warmLeft)}
+              </button>
+            )}
+          </section>
+        )}
+
         <section className="lg-ex" aria-label={exercise.name}>
           <button type="button" className="lg-thumb" onClick={() => onOpenActions(index, 'instructions')}
             aria-label={`${exercise.name} demo and instructions`} aria-haspopup="dialog">
@@ -527,7 +596,7 @@ export default function TrainScreen({
               <th scope="col"><span className="sr-only">Log</span></th>
             </tr>
           </thead>
-          <tbody>{rows}</tbody>
+          <tbody>{rampRows}{rows}</tbody>
         </table>
 
         <div className="sr-only" role="status" aria-live="polite">

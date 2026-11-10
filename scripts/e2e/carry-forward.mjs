@@ -48,7 +48,7 @@ async function onboard(page, unit) {
 /** Each set row as { weight, reps }, read from the cells the lifter sees (inputs since #309). */
 async function rows(page) {
   const out = [];
-  for (const row of await page.locator('table.lg-table tbody tr:not(.lg-note)').all()) {
+  for (const row of await page.locator('table.lg-table tbody tr:not(.lg-note):not(.lg-row--warm)').all()) {
     const cells = row.locator('input.lg-cell');
     out.push({ weight: (await cells.nth(0).inputValue()).trim(), reps: (await cells.nth(1).inputValue()).trim() });
   }
