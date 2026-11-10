@@ -1,6 +1,6 @@
-// The name-tap Start over check (#292): tapping the name (or avatar) on Today opens Settings with
-// the name and a red "Start over on this device" row in view without scrolling. The row opens a
-// sheet that leads with saving: a cancelled or failed backup erases nothing, a backup that left
+// The name-tap Start over check (#292, #324): tapping the name (or avatar) on Today opens Settings on
+// the name and Profile; the red "Start over on this device" row is the last block, under "Danger zone".
+// Tapping the name in Settings, or the row, opens a sheet that leads with saving: a cancelled or failed backup erases nothing, a backup that left
 // the app is recorded in localStorage, and erasing takes two taps. Runs at 390x844, 360x780 and 390x650.
 //
 //   npm run e2e        (builds, then runs every scripts/e2e check against the built app)
@@ -90,22 +90,28 @@ try {
     const page = await context.newPage();
     await onboard(page, 'Sam');
 
-    // 1. Tapping the name (not only the avatar) opens Settings with the block in view.
+    // 1. Tapping the name (not only the avatar) opens Settings on the name and Profile (#324).
     await page.locator('.today__name').click();
     const row = page.getByRole('button', { name: /Start over on this device/ });
-    await row.waitFor({ timeout: 3000 }).catch(() => {});
+    await row.waitFor({ state: 'attached', timeout: 3000 }).catch(() => {});
     check(await row.count() === 1, `${where}: Settings has ${await row.count()} Start over rows, want 1`);
-    check(await inView(page, row.first(), height), `${where}: Start over is not in view without scrolling after the name tap`);
     const block = page.locator('.settings-profile');
     check((await block.innerText().catch(() => '')).includes('Sam'), `${where}: profile block does not show the name`);
+    check(await inView(page, page.locator('#settings-profile'), height), `${where}: Settings does not open on Profile`);
+    check(!(await inView(page, row.first(), height)), `${where}: Start over is still in view on open; it belongs at the bottom`);
+    // (#324) Start over is the last block, under "Danger zone".
+    const last = await page.locator('.settings > .settings-group').last().innerText().catch(() => '');
+    check(/^Danger zone\s+Start over on this device/i.test(last.trim()), `${where}: the last Settings block is not Danger zone / Start over ("${last.slice(0, 60)}")`);
     const rowText = await row.first().innerText().catch(() => '');
     check(/erases this phone's workouts/.test(rowText), `${where}: row subtitle does not say what gets erased ("${rowText}")`);
     check(!/(^|\. )(log|sign) ?out\b/i.test(rowText.replace("No account to log out of", '')), `${where}: row offers to log out`);
-    await shot(page, `292-settings-${where}.png`);
+    await shot(page, `324-settings-${where}.png`);
+    await row.first().scrollIntoViewIfNeeded();
+    await shot(page, `324-settings-bottom-${where}.png`);
 
-    // 2. The row opens the sheet that leads with saving.
+    // 2. Tapping the name in Settings opens the sheet that leads with saving (#292's flow, unchanged).
     const before = await dump(page);
-    await row.first().click();
+    await block.getByRole('button', { name: 'Sam' }).click();
     const sheet = page.locator('.sheet');
     check(await page.getByRole('heading', { name: 'Save your progress first?' }).isVisible().catch(() => false), `${where}: sheet does not lead with "Save your progress first?"`);
     check((await sheet.innerText()).includes('Last backup: never'), `${where}: sheet does not say "Last backup: never"`);
@@ -168,6 +174,9 @@ try {
     const youBlock = nameless.locator('.settings-profile');
     await youBlock.waitFor({ timeout: 3000 }).catch(() => {});
     check((await youBlock.innerText().catch(() => '')).split('\n')[0].trim() === 'You', `${where}: nameless block does not show "You"`);
+    // 8. The Danger zone row itself opens the same sheet.
+    await nameless.getByRole('button', { name: /Start over on this device/ }).click();
+    check(await nameless.getByRole('heading', { name: 'Save your progress first?' }).isVisible().catch(() => false), `${where}: the Start over row does not open the sheet`);
     await blank.close();
   }
 } finally {

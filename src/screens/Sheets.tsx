@@ -1169,17 +1169,13 @@ export function SettingsSheet({
   return (
     <Sheet title="Training settings" onClose={onClose} variant="settings">
       <div className="glass-scope settings">
-        {/* (#292) The name tap lands here: who this is, and the honest "log out" in view. */}
+        {/* (#292) Who this is. (#324) Tapping the name still opens the Start over sheet; the row itself sits last. */}
         <section className="settings-group settings-profile" aria-label="This device">
-          <p className="settings-profile__name">{profile.name?.trim() || 'You'}</p>
-          <div className="settings-card">
-            <button className="settings-row settings-row--action settings-row--stack" style={{ gap: 2 }} onClick={onStartOver}>
-              <span style={{ color: 'var(--danger)' }}>Start over on this device</span>
-              <span className="settings-row__note">
-                No account to log out of: this erases this phone's workouts. Back up first.
-              </span>
+          <p className="settings-profile__name">
+            <button type="button" className="today__name-btn" onClick={onStartOver}>
+              {profile.name?.trim() || 'You'}
             </button>
-          </div>
+          </p>
         </section>
         <section className="settings-group" aria-labelledby="settings-profile">
           <h3 className="settings-group__title" id="settings-profile">
@@ -1354,6 +1350,21 @@ export function SettingsSheet({
           </h3>
           <div className="settings-card">
             <p className="settings-row settings-row__note">{SAFETY_NOTICE}</p>
+          </div>
+        </section>
+
+        {/* (#324) Erasing everything is the last thing in Settings, not the first. */}
+        <section className="settings-group" aria-labelledby="settings-danger">
+          <h3 className="settings-group__title" id="settings-danger">
+            Danger zone
+          </h3>
+          <div className="settings-card">
+            <button className="settings-row settings-row--action settings-row--stack" style={{ gap: 2 }} onClick={onStartOver}>
+              <span style={{ color: 'var(--danger)' }}>Start over on this device</span>
+              <span className="settings-row__note">
+                No account to log out of: this erases this phone's workouts. Back up first.
+              </span>
+            </button>
           </div>
         </section>
 

@@ -9,7 +9,7 @@ import { exerciseMeta, lastSummary, setText, targetSummary } from '../data/flags
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { currentWorkout, setupFor, todayGlance } from '../lib/adapt';
-import type { TodayOnly } from '../lib/todayOnly';
+import type { TodayDiff, TodayOnly } from '../lib/todayOnly';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
 import { isDescribedSession } from '../lib/sequence';
@@ -70,8 +70,10 @@ interface Props {
   described?: DayStatus | null;
   /** (#298) Today's change against the saved setup; null when today is the usual day or a session runs. */
   todayBar?: TodayOnly | null;
-  /** (#298) The saved setup's name: the gear pill always shows it ("Gym"), with a dot when today differs. */
+  /** (#298) The saved setup's name: the gear pill shows it unless today's gear differs (#325). */
   usualGear?: string;
+  /** (#325) Today's gear or length differs from the saved setup: that pill shows today's value with a dot. */
+  todayDiff?: TodayDiff | null;
   /** (#298) Undo today's change: the same path as Restore original. */
   onUndo?: () => void;
   /** (#225) The backup reminder line (`backupReminder`), or null when no backup is due. */
@@ -219,6 +221,7 @@ export default function TodayScreen({
   composing = false,
   todayBar,
   usualGear,
+  todayDiff,
   onUndo,
   described,
   backup,
@@ -322,10 +325,15 @@ export default function TodayScreen({
               className="t7-pill"
               onClick={onOpenLength}
               disabled={Boolean(current)}
-              aria-label={`Workout length, ${adapted.minutes} minutes`}
+              aria-label={
+                todayDiff?.lengthDiffers
+                  ? `Workout length, usually ${profile.sessionMinutes ?? 35} minutes, today ${adapted.minutes} minutes`
+                  : `Workout length, ${adapted.minutes} minutes`
+              }
             >
               <Icon name="schedule" size={16} />
               <span className="t7-pill__l">{adapted.minutes} min</span>
+              {todayDiff?.lengthDiffers && <span className="t7-pill__dot" aria-hidden="true" />}
               <Icon name="expand_more" size={18} />
             </button>
             {onOpenGym && (
@@ -334,11 +342,11 @@ export default function TodayScreen({
                 className="t7-pill t7-pill--gym"
                 onClick={onOpenGym}
                 disabled={Boolean(current)}
-                aria-label={todayBar?.gearDiffers ? `Equipment, usually ${usualGear ?? setup.short}, today ${setup.chip}` : `Equipment today, ${setup.chip}`}
+                aria-label={todayDiff?.gearDiffers ? `Equipment, usually ${usualGear ?? setup.short}, today ${setup.chip}` : `Equipment today, ${setup.chip}`}
               >
                 <Icon name="fitness_center" size={16} />
-                <span className="t7-pill__l">{usualGear ?? setup.short}</span>
-                {todayBar?.gearDiffers && <span className="t7-pill__dot" aria-hidden="true" />}
+                <span className="t7-pill__l">{todayDiff?.gearDiffers ? setup.short : (usualGear ?? setup.short)}</span>
+                {todayDiff?.gearDiffers && <span className="t7-pill__dot" aria-hidden="true" />}
                 <Icon name="expand_more" size={18} />
               </button>
             )}

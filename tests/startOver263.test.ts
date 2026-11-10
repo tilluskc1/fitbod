@@ -164,13 +164,13 @@ async function sheets() {
   return { server, mod: await server.ssrLoadModule('/src/screens/Sheets.tsx') };
 }
 
-test('Settings opens on the name and Start over, with a one-line why (#292 moved it from Data)', async () => {
+test('Start over is the last block, under Danger zone, with a one-line why (#292 moved it from Data, #324 to the bottom)', async () => {
   const { server, mod } = await sheets();
   try {
     const text = plain(renderToStaticMarkup(createElement(mod.SettingsSheet, {
       profile, onChange: noop, onExport: noop, onBackup: noop, onRestore: noop, onStartOver: noop, onClose: noop, storageNote: 'Saved',
     })));
-    assert.match(text, /^\s*Training settings .*Round trip Start over on this device No account to log out of: this erases this phone.s workouts\. Back up first\. Profile/);
+    assert.match(text, /^\s*Training settings .*Round trip Profile .* About .* Danger zone Start over on this device No account to log out of: this erases this phone.s workouts\. Back up first\. Done\s*$/);
     assert.equal(text.match(/Start over on this device/g)?.length, 1, 'one way in, not two');
   } finally {
     await server.close();

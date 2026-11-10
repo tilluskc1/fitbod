@@ -36,7 +36,7 @@ import
 import  { FULL_BODY_A } from './data/flagship';
 import { cursorFor, dayCounter, isDescribedSession, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
 import { withoutCustomDay } from './lib/plan';
-import { CHANGED_FOR_TODAY, todayOnly, undoToast, usualGear } from './lib/todayOnly';
+import { CHANGED_FOR_TODAY, todayDiff, todayOnly, undoToast, usualGear } from './lib/todayOnly';
 import { baseTalk, customDayPreview, describedDayStatus, describedSessionStatus, talkConstraints } from './lib/todayTalk';
 import type { TalkState } from './lib/todayTalk';
 import TodayTalk from './components/TodayTalk';
@@ -1520,6 +1520,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onRestore={() => restoreOriginal()}
             todayBar={todayOnly(state, today)}
             usualGear={usualGear(profile)}
+            todayDiff={todayDiff(state, today)}
             onUndo={() => restoreOriginal(undoToast(profile))}
             onOpenSettings={() => setSheet({ kind: 'settings' })}
             onOpenExercise={(exerciseId, exerciseIndex) => setSheet({ kind: 'actions', exerciseId, exerciseIndex })}
