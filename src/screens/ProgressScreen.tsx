@@ -18,7 +18,8 @@ interface Props {
   unit: Unit;
   /** The profile's confirmed loads, so a rack load reads like the target. */
   loads?: Profile['loads'];
-  onExport: () => void;
+  /** (#293) Opens the backup sheet; nothing is saved until the user confirms there. */
+  onBackup: () => void;
   onCorrect: (
     workoutId: string,
     exerciseIndex: number,
@@ -57,7 +58,7 @@ export default function ProgressScreen({
   history,
   unit,
   loads = {},
-  onExport,
+  onBackup,
   onCorrect,
   onDelete,
   onFeedback,
@@ -156,7 +157,7 @@ export default function ProgressScreen({
         <div>
           <h1 className="page-title">Progress.</h1>
         </div>
-        <button className="icon-btn" onClick={onExport} aria-label="Export backup">
+        <button className="icon-btn" onClick={onBackup} aria-label="Back up workouts">
           <DownloadIcon />
         </button>
       </header>

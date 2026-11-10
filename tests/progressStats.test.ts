@@ -94,7 +94,7 @@ async function renderProgress(history: WorkoutRecord[]) {
       createElement(ProgressScreen, {
         history,
         unit: 'kg' as const,
-        onExport: noop,
+        onBackup: noop,
         onCorrect: noop,
         onDelete: noop,
         onGoTrain: noop,

@@ -273,7 +273,7 @@ test('a logged load reads like its target when accepted unchanged and as typed o
           assert.match(lines[0].next, new RegExp(`@ ${re(X)} ${unit}`), `${tag} Next`);
         }
         const progress = plain(renderToStaticMarkup(createElement(Progress, { history, unit, loads: bar.loads,
-          onExport() {}, onCorrect() {}, onDelete() {}, onFeedback() {}, onGoTrain() {} })));
+          onBackup() {}, onCorrect() {}, onDelete() {}, onFeedback() {}, onGoTrain() {} })));
         assert.match(progress, new RegExp(`${re(shown)} ${unit} total ×`), `${tag} Progress`);
         for (const [label, Sheet, pattern] of [['exercise history', ExerciseActionsSheet, 'own records\\. .*?@'], ['why sheet', WhySheet, 'Working load']] as const) {
           const sheet = plain(renderToStaticMarkup(createElement(Sheet as never, { exerciseId: 'overhead-press', exerciseName: 'x',

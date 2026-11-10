@@ -26,7 +26,7 @@ test('history editor identifies recorded holds as seconds while ordinary kg/lb r
     const noop = () => {};
     for (const unit of ['kg', 'lb']) {
       const html = renderToStaticMarkup(createElement(Progress, { history: state.history, unit,
-        onExport: noop, onCorrect: noop, onDelete: noop, onGoTrain: noop }));
+        onBackup: noop, onCorrect: noop, onDelete: noop, onGoTrain: noop }));
       const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
       assert.match(html, /aria-label="Correct seconds for set 1 of Plank"[^>]*value="45"/);
       assert.doesNotMatch(html, /Correct (?:reps|weight) for set 1 of Plank/);
@@ -61,7 +61,7 @@ test('history correction keeps a no-load loaded set unmarkable and says why', as
     const { default: Progress } = await server.ssrLoadModule('/src/screens/ProgressScreen.tsx');
     const noop = () => {};
     const html = renderToStaticMarkup(createElement(Progress, { history: state.history, unit: 'kg',
-      onExport: noop, onCorrect: noop, onDelete: noop, onGoTrain: noop }));
+      onBackup: noop, onCorrect: noop, onDelete: noop, onGoTrain: noop }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
     assert.match(html, /disabled=""[^>]*aria-label="Mark set 3 of Floor Press complete"/);
     assert.doesNotMatch(html, /disabled=""[^>]*aria-label="Mark set 2 of Floor Press complete"/, 'set 2 has a load');
