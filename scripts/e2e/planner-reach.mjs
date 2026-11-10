@@ -236,7 +236,8 @@ try {
     await train.waitForSelector('.t7-hero');
     const failed = `${width}x${height}-save-error`;
     check(await train.getByText('Not saved.').isVisible(), `${failed}: save error not showing`);
-    check(await train.getByText(/Saved the completed sets/).isVisible(), `${failed}: finish message not showing`);
+    // (#295 review 1) A Problem while a toast shows: the toast goes, the Problem stays.
+    check(!(await train.getByText(/Saved the completed sets/).isVisible()), `${failed}: the finish toast shows beside "Not saved."`);
     await reachable(train, train.getByRole('button', { name: 'Retry' }), 'Retry', failed);
     await reachable(train, train.getByRole('button', { name: 'Data', exact: true }), 'Data', failed);
     await shot(train, failed);
