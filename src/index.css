@@ -1632,6 +1632,18 @@ textarea:focus-visible {
   margin-top: 14px;
 }
 
+/* #262: session lengths share one row of equal chips, so "60 min" never wraps alone at 360px. */
+.chip-wrap--even {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.glass-scope .chip-wrap--even .chip,
+.chip-wrap--even .chip {
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
 .setup-label {
   display: block;
   font-size: 11px;
