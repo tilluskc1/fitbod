@@ -1102,6 +1102,8 @@ interface SettingsProps {
   onStartOver: () => void;
   /** (#307) Open the Install on this phone sheet. */
   onInstall?: () => void;
+  /** (#255) Open the Send feedback sheet. */
+  onFeedback?: () => void;
   onClose: () => void;
   storageNote: string;
 }
@@ -1114,6 +1116,7 @@ export function SettingsSheet({
   onRestore,
   onStartOver,
   onInstall,
+  onFeedback,
   onClose,
   storageNote,
 }: SettingsProps) {
@@ -1330,6 +1333,20 @@ export function SettingsSheet({
             </div>
           )}
         </section>
+
+        {onFeedback && (
+          <section className="settings-group" aria-labelledby="settings-feedback">
+            <h3 className="settings-group__title" id="settings-feedback">
+              Feedback
+            </h3>
+            <div className="settings-card">
+              <button className="settings-row settings-row--action settings-row--stack" style={{ gap: 2 }} onClick={onFeedback}>
+                <span>Send feedback</span>
+                <span className="settings-row__note">Tell the Home Strength team what works and what doesn't.</span>
+              </button>
+            </div>
+          </section>
+        )}
 
         <section className="settings-group" aria-labelledby="settings-about">
           <h3 className="settings-group__title" id="settings-about">
