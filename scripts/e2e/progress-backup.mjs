@@ -112,7 +112,7 @@ try {
     check(!(await sheet(page).getByRole('button', { name: 'Back up now' }).count()), `${where}: empty sheet offers Back up now`);
     if (shots) await page.screenshot({ path: join(shots, `293-empty-${where}.png`) });
     await sheet(page).getByRole('button', { name: 'Close' }).click();
-    await page.getByRole('button', { name: 'Today' }).click();
+    await page.getByRole('button', { name: 'Today', exact: true }).click();
 
     // 2. One workout: the icon asks first. Not now records nothing.
     await finishWorkout(page);
@@ -174,7 +174,7 @@ try {
     check(!(await sheet(page).count()), `${where}: the sheet stayed open after a download`);
 
     // 6. Settings' Back up now saves the same kind of file (one path).
-    await page.getByRole('button', { name: 'Today' }).click();
+    await page.getByRole('button', { name: 'Today', exact: true }).click();
     await page.getByRole('button', { name: 'Open profile and settings' }).click();
     const fromSettings = await downloadDuring(page, () => page.getByRole('button', { name: 'Back up now' }).click(), 3000);
     check(fromSettings && download && fromSettings.suggestedFilename().slice(0, 26) === download.suggestedFilename().slice(0, 26), `${where}: Settings and Progress name the file differently`);
