@@ -4896,7 +4896,7 @@ button.aw-exercise__name-btn {
   border-radius: 6px;
 }
 
-/* (#292) Settings opens on the name and Start over, in view without scrolling. */
+/* (#292) Settings opens on the name; (#324) Start over sits last, under "Danger zone". */
 .settings-profile__name {
   margin: 0 0 8px 16px;
   font-size: 22px;

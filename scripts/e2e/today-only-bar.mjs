@@ -1,6 +1,6 @@
 // The today-only bar (#298): a gym profile that picks Travel for today sees "Today only: Travel gym"
-// with Undo, the gear pill still reads "Gym" with a dot, and Undo puts the usual gear and length
-// back with a "Back to your usual" message. The bar stays on one line and Undo is a 44px target.
+// with Undo, the gear pill reads today's "Travel" with a dot (#325; the length pill too when it
+// changes for today), and Undo puts the usual gear and length back with a "Back to your usual" message. The bar stays on one line and Undo is a 44px target.
 // 390x844, 360x780 and 390x650.
 //
 //   npm run e2e        (builds, then runs every scripts/e2e check against the built app)
@@ -72,8 +72,12 @@ try {
     await page.waitForSelector('.t7-today-only');
     const bar = (await page.locator('.t7-today-only').innerText()).replace(/\s+/g, ' ');
     check(/Today only: Travel gym Undo/.test(bar), `${where}: bar reads "${bar}"`);
-    check((await pill.innerText()).trim().startsWith('Gym'), `${where}: the gear pill no longer reads Gym`);
+    // (#325) The pill, bar and card all say Travel.
+    check((await pill.innerText()).trim().startsWith('Travel'), `${where}: the gear pill does not read Travel ("${(await pill.innerText()).trim()}")`);
+    check(/Travel/.test(await page.locator('.t7-hero__meta').innerText()), `${where}: the card does not say Travel`);
     check(await pill.locator('.t7-pill__dot').count() === 1, `${where}: the gear pill has no dot`);
+    const lengthPill = page.locator('.t7-controls .t7-pill').first();
+    check(!(await lengthPill.locator('.t7-pill__dot').count()), `${where}: the length pill has a dot while length is the usual`);
     check(!(await page.getByText('Adjusted for today').count()), `${where}: "Adjusted for today" still shows`);
     await barFits(page, `${where} travel`);
     if (shots) await page.screenshot({ path: join(shots, `298-travel-${where}.png`) });
@@ -84,6 +88,10 @@ try {
     await page.waitForFunction(() => document.querySelector('.t7-today-only')?.textContent?.includes('30 min'), null, { timeout: 4000 }).catch(() => {});
     const both = (await page.locator('.t7-today-only').innerText()).replace(/\s+/g, ' ');
     check(/Today only: Travel gym · 30 min/.test(both), `${where}: bar reads "${both}"`);
+    // (#325) Both pills show today's values, each with its dot.
+    check(/^30 min/.test((await lengthPill.innerText()).trim()), `${where}: the length pill reads "${(await lengthPill.innerText()).trim()}", want 30 min`);
+    check(await lengthPill.locator('.t7-pill__dot').count() === 1, `${where}: the length pill has no dot for a today-only length`);
+    check((await pill.innerText()).trim().startsWith('Travel') && await pill.locator('.t7-pill__dot').count() === 1, `${where}: the gear pill lost Travel or its dot after the length change`);
     await barFits(page, `${where} travel and 30 min`);
     if (shots) await page.screenshot({ path: join(shots, `298-travel-30-${where}.png`) });
 
@@ -98,6 +106,8 @@ try {
     const meta = await page.locator('.t7-hero__meta').innerText();
     check(/45 min/.test(length) && /Gym/.test(meta) && !/Travel/.test(meta), `${where}: after Undo, length "${length}", hero "${meta}"`);
     check(!(await pill.locator('.t7-pill__dot').count()), `${where}: the dot stays after Undo`);
+    check((await pill.innerText()).trim().startsWith('Gym'), `${where}: the gear pill does not read Gym after Undo`);
+    check(!(await lengthPill.locator('.t7-pill__dot').count()), `${where}: the length dot stays after Undo`);
     if (shots) await page.screenshot({ path: join(shots, `298-undo-${where}.png`) });
     await page.close();
   }

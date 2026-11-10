@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { dayKey } from '../src/lib/plan.ts';
 import { baseTalk, talkFromText } from '../src/lib/todayTalk.ts';
-import { todayOnly, undoToast, usualGear } from '../src/lib/todayOnly.ts';
+import { todayDiff, todayOnly, undoToast, usualGear } from '../src/lib/todayOnly.ts';
 import type { AppState, Profile, TodayOverride, WorkoutRecord } from '../src/types.ts';
 
 const gym: Profile = {
@@ -87,4 +87,24 @@ test('#298 "dumbbells only" keeps the saved setup for home and no-gear profiles'
   const bodyBase = baseTalk({ minutes: 30, equipment: 'bodyweight' }, ['Chest']);
   // Unchanged reading for a no-gear profile: the parser's own "home" (its kit has no dumbbells).
   assert.equal(talkFromText('dumbbells only', bodyBase).equipment, 'home');
+});
+
+test('#325 the pills follow today: gear and length each say whether they differ from the saved setup', () => {
+  assert.deepEqual(todayDiff(state(gym, override({ choice: 'hotel' })), NOW), { gearDiffers: true, lengthDiffers: false });
+  assert.deepEqual(todayDiff(state(gym, override({ choice: 'home', minutes: 45 })), NOW), { gearDiffers: false, lengthDiffers: true });
+  assert.deepEqual(todayDiff(state(gym, override({ choice: 'hotel', minutes: 45 })), NOW), { gearDiffers: true, lengthDiffers: true });
+  // A no-gear profile's bodyweight day is its saved setup.
+  assert.deepEqual(todayDiff(state(noGear, override({ choice: 'bodyweight' })), NOW), { gearDiffers: false, lengthDiffers: false });
+});
+
+test('#325 no override (Undo) or a passed day (midnight): the pills show the saved setup', () => {
+  assert.equal(todayDiff(state(gym, null), NOW), null);
+  assert.equal(todayDiff(state(gym, override({ choice: 'hotel', minutes: 45 })), new Date(2026, 10, 11, 0, 1)), null);
+});
+
+test('#325 a running session keeps today\'s pills; only the bar steps aside', () => {
+  const running = { id: 'w', name: 'Upper', date: NOW.toISOString(), status: 'in-progress', exercises: [] } as unknown as WorkoutRecord;
+  const s = state(gym, override({ choice: 'hotel', minutes: 45 }), running);
+  assert.equal(todayOnly(s, NOW), null);
+  assert.deepEqual(todayDiff(s, NOW), { gearDiffers: true, lengthDiffers: true });
 });

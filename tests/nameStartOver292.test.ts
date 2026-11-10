@@ -35,12 +35,13 @@ test('the last backup line reads never, or the day it happened', () => {
   assert.match(lastBackupLine('2026-11-02T09:00:00.000Z'), /^Last backup: (2 Nov|Nov 2)$/);
 });
 
-test('Settings leads with the name, then Start over; a nameless profile reads "You"', async () => {
+test('Settings leads with the name, then Profile; Start over sits last under Danger zone (#324); a nameless profile reads "You"', async () => {
   const { server, mod } = await sheets();
   try {
-    assert.match(await settingsText(mod, profile), /^Training settings .*?Sam Start over on this device No account/);
+    assert.match(await settingsText(mod, profile), /^Training settings .*?Sam Profile Name/);
+    assert.match(await settingsText(mod, profile), /About .* Danger zone Start over on this device No account to log out of: this erases this phone.s workouts\. Back up first\. Done$/);
     for (const name of [undefined, '', '   ']) {
-      assert.match(await settingsText(mod, { ...profile, name }), /^Training settings .*?You Start over on this device/, `name ${JSON.stringify(name)}`);
+      assert.match(await settingsText(mod, { ...profile, name }), /^Training settings .*?You Profile Name/, `name ${JSON.stringify(name)}`);
     }
   } finally {
     await server.close();
