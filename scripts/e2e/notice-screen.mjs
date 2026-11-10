@@ -88,6 +88,9 @@ try {
     await page.getByRole('button', { name: 'Finish', exact: true }).click();
     await page.getByRole('button', { name: /Save completed work/ }).click();
     check(await showing(page, /Saved the completed sets/), `${where}: the recap message does not show on the recap`);
+    // (#333) Part of the workout was dropped: a Heads-up card, not a Done toast.
+    check(await page.locator('.notice-card--headsUp', { hasText: 'Saved the completed sets' }).count() === 1, `${where}: the partial save is not a Heads-up card`);
+    check(!(await page.locator('.done-toast').count()), `${where}: the partial save shows as a Done toast`);
     await shot(page, 'recap-message', where);
     const leave = page.getByRole('button', { name: /^Done$|Back to Today/ }).first();
     if (await leave.count()) await leave.click();
