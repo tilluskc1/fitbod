@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Profile, WorkoutRecord } from '../types';
 import { feedbackLabel, latestFeedback } from '../lib/feedback';
 import { equipmentTitle, sessionLength } from '../lib/coachLabels';
+import { finishedWorkouts } from '../lib/progressTotals';
 import { ArrowIcon, DumbbellIcon, EditIcon, GoalIcon, ClockIcon } from '../components/ui/Icons';
 
 interface Props {
@@ -19,7 +20,9 @@ type CoachTab = 'review' | 'memory';
 export default function CoachScreen({ profile, history, program, onWhy, onEdit }: Props) {
   const [tab, setTab] = useState<CoachTab>('review');
 
-  const last = history[0];
+  // (#294) Only finished workouts with a logged set count, the same as Progress.
+  const finished = finishedWorkouts(history);
+  const last = finished[0];
   const equipment = profile.equipment.length > 0 ? profile.equipment.join(' · ') : 'Bodyweight only';
   // Only an answer the user actually gave, with the workout it belongs to.
   const felt = latestFeedback(history);
@@ -56,13 +59,13 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
         <>
           <section className="big-card">
             <span className="kicker">
-              {history.length === 0 ? 'A FAMILIAR STARTING POINT' : 'FROM YOUR EXERCISE HISTORY'}
+              {finished.length === 0 ? 'A FAMILIAR STARTING POINT' : 'FROM YOUR EXERCISE HISTORY'}
             </span>
             <h2 className="big-title">
-              {history.length === 0 ? 'Consistency starts with a familiar plan.' : 'Your work carries forward.'}
+              {finished.length === 0 ? 'Consistency starts with a familiar plan.' : 'Your work carries forward.'}
             </h2>
             <p className="big-copy">
-              {history.length === 0
+              {finished.length === 0
                 ? 'Start with the plan, edit the loads to suit you, and build your own history one set at a time.'
                 : 'Each movement keeps its own recorded loads and reps. Review the next target before you train.'}
             </p>
@@ -75,10 +78,13 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
           <div className="card" style={{ marginTop: 14 }}>
             <span className="kicker">OBSERVE → REVIEW → ADAPT</span>
             <h2 className="card-title">Your recent context</h2>
+            {finished.length === 0 ? (
+              <p className="big-copy" style={{ marginTop: 10 }}>After your first workout I'll show what changed and why.</p>
+            ) : (
             <div className="context-list">
               <div className="context-row">
                 <span>Sessions recorded</span>
-                <span>{history.length}</span>
+                <span>{finished.length}</span>
               </div>
               <div className="context-row">
                 <span>Last session</span>
@@ -99,6 +105,7 @@ export default function CoachScreen({ profile, history, program, onWhy, onEdit }
                 </span>
               </div>
             </div>
+            )}
             <p className="data-note">
               Suggestions use your own completed sessions. Example records never trigger a personal
               review.
