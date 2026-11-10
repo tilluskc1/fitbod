@@ -142,6 +142,13 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    (the session's first exercise and whether it can lead), never the first match further down. Check:
    `tests/warmUp300.test.ts` (swap to `cable-fly` and `push-up`, push-up-first day).
 
+24. **One "counts as none" rule covers every view of the same records.** #294 hid Progress's zero tiles
+   for users whose only record was empty or all-skipped, but Session history still checked
+   `sessions.length` and listed a "0 sets" row; review 1 failed it. Rule: when a story defines what counts
+   (a finished workout, a logged set), grep every surface that lists or counts those records and use the
+   one helper (`finishedWorkouts` in `src/lib/progressTotals.ts`). Check: `tests/progressEmpty294.test.ts`
+   renders Overview, Session history and Coach for the same empty-record fixture.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

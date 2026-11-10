@@ -790,29 +790,42 @@ textarea:focus-visible {
   margin-top: 16px;
 }
 
-.chart-empty {
-  padding: 26px 8px 8px;
-  text-align: center;
+/* (#294) Progress for a user with no finished workout: one dashed card and its one action. */
+.progress-empty {
+  margin-top: 4px;
+  padding: 28px 18px;
 }
 
-.chart-empty .bars {
-  color: var(--accent-text);
+.progress-empty__title {
+  font-size: 20px;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.progress-empty p {
+  margin: 8px 0 18px;
+}
+
+/* (#294) One-word tile labels sit on one line; "all time" and the planned-time note under the row. */
+.stats-3 {
+  margin-bottom: 6px;
+}
+
+.stats-3 .stat-label {
+  min-height: 0;
+  white-space: nowrap;
+}
+
+.stats-note {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+  margin: 0 0 4px;
+}
+
+.stats-note:last-of-type {
   margin-bottom: 14px;
-}
-
-.chart-empty h3 {
-  font-size: 22px;
-  letter-spacing: -0.04em;
-}
-
-.chart-empty p {
-  margin-top: 8px;
-  color: var(--secondary);
-  font-size: 14px;
-}
-
-.chart-empty .text-link {
-  margin-top: 12px;
 }
 
 .history-list {
