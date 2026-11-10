@@ -149,7 +149,7 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    one helper (`finishedWorkouts` in `src/lib/progressTotals.ts`). Check: `tests/progressEmpty294.test.ts`
    renders Overview, Session history and Coach for the same empty-record fixture.
 
-23. **Screenshots on the issue are not screenshots shown.** Prod 3 merged #298 (PR 320) and queued six
+25. **Screenshots on the issue are not screenshots shown.** Prod 3 merged #298 (PR 320) and queued six
    more UI PRs without sending the owner a single image; the shots were only linked on the issues. It
    had also skipped reading this file at start-up, so lesson 22 never applied. Rule: product reads this
    file before its first action. Before it merges a UI story, or reports one as merged, it sends the
