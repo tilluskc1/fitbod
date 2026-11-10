@@ -9,7 +9,33 @@ Repo: `tilluskc1/fitbod`. Board: GitHub Project 11. Design system: `DESIGN.md`. 
 
 ---
 
-## 0. Latest product-chat handoff (2026-11-09, 21:30 UTC) — read this first
+## 0. Latest product-chat handoff (2026-11-10, 02:15 UTC, from Prod 2) — read this first
+
+**Rules:** AGENTS.md now opens with **Story flow** (owner, 2026-11-10). One story at a time. Two run together only if they share no files at all, and every UI story touches `src/index.css`, so in practice it's one at a time. The owner says go before a story starts. A story merges as soon as its review passes and `checks` is green, with no batches and no merge chats. Clean up before the next story. Product merges by GitHub MCP `update_pull_request` (draft=false), then `merge_pull_request` (merge, full 40-character SHA). `git push` to main is refused by the classifier; don't retry it. The owner dropped the `.claude/settings.json` change, so no permission files are pending.
+
+**Main:** dd9e3f1. It holds PR 318 (GitHub Actions `checks`, green) and PR 321 (Story flow rule). Vercel is green.
+
+**In flight / next actions:**
+1. **PR 320 (#298, today-only bar):** reviewed (sonnet passed at 2cb7a5f) and screenshots are on #298. At 02:12 I ran "update branch" to merge main in. When `checks` is green on the new head, merge it and comment on #298.
+2. **PRs 314, 311, 312, 308, 305, 313 (owner-approved, #315 item 8):** merge them one at a time.
+   - PR 314 (#300 warm-up) is red in CI on `planner-reach` e2e: the TrainScreen tab-bar change breaks the planner reach check. It needs a dev fix (Opus, logger).
+   - PR 311 conflicts with main.
+   - PR 312's e2e needs `{ name: 'Today', exact: true }` once 311 lands (lesson 20).
+   - Do each one as its own small dev chat, or one sonnet chat that fixes and merges them in turn. Stop on red.
+3. **#309 (PR 316 at 7df31d0):** reviewed. It truly conflicts with 314 in TrainScreen.tsx and tests/lbLoadPrecision.test.ts. After 314 lands, an Opus dev chat rebases it, gets one opus reviewer and merges it. Then close PR 310 (owner approved, #315 items 8 and 11). The owner already said go.
+4. **#307 (iPhone install hint):** unparked; no longer depends on #295. It is the top beta blocker after #309. Ask the owner for go.
+5. **#255 in-app feedback:** saved to a Supabase table using plain fetch (story on #255). Waiting on the owner for two things: the Supabase project URL and anon key, and #315 item 15 (an anonymous tester ID).
+
+**Owner decisions 2026-11-10:**
+- 12 no (cleared-cells key removed).
+- 14 yes, after the beta: #322 is an account and cloud save on Supabase, labelled `beta-gated`. Supabase over Firebase, including for Google login.
+- Feedback goes in-app, not WhatsApp.
+- Beta bar: 5 testers, 3 workouts each within 14 days, no data lost.
+- Fitify competitor scan done: no real moat; our position is honesty, no subscription traps, and your data is yours.
+
+**Not mine, left alone:** chats from other projects (Keel, payroll, BecomeOS, CMO Lane, Beefit). The owner's first "Prod" chat (session_01LzbJh9hGfhCJK9hm8TzvmL) is never archived.
+
+## 0b. Previous handoff (2026-11-09, 21:30 UTC)
 
 **Product chat role:** product owner + UI/UX lead + strength coach. Writes stories, never code. Rules: AGENTS.md (story first with named defaults, screenshots on every UI story, one dev chat per story on Opus with routine work on Sonnet), `docs/agents/lessons.md` (22 lessons; 18 = never close or archive anything the owner didn't ask for).
 
