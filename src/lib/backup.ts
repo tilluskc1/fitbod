@@ -59,6 +59,21 @@ export async function shareBackup(
   return { ok: true, via: 'download' };
 }
 
+/**
+ * (#292) What Start over says after a backup try. A cancel or failure keeps
+ * everything, and says so; a backup that left the app shows its own message.
+ */
+export function startOverBackupNote(result: { ok: boolean; message: string | null }): string | null {
+  if (result.ok) return result.message;
+  return result.message ? `${result.message} Nothing was erased.` : 'Backup cancelled. Nothing was erased.';
+}
+
+/** (#292) "Last backup: never" or "Last backup: 2 Nov". */
+export function lastBackupLine(lastBackupAt?: string): string {
+  if (!lastBackupAt) return 'Last backup: never';
+  return `Last backup: ${new Date(lastBackupAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`;
+}
+
 /** (#293) The workouts a backup sheet names: completed ones, as the reminder counts them. */
 export function backupCount(history: AppState['history']): number {
   return history.filter((workout) => workout.status === 'completed').length;
