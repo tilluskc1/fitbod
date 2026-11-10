@@ -174,7 +174,7 @@ test('D5: the remove-remaining toast keeps logged sets in its words', () => {
   const day = session([slot('dumbbell-row', 3, 20, 10)]);
   const one = skipExercise(logSet(day, 0, 0, at(1)), 0).exercises[0];
   assert.doesNotMatch(removeTodayNotice(one), /Nothing was recorded/);
-  assert.match(removeTodayNotice(one), /1 logged set is kept/);
+  assert.match(removeTodayNotice(one), /1 logged set kept/);
   const none = skipExercise(day, 0).exercises[0];
-  assert.equal(removeTodayNotice(none), 'Dumbbell Row skipped for today. Nothing was recorded for it.');
+  assert.equal(removeTodayNotice(none), 'Dumbbell Row skipped today. Nothing was recorded.');
 });

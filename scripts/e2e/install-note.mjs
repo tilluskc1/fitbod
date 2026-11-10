@@ -96,6 +96,7 @@ try {
 
       await finishWorkout(page);
       if (shots && name === 'safari') {
+        await page.waitForTimeout(300); // (#295) past the Done toast's fade-in
         await page.screenshot({ path: join(shots, `307-${before ? 'before' : 'after'}-today-${width}x${height}.png`) });
         if (!before) {
           // Centre the note, clear of the dock and the passing message.
@@ -119,7 +120,11 @@ try {
         `${where}: wrong Add to Home Screen steps: ${steps}`,
       );
       check(/Restore backup on the first screen/.test(steps), `${where}: no restore step`);
-      if (shots && name === 'safari') await page.screenshot({ path: join(shots, `307-after-sheet-${width}x${height}.png`) });
+      if (shots && name === 'safari') {
+        // (#295) Shot after the sheet's slide-in settles, not mid-animation.
+        await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => Number.isFinite(a.effect?.getComputedTiming?.().endTime) && !a.effect?.target?.closest?.('.done-toast')).map((a) => a.finished.catch(() => {}))));
+        await page.screenshot({ path: join(shots, `307-after-sheet-${width}x${height}.png`) });
+      }
       const download = page.waitForEvent('download', { timeout: 3000 }).catch(() => null);
       await sheet.getByRole('button', { name: 'Back up now' }).click();
       check(Boolean(await download), `${where}: Back up now saved nothing`);

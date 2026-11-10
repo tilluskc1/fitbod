@@ -22,6 +22,8 @@ import { listAreas } from '../lib/recovery';
 import type { FresherDay } from '../lib/recovery';
 import type { SwitchOption } from '../lib/switchDay';
 import Icon from '../components/ui/Icon';
+import { NoticeCard } from '../components/ui/Notices';
+import { todayCard } from '../lib/notices';
 
 interface Props {
   profile: Profile;
@@ -82,6 +84,9 @@ interface Props {
   onInstall?: () => void;
   /** (#307) ×: hide the note for 7 days; after two it lives only in Settings. */
   onDismissInstall?: () => void;
+  /** (#295) A passing Heads-up message raised by App, shown in Today's one card slot. */
+  message?: string | null;
+  onDismissMessage?: () => void;
   /** (#134) The day up next repeats muscles trained in the last 48 h: a fresher day to switch to. */
   fresher?: FresherDay | null;
   /** (#134) Switch to the fresher day: the Switch sheet's own pick. */
@@ -221,6 +226,8 @@ export default function TodayScreen({
   install = false,
   onInstall,
   onDismissInstall,
+  message = null,
+  onDismissMessage,
   fresher,
   onPickFresher,
   onKeepNext,
@@ -280,6 +287,15 @@ export default function TodayScreen({
   const leadId = leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId));
   const leadName = adapted.exercises.find((exercise) => exercise.exerciseId === leadId)?.name;
   const loads = leadId ? topLoads(history, leadId).map((kg) => toDisplay(kg, unit)) : [];
+
+  // (#295) At most one Heads-up card, never mid-session: install, then backup, then the rest.
+  const card = todayCard({
+    install: Boolean(install && onInstall && onDismissInstall && !current),
+    backup: Boolean(backup && onBackup && !current),
+    message: Boolean(message),
+    limited: !described && !current && !adjusted && program.feasibility?.status === 'limited',
+    fresher: Boolean(fresher && onPickFresher && onKeepNext && !current),
+  });
 
   return (
     <div className="screen flow-screen">
@@ -385,35 +401,39 @@ export default function TodayScreen({
 
         {/* A described day names its gaps, open or not (#219); otherwise the status describes the saved setup. */}
         {described && <DescribedNote day={described} />}
-        {!described && !current && !adjusted && (
+        {!described && !current && !adjusted && (program.feasibility?.status !== 'limited' || card === 'limited') && (
           <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
         )}
 
         {/* (#256) The planner entry comes straight after the hero, ahead of the backup note, so it stays above the dock. */}
         {!current && composer}
         {/* (#225) Not mid-session: a backup taken now would miss the open session. */}
-        {backup && onBackup && !current && (
-          <div className="feasibility backup-note" role="note">
-            <p className="feasibility__line">{backup}</p>
-            <button className="feasibility__alt" onClick={onBackup}>Back up now</button>
-          </div>
+        {/* (#295) One Heads-up card at a time on Today: install, then backup, then the rest. */}
+        {card === 'install' && onInstall && (
+          <NoticeCard
+            kind="headsUp"
+            className="install-note"
+            title={INSTALL_NOTE}
+            onDismiss={onDismissInstall}
+            dismissLabel="Dismiss for 7 days"
+            actions={<button className="notice-card__fix" onClick={onInstall}>Show me how</button>}
+          />
         )}
-        {/* (#307) Today's notice style until #295's Heads-up card takes it; never mid-session. */}
-        {install && onInstall && onDismissInstall && !current && (
-          <div className="feasibility install-note" role="note">
-            <p className="feasibility__line">{INSTALL_NOTE}</p>
-            <div className="feasibility__alts">
-              <button className="feasibility__alt" onClick={onInstall}>Show me how</button>
-              <button className="feasibility__alt feasibility__alt--text feasibility__alt--icon" onClick={onDismissInstall} aria-label="Dismiss for 7 days">
-                ×
-              </button>
-            </div>
-          </div>
+        {card === 'backup' && onBackup && (
+          <NoticeCard
+            kind="headsUp"
+            className="backup-note"
+            title={backup}
+            actions={<button className="notice-card__fix" onClick={onBackup}>Back up now</button>}
+          />
+        )}
+        {card === 'message' && message && (
+          <NoticeCard kind="headsUp" title={message} onDismiss={onDismissMessage} />
         )}
 
 
         {/* (#134) After the composer: "Plan today with me" stays above the fold (#236). */}
-        {fresher && onPickFresher && onKeepNext && !current && (
+        {card === 'fresher' && fresher && onPickFresher && onKeepNext && (
           <div className="feasibility" role="note">
             <p className="feasibility__line">{listAreas(fresher.areas)} trained {fresher.when}. {fresher.option.name} is fresher.</p>
             <p className="feasibility__reason">Switching skips {listAreas(fresher.option.skips)}.</p>

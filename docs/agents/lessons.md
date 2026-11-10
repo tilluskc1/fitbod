@@ -188,6 +188,19 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    `tests/inlineSets309review2.test.ts` and the "review-2" blocks in `scripts/e2e/inline-sets.mjs` (they paste
    to reach the refusal, since typing is capped; each step was run against a469d89 and failed there).
 
+29. **A screenshot waits for the screen to settle.** #307's install-sheet shot was taken while the sheet
+   was still sliding in; product had to ask for a reshoot (2026-11-10). Rule: before a shot, wait for every
+   finite animation to finish (an endless photo loop never does, so skip it; a Done toast's own 4 s life is
+   skipped too). Check: `settle` in `scripts/e2e/notice-kinds.mjs` and the sheet shot in
+   `scripts/e2e/install-note.mjs`.
+
+30. **A rule about "a Problem" covers every place a Problem comes from.** #295 review 1: "a Problem
+   removes the toast" was built into the one message slot, but a failed save and a tab conflict live in
+   their own state, so "Workout saved." showed beside "Not saved." Rule: when a story states a rule
+   about a kind of message, grep every state that renders that kind (`notice`, `saveUi`, `conflict`) and
+   apply it to each. Check: "toast goes, Problem stays" in `scripts/e2e/notice-kinds.mjs` (it fails on
+   c5c05cf).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

@@ -2,7 +2,7 @@
 // action are fully on screen and take the tap themselves (nothing from the nav or dock on top),
 // at 390x844, 360x780 and 390x650 (iPhone Chrome's visible area), with and without the backup
 // reminder, and with the keyboard open on the text box. The entry also clears the dock by at least
-// 8px (#276), including right after Finish while the "Session saved to history" message shows.
+// 8px (#276), including right after Finish while the "Workout saved." toast shows.
 // A message floats only on Today: on Train it never covers Finish or Minimize, and with a save
 // error showing, Retry and Data stay tappable.
 //
@@ -186,10 +186,10 @@ try {
     await walkPlanner(page, `${width}x${height}`);
 
     // With the backup reminder: one finished workout, then the next day.
-    // Right after Finish, while the "Session saved to history" message still shows.
+    // Right after Finish, while the "Workout saved." toast still shows.
     await finishWorkout(page, async () => {
       const where = `${width}x${height}-finish-toast`;
-      check(await page.getByText('Session saved to history.').isVisible(), `${where}: finish message not showing`);
+      check(await page.getByText('Workout saved.').isVisible(), `${where}: finish message not showing`);
       await reachable(page, page.locator('.tt-open'), 'Plan today with me', where);
       await clearsDock(page, where);
       await shot(page, `${where}-entry`);
@@ -222,13 +222,13 @@ try {
     await train.getByRole('button', { name: "Remove from today's workout" }).click();
     const where = `${width}x${height}-train-message`;
     // One set was logged first, so the message says it is kept (#105), not "skipped".
-    check(await train.getByText(/remaining sets are removed for today\. 1 logged set is kept/).isVisible(), `${where}: message not showing`);
+    check(await train.getByText(/rest removed today\. 1 logged set kept/).isVisible(), `${where}: message not showing`);
     await reachable(train, train.locator('.finish-btn'), 'Finish', where);
     await reachable(train, train.getByRole('button', { name: 'Minimize workout' }), 'Minimize', where);
     await shot(train, where);
 
     // (#276) With a save error showing, the message never floats over Retry or Data.
-    await train.getByRole('button', { name: 'Dismiss message' }).click();
+    // (#295) A Done toast has no Dismiss; taps pass through it.
     await train.evaluate(() => { window.__failSaves = true; });
     await train.locator('.finish-btn').click();
     await train.getByRole('button', { name: 'Save completed work' }).click();
@@ -236,7 +236,8 @@ try {
     await train.waitForSelector('.t7-hero');
     const failed = `${width}x${height}-save-error`;
     check(await train.getByText('Not saved.').isVisible(), `${failed}: save error not showing`);
-    check(await train.getByText(/Saved the completed sets/).isVisible(), `${failed}: finish message not showing`);
+    // (#295 review 1) A Problem while a toast shows: the toast goes, the Problem stays.
+    check(!(await train.getByText(/Saved the completed sets/).isVisible()), `${failed}: the finish toast shows beside "Not saved."`);
     await reachable(train, train.getByRole('button', { name: 'Retry' }), 'Retry', failed);
     await reachable(train, train.getByRole('button', { name: 'Data', exact: true }), 'Data', failed);
     await shot(train, failed);

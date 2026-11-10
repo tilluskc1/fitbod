@@ -1749,50 +1749,156 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.banner {
-  margin: 8px 0 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  font-size: 12.5px;
-  line-height: 1.45;
-  border: 1px solid #ecd6ae;
-  background: #fbf0dd;
-  color: #8a5300;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.banner.error {
-  border-color: #f1c4bc;
-  background: #fbe9e6;
-  color: #a03224;
-}
-
-.banner button {
-  color: inherit;
-  text-decoration: underline;
-  font-size: 12.5px;
-  flex: none;
-  /* These are the only recovery actions on a failed save, so keep them tappable. */
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-}
-
+/* ---------- Notices by meaning (#295) ----------
+   Done: a dark toast near the bottom that passes on its own. Heads-up: a white card with an amber
+   title. Problem: a card with a red title and the fix as a button. DESIGN.md tokens only. */
 .app-alerts {
   flex: none;
-  padding: 0 17px;
+  padding: 8px 17px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-/* (#276) On Today a passing message floats over the top instead of pushing the entry under the dock. */
-.app-alerts--toast {
+.notice-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--outline-variant);
+  color: var(--text);
+}
+
+.notice-card--problem {
+  border-color: var(--danger-line);
+}
+
+.notice-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.notice-glyph {
+  flex: none;
+}
+
+.notice-card--headsUp .notice-card__head {
+  color: var(--amber);
+}
+
+.notice-card--problem .notice-card__head {
+  color: var(--danger);
+}
+
+.notice-card__head .notice-glyph {
+  margin-top: 0;
+}
+
+.notice-card__title {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.notice-card__body {
+  margin: 0 0 0 30px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+
+.notice-card__x {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: -12px -12px -12px 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.notice-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: 30px;
+}
+
+.notice-card__fix,
+.notice-card__alt {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.notice-card__fix {
+  background: var(--btn);
+  color: var(--on-btn);
+}
+
+.notice-card__alt {
+  border: 1px solid var(--outline-variant);
+  color: var(--text);
+}
+
+.done-toast {
   position: absolute;
-  top: env(safe-area-inset-top, 0px);
-  left: 0;
-  right: 0;
-  z-index: 35;
+  left: 16px;
+  right: 16px;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  /* Taps pass through to whatever sits under it; only its own action takes them. */
+  pointer-events: none;
+}
+
+.done-toast__pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 6px 18px 6px 14px;
+  border-radius: 22px;
+  background: var(--btn);
+  color: var(--on-btn);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+  box-shadow: 0 10px 24px -12px rgba(18, 21, 21, 0.6);
+  animation: done-toast-life 4s linear both;
+}
+
+.done-toast__action {
+  pointer-events: auto;
+  flex: none;
+  min-height: 44px;
+  margin: -6px -10px -6px 4px;
+  padding: 0 12px;
+  color: var(--on-btn);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+@keyframes done-toast-life {
+  0% { opacity: 0; transform: translateY(8px); }
+  5% { opacity: 1; transform: none; }
+  92% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .done-toast__pill { animation: none; }
 }
 
 .photo {
@@ -1905,7 +2011,7 @@ textarea:focus-visible {
 
 @media (max-width: 719px) {
   .app-alerts {
-    padding: 0 13px;
+    padding: 8px 13px 0;
   }
 }
 
@@ -4314,13 +4420,6 @@ button.aw-exercise__name-btn {
 
 .empty-state p {
   margin: 0 0 6px;
-}
-
-/* (#225) The backup reminder: one line and its action, side by side while they fit. */
-.backup-note {
-  flex-flow: row wrap;
-  align-items: center;
-  justify-content: space-between;
 }
 
 .feasibility__reason {

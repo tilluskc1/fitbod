@@ -91,7 +91,7 @@ try {
     await page.locator('.t7-today-only__undo').click();
     await page.waitForFunction(() => !document.querySelector('.t7-today-only'), null, { timeout: 4000 }).catch(() => {});
     check(!(await page.locator('.t7-today-only').count()), `${where}: the bar is still there after Undo`);
-    const alerts = await page.locator('.app-alerts').innerText().catch(() => '');
+    const alerts = await page.locator('.done-toast').innerText().catch(() => '');
     check(alerts.includes('Back to your usual: Gym · 45 min.'), `${where}: Undo message reads "${alerts}"`);
     // The length pill names the asked length; the hero's figure is the work's own estimate (#203).
     const length = await page.locator('.t7-controls .t7-pill').first().innerText();

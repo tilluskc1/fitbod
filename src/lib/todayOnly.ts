@@ -39,6 +39,9 @@ export function todayOnly(state: AppState, now: Date): TodayOnly | null {
 }
 
 /** (#298) The Done message after Undo: "Back to your usual: Gym · 30 min." */
+/** (#295) The Done toast after a today-only change of length or gear. */
+export const CHANGED_FOR_TODAY = 'Changed for today. Your plan stays the same.';
+
 export function undoToast(profile: Profile): string {
   return `Back to your usual: ${usualGear(profile)} · ${profile.sessionMinutes ?? 35} min.`;
 }

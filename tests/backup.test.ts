@@ -134,7 +134,7 @@ test('share fails with another error: not recorded, short message', async () => 
   });
   assert.equal(result.ok, false);
   assert.ok(!result.ok && result.message);
-  assert.match(result.ok ? '' : result.message ?? '', /^Backup not shared, so nothing was recorded\. .*Export JSON backup/);
+  assert.match(result.ok ? '' : result.message ?? '', /^Backup not shared, nothing recorded\. .*Export in Settings/);
   assert.equal(calls.length, 0);
 });
 

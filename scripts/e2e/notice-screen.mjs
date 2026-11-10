@@ -43,7 +43,7 @@ async function onboard(page) {
   await page.waitForSelector('.t7-hero');
 }
 
-const messages = (page) => page.locator('.app-alerts[role="status"]').allInnerTexts();
+const messages = (page) => page.locator('.done-toast, .app-alerts .notice-card').allInnerTexts();
 const showing = async (page, pattern) => (await messages(page)).some((text) => pattern.test(text));
 
 async function logOneSet(page) {

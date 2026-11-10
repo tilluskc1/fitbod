@@ -122,7 +122,7 @@ try {
     const bad = join(work, 'bad.json');
     writeFileSync(bad, 'not json at all');
     await app.locator('.splash__restore input[type=file]').setInputFiles(bad);
-    const said = await app.locator('.app-alerts .banner').waitFor({ timeout: 3000 }).then(() => app.locator('.app-alerts .banner').innerText(), () => '');
+    const said = await app.locator('.app-alerts .notice-card--problem').waitFor({ timeout: 3000 }).then(() => app.locator('.app-alerts .notice-card--problem').innerText(), () => '');
     check(/^Restore rejected/.test(said), `${where}: bad file not rejected on the splash ("${said}")`);
     check(await restore.isVisible(), `${where}: splash left after a file with no profile`);
 
