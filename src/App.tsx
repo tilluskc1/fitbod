@@ -123,7 +123,15 @@ import
  TrainScreen from './screens/TrainScreen';
 import type { SetEdit } from './screens/TrainScreen';
 import FeedbackSheet from './components/FeedbackSheet';
-import { EMPTY_DRAFT, appVersion, deviceKind, sendFeedback, testerId, type FeedbackDraft } from './lib/sendFeedback';
+import {
+  EMPTY_DRAFT,
+  appVersion,
+  deviceKind,
+  sendFeedback,
+  testerId,
+  type FeedbackDraft,
+  type FeedbackStatus,
+} from './lib/sendFeedback';
 import { finishedWorkouts } from './lib/progressTotals';
 import
  RecapScreen from './screens/RecapScreen';
@@ -241,6 +249,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' });
   // (#255) The feedback note being written, for this visit only: never stored.
   const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft>(EMPTY_DRAFT);
+  // The send lives here with the draft, so closing the sheet mid-send never loses or repeats a note.
+  const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>('idle');
+  const feedbackSending = useRef(false);
   const [pending, setPending] = useState<Proposal | null>(null);
   const [pendingNotices, setPendingNotices] = useState<ConstraintNotice[]>([]);
   const [recapId, setRecapId] = useState<string | null>(null);
@@ -1722,21 +1733,39 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       {sheet.kind === 'feedback' && (
         <FeedbackSheet
           draft={feedbackDraft}
-          onDraft={setFeedbackDraft}
-          onSend={(draft) => {
+          status={feedbackStatus}
+          onDraft={(draft) => {
+            if (feedbackSending.current) return;
+            setFeedbackDraft(draft);
+            setFeedbackStatus('idle');
+          }}
+          onSend={() => {
+            if (feedbackSending.current || !feedbackDraft.message.trim()) return;
+            feedbackSending.current = true;
+            setFeedbackStatus('sending');
+            const sent = feedbackDraft;
             let store: Storage | null = null;
             try {
               store = globalThis.localStorage ?? null;
             } catch {
               // Blocked storage: the note still goes with an ID for this send.
             }
-            return sendFeedback({
-              ...draft,
+            void sendFeedback({
+              ...sent,
               appVersion: appVersion(),
               screen: sheet.from,
               device: deviceKind(currentDevice()),
               workoutCount: finishedWorkouts(state.history).length,
               testerId: testerId(store),
+            }).then((result) => {
+              feedbackSending.current = false;
+              if (result.ok) {
+                // Fields are read-only while sending; the guard still never clears a different note.
+                setFeedbackDraft((current) => (current.message === sent.message ? { ...current, message: '' } : current));
+                setFeedbackStatus('sent');
+              } else {
+                setFeedbackStatus('failed');
+              }
             });
           }}
           onClose={sheet.from === 'settings' ? () => setSheet({ kind: 'settings' }) : closeSheet}

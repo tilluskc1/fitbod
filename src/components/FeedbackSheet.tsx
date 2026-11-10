@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import Sheet from './ui/Sheet';
 import {
   FEEDBACK_NOTE,
@@ -7,42 +6,25 @@ import {
   NOT_SENT,
   SENT,
   type FeedbackDraft,
-  type SendResult,
+  type FeedbackStatus,
 } from '../lib/sendFeedback';
 
 interface Props {
   draft: FeedbackDraft;
+  /** Owned by App with the draft, so a send outlives the sheet and a reopened sheet shows it. */
+  status: FeedbackStatus;
   onDraft: (draft: FeedbackDraft) => void;
-  /** Posts the note; App adds the version, screen, device, workout count and tester ID. */
-  onSend: (draft: FeedbackDraft) => Promise<SendResult>;
+  onSend: () => void;
   onClose: () => void;
 }
 
 /**
- * (#255) Send feedback: one required box, an optional name, a dark Send pill. A failed or offline
- * send keeps the text and says so; a sent note clears the box and says thanks.
+ * (#255) Send feedback: one required box, an optional name, a dark Send pill. While a note is on
+ * its way both fields are read-only and Send is off, so nothing typed is lost and nothing posts twice.
  */
-export default function FeedbackSheet({ draft, onDraft, onSend, onClose }: Props) {
-  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
-  const canSend = draft.message.trim().length > 0 && status !== 'sending';
-
-  const send = async () => {
-    if (!canSend) return;
-    setStatus('sending');
-    const sent = draft;
-    const result = await onSend(sent);
-    if (result.ok) {
-      onDraft({ ...sent, message: '' });
-      setStatus('sent');
-    } else {
-      setStatus('failed');
-    }
-  };
-
-  const edit = (patch: Partial<FeedbackDraft>) => {
-    onDraft({ ...draft, ...patch });
-    if (status === 'sent' || status === 'failed') setStatus('idle');
-  };
+export default function FeedbackSheet({ draft, status, onDraft, onSend, onClose }: Props) {
+  const sending = status === 'sending';
+  const canSend = draft.message.trim().length > 0 && !sending;
 
   return (
     <Sheet title="Send feedback" onClose={onClose}>
@@ -50,7 +32,7 @@ export default function FeedbackSheet({ draft, onDraft, onSend, onClose }: Props
         className="feedback-form"
         onSubmit={(event) => {
           event.preventDefault();
-          void send();
+          if (canSend) onSend();
         }}
       >
         <label className="field-label" htmlFor="feedback-message">
@@ -61,10 +43,11 @@ export default function FeedbackSheet({ draft, onDraft, onSend, onClose }: Props
           className="feedback-form__message"
           rows={5}
           required
+          readOnly={sending}
           maxLength={MESSAGE_MAX}
           value={draft.message}
           aria-describedby="feedback-note"
-          onChange={(event) => edit({ message: event.target.value })}
+          onChange={(event) => onDraft({ ...draft, message: event.target.value })}
         />
         <p className="feedback-form__note" id="feedback-note">
           {FEEDBACK_NOTE}
@@ -76,12 +59,14 @@ export default function FeedbackSheet({ draft, onDraft, onSend, onClose }: Props
           id="feedback-name"
           className="search feedback-form__name"
           type="text"
+          readOnly={sending}
           maxLength={NAME_MAX}
           autoComplete="given-name"
           value={draft.name}
-          onChange={(event) => edit({ name: event.target.value })}
+          onChange={(event) => onDraft({ ...draft, name: event.target.value })}
         />
         <p className="feedback-form__status" role="status">
+          {sending && 'Sending…'}
           {status === 'sent' && SENT}
         </p>
         {status === 'failed' && (
@@ -91,7 +76,7 @@ export default function FeedbackSheet({ draft, onDraft, onSend, onClose }: Props
         )}
         <div className="sheet-actions">
           <button type="submit" className="primary" disabled={!canSend}>
-            {status === 'sending' ? 'Sending…' : 'Send'}
+            {sending ? 'Sending…' : 'Send'}
           </button>
         </div>
       </form>

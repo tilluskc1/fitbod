@@ -31,6 +31,8 @@ export interface FeedbackDraft {
 
 export const EMPTY_DRAFT: FeedbackDraft = { message: '', name: '' };
 
+export type FeedbackStatus = 'idle' | 'sending' | 'sent' | 'failed';
+
 export interface FeedbackNote {
   message: string;
   name: string;

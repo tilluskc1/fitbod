@@ -1,6 +1,7 @@
 // The Send feedback check (#255): Settings and the recap open one sheet; offline and a refused send
 // keep the text and say "Not sent"; a sent note clears the box and says thanks. The Firestore endpoint
-// is mocked with page.route, so this never writes to the real database; an unmocked call fails.
+// is mocked with context.route (every firestore.googleapis.com call), so this never writes to the real
+// database; a call to any other URL or method there is a failure.
 // Checks the posted body: rule field names, screen, workout count, one tester ID kept per phone.
 // 390x844 and 360x780.
 //
@@ -78,8 +79,10 @@ try {
     // Every Firestore call is answered here; `answer` picks the reply for the next one.
     const posts = [];
     let answer = 200;
+    let gate = null; // when set, the reply waits for it (a send in flight)
     await context.route('https://firestore.googleapis.com/**', async (route) => {
       const request = route.request();
+      if (gate) await gate;
       check(request.url() === ENDPOINT, `${where}: unexpected Firestore URL ${request.url()}`);
       check(request.method() === 'POST', `${where}: Firestore call was ${request.method()}, not POST`);
       posts.push(JSON.parse(request.postData() ?? '{}'));
@@ -157,6 +160,35 @@ try {
     check(/^[0-9a-f]{7}$|^dev$/.test(sent.appVersion?.stringValue ?? ''), `${where}: appVersion ${JSON.stringify(sent.appVersion)}`);
     const stored = await page.evaluate((key) => localStorage.getItem(key), TESTER_KEY);
     check(stored && sent.testerId?.stringValue === stored, `${where}: testerId ${JSON.stringify(sent.testerId)} not the stored ${stored}`);
+
+    // 5b. A send in flight (review 1): fields lock, Send stays off across a close and reopen, the
+    // note posts once, and its result reaches the reopened sheet without wiping a newer note.
+    let release;
+    gate = new Promise((resolve) => { release = resolve; });
+    const before = posts.length;
+    await box.fill('In flight note');
+    await send.click();
+    await sheet.getByRole('status').getByText('Sending…').waitFor();
+    check(await box.evaluate((el) => el.readOnly), `${where}: box editable while sending`);
+    check(await name.evaluate((el) => el.readOnly), `${where}: name editable while sending`);
+    await box.press('End');
+    await page.keyboard.type(' plus more');
+    check((await box.inputValue()) === 'In flight note', `${where}: typing changed the box while sending`);
+    await sheet.getByRole('button', { name: /Close/ }).click();
+    await settings.getByRole('button', { name: /Send feedback/ }).click();
+    await sheet.waitFor();
+    check((await box.inputValue()) === 'In flight note', `${where}: reopened mid-send without the note`);
+    check(await sheet.getByRole('button', { name: 'Sending…' }).isDisabled(), `${where}: Send on again after reopening mid-send`);
+    await sheet.getByRole('button', { name: 'Sending…' }).click({ force: true }).catch(() => {});
+    gate = null;
+    release();
+    await sheet.getByText('Sent. Thanks.').waitFor();
+    check(posts.length === before + 1, `${where}: in-flight note posted ${posts.length - before} times`);
+    check((await box.inputValue()) === '', `${where}: box not cleared after the in-flight send`);
+    check((await name.inputValue()) === 'Sam', `${where}: name lost after the in-flight send`);
+    await box.fill('A newer note');
+    check(!(await sheet.getByText('Sent. Thanks.').count()), `${where}: Sent still shows after typing again`);
+    await box.fill('');
     await sheet.getByRole('button', { name: /Close/ }).click();
     await settings.getByRole('button', { name: 'Done' }).click();
 
