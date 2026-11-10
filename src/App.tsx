@@ -2,7 +2,7 @@ import
  { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { backupCount, backupReminder, shareBackup } from './lib/backup';
 import { offerFirstBackup } from './lib/dataHome';
-import { currentDevice } from './lib/install';
+import { currentDevice, dismissInstallNote, installGuide, showInstallNote } from './lib/install';
 import { noticeHome, screenKey } from './lib/noticeScreen';
 import
  { downloadText } from './lib/download';
@@ -154,6 +154,7 @@ import
   SettingsSheet,
   StartOverSheet,
   BackupSheet,
+  InstallSheet,
   SwapSheet,
   WhySheet,
 } from './screens/Sheets';
@@ -169,6 +170,7 @@ type SheetState =
   | { kind: 'settings' }
   | { kind: 'startOver' }
   | { kind: 'backup' }
+  | { kind: 'install'; from: 'today' | 'settings' }
   | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' | 'history' }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
@@ -1151,6 +1153,13 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setNotice('Workout deleted.');
   };
 
+  /** (#307) × on Today's install note: this browser's choice, at most two dates. */
+  const dismissInstall = () =>
+    setState((currentState) => ({
+      ...currentState,
+      installNoteDismissals: dismissInstallNote(currentState.installNoteDismissals, new Date()),
+    }));
+
   /** (#225) A file that left the app is a backup: the reminder counts it. */
   const recordBackup = () => setState((currentState) => ({ ...currentState, lastBackupAt: new Date().toISOString() }));
 
@@ -1489,6 +1498,18 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
             backup={backupReminder(state, today)}
             onBackup={backupNow}
+            install={
+              typeof window !== 'undefined' &&
+              showInstallNote({
+                device: currentDevice(),
+                completedWorkouts: backupCount(state.history),
+                sessionOpen: Boolean(state.current),
+                dismissals: state.installNoteDismissals,
+                now: today,
+              })
+            }
+            onInstall={() => setSheet({ kind: 'install', from: 'today' })}
+            onDismissInstall={dismissInstall}
             fresher={fresher}
             onPickFresher={pickDay}
             onKeepNext={() => slot && setKeptFresher(keepKey(slot.id, today))}
@@ -1684,8 +1705,18 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           onBackup={backupNow}
           onRestore={restoreFile}
           onStartOver={() => setSheet({ kind: 'startOver' })}
+          onInstall={() => setSheet({ kind: 'install', from: 'settings' })}
           onClose={closeSheet}
           storageNote={storageNote}
+        />
+      )}
+
+      {sheet.kind === 'install' && typeof window !== 'undefined' && installGuide(currentDevice()) && (
+        <InstallSheet
+          guide={installGuide(currentDevice())!}
+          workouts={backupCount(state.history)}
+          onBackup={backupNow}
+          onClose={sheet.from === 'settings' ? () => setSheet({ kind: 'settings' }) : closeSheet}
         />
       )}
 

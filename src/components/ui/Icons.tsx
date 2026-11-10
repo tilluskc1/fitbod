@@ -66,6 +66,16 @@ export function EditIcon({ size = 18 }: IconProps) {
   );
 }
 
+/** (#307) The iOS Share glyph, inline in the install steps. */
+export function ShareIcon({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M12 3v12M8 7l4-4 4 4" />
+      <path d="M8 10H6.5A1.5 1.5 0 0 0 5 11.5v8A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-8A1.5 1.5 0 0 0 17.5 10H16" />
+    </svg>
+  );
+}
+
 export function PhoneIcon({ size = 20 }: IconProps) {
   return (
     <svg {...base(size)}>

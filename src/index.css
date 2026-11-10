@@ -4804,3 +4804,74 @@ button.aw-exercise__name-btn {
   font-weight: 700;
   color: var(--on-surface);
 }
+
+/* ---------------- Install on this phone (#307) ---------------- */
+.feasibility__alt--icon {
+  min-width: 44px;
+  justify-content: center;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.settings-install {
+  margin-top: 10px;
+}
+
+.install-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.install-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.install-step__num {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--glass-lime-fill, rgba(214, 240, 92, 0.24));
+  border: 1px solid var(--glass-lime-edge, rgba(214, 240, 92, 1));
+  color: var(--accent-text);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.install-step--done .install-step__num {
+  background: var(--accent-text);
+  border-color: var(--accent-text);
+  color: #fff;
+}
+
+.install-step__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.install-step__body p {
+  margin: 4px 0 0;
+  color: var(--secondary);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.install-step__share {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+  vertical-align: bottom;
+}

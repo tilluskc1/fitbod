@@ -452,6 +452,8 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
       slotSkips,
       // (#225) Restoring a file is not a backup of this browser: keep this browser's own date.
       ...(current.lastBackupAt === undefined ? {} : { lastBackupAt: current.lastBackupAt }),
+      // (#307) Dismissing the install note is this browser's choice too.
+      ...(current.installNoteDismissals === undefined ? {} : { installNoteDismissals: current.installNoteDismissals }),
     },
     summary: {
       newWorkouts: imported.history.length - duplicateWorkouts,

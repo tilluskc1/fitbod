@@ -486,6 +486,13 @@ function normaliseState(value: unknown): AppState {
   const slotSkips = validateSkips(raw.slotSkips);
   // (#225) Optional and written only when present, so older data reads unchanged.
   const lastBackupAt = raw.lastBackupAt === undefined ? undefined : isoDate(raw.lastBackupAt, 'state.lastBackupAt');
+  // (#307) Same rule: optional, at most two dismissal dates.
+  const installNoteDismissals =
+    raw.installNoteDismissals === undefined
+      ? undefined
+      : array(raw.installNoteDismissals, 'state.installNoteDismissals', 2).map((value, index) =>
+          isoDate(value, `state.installNoteDismissals[${index}]`),
+        );
 
   const ids = new Set<string>();
   for (const workout of [...history, ...(current ? [current] : [])]) {
@@ -503,6 +510,7 @@ function normaliseState(value: unknown): AppState {
     programCursor,
     slotSkips,
     ...(lastBackupAt === undefined ? {} : { lastBackupAt }),
+    ...(installNoteDismissals === undefined ? {} : { installNoteDismissals }),
   };
 }
 

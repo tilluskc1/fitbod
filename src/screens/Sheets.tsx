@@ -31,8 +31,8 @@ import { PREF_LABEL, conflictChanges, exclusionChange, preferenceChange, type Pr
 import Sheet from '../components/ui/Sheet';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
-import { CheckIcon, LockIcon, PhoneIcon } from '../components/ui/Icons';
-import { currentDevice, installHint } from '../lib/install';
+import { CheckIcon, LockIcon, PhoneIcon, ShareIcon } from '../components/ui/Icons';
+import { currentDevice, installGuide, installSteps, type InstallGuide } from '../lib/install';
 import { START_OVER_BLOCKED } from '../lib/storage';
 import { lastBackupLine, startOverBackupNote } from '../lib/backup';
 import { SAFETY_NOTICE } from '../lib/safety';
@@ -925,6 +925,83 @@ export function StartOverSheet({
  * Settings (Share sheet, else a download); a backup that left the app closes
  * the sheet, a cancel leaves it open and records nothing, a failure says why here.
  */
+/** (#307) The first "Share" in a step carries the Share glyph, so the button is easy to find. */
+function WithShareIcon({ text }: { text: string }) {
+  const at = text.indexOf('Share');
+  if (at < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, at)}
+      <strong className="install-step__share">
+        Share <ShareIcon />
+      </strong>
+      {text.slice(at + 'Share'.length)}
+    </>
+  );
+}
+
+/**
+ * (#307) Install on this phone: numbered steps with live state. On iOS with workouts, back up first
+ * (the step ticks once a backup leaves the app), add to the Home Screen, then restore in the new app.
+ */
+export function InstallSheet({
+  guide,
+  workouts,
+  onBackup,
+  onClose,
+}: {
+  guide: InstallGuide;
+  /** Completed workouts; with none there is nothing to carry across. */
+  workouts: number;
+  onBackup: () => Promise<{ ok: boolean; message: string | null }>;
+  onClose: () => void;
+}) {
+  const [backedUp, setBackedUp] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const backup = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const result = await onBackup();
+    setBusy(false);
+    if (result.ok) setBackedUp(true);
+    else if (result.message) setError(result.message);
+  };
+  const steps = installSteps(guide, workouts);
+
+  return (
+    <Sheet title="Install on this phone" subtitle={guide.title} onClose={onClose}>
+      <ol className="install-steps">
+        {steps.map((step, index) => {
+          const done = step.key === 'backup' && backedUp;
+          return (
+            <li key={step.key} className={`install-step${done ? ' install-step--done' : ''}`}>
+              <span className="install-step__num" aria-hidden="true">
+                {done ? <CheckIcon size={16} /> : steps.length > 1 ? index + 1 : <PhoneIcon />}
+              </span>
+              <div className="install-step__body">
+                <p>{done ? 'Backed up.' : <WithShareIcon text={step.text} />}</p>
+                {step.key === 'backup' && !done && (
+                  <button className="feasibility__alt" onClick={backup} disabled={busy}>
+                    Back up now
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      {error && <p className="error-text" role="alert">{error}</p>}
+      <div className="sheet-actions">
+        <button className="primary" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 export function BackupSheet({
   workouts,
   onBackup,
@@ -1023,6 +1100,8 @@ interface SettingsProps {
   onRestore: (file: File | undefined) => void;
   /** (#263) Open the Start over sheet. */
   onStartOver: () => void;
+  /** (#307) Open the Install on this phone sheet. */
+  onInstall?: () => void;
   onClose: () => void;
   storageNote: string;
 }
@@ -1034,11 +1113,12 @@ export function SettingsSheet({
   onBackup,
   onRestore,
   onStartOver,
+  onInstall,
   onClose,
   storageNote,
 }: SettingsProps) {
-  // How to keep the app on this phone; nothing once installed or on desktop (#214).
-  const install = useMemo(() => (typeof window === 'undefined' ? null : installHint(currentDevice())), []);
+  // How to keep the app on this phone; nothing once installed or on desktop (#214, #307).
+  const install = useMemo(() => (typeof window === 'undefined' ? null : installGuide(currentDevice())), []);
   const unit = unitOf(profile);
   const [name, setName] = useState(profile.name ?? '');
   const [loadsText, setLoadsText] = useState(() => loadsInputText(profile.loads.Dumbbell, unit));
@@ -1237,12 +1317,15 @@ export function SettingsSheet({
               <p>There is no account or cloud sync. Back up now saves a copy outside this browser, through the Share sheet or a download. Do it weekly and before clearing site data or changing devices.</p>
             </div>
           </div>
-          {install && (
+          {install && onInstall && (
             <div className="settings-card settings-lock" role="note">
               <PhoneIcon />
               <div>
                 <strong>{install.title}</strong>
-                <p>{install.how}</p>
+                <p>It keeps your workouts safe and opens like an app.</p>
+                <button className="feasibility__alt settings-install" onClick={onInstall}>
+                  Install on this phone
+                </button>
               </div>
             </div>
           )}
