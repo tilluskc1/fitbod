@@ -25,6 +25,8 @@ interface Props {
   /** (#258) First finished workout and no backup yet: offer one, once. */
   offerBackup?: boolean;
   onBackup?: () => void;
+  /** (#255) Open the Send feedback sheet. */
+  onSendFeedback?: () => void;
 }
 
 function minutesOf(workout: WorkoutRecord): number {
@@ -46,6 +48,7 @@ export default function RecapScreen({
   onBackToday,
   offerBackup = false,
   onBackup,
+  onSendFeedback,
 }: Props) {
   // (#258) Hidden for this visit once used or dismissed; the offer's own condition keeps it to one workout.
   const [backupHidden, setBackupHidden] = useState(false);
@@ -184,6 +187,15 @@ export default function RecapScreen({
         <p className="recap-note">
           Only completed sets were recorded. There is no automatic catch-up work.
         </p>
+
+        {onSendFeedback && (
+          <p className="recap-note recap-feedback">
+            Something off, or something you liked?{' '}
+            <button className="text-link" onClick={onSendFeedback}>
+              Send feedback
+            </button>
+          </p>
+        )}
 
         <div className="recap-actions">
           <button className="primary" onClick={onViewHistory}>

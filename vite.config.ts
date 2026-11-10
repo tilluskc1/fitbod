@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -60,8 +61,20 @@ export function swBuildManifest(): Plugin {
   }
 }
 
+/** (#255) The version a feedback note carries: the deployed commit's short SHA, else `dev`. */
+function appVersion(): string {
+  const sha = process.env.VERCEL_GIT_COMMIT_SHA
+  if (sha) return sha.slice(0, 7)
+  try {
+    return execSync('git rev-parse --short=7 HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || 'dev'
+  } catch {
+    return 'dev'
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), swBuildManifest()],
   cacheDir: testCacheDir,
+  define: { __APP_VERSION__: JSON.stringify(appVersion()) },
 })

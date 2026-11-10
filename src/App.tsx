@@ -122,6 +122,9 @@ import
 import
  TrainScreen from './screens/TrainScreen';
 import type { SetEdit } from './screens/TrainScreen';
+import FeedbackSheet from './components/FeedbackSheet';
+import { EMPTY_DRAFT, appVersion, deviceKind, sendFeedback, testerId, type FeedbackDraft } from './lib/sendFeedback';
+import { finishedWorkouts } from './lib/progressTotals';
 import
  RecapScreen from './screens/RecapScreen';
 import
@@ -171,6 +174,7 @@ type SheetState =
   | { kind: 'startOver' }
   | { kind: 'backup' }
   | { kind: 'install'; from: 'today' | 'settings' }
+  | { kind: 'feedback'; from: 'settings' | 'recap' }
   | { kind: 'actions'; exerciseId: string; exerciseIndex: number; mode?: 'instructions' | 'history' }
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
@@ -235,6 +239,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const [view, setView] = useState<View>('tabs');
   const [tab, setTab] = useState<Tab>('today');
   const [sheet, setSheet] = useState<SheetState>({ kind: 'none' });
+  // (#255) The feedback note being written, for this visit only: never stored.
+  const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft>(EMPTY_DRAFT);
   const [pending, setPending] = useState<Proposal | null>(null);
   const [pendingNotices, setPendingNotices] = useState<ConstraintNotice[]>([]);
   const [recapId, setRecapId] = useState<string | null>(null);
@@ -1409,6 +1415,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         }}
         offerBackup={offerFirstBackup(state) && state.history.some((workout) => workout.id === recap.id)}
         onBackup={backupNow}
+        onSendFeedback={() => setSheet({ kind: 'feedback', from: 'recap' })}
       />
     ) : view === 'library' ? (
       <LibraryScreen
@@ -1706,8 +1713,33 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           onRestore={restoreFile}
           onStartOver={() => setSheet({ kind: 'startOver' })}
           onInstall={() => setSheet({ kind: 'install', from: 'settings' })}
+          onFeedback={() => setSheet({ kind: 'feedback', from: 'settings' })}
           onClose={closeSheet}
           storageNote={storageNote}
+        />
+      )}
+
+      {sheet.kind === 'feedback' && (
+        <FeedbackSheet
+          draft={feedbackDraft}
+          onDraft={setFeedbackDraft}
+          onSend={(draft) => {
+            let store: Storage | null = null;
+            try {
+              store = globalThis.localStorage ?? null;
+            } catch {
+              // Blocked storage: the note still goes with an ID for this send.
+            }
+            return sendFeedback({
+              ...draft,
+              appVersion: appVersion(),
+              screen: sheet.from,
+              device: deviceKind(currentDevice()),
+              workoutCount: finishedWorkouts(state.history).length,
+              testerId: testerId(store),
+            });
+          }}
+          onClose={sheet.from === 'settings' ? () => setSheet({ kind: 'settings' }) : closeSheet}
         />
       )}
 

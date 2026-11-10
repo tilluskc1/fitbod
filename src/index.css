@@ -4875,3 +4875,48 @@ button.aw-exercise__name-btn {
   white-space: nowrap;
   vertical-align: bottom;
 }
+
+/* (#255) Send feedback sheet. 16px text keeps iPhone from zooming on focus. */
+.feedback-form .field-label {
+  margin-top: 4px;
+}
+
+.feedback-form .field-label[for='feedback-name'] {
+  margin-top: 18px;
+}
+
+.feedback-form__message {
+  display: block;
+  width: 100%;
+  min-height: 120px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid #dde8e6;
+  background: #ffffff;
+  font-size: 16px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.feedback-form__name.search {
+  margin-top: 0;
+  font-size: 16px;
+}
+
+.feedback-form__note {
+  margin-top: 8px;
+  color: var(--secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.feedback-form__status:empty {
+  margin: 0;
+}
+
+.feedback-form__status {
+  margin-top: 14px;
+  color: #1f6b4f;
+  font-size: 14px;
+  font-weight: 600;
+}
