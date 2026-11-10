@@ -136,6 +136,12 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    linked in the issue body under `docs/product/screens/<story>/`. Check: the issue body has an image
    link and the chat reply sent the file.
 
+23. **A slot is a position, not a search.** #300's first build gave ramp sets to `leadCompoundId` of the
+   whole session, so a lead swapped to a fly or push-up before set 1 handed the ramp rows to a lift
+   further down; review 1 failed it. Rule: when a rule applies to "the day's lead", read the slot itself
+   (the session's first exercise and whether it can lead), never the first match further down. Check:
+   `tests/warmUp300.test.ts` (swap to `cable-fly` and `push-up`, push-up-first day).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
