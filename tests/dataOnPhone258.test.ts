@@ -28,5 +28,7 @@ test('the installed-app restore uses the same validated restore as Settings', ()
 });
 
 test('no new stored fields', () => {
-  assert.ok(!read('src/types.ts').match(/dismiss|seenRestore|backupOffer/i));
+  // #307's install-note dismiss record is the one owner-approved exception; #258 itself stores nothing.
+  const types = read('src/types.ts').replace(/\/\*\*\n\s*\* \(#307\)[\s\S]*?installNoteDismissals\?: string\[\];/, '');
+  assert.ok(!types.match(/dismiss|seenRestore|backupOffer/i));
 });

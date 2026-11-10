@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { INSTALL_NOTE } from '../lib/install';
 import type { ReactNode } from 'react';
 import type { Profile, Unit, WorkoutRecord } from '../types';
 import { lastPerformance, workoutsThisWeek } from '../lib/plan';
@@ -75,6 +76,12 @@ interface Props {
   backup?: string | null;
   /** (#225) Back up now: the same action as Settings. */
   onBackup?: () => void;
+  /** (#307) Show the install note (`showInstallNote`). */
+  install?: boolean;
+  /** (#307) Show me how: open the Install on this phone sheet. */
+  onInstall?: () => void;
+  /** (#307) ×: hide the note for 7 days; after two it lives only in Settings. */
+  onDismissInstall?: () => void;
   /** (#134) The day up next repeats muscles trained in the last 48 h: a fresher day to switch to. */
   fresher?: FresherDay | null;
   /** (#134) Switch to the fresher day: the Switch sheet's own pick. */
@@ -211,6 +218,9 @@ export default function TodayScreen({
   described,
   backup,
   onBackup,
+  install = false,
+  onInstall,
+  onDismissInstall,
   fresher,
   onPickFresher,
   onKeepNext,
@@ -386,6 +396,18 @@ export default function TodayScreen({
           <div className="feasibility backup-note" role="note">
             <p className="feasibility__line">{backup}</p>
             <button className="feasibility__alt" onClick={onBackup}>Back up now</button>
+          </div>
+        )}
+        {/* (#307) Today's notice style until #295's Heads-up card takes it; never mid-session. */}
+        {install && onInstall && onDismissInstall && !current && (
+          <div className="feasibility install-note" role="note">
+            <p className="feasibility__line">{INSTALL_NOTE}</p>
+            <div className="feasibility__alts">
+              <button className="feasibility__alt" onClick={onInstall}>Show me how</button>
+              <button className="feasibility__alt feasibility__alt--text feasibility__alt--icon" onClick={onDismissInstall} aria-label="Dismiss for 7 days">
+                ×
+              </button>
+            </div>
           </div>
         )}
 

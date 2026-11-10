@@ -263,6 +263,11 @@ export interface AppState {
    * download. Absent until the first one; a restore never sets it.
    */
   lastBackupAt?: string;
+  /**
+   * (#307) When the Today install note was dismissed, at most two dates. Absent until the first ×;
+   * a restore never sets it.
+   */
+  installNoteDismissals?: string[];
 }
 
 export interface SlotSkip {
