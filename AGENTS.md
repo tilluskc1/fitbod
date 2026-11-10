@@ -1,5 +1,13 @@
 # Project instructions
 
+## Story flow (owner, 2026-11-10) — read first, overrides anything below
+
+1. **One story at a time. Two only when they cannot conflict:** different screens and no shared source, test, CSS or e2e file. If in doubt, run them one after the other.
+2. **Owner says go.** Product names the next one or two stories, the files each touches, and why they don't overlap. No dev chat starts a story before the owner's word.
+3. **Merge as soon as it passes.** A story merges to `main` once its separate review passes and the GitHub `checks` status is green (standing merge rule). No batches, no separate merge chats.
+4. **Clean up before the next story.** Archive finished chats, delete merged branches, close superseded PRs and leave no stray files. Then the next story starts.
+5. **No waste.** Edge cases are decided in the story before the build. Dev chats read CI results instead of re-running checks by hand. Decisions go into a chat's first prompt, not into messages between chats.
+
 ## Output style: ADHD mode is always on
 
 Every response in this repository follows `.agents/skills/i-have-adhd/SKILL.md`.
