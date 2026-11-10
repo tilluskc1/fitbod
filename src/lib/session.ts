@@ -138,6 +138,145 @@ export function logSet(
   return startRest(updated, now, seconds);
 }
 
+/** The later sets that follow an edited set, per field (#306). */
+export interface Followers {
+  weight: number[];
+  reps: number[];
+}
+
+/** What an edit carried (#306): the later sets it changed and their values before, for Undo. */
+export interface CarryResult {
+  session: WorkoutRecord;
+  carried: number[];
+  previous: { index: number; weight: number; reps: number }[];
+  /** Which sets followed, so the rest of a keystroke burst moves the same sets and no others. */
+  followers?: Followers;
+}
+
+/**
+ * Edit one set and carry the change forward (#306). A later set not yet logged takes the new weight
+ * (or reps) when it was following: it held the edited set's value when the edit (or keystroke burst)
+ * began. A set the lifter changed by hand to anything else keeps it, even if a keystroke passes through
+ * its value, and so does a set an Undo put back (it no longer matches). Logged sets, `planned` and the done state
+ * are never touched. No stored flag: the rule reads the same after a reload.
+ */
+export function editSet(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  setIndex: number,
+  patch: Partial<PerformedSet>,
+  now: string,
+  /** A burst's followers, fixed at its first keystroke; omitted, they are read from this edit. */
+  fixed?: Followers,
+): CarryResult {
+  const before = session.exercises[exerciseIndex]?.performed[setIndex];
+  // A logged set never takes 0 reps (or seconds): it would read as a set never done (#309 review 2).
+  if (before?.done && patch.reps !== undefined && patch.reps <= 0) {
+    patch = { ...patch, reps: undefined };
+  }
+  const edited = updatePerformedSet(session, exerciseIndex, setIndex, patch, now);
+  const none = { weight: [], reps: [] };
+  if (!before || edited === session) return { session, carried: [], previous: [], followers: fixed ?? none };
+  const after = edited.exercises[exerciseIndex].performed[setIndex];
+  const weightMoved = Math.abs(after.weight - before.weight) > 1e-9;
+  const repsMoved = after.reps !== before.reps;
+  const later = edited.exercises[exerciseIndex].performed
+    .map((set, i) => ({ set, i }))
+    .filter(({ set, i }) => i > setIndex && !set.done);
+  const followers: Followers = fixed ?? {
+    weight: later.filter(({ set }) => Math.abs(set.weight - before.weight) < 1e-9).map(({ i }) => i),
+    reps: later.filter(({ set }) => set.reps === before.reps).map(({ i }) => i),
+  };
+  const follows: Partial<PerformedSet>[] = edited.exercises[exerciseIndex].performed.map((set, i) => {
+    if (i <= setIndex || set.done) return {};
+    return {
+      // A cleared field (0) carries nothing: the prefills wait for the first typed value.
+      ...(weightMoved && after.weight > 0 && followers.weight.includes(i) ? { weight: after.weight } : {}),
+      ...(repsMoved && after.reps > 0 && followers.reps.includes(i) ? { reps: after.reps } : {}),
+    };
+  });
+  return { ...applyToSets(edited, exerciseIndex, follows, now), followers };
+}
+
+/** "Set all remaining sets to…" (#306): every set not yet logged takes this weight and these reps. */
+export function setRemaining(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  value: { weight: number; reps: number },
+  now: string,
+): CarryResult {
+  const exercise = session.exercises[exerciseIndex];
+  if (!exercise) return { session, carried: [], previous: [] };
+  return applyToSets(session, exerciseIndex, exercise.performed.map((set) => (set.done ? {} : { ...value })), now);
+}
+
+function applyToSets(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  patches: Partial<PerformedSet>[],
+  now: string,
+): CarryResult {
+  let next = session;
+  const carried: number[] = [];
+  const previous: CarryResult['previous'] = [];
+  patches.forEach((patch, i) => {
+    if (patch.weight === undefined && patch.reps === undefined) return;
+    const set = next.exercises[exerciseIndex].performed[i];
+    const changed = updatePerformedSet(next, exerciseIndex, i, patch, now);
+    const out = changed.exercises[exerciseIndex].performed[i];
+    if (changed === next || (out.weight === set.weight && out.reps === set.reps)) return;
+    previous.push({ index: i, weight: set.weight, reps: set.reps });
+    carried.push(i);
+    next = changed;
+  });
+  return { session: next, carried, previous };
+}
+
+/**
+ * Undo a carry: the listed sets return to their earlier values unless they were logged since.
+ * `edited`: a logged set the edit itself changed (#309); it returns to its earlier values too.
+ */
+export function undoCarry(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  exerciseId: string,
+  previous: CarryResult['previous'],
+  now: string,
+  edited?: CarryResult['previous'][number],
+): WorkoutRecord {
+  if (session.exercises[exerciseIndex]?.exerciseId !== exerciseId) return session;
+  let next = session;
+  if (edited && next.exercises[exerciseIndex].performed[edited.index]?.done) {
+    next = updatePerformedSet(next, exerciseIndex, edited.index, { weight: edited.weight, reps: edited.reps }, now);
+  }
+  for (const { index, weight, reps } of previous) {
+    if (next.exercises[exerciseIndex].performed[index]?.done === false) {
+      next = updatePerformedSet(next, exerciseIndex, index, { weight, reps }, now);
+    }
+  }
+  return next;
+}
+
+/**
+ * A refused or emptied keystroke ends what its burst did (#309 review 2): every set the burst carried
+ * returns to exactly what Undo would put back, and the edited set takes `target` (the value it held when
+ * the burst began, or 0 for an emptied cell not yet logged). Nothing is left holding a load the screen
+ * calls "not saved".
+ */
+export function revertBurst(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  exerciseId: string,
+  setIndex: number,
+  target: Partial<Pick<PerformedSet, 'weight' | 'reps'>>,
+  previous: CarryResult['previous'],
+  now: string,
+): WorkoutRecord {
+  if (session.exercises[exerciseIndex]?.exerciseId !== exerciseId) return session;
+  const restored = undoCarry(session, exerciseIndex, exerciseId, previous, now);
+  return updatePerformedSet(restored, exerciseIndex, setIndex, target, now);
+}
+
 /** Confirming the first weight applies it to every set of the exercise not yet logged. */
 export function confirmWeight(
   session: WorkoutRecord,

@@ -62,8 +62,8 @@ test('swap-back segments keep their own accepted targets in Today, details, Why,
     assert.match(trainHtml, /<h2 class="aw-exercise__name"><button/, 'the exercise name stays a heading');
     assert.match(train, /Exercise 2 of \d+ · Target 1 × 10/);
     assert.match(train, /Set Previous kg each Reps/);
-    assert.match(trainHtml, /aria-label="Edit weight for set 1"[^>]*>20</, "the segment's own 20 kg, not the press-up's");
-    assert.match(trainHtml, /aria-label="Edit reps for set 1"[^>]*>10</);
+    assert.match(trainHtml, /aria-label="Set 1 weight, kilograms each"[^>]*value="20"/, "the segment's own 20 kg, not the press-up's");
+    assert.match(trainHtml, /aria-label="Set 1 reps"[^>]*value="10"/);
   } finally { await server.close(); }
 });
 
@@ -92,11 +92,12 @@ test('barbell logger offers calibration without fixture dumbbell weights', async
     const html = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
       loadOptions: [10, 15, 18], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop,
       onToggleRestPause: noop, onExtendRest: noop, onReturn: noop }));
-    assert.match(html, /Weight \(kg total\)/);
-    assert.match(html, /Enter barbell load \(kg total\)/);
-    assert.doesNotMatch(html, /lg-quick|weight-pills/);
+    // #309: the typed first-weight field and its Weight (kg total) label are gone; the weight is typed in set 1's cell.
+    assert.match(html, /aria-label="Set 1 weight, kilograms"/, 'a barbell cell is total, not each');
+    assert.doesNotMatch(html, /Weight \(kg total\)|Enter barbell load/);
+    assert.doesNotMatch(html, /lg-quick|weight-pills|<button(?![^>]*lg-wcheck)[^>]*aria-pressed/);
     assert.doesNotMatch(html, /Dumbbell/);
-    assert.match(html, /aria-label="Edit weight for set 1"[^>]*>—</, 'load not set');
+    assert.match(html, /aria-label="Set 1 weight, kilograms"[^>]*value=""/, 'load not set');
     assert.doesNotMatch(html, />BW</, 'a barbell is not bodyweight');
   } finally { await server.close(); }
 });
@@ -111,7 +112,7 @@ test('a barbell set opens with precise saved kilograms', async () => {
     const html = renderToStaticMarkup(createElement(Train, { session: current, history: [], now: Date.now(),
       loadOptions: [], unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop,
       onToggleRestPause: noop, onExtendRest: noop, onReturn: noop }));
-    assert.match(html, /aria-label="Edit weight for set 1"[^>]*>42\.3</);
+    assert.match(html, /aria-label="Set 1 weight, kilograms"[^>]*value="42\.3"/);
   } finally { await server.close(); }
 });
 

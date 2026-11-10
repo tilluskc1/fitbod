@@ -78,23 +78,32 @@ async function renderTrain(extra: Record<string, unknown>) {
   } finally { await server.close(); }
 }
 
-test('a typed first load is prefilled from the profile, says why, and Confirm is ready', async () => {
+const cell = (html: string, label: string) => html.match(new RegExp(`aria-label="${label}"[^>]*value="([^"]*)"`))?.[1];
+const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+
+test('a first load is prefilled from the profile in every pending set, says why, and the ✓ is ready', async () => {
   const html = await renderTrain({ experience: 'Beginner' });
-  const input = html.match(/<input[^>]*aria-label="Enter dumbbell load[^"]*"[^>]*>/)?.[0] ?? '';
-  assert.match(input, /value="6"/, 'floor press, Beginner, kg: 6 per hand');
-  assert.match(html, /Suggested: 6 kg each, from your Beginner setup\. Change it if it feels off\./);
-  assert.match(html, /<button class="pill-primary"[^>]*>Confirm<\/button>/);
-  assert.doesNotMatch(html, /<button class="pill-primary" disabled=""[^>]*>Confirm/);
+  for (const n of [1, 2, 3]) {
+    assert.equal(cell(html, `Set ${n} weight, kilograms each`), '6', `set ${n}: floor press, Beginner, kg: 6 per hand`);
+    assert.match(html, new RegExp(`aria-label="Log set ${n}">`), `set ${n} logs in one tap`);
+    assert.doesNotMatch(html, new RegExp(`aria-label="Log set ${n}"[^>]*disabled`));
+  }
+  assert.match(plain(html), /Suggested start 6 kg each\. Do 5 easy reps with it, then adjust set 1\./);
+  // #309: the "Suggested: …" note, Confirm and Skip are gone; the hint and the prefilled cells replace them.
+  assert.doesNotMatch(html, />Confirm<|>Skip<|Suggested: |Enter dumbbell load/);
 });
 
-test('owned loads mark the nearest one as suggested without choosing it', async () => {
+test('owned loads: the suggestion is the nearest one owned, shown in the cells; no pills', async () => {
   const html = await renderTrain({ experience: 'Beginner', calibrationLoads: RACK, loadOptions: RACK });
-  assert.match(html, /<button type="button" aria-pressed="false" class="is-suggested" aria-label="10, suggested">10<\/button>/);
-  assert.doesNotMatch(html, /aria-pressed="true"/, 'nothing is chosen until a tap');
+  assert.equal(cell(html, 'Set 1 weight, kilograms each'), '10', '6 kg snaps to the nearest owned dumbbell');
+  assert.match(plain(html), /Suggested start 10 kg each\./);
+  // #309: the load-pill row (is-suggested / aria-pressed) is gone; the nearest owned load is the cell value.
+  assert.doesNotMatch(html, /<button(?![^>]*lg-wcheck)[^>]*aria-pressed|is-suggested|Your dumbbells/);
 });
 
-test('without a profile level the step stays as it was: blank and nothing suggested', async () => {
+test('without a profile level nothing is suggested: cells blank, ✓ waits for a weight', async () => {
   const html = await renderTrain({});
-  assert.doesNotMatch(html, /Suggested:/);
-  assert.match(html, /<input[^>]*aria-label="Enter dumbbell load[^"]*" value=""/);
+  assert.doesNotMatch(plain(html), /Suggested/);
+  assert.equal(cell(html, 'Set 1 weight, kilograms each'), '');
+  assert.match(html, /aria-label="Log set 1" disabled=""/);
 });

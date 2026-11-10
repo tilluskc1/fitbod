@@ -59,15 +59,23 @@ import
   applyFinish,
   createSession,
   extendRest,
-  confirmWeight,
+  updatePerformedSet,
   logSet,
   sessionProgress,
   skipExercise,
   swapPendingExercise,
   toggleRestPause,
   unskipExercise,
-  updatePerformedSet,
-} from './lib/session';import { setWorkoutFeedback } from './lib/feedback';
+  editSet,
+  setRemaining,
+  undoCarry,
+  revertBurst,
+  type CarryResult,
+  type Followers,
+} from './lib/session';
+import { bigJumpNote, burstLive, burstMark, carryMessage, setAllMessage } from './lib/carry';
+import { loadModeOf, needsLoad, setUnit } from './data/flagship';
+import { lastExercisePerformance } from './lib/progression';import { setWorkoutFeedback } from './lib/feedback';
 import
  { EMPTY_STATE,
   startOverErase,
@@ -91,6 +99,7 @@ import
  type {
   AppState,
   PerformedSet,
+  WorkoutRecord,
   Profile,
   TodayOverride,
   WorkoutFeedback,
@@ -112,6 +121,7 @@ import
  CoachScreen from './screens/CoachScreen';
 import
  TrainScreen from './screens/TrainScreen';
+import type { SetEdit } from './screens/TrainScreen';
 import
  RecapScreen from './screens/RecapScreen';
 import
@@ -177,6 +187,11 @@ interface SaveUi {
 const INITIAL: LoadedState = loadState();
 const CORRUPT_BACKUP_KEY = 'fitbod-clone-v1:corrupt-backup';
 
+/** An event's timestamp; only ever called from handlers. */
+function stampNow(): string {
+  return new Date().toISOString();
+}
+
 function initialSaveUi(load: LoadedState): SaveUi {
   if (load.status === 'unavailable') {
     return { kind: 'error', reason: 'unavailable', message: load.error ?? 'Storage is unavailable.' };
@@ -222,6 +237,28 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const [pendingNotices, setPendingNotices] = useState<ConstraintNotice[]>([]);
   const [recapId, setRecapId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // #306: the carry the toast's Undo would reverse; one burst per edited set while its toast is up.
+  const [carryUndo, setCarryUndo] = useState<{
+    key: string;
+    message: string;
+    sessionId: string;
+    exerciseIndex: number;
+    exerciseId: string;
+    previous: CarryResult['previous'];
+    followers: Followers;
+    /** The exercise's sets as this burst left them; see `burstLive`. */
+    mark: string;
+    /** A logged set this burst edited (#309), as it was before the burst: Undo puts it back. */
+    edited?: CarryResult['previous'][number];
+    /** The edited set as it was when the burst began: a refused keystroke puts it back (#309 review 2). */
+    origin?: CarryResult['previous'][number];
+    /** The "Big jump" heads-up this toast carries; it outlives the Undo when a set is logged (#309 review 2). */
+    note?: string;
+  } | null>(null);
+  // A burst whose exercise changed by any other path is over: no Undo, no fixed followers.
+  const liveCarry = carryUndo !== null && burstLive(state.current, carryUndo.exerciseIndex, carryUndo.mark) ? carryUndo : null;
+  const jumpWarned = useRef(new Map<string, string>());
+  const jumpBase = useRef(new Map<string, number>());
   const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(initial));
   // The one feedback write the screens can speak about. It only becomes "saved"
   // when saveState verified the write that carried this answer.
@@ -242,7 +279,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   // automated renderers and deadlocked a tab.
   const [replacePrompt, setReplacePrompt] = useState<Constraints | null>(null);
   /** First-weight steps skipped in this tab; in memory only, never stored. */
-  const [calibrationSkips, setCalibrationSkips] = useState<string[]>([]);
   /** (#134) Keep tapped on the fresher-day offer: this slot, today. In memory only, never stored. */
   const [keptFresher, setKeptFresher] = useState<string | null>(null);
   /** (#193) The Today composer is open or previewing; it clears this when it closes or unmounts. */
@@ -854,29 +890,165 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setNotice(message);
   };
 
-  const updateSet = (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => {
-    const stamp = new Date().toISOString();
-    setState((currentState) =>
-      currentState.current
-        ? {
-            ...currentState,
-            current: updatePerformedSet(currentState.current, exerciseIndex, setIndex, patch, stamp),
-          }
-        : currentState,
-    );
+  /** Show what a carry changed, with Undo; typing 1, 13, 135 into one set is one burst with one Undo. */
+  const burstKey = (session: WorkoutRecord, exerciseIndex: number, burst: string) =>
+    `${session.id}:${exerciseIndex}:${session.exercises[exerciseIndex]?.exerciseId}:${burst}`;
+  /** The open burst for this key. Every edit opens its own burst and ends any other (#306 review 2). */
+  const openBurst = (key: string) => (liveCarry !== null && liveCarry.key === key ? liveCarry : null);
+
+  const announceCarry = (
+    session: WorkoutRecord,
+    exerciseIndex: number,
+    burst: string,
+    result: CarryResult,
+    message: (carried: number[]) => string | null,
+    jump?: { startKg: number; kg: number },
+    edited?: CarryResult['previous'][number],
+    origin?: CarryResult['previous'][number],
+  ) => {
+    const exercise = session.exercises[exerciseIndex];
+    if (!exercise) return;
+    const key = burstKey(session, exerciseIndex, burst);
+    const open = openBurst(key);
+    // The heads-up compares with the exercise's first prefill this session, not the last keystroke.
+    const jumpKey = `${session.id}:${exerciseIndex}:${exercise.exerciseId}`;
+    if (jump && jump.startKg > 0 && !jumpBase.current.has(jumpKey)) jumpBase.current.set(jumpKey, jump.startKg);
+    const previous = open
+      ? [...open.previous, ...result.previous.filter((p) => !open.previous.some((q) => q.index === p.index))]
+      : result.previous;
+    const followers = result.followers ?? { weight: [], reps: [] };
+    const self = open ? open.edited : edited;
+    const entry = {
+      key, sessionId: session.id, exerciseIndex, exerciseId: exercise.exerciseId, previous, followers,
+      mark: burstMark(result.session, exerciseIndex), edited: self, origin: open ? open.origin : origin,
+    };
+    let text = message(previous.map((p) => p.index));
+    // Undo has something to put back only while a set differs from what the burst found (#309 review 2):
+    // a refused first keystroke, or one that types the old value back, says nothing.
+    const sets = result.session.exercises[exerciseIndex]?.performed ?? [];
+    const differs = (p: CarryResult['previous'][number]) =>
+      sets[p.index] !== undefined && (Math.abs(sets[p.index].weight - p.weight) > 1e-9 || sets[p.index].reps !== p.reps);
+    const undoable = previous.some((p) => sets[p.index]?.done === false && differs(p)) || (self !== undefined && differs(self));
+    if (!undoable || text === null) {
+      // Nothing to say, but the burst still opens (its followers fixed now, even if none), so a later
+      // keystroke can never re-read them from a half-typed value. A cleared field drops a stale toast.
+      setCarryUndo({ ...entry, message: '' });
+      if (open !== null && open.message !== '' && notice === open.message) setNotice(null);
+      return;
+    }
+    if (result.carried.length === 0 && !self) {
+      setCarryUndo({ ...entry, message: open !== null ? open.message : '', note: open?.note });
+      return;
+    }
+    const mode = loadModeOf(exercise.exerciseId);
+    const firstTime = !lastExercisePerformance(state.history, exercise.exerciseId, exercise.setup)?.done.length;
+    const note = jump ? bigJumpNote(firstTime, jumpBase.current.get(jumpKey) ?? 0, jump.kg, unit, mode) : null;
+    // Once per exercise: the burst that raised it keeps showing it while the jump holds.
+    const warned = note !== null && (jumpWarned.current.get(jumpKey) ?? key) === key;
+    if (warned) {
+      jumpWarned.current.set(jumpKey, key);
+      text = `${text}. ${note}`;
+    }
+    setCarryUndo({ ...entry, message: text, note: warned ? note : undefined });
+    setNotice(text);
   };
 
-  const confirmFirstWeight = (exerciseIndex: number, weight: number) => {
-    const stamp = new Date().toISOString();
+  /**
+   * `revert`: the keystroke was refused, or emptied the cell (#309 review 2). The open burst then ends
+   * what it did: every set it carried goes back to what Undo would restore, and the edited set to the
+   * value it held when the burst began (an emptied set not yet logged stays empty).
+   */
+  const updateSet = (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>, how: SetEdit = {}) => {
+    const { revert, prefill = 0 } = how;
+    const stamp = stampNow();
+    const session = state.current;
+    // Typing into one field of one set is a burst whose following sets were fixed at its first keystroke (#306).
+    const field = patch.weight !== undefined ? 'weight' : 'reps';
+    const open = session ? openBurst(burstKey(session, exerciseIndex, `${setIndex}:${field}`)) : null;
+    const fixed = open?.followers;
+    const before = session?.exercises[exerciseIndex]?.performed[setIndex];
+    if (revert && session && before) {
+      // Nothing open: a refused keystroke changed nothing, and an emptied logged set keeps its value.
+      const origin = open?.origin ?? { index: setIndex, weight: before.weight, reps: before.reps };
+      const keepsValue = revert === 'refused' || (before.done && (field === 'reps' || needsLoad(session.exercises[exerciseIndex].exerciseId)));
+      if (open || keepsValue) {
+        const target = keepsValue ? { [field]: origin[field] } : { [field]: 0 };
+        const exerciseId = session.exercises[exerciseIndex].exerciseId;
+        const previous = open?.previous ?? [];
+        setState((currentState) =>
+          currentState.current
+            ? { ...currentState, current: revertBurst(currentState.current, exerciseIndex, exerciseId, setIndex, target, previous, stamp) }
+            : currentState,
+        );
+        const reverted = revertBurst(session, exerciseIndex, exerciseId, setIndex, target, previous, stamp);
+        announceCarry(session, exerciseIndex, `${setIndex}:${field}`, { session: reverted, carried: [], previous: [], followers: fixed },
+          () => null, undefined, before.done ? { index: setIndex, weight: before.weight, reps: before.reps } : undefined, origin);
+        return;
+      }
+    }
     setState((currentState) =>
       currentState.current
-        ? { ...currentState, current: confirmWeight(currentState.current, exerciseIndex, weight, stamp) }
+        ? { ...currentState, current: editSet(currentState.current, exerciseIndex, setIndex, patch, stamp, fixed).session }
         : currentState,
     );
+    // The same pure edit on the rendered state names what was carried, for the toast and Undo.
+    if (!session || !before) return;
+    const result = editSet(session, exerciseIndex, setIndex, patch, stamp, fixed);
+    const after = result.session.exercises[exerciseIndex].performed[setIndex];
+    const moved = Math.abs(after.weight - before.weight) > 1e-9 ? 'weight' : 'reps';
+    const exerciseId = session.exercises[exerciseIndex].exerciseId;
+    // An edit to a logged set says so, with Undo, even when nothing follows it (#309).
+    const edited = before.done ? { index: setIndex, weight: before.weight, reps: before.reps } : undefined;
+    announceCarry(session, exerciseIndex, `${setIndex}:${field}`, result, (carried) => {
+      // A cleared field keeps its burst but says nothing until a value is typed.
+      const carriedText = (moved === 'weight' ? after.weight : after.reps) <= 0 ? null
+        : carryMessage({ field: moved, kg: after.weight, reps: after.reps, carried, unit, mode: loadModeOf(exerciseId), seconds: setUnit(exerciseId) === 'seconds' });
+      if (!before.done) return carriedText;
+      return `Set ${setIndex + 1} updated${carriedText && carried.length > 0 ? `. ${carriedText}` : ''}`;
+    // The heads-up compares with what set 1 showed when the burst began: its load, or the suggested
+    // start an empty cell showed (#306), never a half-typed keystroke (#309 review 2).
+    }, moved === 'weight' ? { startKg: (open?.origin ?? before).weight > 0 ? (open?.origin ?? before).weight : prefill, kg: after.weight } : undefined, edited,
+    { index: setIndex, weight: before.weight, reps: before.reps });
   };
 
-  const logOneSet = (exerciseIndex: number, setIndex: number, exerciseId: string) => {
+  /** "Set all remaining sets to…" from the exercise menu (#306). */
+  const setAllRemaining = (exerciseIndex: number, exerciseId: string, value: { weight: number; reps: number }) => {
+    const stamp = stampNow();
+    const session = state.current;
+    if (!session || session.exercises[exerciseIndex]?.exerciseId !== exerciseId) return;
+    setState((currentState) =>
+      currentState.current?.exercises[exerciseIndex]?.exerciseId === exerciseId
+        ? { ...currentState, current: setRemaining(currentState.current, exerciseIndex, value, stamp).session }
+        : currentState,
+    );
+    const result = setRemaining(session, exerciseIndex, value, stamp);
+    const first = session.exercises[exerciseIndex].performed.find((set) => !set.done);
+    announceCarry(session, exerciseIndex, 'all', result, (carried) =>
+      setAllMessage({ kg: value.weight, reps: value.reps, carried, unit, mode: loadModeOf(exerciseId), seconds: setUnit(exerciseId) === 'seconds' }),
+      first ? { startKg: first.weight, kg: value.weight } : undefined);
+  };
+
+  const undoLastCarry = () => {
+    const undo = liveCarry;
+    if (!undo) return;
     const stamp = new Date().toISOString();
+    setState((currentState) =>
+      currentState.current?.id === undo.sessionId
+        ? { ...currentState, current: undoCarry(currentState.current, undo.exerciseIndex, undo.exerciseId, undo.previous, stamp, undo.edited) }
+        : currentState,
+    );
+    setCarryUndo(null);
+    setNotice(null);
+  };
+
+  /** `weight`: the suggested start an empty cell showed (#309); it is written to that set as it is logged. */
+  const logOneSet = (exerciseIndex: number, setIndex: number, exerciseId: string, weight?: number) => {
+    const stamp = new Date().toISOString();
+    // A logged set ends any carry burst: Undo must not reverse the reps #182 carries on log (#306).
+    // Its toast goes with it, rather than staying up without the Undo it offered (#309 review 1); a
+    // "Big jump" heads-up it carried stays, on its own, since the load it warns about is still there.
+    if (liveCarry !== null && notice === liveCarry.message) setNotice(liveCarry.note ?? null);
+    setCarryUndo(null);
     setState((currentState) => {
       const session = currentState.current;
       const exercise = session?.exercises[exerciseIndex];
@@ -884,7 +1056,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       if (!session || exercise?.exerciseId !== exerciseId || exercise.skipped) return currentState;
       // Rest by the exercise's role in the day, the same seconds the minutes were fitted with (#132).
       const rest = sessionRests(session.exercises.map((item) => item.exerciseId), currentState.profile?.goal, session.durationMin)[exerciseIndex];
-      const logged = logSet(session, exerciseIndex, setIndex, stamp, rest);
+      // Only an empty load takes the suggestion; logSet then carries it to later empty sets (#182).
+      const filled = weight !== undefined && weight > 0 && exercise.performed[setIndex]?.weight === 0
+        ? updatePerformedSet(session, exerciseIndex, setIndex, { weight }, stamp) : session;
+      const logged = logSet(filled, exerciseIndex, setIndex, stamp, rest);
       return logged === session ? currentState : { ...currentState, current: logged };
     });
   };
@@ -1166,12 +1341,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         session={current}
         history={state.history}
         now={now}
-        loadOptions={loadOptions(constraints.equipment, constraints.loads)}
         profileLoads={profile?.loads}
+        rampLoads={loadOptions(constraints.equipment, constraints.loads)}
         calibrationLoads={confirmedLoads(constraints.equipment, constraints.loads)}
         experience={state.profile?.experience}
-        skippedCalibrations={calibrationSkips}
-        onSkipCalibration={(key) => setCalibrationSkips((keys) => [...keys, key])}
         targetNotes={targetNotes}
         rests={current ? sessionRests(current.exercises.map((item) => item.exerciseId), profile?.goal, current.durationMin) : []}
         goHeavier={goHeavier}
@@ -1182,7 +1355,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         }}
         onFinish={requestFinish}
         onUpdateSet={updateSet}
-        onConfirmWeight={confirmFirstWeight}
         onLogSet={logOneSet}
         onToggleRestPause={() => {
           const stamp = new Date().toISOString();
@@ -1395,6 +1567,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         <div className={view === 'tabs' && tab === 'today' && !conflict && saveUi.kind !== 'error' ? 'app-alerts app-alerts--toast' : 'app-alerts'} role="status">
           <div className="banner" style={{ margin: '8px 0 0' }}>
             <span>{notice}</span>
+            {liveCarry !== null && liveCarry.message === notice && (
+              <button onClick={undoLastCarry}>Undo</button>
+            )}
             <button onClick={() => setNotice(null)} aria-label="Dismiss message">
               Dismiss
             </button>
@@ -1568,6 +1743,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
                 closeSheet();
                 returnToExercise(index);
               }}
+              remaining={exercise.performed.find((set) => !set.done)}
+              onSetAll={(value) => setAllRemaining(sheet.exerciseIndex, sheet.exerciseId, value)}
               onClose={closeSheet}
             />
           );

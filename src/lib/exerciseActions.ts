@@ -10,6 +10,7 @@ import type { WorkoutExercise, WorkoutRecord } from '../types';
 export type ExerciseActionId =
   | 'instructions'
   | 'history'
+  | 'set-all'
   | 'replace'
   | 'more'
   | 'less'
@@ -40,17 +41,19 @@ export function exerciseActions(pending: number, done: number, inSession: boolea
   const today: ExerciseAction[] = skipped
     ? [{ id: 'return', label: 'Return to exercise' }]
     : [
+        // #306: change your mind before set 1; every set not yet logged takes the new values.
+        { id: 'set-all', label: 'Set all remaining sets to…', blockedReason: blocked },
         { id: 'replace', label: 'Replace for the remaining sets', blockedReason: blocked },
         { id: 'remove-today', label: "Remove today's remaining work", blockedReason: blocked },
       ];
   return [
     { id: 'instructions', label: 'Instructions and demo' },
     { id: 'history', label: 'History for this exercise' },
-    today[0],
+    ...today.slice(0, skipped ? 1 : 2),
     { id: 'more', label: 'Recommend more often' },
     { id: 'less', label: 'Recommend less often' },
     { id: 'dont-recommend', label: "Don't recommend again" },
-    ...today.slice(1),
+    ...today.slice(skipped ? 1 : 2),
   ];
 }
 

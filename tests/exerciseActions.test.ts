@@ -64,7 +64,7 @@ test('pending work unlocks replace and removal, and every promised capability ha
   const actions = exerciseActions(3, 0, true, false);
   assert.deepEqual(
     actions.map((action) => action.id),
-    ['instructions', 'history', 'replace', 'more', 'less', 'dont-recommend', 'remove-today'],
+    ['instructions', 'history', 'set-all', 'replace', 'more', 'less', 'dont-recommend', 'remove-today'],
   );
   // With pending work nothing is blocked: no placeholder row is left.
   assert.deepEqual(actions.filter((action) => action.blockedReason), []);
@@ -245,18 +245,18 @@ test('a completed exercise states its one reason once and keeps reading actions 
   await withSheets(({ ExerciseActionsSheet }) => {
     const html = renderToStaticMarkup(createElement(ExerciseActionsSheet, { ...sheetProps({}), pending: 0, done: 3 }));
     assert.equal(plain(html).match(/Every set here is logged/g)?.length, 1);
-    assert.equal(html.match(/disabled=""/g)?.length, 2, 'only replace and remove are blocked');
+    assert.equal(html.match(/disabled=""/g)?.length, 3, 'only set all, replace and remove are blocked');
   });
 });
 
 test('before Start, replace and remove are stated as unavailable instead of doing nothing', async () => {
   const actions = exerciseActions(3, 0, false, false);
-  for (const id of ['replace', 'remove-today'] as const)
+  for (const id of ['set-all', 'replace', 'remove-today'] as const)
     assert.equal(actions.find((action) => action.id === id)?.blockedReason, "Start the workout to change today's sets.");
   await withSheets(({ ExerciseActionsSheet }) => {
     const html = renderToStaticMarkup(createElement(ExerciseActionsSheet, { ...sheetProps({}), inSession: false }));
     assert.match(plain(html), /Start the workout to change today(?:'|&#x27;)s sets/);
-    assert.equal(html.match(/disabled=""/g)?.length, 2);
+    assert.equal(html.match(/disabled=""/g)?.length, 3);
   });
 });
 
@@ -264,7 +264,7 @@ test('a segment removed for today offers Return to exercise in place of replace 
   const actions = exerciseActions(3, 1, true, true);
   const ids = actions.map((action) => action.id);
   assert.ok(ids.includes('return'));
-  assert.ok(!ids.includes('replace') && !ids.includes('remove-today'));
+  assert.ok(!ids.includes('replace') && !ids.includes('remove-today') && !ids.includes('set-all'));
   assert.equal(actions.find((action) => action.id === 'return')?.label, 'Return to exercise');
   await withSheets(({ ExerciseActionsSheet }) => {
     const text = plain(renderToStaticMarkup(createElement(ExerciseActionsSheet, { ...sheetProps({}), skipped: true })));

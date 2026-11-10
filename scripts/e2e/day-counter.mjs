@@ -51,8 +51,6 @@ async function finishWorkout(page) {
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
   for (let guard = 0; guard < 120; guard += 1) {
-    const confirm = page.getByRole('button', { name: 'Confirm' });
-    if (await confirm.count()) { await confirm.click(); continue; }
     const log = page.locator('button.lg-check:not([disabled])').first();
     if (!(await log.count())) break;
     await log.click();

@@ -65,11 +65,17 @@ async function renderTrain(history: WorkoutRecord[]) {
   } finally { await server.close(); }
 }
 
-test('with a listed rack, the first-load step still takes a typed weight and confirms it', async () => {
+test('with a listed rack, the first-load suggestion is the owned dumbbell, in the set cells, and any weight can be typed', async () => {
   const html = await renderTrain([]);
-  assert.match(html, /aria-label="10, suggested"/, 'the owned dumbbell is still a one-tap pick');
-  assert.match(html, /<input[^>]*aria-label="Enter dumbbell load \(lb each\)"/, 'and any other weight can be typed');
-  assert.match(html, /<button class="pill-primary"[^>]*>Confirm<\/button>/);
+  const cell = (label: string) => html.match(new RegExp(`aria-label="${label}"[^>]*value="([^"]*)"`))?.[1];
+  for (const n of [1, 2, 3]) {
+    assert.equal(cell(`Set ${n} weight, pounds each`), '10', `set ${n} starts at the owned 10 lb`);
+    assert.match(html, new RegExp(`aria-label="Log set ${n}">`), 'and the ✓ is ready');
+  }
+  assert.match(html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '), /Suggested start 10 lb each\. Do 5 easy reps with it, then adjust set 1\./);
+  assert.match(html, /<input[^>]*aria-label="Set 1 weight, pounds each"/, 'any other weight is typed in the cell');
+  // #309: the one-tap rack pills and Confirm are gone; the owned dumbbell is the prefilled cell value.
+  assert.doesNotMatch(html, /<button(?![^>]*lg-wcheck)[^>]*aria-pressed|suggested"|>Confirm</);
 });
 
 test('a gym user is never asked for an owned rack: onboarding hides it, Settings says leave it blank (#180)', async () => {
@@ -90,7 +96,7 @@ test("the set editor's rack buttons and typed field are pills, like the rest of 
     const rule = css.slice(css.lastIndexOf('}', at) + 1, css.indexOf('}', at));
     if (selector !== '.aw-field input {') assert.match(rule, /border-radius: 999px/, selector);
   }
-  assert.match(css, /\.lg-first__typed input,\s*\.aw-field input \{[^}]*border-radius: 999px/);
+  assert.match(css, /\.aw-field input \{[^}]*border-radius: 999px/);
 });
 
 test("the rack's top typed in the other unit is still the top of the rack, not above it", () => {

@@ -47,8 +47,6 @@ const messages = (page) => page.locator('.app-alerts[role="status"]').allInnerTe
 const showing = async (page, pattern) => (await messages(page)).some((text) => pattern.test(text));
 
 async function logOneSet(page) {
-  const confirm = page.getByRole('button', { name: 'Confirm' });
-  if (await confirm.count()) await confirm.click();
   await page.locator('button.lg-check:not([disabled])').first().click();
 }
 

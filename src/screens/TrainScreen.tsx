@@ -1,17 +1,14 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
 import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
-import { applyDraft, openDraft, saveDraft } from '../lib/editDraft';
-import type { EditDraft } from '../lib/editDraft';
 import { exerciseInWorkout, lastPerformance } from '../lib/plan';
-import { needsCalibration, plannedLoad } from '../lib/liveProgression';
+import { firstTimeLoaded, plannedLoad } from '../lib/liveProgression';
 import { nearestLoad, suggestedFirstLoad } from '../lib/firstLoad';
 import { availableLoads } from '../lib/progression';
-import { calibrationInputValue, loadLimitMessage, loadValue, typedLoad, unitLabel } from '../lib/units';
+import { calibrationInputValue, loadLimitMessage, loadValue, repsLimitMessage, typedLoad, typedReps, unitLabel } from '../lib/units';
 import { restLabel } from '../lib/sessionTime';
-import { MAX_REPS } from '../lib/validate';
 import { GENERAL_WARM_UP_TEXT, generalWarmUpMinutes, rampExerciseIndex, rampSets, setWarmUpChecks, showsGeneralWarmUp, warmUpChecks } from '../lib/warmUp';
 import type { WarmUpChecks } from '../lib/warmUp';
 import type { Experience, PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
@@ -23,15 +20,12 @@ interface Props {
   session: WorkoutRecord;
   history: WorkoutRecord[];
   now: number;
-  /** Confirmed dumbbell weights for the chosen setup. */
-  loadOptions: number[];
   /** The profile's confirmed loads by equipment: the rack a logged load is compared with. */
   profileLoads?: Profile['loads'];
+  /** The setup's dumbbell rack (a hotel gym's on Travel); only the #300 ramp rows read it, never the set cells. */
+  rampLoads?: number[];
   /** Only the user's confirmed loads; the first-weight step never offers the example rack. */
   calibrationLoads?: number[];
-  /** `sessionId:exerciseIndex:exerciseId` keys whose first-weight step was skipped. */
-  skippedCalibrations?: string[];
-  onSkipCalibration?: (key: string) => void;
   /** The profile's level: the first-weight step starts from a load suggested for it (#116). Absent, it suggests nothing. */
   experience?: Experience;
   /** Display unit. Records stay in kilograms. */
@@ -44,10 +38,12 @@ interface Props {
   goHeavier?: Record<string, number>;
   onMinimize: () => void;
   onFinish: () => void;
-  onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>) => void;
-  onConfirmWeight: (exerciseIndex: number, weight: number) => void;
-  /** The exercise id lets the handler refuse a tap rendered against a since-changed session. */
-  onLogSet: (exerciseIndex: number, setIndex: number, exerciseId: string) => void;
+  onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>, how?: SetEdit) => void;
+  /**
+   * The exercise id lets the handler refuse a tap rendered against a since-changed session. `weight`:
+   * the suggested start the empty cell showed (#309), written to that set before it is logged.
+   */
+  onLogSet: (exerciseIndex: number, setIndex: number, exerciseId: string, weight?: number) => void;
   onToggleRestPause: () => void;
   onExtendRest: () => void;
   onOpenActions: (exerciseIndex: number, mode?: 'instructions' | 'history') => void;
@@ -81,100 +77,69 @@ function shortTarget(entry: WorkoutExercise): string {
   return same ? `${reps.length} × ${reps[0]}${seconds}` : repsTarget(entry.exerciseId, reps.length, entry.planned) ?? '';
 }
 
-/** The user's loads in one row: a tap writes that load to every set not yet logged (#66). */
-export function WeightRow({ label, unitText, loads, selected, suggested = null, show, onPick }: {
-  label: string;
-  unitText: string;
-  loads: number[];
-  selected: number | null;
-  /** Marked, not chosen: the tap still confirms it (#116). */
-  suggested?: number | null;
-  show: (kg: number) => string;
-  onPick: (kg: number) => void;
-}) {
-  return (
-    <div className="lg-quick" role="group" aria-label={`${label} (${unitText})`}>
-      <span className="lg-quick__label" aria-hidden="true">{label}</span>
-      {loads.map((weight) => (
-        <button type="button" key={weight} aria-pressed={selected === weight}
-          className={suggested === weight ? 'is-suggested' : undefined}
-          aria-label={suggested === weight ? `${show(weight)}, suggested` : undefined} onClick={() => onPick(weight)}>
-          {show(weight)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** A logged loaded set saves only with a load (#103). */
-export function SaveSetRow({ needsWeight, onCancel, onSave }: {
-  needsWeight: boolean;
-  onCancel: () => void;
-  onSave: () => void;
-}) {
-  return (
-    <>
-      {needsWeight && <p className="lg-coach lg-save-reason">{NEEDS_LOAD_REASON}</p>}
-      <button className="pill-quiet" onClick={onCancel}>Cancel</button>
-      <button className="pill-primary" disabled={needsWeight} onClick={onSave}>Save set</button>
-    </>
-  );
+/**
+ * `revert`: the keystroke was refused or emptied the cell; the handler undoes its burst (#309 review 2).
+ * `prefill`: the suggested start the empty cell showed, the base of the "Big jump" heads-up (#306).
+ */
+export interface SetEdit {
+  revert?: 'refused' | 'emptied';
+  prefill?: number;
 }
 
 /**
- * First-load help for an uncalibrated variant. It starts from a load suggested by
- * the profile (#116), which the user confirms or changes; the warm-up it
- * describes is never recorded.
- * A load pill confirms with its own tap; a typed load needs Confirm.
+ * What a cell does with a keystroke: null keeps the typed text; 'block' ignores the keystroke (the text
+ * stays as it was, nothing is saved); 'reset' shows the stored value again, selected, so the next key
+ * replaces it rather than appending to it (#309 review 2).
  */
-export function CalibrationStep({ selected = null, onConfirm, onSkip }: {
-  selected?: number | null;
-  onConfirm?: (weight: number) => void;
-  onSkip: () => void;
-}) {
-  return (
-    <div className="lg-first__step">
-      <p className="data-note">
-        Do 5 easy reps with it, then confirm or change. This warm-up is not logged.
-      </p>
-      <div className="lg-first__actions">
-        <button className="pill-quiet" aria-label="Skip first-weight help" onClick={onSkip}>Skip</button>
-        {onConfirm && (
-          <button className="pill-primary" disabled={selected === null}
-            onClick={() => selected !== null && onConfirm(selected)}>Confirm</button>
-        )}
-      </div>
-    </div>
-  );
-}
+type CellAnswer = null | 'block' | 'reset';
 
 /**
- * A typed load. One above the loader's limit is refused with a message and the
- * field falls back to the load held at focus, so nothing invalid is kept (#101).
+ * A set's weight or reps, typed in its own cell (#309). Away from focus it shows the stored value;
+ * while focused it shows exactly what was typed, so a value is never reformatted mid-keystroke.
+ * `typed` is true for a key typed on the keyboard, false for a paste, autofill or drop.
  */
-function LoadEntry({ weight, update, shown, unit, label }: {
-  weight: number;
-  update: (weight: number) => void;
-  shown?: string;
-  unit: Unit;
+function SetCell({ id, label, shown, inputMode, enterKeyHint, empty, onText, onEnter }: {
+  id: string;
   label: string;
+  shown: string;
+  inputMode: 'decimal' | 'numeric';
+  enterKeyHint: 'next' | 'done';
+  empty: boolean;
+  onText: (text: string, typed: boolean) => CellAnswer;
+  onEnter: (input: HTMLInputElement) => void;
 }) {
-  const [refused, setRefused] = useState(false);
-  const focused = useRef(weight);
+  const [text, setText] = useState<string | null>(null);
+  /** Set by a reset; the render it causes selects the stored value it shows. */
+  const selectNext = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!selectNext.current) return;
+    selectNext.current = false;
+    input.current?.select();
+  });
   return (
-    <>
-      <input type="number" min="0" step="any" inputMode="decimal" aria-label={label} aria-invalid={refused || undefined}
-        defaultValue={shown ?? calibrationInputValue(weight, unit)}
-        onFocus={() => { focused.current = weight; }}
-        onChange={(event) => {
-          const next = typedLoad(event.target.value, unit, focused.current);
-          if (!next) return;
-          setRefused(next.refused);
-          if (next.refused) event.target.value = calibrationInputValue(next.kg, unit);
-          update(next.kg);
-        }} />
-      {refused && <span className="error-text" role="alert">{loadLimitMessage(unit)}</span>}
-    </>
+    <input ref={input} id={id} className={empty ? 'lg-cell lg-input lg-cell--empty' : 'lg-cell lg-input'} type="text"
+      inputMode={inputMode} enterKeyHint={enterKeyHint} autoComplete="off" aria-label={label}
+      placeholder="—" value={text ?? shown}
+      onFocus={(event) => { setText(shown); event.currentTarget.select(); }}
+      onChange={(event) => {
+        const typed = event.target.value.replace(',', '.');
+        const answer = onText(typed, (event.nativeEvent as InputEvent).inputType === 'insertText');
+        if (answer === 'block') return;
+        if (answer === 'reset') {
+          // While focused the cell shows `text`, so drop it to show the stored value, then select it.
+          selectNext.current = true;
+          setText(null);
+          return;
+        }
+        setText(typed);
+      }}
+      onBlur={() => setText(null)}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        onEnter(event.currentTarget);
+      }} />
   );
 }
 
@@ -182,11 +147,9 @@ export default function TrainScreen({
   session,
   history,
   now,
-  loadOptions,
   profileLoads = {},
+  rampLoads = [],
   calibrationLoads = [],
-  skippedCalibrations = [],
-  onSkipCalibration,
   experience,
   unit,
   targetNotes,
@@ -195,7 +158,6 @@ export default function TrainScreen({
   onMinimize,
   onFinish,
   onUpdateSet,
-  onConfirmWeight,
   onLogSet,
   onToggleRestPause,
   onExtendRest,
@@ -203,30 +165,29 @@ export default function TrainScreen({
   onReplace,
   onReturn,
 }: Props) {
-  /** A logged set's edit; the record is untouched until Save set. */
-  const [editing, setEditing] = useState<EditDraft | null>(null);
-  /** The row whose editor is open, by its exercise-segment-set key. */
-  const [openKey, setOpenKey] = useState<string | null>(null);
-  /** The calibration pick lives here until Confirm; nothing reaches the record before it. */
-  const [calibration, setCalibration] = useState<{ key: string; weight: number } | null>(null);
+  /**
+   * Set cells (`calibrationKey:setIndex`) whose suggested start the lifter cleared: they stay empty for
+   * this visit. Nothing is stored (owner, #315 item 12): after a reload the muted suggestion shows again,
+   * and it reaches the record only when a set is logged with it.
+   */
+  const [cleared, setCleared] = useState<string[]>([]);
+  /** A refused keystroke's message, under the row it was typed in. */
+  const [refusal, setRefusal] = useState<{ key: string; text: string } | null>(null);
   /** After the focused control unmounts, focus moves here (an element id, or 'log' for the next open ✓) instead of <body>. */
   const focusNext = useRef<string | null>(null);
   useEffect(() => {
     const target = focusNext.current;
     if (!target) return;
     focusNext.current = null;
-    // A calibrating exercise has no open ✓ yet; its first-weight row comes first. After the last ✓, Finish.
+    // The next open ✓; an exercise with no load yet offers its first weight cell. After the last ✓, Finish.
     const element = target === 'log'
-      ? document.querySelector<HTMLElement>('button.lg-check:not(:disabled)') ?? document.querySelector<HTMLElement>('.lg-first')
+      ? document.querySelector<HTMLElement>('button.lg-check:not(:disabled)') ?? document.querySelector<HTMLElement>('input.lg-input')
         ?? document.querySelector<HTMLElement>('.finish-btn')
       : document.getElementById(target);
     (element?.matches('button, input') ? element
       : element?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? element?.querySelector<HTMLElement>('button, input'))?.focus();
   });
 
-  /** Edit controls write to the draft only; nothing reaches the record here. */
-  const patchDraft = (patch: Partial<Pick<EditDraft, 'reps' | 'weight'>>) =>
-    setEditing((draft) => (draft ? applyDraft(draft, patch) : draft));
   // #300: warm-up checks live in memory for the session; nothing reaches the record.
   // Read by session id every render, so a session replaced under a mounted logger never shows another's checks.
   const [, setWarmTick] = useState(0);
@@ -246,8 +207,6 @@ export default function TrainScreen({
 
   const [muted, setMuted] = useState(() => isRestMuted(session.id));
   const [restOver, setRestOver] = useState(false);
-  // The typed field is uncontrolled: a rack tap remounts it, so it never shows a weight the pill replaced.
-  const [rackTaps, setRackTaps] = useState(0);
   const [prevRest, setPrevRest] = useState(rest);
   const restActive = Boolean(session.restStartedAt);
   const ended = restEnded({ prev: prevRest, remaining: rest, active: restActive, paused: restPaused, muted });
@@ -392,125 +351,89 @@ export default function TrainScreen({
   const last = lastPerformance(history, exercise.exerciseId);
   const previous = last ? exerciseInWorkout(last.workout, exercise.exerciseId)?.done ?? [] : [];
   const holdUnit = setUnit(exercise.exerciseId) === 'seconds';
-  const canPickWeight = equipment === 'Dumbbell' && loadOptions.length > 0;
-  // A dumbbell with no confirmed rack is typed, the same way a barbell load is.
-  const canEnterWeight = mode !== 'none' && !canPickWeight;
-  const loadEntry = (weight: number, update: (weight: number) => void, shown?: string,
-    label = `Enter ${equipment.toLowerCase()} load (${weightLabel})`) => (
-    <LoadEntry weight={weight} update={update} shown={shown} unit={unit} label={label} />
-  );
 
   // #80: everything a row renders is keyed by exercise, segment and set, so a
   // skip or swap mounts fresh controls instead of reusing another exercise's.
   const exerciseKey = `${exercise.exerciseId}:${index}`;
   const rowKey = (setIndex: number) => `${exerciseKey}:${setIndex}`;
   const calibrationKey = `${session.id}:${index}:${exercise.exerciseId}`;
-  // Untouched (undefined), the step holds the suggested load; a cleared field (0) holds none.
-  const touched = calibration?.key === calibrationKey ? calibration.weight : undefined;
-  const canPickCalibration = equipment === 'Dumbbell' && calibrationLoads.length > 0;
-  // Ready to go heavier (#165): the same weight step, from last time's load instead of a table guess.
+  // Ready to go heavier (#165): the lifter types the next load up from last time's.
   const floor = goHeavier[exercise.exerciseId];
   const raising = floor !== undefined && exercise.performed[0]?.weight === 0
     && !exercise.performed.some((set) => set.done);
-  const calibrating = (canPickCalibration || canEnterWeight)
-    && !skippedCalibrations.includes(calibrationKey) && (needsCalibration(exercise, history) || raising);
-  const choose = (weight: number) => setCalibration({ key: calibrationKey, weight });
-  const quickLoads = calibrating
-    ? (canPickCalibration ? calibrationLoads.filter((load) => !raising || load > floor) : [])
-    : canPickWeight ? loadOptions : [];
+  // First time on a loaded lift (#116): empty weight cells show a suggested start (#309), in the
+  // user's own dumbbells when they listed them. It reaches the record only when a set is logged with it.
+  // The suggestion stays on empty cells after a set is logged out of order (#309 review 1); the hint
+  // line, which talks about set 1, only until the first set is logged.
+  const neverLogged = firstTimeLoaded(exercise, history, { evenIfLogged: true });
+  const firstTime = firstTimeLoaded(exercise, history);
   const definition = exerciseById(exercise.exerciseId);
-  const table = calibrating && !raising && experience && definition ? suggestedFirstLoad(definition, experience, unit) : 0;
-  const suggested = table > 0 ? (quickLoads.length > 0 ? nearestLoad(quickLoads, table) : table) : null;
-  const held = touched === undefined ? suggested : touched > 0 ? touched : null;
-  const coach = calibrating && raising
+  const table = neverLogged && !raising && experience && definition ? suggestedFirstLoad(definition, experience, unit) : 0;
+  const ownDumbbells = equipment === 'Dumbbell' ? calibrationLoads : [];
+  const suggested = table > 0 ? (ownDumbbells.length > 0 ? nearestLoad(ownDumbbells, table) ?? table : table) : null;
+  const prefill = suggested;
+  const perSide = mode === 'each' ? ' each' : '';
+  const hint = suggested !== null && firstTime
+    ? `Suggested start ${calibrationInputValue(suggested, unit)} ${unitLabel(unit)}${perSide}. Do 5 easy reps with it, then adjust set 1.`
+    : null;
+  const coach = raising
     ? `Ready to go heavier. Pick your next ${equipment.toLowerCase()} up from ${calibrationInputValue(floor, unit)} ${weightLabel}, for ${exercise.planned[0]?.reps ?? 0} reps.`
-    : calibrating
-    ? `First time on this one. Pick a weight you could lift for ${exercise.planned[0]?.reps ?? 10} reps with 2–3 to spare.`
-    : targetNotes?.[exercise.exerciseId];
+    : hint ?? (firstTime && mode !== 'none'
+      ? `First time on this one. Pick a weight you could lift for ${exercise.planned[0]?.reps ?? 10} reps with 2–3 to spare.`
+      : targetNotes?.[exercise.exerciseId]);
+  const unitWord = `${unit === 'kg' ? 'kilograms' : 'pounds'}${perSide}`;
 
-  const openEditor = (set: PerformedSet, setIndex: number, field: 'weight' | 'reps') => {
-    const key = rowKey(setIndex);
-    setEditing(set.done ? openDraft(index, setIndex, set) : null);
-    setOpenKey(key);
-    focusNext.current = `${key}:edit-${field}`;
+  /**
+   * A value past the limit (#101, #109). A typed key is capped at the cell: it is never typed, so nothing
+   * changes (#309 review 2). Anything else (a paste) is refused, and the burst it ended is undone: every
+   * set it carried goes back to what Undo restores, and the cell shows its value again, selected.
+   */
+  const refuse = (setIndex: number, key: string, message: string, patch: Partial<PerformedSet>, typed: boolean): CellAnswer => {
+    setRefusal({ key, text: message });
+    if (typed) return 'block';
+    onUpdateSet(index, setIndex, patch, { revert: 'refused' });
+    return 'reset';
   };
-  const closeEditor = (key: string) => {
-    setEditing(null);
-    setOpenKey(null);
-    focusNext.current = `${key}:reps`;
+  /** A weight keystroke. An emptied cell undoes its burst; a logged set keeps its load (#103). */
+  const typeWeight = (set: PerformedSet, setIndex: number, key: string, text: string, typed: boolean): CellAnswer => {
+    const next = typedLoad(text, unit, set.weight);
+    if (!next) return 'block';
+    if (next.refused) return refuse(setIndex, key, loadLimitMessage(unit), { weight: set.weight }, typed);
+    setRefusal(null);
+    if (next.kg <= 0) {
+      // Clearing a cell drops the suggested start from that cell only: an emptied cell stays empty.
+      const cell = `${calibrationKey}:${setIndex}`;
+      if (prefill !== null && !cleared.includes(cell)) setCleared((keys) => [...keys, cell]);
+      onUpdateSet(index, setIndex, { weight: 0 }, { revert: 'emptied' });
+      return null;
+    }
+    onUpdateSet(index, setIndex, { weight: next.kg }, { prefill: prefill ?? 0 });
+    return null;
   };
-  /** Save set is the only path that writes an edited set; it keeps its original timestamp. */
-  const saveEditing = (key: string) => {
-    const set = editing && session.exercises[editing.exerciseIndex]?.performed[editing.setIndex];
-    if (editing && set) onUpdateSet(editing.exerciseIndex, editing.setIndex, saveDraft(editing, set));
-    closeEditor(key);
-  };
-
-  const editor = (set: PerformedSet, setIndex: number, key: string, draft: EditDraft | null) => {
-    const value = draft ?? set;
-    const patch = draft ? patchDraft : (change: Partial<PerformedSet>) => onUpdateSet(index, setIndex, change);
-    return (
-      <div className="set-card lg-editor" role="group"
-        aria-label={draft ? `Edit logged set ${setIndex + 1}` : `Set ${setIndex + 1}`}>
-        {mode !== 'none' && (
-          <div className="aw-field" id={`${key}:edit-weight`}>
-            <div className="aw-field__label">
-              <span>Weight ({weightLabel})</span>
-              <span className="aw-field__note">{equipment}</span>
-            </div>
-            {canPickWeight && (
-              <div className="weight-pills">
-                {loadOptions.map((weight) => (
-                  <button key={weight} aria-pressed={value.weight === weight}
-                    onClick={() => { patch({ weight }); setRackTaps((taps) => taps + 1); }}>
-                    {showWeight(weight)}
-                  </button>
-                ))}
-              </div>
-            )}
-            {/* A listed rack is a shortcut, never a cap: a gym has more than the user listed (#129). */}
-            <Fragment key={rackTaps}>
-              {loadEntry(value.weight, (weight) => patch({ weight }), draft ? undefined : showPending(set.weight, setIndex),
-                `Set ${setIndex + 1} load (${weightLabel})`)}
-            </Fragment>
-          </div>
-        )}
-        <div className="reps-field">
-          <div className="reps-field__label">{holdUnit ? 'Seconds held' : 'Reps completed'}</div>
-          <div className="stepper" id={`${key}:edit-reps`}>
-            <button onClick={() => patch({ reps: Math.max(0, value.reps - 1) })}
-              aria-label={holdUnit ? 'Decrease seconds' : 'Decrease reps'}>
-              <Icon name="remove" size={20} />
-            </button>
-            <output aria-live="polite">{value.reps}</output>
-            <button onClick={() => patch({ reps: value.reps + 1 })} disabled={value.reps >= MAX_REPS}
-              aria-label={holdUnit ? 'Increase seconds' : 'Increase reps'}>
-              <Icon name="add" size={20} />
-            </button>
-          </div>
-        </div>
-        <div className="review-footer__row">
-          {draft ? (
-            <SaveSetRow needsWeight={needsLoad(exercise.exerciseId) && draft.weight <= 0}
-              onCancel={() => closeEditor(key)} onSave={() => saveEditing(key)} />
-          ) : (
-            <button className="pill-quiet" onClick={() => closeEditor(key)}>Done</button>
-          )}
-        </div>
-      </div>
-    );
+  /** A reps (or seconds) keystroke; above the limit it is capped or refused, as a load is. */
+  const typeReps = (set: PerformedSet, setIndex: number, key: string, text: string, typed: boolean): CellAnswer => {
+    if (!/^\d*$/.test(text)) return 'block';
+    const next = typedReps(text, set.reps);
+    if (next.refused) return refuse(setIndex, key, repsLimitMessage(holdUnit), { reps: set.reps }, typed);
+    setRefusal(null);
+    onUpdateSet(index, setIndex, { reps: next.reps }, next.reps <= 0 ? { revert: 'emptied' } : {});
+    return null;
   };
 
   const rows = exercise.performed.flatMap((set, setIndex) => {
     const key = rowKey(setIndex);
     const n = setIndex + 1;
-    const draft = editing && editing.exerciseIndex === index && editing.setIndex === setIndex ? editing : null;
-    // A logged set is only ever edited through its draft.
-    const open = openKey === key && (!set.done || draft !== null);
     const before = previous[setIndex];
-    const noLoad = needsLoad(exercise.exerciseId) && set.weight <= 0;
-    // While calibrating, the first-weight row already says what to do.
-    const reason = !set.done && noLoad && !calibrating && setIndex === activeSet ? `${key}:reason` : undefined;
+    // The suggested start shows in every empty weight cell still to log; logging writes it to that set.
+    const shownPrefill = !set.done && set.weight <= 0 && prefill !== null && !cleared.includes(`${calibrationKey}:${setIndex}`)
+      ? prefill : null;
+    const noLoad = needsLoad(exercise.exerciseId) && set.weight <= 0 && shownPrefill === null;
+    // An emptied reps (or seconds) cell is never logged as 0 either (#309 review 1).
+    const noReps = set.reps <= 0;
+    const reason = !set.done && (noLoad || noReps) && setIndex === activeSet ? `${key}:reason` : undefined;
+    const refused = refusal?.key === key ? `${key}:refused` : undefined;
+    const weightShown = set.weight > 0 ? showPending(set.weight, setIndex)
+      : shownPrefill !== null ? showActual(shownPrefill) : '';
     const row = (
       <tr key={key} className={set.done ? 'lg-row--done' : setIndex === activeSet ? 'lg-row--current' : undefined}>
         <td>{n}</td>
@@ -521,18 +444,17 @@ export default function TrainScreen({
           {mode === 'none' ? (
             <span className="lg-cell lg-cell--bw">BW</span>
           ) : (
-            <button type="button" className={set.weight > 0 ? 'lg-cell' : 'lg-cell lg-cell--empty'} id={`${key}:weight`}
-              aria-label={`Edit weight for set ${n}`} aria-expanded={open} onClick={() => openEditor(set, setIndex, 'weight')}>
-              {set.weight > 0 ? showPending(set.weight, setIndex) : '—'}
-            </button>
+            <SetCell id={`${key}:weight`} label={`Set ${n} weight, ${unitWord}`} shown={weightShown}
+              empty={set.weight <= 0} inputMode="decimal" enterKeyHint="next"
+              onText={(text, typed) => typeWeight(set, setIndex, key, text, typed)}
+              onEnter={() => document.getElementById(`${key}:reps`)?.focus()} />
           )}
         </td>
         <td>
-          <button type="button" className="lg-cell" id={`${key}:reps`}
-            aria-label={`Edit ${holdUnit ? 'seconds' : 'reps'} for set ${n}`} aria-expanded={open}
-            onClick={() => openEditor(set, setIndex, 'reps')}>
-            {`${set.reps}${holdUnit ? 's' : ''}`}
-          </button>
+          <SetCell id={`${key}:reps`} label={`Set ${n} ${holdUnit ? 'seconds' : 'reps'}`}
+            shown={String(set.reps)} empty={false} inputMode="numeric" enterKeyHint="done"
+            onText={(text, typed) => typeReps(set, setIndex, key, text, typed)}
+            onEnter={(input) => input.blur()} />
         </td>
         <td>
           {set.done ? (
@@ -540,13 +462,15 @@ export default function TrainScreen({
               <Icon name="check" size={20} />
             </span>
           ) : (
-            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={calibrating || noLoad}
+            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={noLoad || noReps}
               aria-describedby={reason}
+              // Keep the keyboard's field focused through the tap, so the row does not jump first.
+              onPointerDown={(event) => event.preventDefault()}
               onClick={() => {
                 primeRestAudio();
-                if (openKey === key) setOpenKey(null);
+                setRefusal(null);
                 focusNext.current = 'log';
-                onLogSet(index, setIndex, exercise.exerciseId);
+                onLogSet(index, setIndex, exercise.exerciseId, shownPrefill ?? undefined);
               }}>
               <Icon name="check" size={20} />
             </button>
@@ -554,15 +478,21 @@ export default function TrainScreen({
         </td>
       </tr>
     );
-    const note = reason && <tr key={reason} className="lg-note"><td colSpan={5} id={reason}>{NEEDS_LOAD_REASON}</td></tr>;
-    return [row, note, open && <tr key={`${key}:edit`} className="lg-edit"><td colSpan={5}>{editor(set, setIndex, key, draft)}</td></tr>]
-      .filter(Boolean);
+    const note = reason && (
+      <tr key={reason} className="lg-note">
+        <td colSpan={5} id={reason}>{noLoad ? NEEDS_LOAD_REASON : `Enter ${holdUnit ? 'seconds' : 'reps'} to log this set`}</td>
+      </tr>
+    );
+    const error = refused && (
+      <tr key={refused} className="lg-note"><td colSpan={5} id={refused} className="error-text" role="alert">{refusal?.text}</td></tr>
+    );
+    return [row, note, error].filter(Boolean);
   });
 
   // #300: two ramp sets before the lead's working sets, from the load set 1 shows. Not sets: never
   // logged, counted or stored. A dumbbell ramps on the rack the logger's own picker offers (Travel's
   // hotel rack on a today-only day), else plate steps.
-  const rampRack = equipment === 'Dumbbell' ? loadOptions : rack;
+  const rampRack = equipment === 'Dumbbell' ? rampLoads : rack;
   const ramps = mode !== 'none' && index === rampExerciseIndex(session)
     ? rampSets({ equipment, working: exercise.performed[0]?.weight ?? 0, unit, rack: rampRack })
     : [];
@@ -655,41 +585,6 @@ export default function TrainScreen({
         </div>
 
         {coach && <p className="lg-coach">{coach}</p>}
-
-        {mode !== 'none' && (quickLoads.length > 0 || calibrating) && (
-          <div className="lg-first" key={exerciseKey} id={`${exerciseKey}:first`}>
-            {quickLoads.length > 0 && (
-              <WeightRow label={canPickCalibration ? 'Your dumbbells' : 'Dumbbells'} unitText={weightLabel}
-                loads={quickLoads} selected={exercise.performed[activeSet]?.weight ?? null}
-                suggested={calibrating && touched === undefined ? suggested : null} show={showWeight}
-                onPick={(weight) => { onConfirmWeight(index, weight); setRackTaps((taps) => taps + 1); }} />
-            )}
-            {calibrating && (
-              <label className="lg-first__typed">
-                <span>{quickLoads.length > 0 ? 'Or type a weight' : 'Weight'} ({weightLabel})</span>
-                {loadEntry(held ?? 0, choose)}
-              </label>
-            )}
-            {suggested !== null && experience && (
-              <p className="data-note">
-                Suggested: {calibrationInputValue(suggested, unit)} {weightLabel}, from your {experience} setup. Change it if it feels off.
-              </p>
-            )}
-            {calibrating && (
-              <CalibrationStep
-                selected={held}
-                onConfirm={(weight) => {
-                  focusNext.current = 'log';
-                  onConfirmWeight(index, weight);
-                }}
-                onSkip={() => {
-                  focusNext.current = `${rowKey(Math.max(activeSet, 0))}:weight`;
-                  onSkipCalibration?.(calibrationKey);
-                }}
-              />
-            )}
-          </div>
-        )}
 
         <table className="lg-table" aria-label={`Sets for ${exercise.name}`}>
           <thead>

@@ -48,13 +48,11 @@ async function onboard(page) {
   await page.waitForSelector('.t7-hero');
 }
 
-/** One whole workout: confirm each suggested first weight, log every set, finish, back to Today. */
+/** One whole workout: log every set at its prefilled weight (#309), finish, back to Today. */
 async function finishWorkout(page) {
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
   for (let guard = 0; guard < 120; guard += 1) {
-    const confirm = page.getByRole('button', { name: 'Confirm' });
-    if (await confirm.count()) { await confirm.click(); continue; }
     const log = page.locator('button.lg-check:not([disabled])').first();
     if (!(await log.count())) break;
     await log.click();
@@ -100,9 +98,9 @@ try {
     // Two taps and nothing in between: Start, then set 1's check, with no step and no typing.
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
-    check(await page.getByRole('button', { name: 'Confirm' }).count() === 0, `${where}: no first-weight step the second time`);
+    check(await page.getByText(/Suggested start/).count() === 0, `${where}: no suggested start the second time`);
     const row = (await page.locator('td.lg-prev').first().innerText()).replace(/\s+/g, ' ').trim();
-    const weight = (await page.locator('table button.lg-cell').first().innerText()).trim();
+    const weight = (await page.locator('table input.lg-cell').first().inputValue()).trim();
     if (last) check(row === `${last[2]} × ${last[1]}`, `${where}: previous is last week's ${last[2]} × ${last[1]} (${row})`);
     if (target) check(weight === target[2], `${where}: set 1 is prefilled with the target's ${target[2]} (${weight})`);
     const log = page.getByRole('button', { name: 'Log set 1' }).first();

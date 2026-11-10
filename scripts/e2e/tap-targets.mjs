@@ -119,7 +119,7 @@ try {
     await target(page, page.getByRole('button', { name: 'Edit', exact: true }), 'Edit', `${where} Plan equipment`);
     await shot(page, 'plan-equipment', where);
 
-    // Train: the exercise title, the set editor's Done, Swap rows, then Discard.
+    // Train: the exercise title, the set cells, Swap rows, then Discard.
     await page.getByRole('button', { name: 'Today', exact: true }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
@@ -128,14 +128,18 @@ try {
     await noOverflow(page, `${where} Train`);
     await shot(page, 'train', where);
 
-    await page.locator('button.lg-cell[aria-label^="Edit reps for set 1"]').click();
-    const done = page.locator('.lg-edit').getByRole('button', { name: 'Done', exact: true });
-    await target(page, done, 'set editor Done', `${where} Train`);
-    const [doneWidth, rowWidth] = await done.evaluate((el) => [el.offsetWidth, el.parentElement.clientWidth]);
-    check(doneWidth >= rowWidth - 1, `${where} Train: set editor Done is ${doneWidth}px of a ${rowWidth}px row, not full width`);
-    await done.scrollIntoViewIfNeeded();
-    await shot(page, 'set-editor', where);
-    await done.click();
+    // (#309) The weight and reps cells are the inputs: each a full target that never wraps.
+    for (const label of [/^Set 1 weight/, /^Set 1 reps/]) {
+      const input = page.getByLabel(label);
+      if (!(await input.count())) continue;
+      const cellName = `set 1 ${String(label).includes('weight') ? 'weight' : 'reps'} cell`;
+      // An input is one line by nature; what it must not do is clip its value.
+      await target(page, input, cellName, `${where} Train`, { wraps: true });
+      check(await input.evaluate((el) => el.scrollWidth <= el.clientWidth), `${where} Train: ${cellName} clips its value`);
+    }
+    await page.getByLabel(/^Set 1 reps/).click();
+    await shot(page, 'set-cell-editing', where);
+    await page.getByLabel(/^Set 1 reps/).blur();
 
     await page.locator('.lg-acts').getByRole('button', { name: 'Replace' }).click();
     const rows = page.locator('[role="dialog"] button.context-row');
@@ -155,8 +159,6 @@ try {
     await page.getByRole('dialog').getByRole('button', { name: /^Keep / }).click();
 
     // Log one set so Finish offers to save or discard (an empty session offers a skip instead).
-    const confirm = page.getByRole('button', { name: 'Confirm' });
-    if (await confirm.count()) await confirm.click();
     await page.locator('button.lg-check:not([disabled])').first().click();
     await page.getByRole('button', { name: 'Finish', exact: true }).click();
     await target(page, page.getByRole('button', { name: 'Discard this session' }), 'Discard this session', `${where} Finish sheet`);

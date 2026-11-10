@@ -228,7 +228,7 @@ test('#188: a load under the lightest travel dumbbell keeps the exercise and ask
   assert.match(adapted.note, /pick/);
   const live = liveExercises(adapted, gym, history).find((exercise) => exercise.exerciseId === 'goblet-squat')!;
   assert.ok(live.planned.every((set) => set.weight === 0));
-  // The logger blocks the ✓ until a load is picked and offers the travel rack to pick from.
+  // The logger blocks the ✓ until a load is typed in a set cell.
   const { createServer } = await import('vite');
   const { createElement } = await import('react');
   const { renderToStaticMarkup } = await import('react-dom/server');
@@ -242,7 +242,9 @@ test('#188: a load under the lightest travel dumbbell keeps the exercise and ask
       onUpdateSet: noop, onLogSet: noop, onToggleRestPause: noop, onExtendRest: noop, onReturn: noop }));
     assert.match(html, new RegExp(NEEDS_LOAD_REASON));
     assert.match(html, /<button[^>]*aria-label="Log set 1"[^>]*disabled=""|<button[^>]*disabled=""[^>]*aria-label="Log set 1"/);
-    for (const kg of EQUIPMENT_OPTIONS.hotel.loads) assert.match(html, new RegExp(`>${kg}<`));
+    // #309: the travel rack is no longer offered as pills; the pick is typed in the (empty) set cells.
+    for (const n of [1, 2, 3]) assert.match(html, new RegExp(`aria-label="Set ${n} weight, kilograms"[^>]*value=""`));
+    assert.doesNotMatch(html, /<button(?![^>]*lg-wcheck)[^>]*aria-pressed|Your dumbbells/);
   } finally {
     await server.close();
   }

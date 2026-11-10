@@ -97,7 +97,9 @@ try {
     check(blockText.includes('Easy cardio: treadmill walk or jog, bike or rower'), `${where}: cardio copy (${blockText})`);
 
     // Ramp rows against the working load set 1 shows (lesson 12).
-    const working = number(await text(page.locator('table button.lg-cell').first()));
+    const working = number(await page.locator('table input.lg-input').first().inputValue());
+    // #309: W rows stay tick-only; the first input in the table is set 1's weight.
+    check(await page.locator('tr.lg-row--warm input').count() === 0, `${where}: W rows have no inputs`);
     const rampLoads = await page.locator('tr.lg-row--warm td:nth-child(3)').allInnerTexts();
     const rampReps = await page.locator('tr.lg-row--warm td:nth-child(4)').allInnerTexts();
     const tags = await page.locator('tr.lg-row--warm .lg-warm-tag').allInnerTexts();
@@ -132,6 +134,15 @@ try {
     check(await page.getByRole('region', { name: 'Warm-up' }).count() === 1, `${where}: warm-up again after reload`);
     check(await page.locator('tr.lg-row--warm').count() === 2, `${where}: ramp rows again after reload`);
     if (SHOTS) await page.screenshot({ path: join(SHOTS, `warm-up-${width}x${height}.png`) });
+
+    // #309: typing set 1's weight in the row moves the ramps with it (lesson 12: the value the next surface uses).
+    const setOne = page.getByRole('textbox', { name: /^Set 1 weight/ });
+    await setOne.click();
+    await setOne.press('Control+a');
+    await setOne.pressSequentially('80');
+    const edited = (await page.locator('tr.lg-row--warm td:nth-child(3)').allInnerTexts()).map(number);
+    check(edited.join() === `${step(40)},${step(60)}`, `${where}: ramps follow the typed 80 kg (${edited})`);
+    if (SHOTS) await page.screenshot({ path: join(SHOTS, `warm-up-edit-${width}x${height}.png`) });
 
     // The first working set ends the warm-up.
     await page.getByRole('button', { name: 'Log set 1' }).first().click();

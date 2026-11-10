@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
-import { dumbbellLoadsPatch, formatWeight, loadLimitMessage, loadsInputText, overLoadLimit, parseLoads, unitLabel, unitOf } from '../lib/units';
+import { calibrationInputValue, dumbbellLoadsPatch, formatWeight, loadLimitMessage, loadsInputText, overLoadLimit, parseLoads, toKg, unitLabel, unitOf } from '../lib/units';
+import { MAX_REPS } from '../lib/validate';
 import type { Profile, Unit, WorkoutExercise } from '../types';
 import { lastPerformance } from '../lib/plan';
 import { plannedLoad } from '../lib/liveProgression';
@@ -13,7 +14,7 @@ import {
   type Constraints,
   type EquipmentChoice,
 } from '../lib/adapt';
-import { loadModeOf, repsTarget, setText } from '../data/flagship';
+import { loadModeOf, needsLoad, repsTarget, setText, setUnit } from '../data/flagship';
 import {
   MINUTE_OPTIONS,
   PRESETS,
@@ -304,7 +305,7 @@ export function WhySheet({
 
 /* ---------------- Exercise actions ---------------- */
 
-type ActionMode = 'menu' | 'instructions' | 'history' | 'remove';
+type ActionMode = 'menu' | 'instructions' | 'history' | 'remove' | 'set-all';
 
 /** Preview body for a profile change; nothing is saved unless Confirm is pressed. */
 export function ConfirmChange({
@@ -354,6 +355,8 @@ export function ExerciseActionsSheet({
   onRemoveToday,
   onReturn,
   onClose,
+  remaining,
+  onSetAll,
   initialMode = 'menu',
 }: {
   exerciseId: string;
@@ -377,6 +380,9 @@ export function ExerciseActionsSheet({
   onRemoveToday: () => void;
   onReturn: () => void;
   onClose: () => void;
+  /** The first set not yet logged: what "Set all remaining sets to…" opens with (#306). */
+  remaining?: { weight: number; reps: number };
+  onSetAll?: (value: { weight: number; reps: number }) => void;
 }) {
   const [mode, setMode] = useState<ActionMode>(initialMode);
   const meta = exerciseById(exerciseId);
@@ -408,6 +414,7 @@ export function ExerciseActionsSheet({
       setAsk(() => (current: Profile) =>
         exclusionChange(current, exercise, !current.exclusions.includes(exerciseId)));
     if (id === 'remove-today') setMode('remove');
+    if (id === 'set-all') setMode('set-all');
     if (id === 'return') onReturn();
   };
 
@@ -535,6 +542,11 @@ export function ExerciseActionsSheet({
         </>
       )}
 
+      {mode === 'set-all' && (
+        <SetAllForm exerciseId={exerciseId} pending={pending} unit={unit} start={remaining ?? planned[0] ?? { weight: 0, reps: 10 }}
+          onApply={(value) => { onClose(); onSetAll?.(value); }} onBack={back} />
+      )}
+
       {mode === 'remove' && (
         <>
           <p className="sheet-copy">
@@ -554,6 +566,63 @@ export function ExerciseActionsSheet({
         </>
       )}
     </Sheet>
+  );
+}
+
+/** "Set all remaining sets to…" (#306): one weight and one reps value for every set not yet logged. */
+function SetAllForm({ exerciseId, pending, unit, start, onApply, onBack }: {
+  exerciseId: string;
+  pending: number;
+  unit: Unit;
+  start: { weight: number; reps: number };
+  onApply: (value: { weight: number; reps: number }) => void;
+  onBack: () => void;
+}) {
+  const mode = loadModeOf(exerciseId);
+  const seconds = setUnit(exerciseId) === 'seconds';
+  const [weightText, setWeightText] = useState(calibrationInputValue(start.weight, unit));
+  const [reps, setReps] = useState(start.reps);
+  const typed = Number(weightText);
+  const kg = mode === 'none' ? 0 : weightText === '' || !Number.isFinite(typed) || typed < 0 ? null : toKg(typed, unit);
+  const tooHeavy = kg !== null && overLoadLimit([kg]);
+  // A loaded movement can't be logged at 0, so it can't be set to 0 for every remaining set either.
+  const ready = kg !== null && !tooHeavy && !(kg <= 0 && needsLoad(exerciseId)) && reps > 0 && reps <= MAX_REPS;
+  const loadLabel = `Weight (${unitLabel(unit)}${mode === 'each' ? ' each' : mode === 'total' ? ' total' : ''})`;
+  return (
+    <div className="set-all" role="group" aria-label="Set all remaining sets">
+      <p className="sheet-copy">
+        Every set not yet logged ({pending}) takes these values. Logged sets stay as they are.
+      </p>
+      {mode !== 'none' && (
+        <div className="aw-field">
+          <span className="aw-field__label" aria-hidden="true"><span>{loadLabel}</span></span>
+          <input type="number" min="0" step="any" inputMode="decimal" aria-label={loadLabel} aria-invalid={tooHeavy || undefined}
+            value={weightText} onChange={(event) => setWeightText(event.target.value)} />
+          {tooHeavy && <span className="error-text" role="alert">{loadLimitMessage(unit)}</span>}
+        </div>
+      )}
+      <div className="reps-field">
+        <div className="reps-field__label">{seconds ? 'Seconds' : 'Reps'}</div>
+        <div className="stepper">
+          <button onClick={() => setReps((value) => Math.max(1, value - 1))} aria-label={seconds ? 'Decrease seconds' : 'Decrease reps'}>
+            <Icon name="remove" size={20} />
+          </button>
+          <output aria-live="polite">{reps}</output>
+          <button onClick={() => setReps((value) => Math.min(MAX_REPS, value + 1))} disabled={reps >= MAX_REPS}
+            aria-label={seconds ? 'Increase seconds' : 'Increase reps'}>
+            <Icon name="add" size={20} />
+          </button>
+        </div>
+      </div>
+      <div className="sheet-actions">
+        <button className="primary" disabled={!ready} onClick={() => kg !== null && onApply({ weight: kg, reps })}>
+          Apply to {pending} {pending === 1 ? 'set' : 'sets'}
+        </button>
+        <button className="secondary" onClick={onBack}>
+          Back to actions
+        </button>
+      </div>
+    </div>
   );
 }
 

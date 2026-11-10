@@ -157,6 +157,37 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    A dev chat's report of a UI story isn't passed on without the images. Check: the chat turn that
    reports a UI merge contains a file send of that story's screenshots.
 
+26. **A keystroke is not an edit.** #306's carry decided "which later sets follow set 1" on every
+   keystroke and stepper tap, so typing 1, 10, 100 (or stepping reps 8, 7, 6, 5) passed through a
+   hand-typed value and took that set along; review 1 failed it. Rule: when an input writes per
+   keystroke, decide anything that depends on "the value before" once, at the start of the burst, and
+   carry that decision through the burst, even when the first keystroke decides "nobody" (review 2
+   found that case still leaked). Check: `tests/carryForward306.test.ts` (review probes) and
+   `scripts/e2e/carry-forward.mjs`, which types one key at a time and backspaces (a cleared field
+   alone hid the bug); confirm a new e2e step fails on the old code before trusting it.
+
+27. **A removed control takes its tests with it.** #309 replaced the logger's set editor with inputs in
+   the row; 19 tests then failed, every one asserting the old panel's markup (pills, Confirm, Skip,
+   `Edit weight for set N`) rather than a value the lifter sees.
+   Rule: when a UI story removes a control, list the tests and e2e scripts that name it before building
+   (`grep -rn "<control text>" tests scripts`), and put that list in the brief; assert the value a cell
+   shows, not the element that showed it. Check: `tests/inlineSets309.test.ts` reads cell values by
+   accessible name, so the next markup change does not move it.
+   Review 1 found the other half: the removed `LoadEntry` wrote the focus value back on a refused
+   keystroke, the new cell did not, and only the pure `typedLoad` was tested, so a "not saved" load
+   stayed stored. Rule: when a control is replaced, carry over what its handlers *did*, not only what
+   it rendered; test the stored value after the keystroke, in the e2e. Check: "review-1" block in
+   `scripts/e2e/inline-sets.mjs`.
+
+28. **A refusal undoes the burst, not just the cell.** #309 review 2: set 1 empty, typing 1, 3, 5, 9
+   carried 1359 lb to sets 2 to 4; the next 9 was refused and only set 1 went back, so "That load was not
+   saved" sat over three sets holding 1359, and set 2 logged it in one tap. The cause was #306's rule that a
+   0 is never carried, applied to the fallback too.
+   Rule: when an edit fans out, a refusal or an emptied field reverts everything the edit fanned out to (what
+   Undo restores), and a typed key past a limit is capped at the field so it never fans out at all. Check:
+   `tests/inlineSets309review2.test.ts` and the "review-2" blocks in `scripts/e2e/inline-sets.mjs` (they paste
+   to reach the refusal, since typing is capped; each step was run against a469d89 and failed there).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
