@@ -10,13 +10,15 @@ interface Props {
   savedGear: string;
   /** The saved kit is a full gym: name the saved option "Your gym" (#180). */
   gymKit?: boolean;
+  /** (#298) The saved setup: its option reads "(usual)". */
+  usual?: EquipmentChoice;
   onPick: (choice: EquipmentChoice) => void;
   onEditSaved: () => void;
   onClose: () => void;
 }
 
 /** (#149) Today's equipment, each option with what still fits. Today only; saved gear lives in Settings. */
-export default function GymSheet({ options, current, dayName, savedGear, gymKit = false, onPick, onEditSaved, onClose }: Props) {
+export default function GymSheet({ options, current, dayName, savedGear, gymKit = false, usual, onPick, onEditSaved, onClose }: Props) {
   return (
     <Sheet title="Today's equipment" subtitle={`Saved gear: ${savedGear}. A change here is for today only.`} onClose={onClose}>
       <div className="len-list">
@@ -30,7 +32,7 @@ export default function GymSheet({ options, current, dayName, savedGear, gymKit 
           >
             <span className="len-opt__badge" aria-hidden="true"><Icon name="fitness_center" size={18} /></span>
             <span className="len-opt__text">
-              <span className="len-opt__name">{gymKit && option.choice === 'home' ? 'Your gym' : EQUIPMENT_OPTIONS[option.choice].label}</span>
+              <span className="len-opt__name">{gymKit && option.choice === 'home' ? 'Your gym' : EQUIPMENT_OPTIONS[option.choice].label}{option.choice === usual ? ' (usual)' : ''}</span>
               <span className={`len-opt__c ${option.kind === 'none' ? 'len-opt__c--none' : ''}`}>{setupConsequence(option, dayName)}</span>
             </span>
             {option.choice === current ? <Icon name="check" size={20} /> : <span />}
