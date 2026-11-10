@@ -18,7 +18,7 @@ test('history editor identifies recorded holds as seconds while ordinary kg/lb r
   const before = structuredClone(state);
   const server = await createServer({ plugins: [{ name: 'history-view-fixture', enforce: 'pre', transform(code, id) {
     if (id.endsWith('/src/screens/ProgressScreen.tsx')) return code
-      .replace("useState<'overview' | 'history'>('overview')", "useState<'overview' | 'history'>('history')")
+      .replace("useState<'overview' | 'history'>(initialTab)", "useState<'overview' | 'history'>('history')")
       .replace('useState<string | null>(null)', "useState<string | null>('history-units')");
   } }], server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
@@ -54,7 +54,7 @@ test('history correction keeps a no-load loaded set unmarkable and says why', as
     { early: true, now: '2026-10-31T10:06:00.000Z' });
   const server = await createServer({ plugins: [{ name: 'history-view-fixture', enforce: 'pre', transform(code, id) {
     if (id.endsWith('/src/screens/ProgressScreen.tsx')) return code
-      .replace("useState<'overview' | 'history'>('overview')", "useState<'overview' | 'history'>('history')")
+      .replace("useState<'overview' | 'history'>(initialTab)", "useState<'overview' | 'history'>('history')")
       .replace('useState<string | null>(null)', "useState<string | null>('history-units')");
   } }], server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {

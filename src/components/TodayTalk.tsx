@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { Profile } from '../types';
 import type { EquipmentChoice } from '../lib/adapt';
 import { AREAS } from '../lib/areas';
@@ -60,7 +60,8 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
   const talk = { ...said, pain: painStops(pain, text, said.pain) };
   const answer = (tap: Parameters<typeof answerPain>[1]) => setPain(answerPain(pain, tap, text));
 
-  useEffect(() => {
+  // Layout effect: the tab bar hides in the same frame the planner opens, never painted under step 1.
+  useLayoutEffect(() => {
     onActive?.(step !== null);
     return () => onActive?.(false);
   }, [step, onActive]);

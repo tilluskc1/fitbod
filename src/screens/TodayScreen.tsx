@@ -8,6 +8,7 @@ import { exerciseMeta, lastSummary, setText, targetSummary } from '../data/flags
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
 import { currentWorkout, setupFor, todayGlance } from '../lib/adapt';
+import type { TodayOnly } from '../lib/todayOnly';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
 import { isDescribedSession } from '../lib/sequence';
@@ -64,6 +65,12 @@ interface Props {
    * (#220) While a described session runs, the session's own; absent once its day has passed.
    */
   described?: DayStatus | null;
+  /** (#298) Today's change against the saved setup; null when today is the usual day or a session runs. */
+  todayBar?: TodayOnly | null;
+  /** (#298) The saved setup's name: the gear pill always shows it ("Gym"), with a dot when today differs. */
+  usualGear?: string;
+  /** (#298) Undo today's change: the same path as Restore original. */
+  onUndo?: () => void;
   /** (#225) The backup reminder line (`backupReminder`), or null when no backup is due. */
   backup?: string | null;
   /** (#225) Back up now: the same action as Settings. */
@@ -198,6 +205,9 @@ export default function TodayScreen({
   composer,
   canRestore = true,
   composing = false,
+  todayBar,
+  usualGear,
+  onUndo,
   described,
   backup,
   onBackup,
@@ -293,10 +303,11 @@ export default function TodayScreen({
                 className="t7-pill t7-pill--gym"
                 onClick={onOpenGym}
                 disabled={Boolean(current)}
-                aria-label={`Equipment today, ${setup.chip}`}
+                aria-label={todayBar?.gearDiffers ? `Equipment, usually ${usualGear ?? setup.short}, today ${setup.chip}` : `Equipment today, ${setup.chip}`}
               >
                 <Icon name="fitness_center" size={16} />
-                <span className="t7-pill__l">{setup.short}</span>
+                <span className="t7-pill__l">{usualGear ?? setup.short}</span>
+                {todayBar?.gearDiffers && <span className="t7-pill__dot" aria-hidden="true" />}
                 <Icon name="expand_more" size={18} />
               </button>
             )}
@@ -316,7 +327,6 @@ export default function TodayScreen({
           <img className="t7-hero__photo" src={HERO_PHOTO} alt="" />
           <span className="t7-hero__top">
             <span className="t7-hero__eyebrow">{current ? 'In progress' : 'Your next workout'}</span>
-            {adjusted && !current && <span className="aw-badge">Adjusted for today</span>}
           </span>
           <h2 className="t7-hero__title">
             {current
@@ -346,6 +356,17 @@ export default function TodayScreen({
             {chip.label}
           </span>
         </section>
+
+        {/* (#298) Today differs from the saved setup: say what, and undo it in one tap. */}
+        {todayBar && !current && (
+          <div className="t7-today-only" role="status">
+            <Icon name="calendar_month" size={18} />
+            <span className="t7-today-only__l">{todayBar.label}</span>
+            {onUndo && canRestore && (
+              <button type="button" className="t7-today-only__undo" onClick={onUndo}>Undo</button>
+            )}
+          </div>
+        )}
 
         {/* A described day names its gaps, open or not (#219); otherwise the status describes the saved setup. */}
         {described && <DescribedNote day={described} />}

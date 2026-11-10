@@ -164,6 +164,8 @@ test('an exercise that was never logged draws no point at all', async () => {
       ],
       logged: [],
     },
+    // (#294) One logged set elsewhere, so this is a finished workout and the chart card shows.
+    { id: 'push-up', name: 'Push-up', sets: [{ weight: 0, reps: 10 }], logged: [0] },
   ]);
   assertReal(workout);
 
