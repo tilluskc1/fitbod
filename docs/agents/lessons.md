@@ -149,6 +149,14 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    one helper (`finishedWorkouts` in `src/lib/progressTotals.ts`). Check: `tests/progressEmpty294.test.ts`
    renders Overview, Session history and Coach for the same empty-record fixture.
 
+25. **Screenshots on the issue are not screenshots shown.** Prod 3 merged #298 (PR 320) and queued six
+   more UI PRs without sending the owner a single image; the shots were only linked on the issues. It
+   had also skipped reading this file at start-up, so lesson 22 never applied. Rule: product reads this
+   file before its first action. Before it merges a UI story, or reports one as merged, it sends the
+   before/after images to the owner in chat (SendUserFile, rendered) with one line per problem it sees.
+   A dev chat's report of a UI story isn't passed on without the images. Check: the chat turn that
+   reports a UI merge contains a file send of that story's screenshots.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
