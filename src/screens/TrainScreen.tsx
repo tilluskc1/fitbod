@@ -6,7 +6,6 @@ import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shou
 import { exerciseInWorkout, lastPerformance } from '../lib/plan';
 import { firstTimeLoaded, plannedLoad } from '../lib/liveProgression';
 import { nearestLoad, suggestedFirstLoad } from '../lib/firstLoad';
-import { readCleared, writeCleared } from '../lib/clearedCells';
 import { availableLoads } from '../lib/progression';
 import { calibrationInputValue, loadLimitMessage, loadValue, repsLimitMessage, typedLoad, typedReps, unitLabel } from '../lib/units';
 import { restLabel } from '../lib/sessionTime';
@@ -161,8 +160,12 @@ export default function TrainScreen({
   onReplace,
   onReturn,
 }: Props) {
-  /** Set cells (`calibrationKey:setIndex`) whose suggested start the lifter cleared: they stay empty, across a reload. */
-  const [cleared, setCleared] = useState<string[]>(() => readCleared(session.id));
+  /**
+   * Set cells (`calibrationKey:setIndex`) whose suggested start the lifter cleared: they stay empty for
+   * this visit. Nothing is stored (owner, #315 item 12): after a reload the muted suggestion shows again,
+   * and it reaches the record only when a set is logged with it.
+   */
+  const [cleared, setCleared] = useState<string[]>([]);
   /** A refused keystroke's message, under the row it was typed in. */
   const [refusal, setRefusal] = useState<{ key: string; text: string } | null>(null);
   /** After the focused control unmounts, focus moves here (an element id, or 'log' for the next open ✓) instead of <body>. */
@@ -382,11 +385,7 @@ export default function TrainScreen({
     if (next.kg <= 0) {
       // Clearing a cell drops the suggested start from that cell only: an emptied cell stays empty.
       const cell = `${calibrationKey}:${setIndex}`;
-      if (prefill !== null && !cleared.includes(cell)) {
-        const keys = [...cleared.filter((k) => k.startsWith(`${session.id}:`)), cell];
-        setCleared(keys);
-        writeCleared(session.id, keys);
-      }
+      if (prefill !== null && !cleared.includes(cell)) setCleared((keys) => [...keys, cell]);
       onUpdateSet(index, setIndex, { weight: 0 }, { revert: 'emptied' });
       return null;
     }

@@ -227,14 +227,15 @@ try {
     check(!(await logButton(page, 2).isDisabled()), `${where} D4: set 2 still logs at the suggestion`);
 
     // D3: logging set 2 first leaves the empty sets at the suggestion, still one tap. After the reload
-    // the cleared set 1 is still empty (review 2, follow-up 3), so it shows nothing and cannot log.
+    // the cleared set 1 shows the muted suggestion again: nothing stores a cleared cell (owner, #315 item 12).
     await page.reload();
     await page.waitForSelector('.lg-ex').catch(() => {});
     const resume = page.getByRole('button', { name: 'Resume workout', exact: true });
     if (!(await page.locator('.lg-ex').count())) await resume.click();
     await page.waitForSelector('.lg-ex');
     r = await rows(page);
-    check(r[0].weight === '' && await logButton(page, 1).isDisabled(), `${where} R3: a cleared cell stays empty after a reload (${JSON.stringify(r)})`);
+    check(r[0].weight === hint && !(await logButton(page, 1).isDisabled()), `${where} R3: a reload shows the suggestion in a cleared cell again (${JSON.stringify(r)})`);
+    check(await weightCell(page, 1).evaluate((el) => el.classList.contains('lg-cell--empty')), `${where} R3: in the muted style`);
     await logButton(page, 2).click();
     r = await rows(page);
     check(r[1].logged && r[2].weight === hint && !(await logButton(page, 3).isDisabled()),

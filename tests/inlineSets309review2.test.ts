@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { createSession, editSet, logSet, revertBurst, undoCarry, type CarryResult, type Followers } from '../src/lib/session.ts';
-import { readCleared, writeCleared } from '../src/lib/clearedCells.ts';
 import { toKg } from '../src/lib/units.ts';
 import type { WorkoutRecord } from '../src/types.ts';
 
@@ -75,52 +75,27 @@ test('a logged set never takes 0 reps; an unlogged one may be emptied (its ✓ i
   assert.equal(editSet(bench(), 0, 1, { reps: 0 }, NOW).session.exercises[0].performed[1].reps, 0);
 });
 
-/** A Storage stand-in for node. */
-function fakeStorage() {
-  const map = new Map<string, string>();
-  return { getItem: (k: string) => map.get(k) ?? null, setItem: (k: string, v: string) => void map.set(k, String(v)),
-    removeItem: (k: string) => void map.delete(k), clear: () => map.clear(), key: (i: number) => [...map.keys()][i] ?? null,
-    get length() { return map.size; } };
-}
-
-test('cleared cells are remembered for the running workout only, and a broken store reads as none', () => {
-  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
-  try {
-    Object.defineProperty(globalThis, 'localStorage', { value: fakeStorage(), configurable: true });
-    writeCleared('a', ['a:0:x:1']);
-    assert.deepEqual(readCleared('a'), ['a:0:x:1']);
-    assert.deepEqual(readCleared('b'), [], 'another workout sees none');
-    writeCleared('b', ['b:0:x:0']);
-    assert.deepEqual(readCleared('a'), [], 'one workout at a time: the store never grows');
-    globalThis.localStorage.setItem('fitbod-clone-v1:cleared-cells', '{not json');
-    assert.deepEqual(readCleared('b'), []);
-  } finally {
-    if (original) Object.defineProperty(globalThis, 'localStorage', original);
-    else delete (globalThis as { localStorage?: unknown }).localStorage;
-  }
-});
-
-test('after a reload, a cell the lifter cleared stays empty; the others keep the suggestion', async () => {
-  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+test('after a reload, a cleared cell shows the muted suggestion again; nothing stores it (owner, #315 item 12)', async () => {
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
-    Object.defineProperty(globalThis, 'localStorage', { value: fakeStorage(), configurable: true });
-    const session = bench();
-    writeCleared(session.id, [`${session.id}:0:${ID}:0`]);
+    // A reload mounts the logger fresh on the stored record, where a cleared set 1 is stored as 0.
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const noop = () => {};
-    const html = renderToStaticMarkup(createElement(Train, { session, history: [], now: Date.parse(NOW), calibrationLoads: [],
+    const html = renderToStaticMarkup(createElement(Train, { session: bench(), history: [], now: Date.parse(NOW), calibrationLoads: [],
       unit: 'lb', experience: 'Beginner', onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop,
       onToggleRestPause: noop, onExtendRest: noop, onOpenActions: noop, onReturn: noop }));
-    const cell = (n: number) => html.match(new RegExp(`aria-label="Set ${n} weight, pounds"[^>]*value="([^"]*)"`))?.[1];
-    assert.equal(cell(1), '', 'the cleared cell stays empty');
     const hint = html.match(/Suggested start (\d+) lb/)?.[1];
     assert.ok(hint);
-    for (const n of [2, 3, 4]) assert.equal(cell(n), hint, `set ${n} keeps the suggestion`);
-    assert.match(html, /aria-label="Log set 1" disabled=""/, 'the cleared set cannot log an empty load');
+    const set1 = html.match(/<input[^>]*aria-label="Set 1 weight, pounds"[^>]*>/)?.[0] ?? '';
+    assert.match(set1, new RegExp(`value="${hint}"`), 'set 1 shows the suggestion again');
+    assert.match(set1, /lg-cell--empty/, 'in the muted style: it is a suggestion, not a typed load');
+    assert.doesNotMatch(html, /aria-label="Log set 1" disabled/, 'and logs in one tap at the suggestion');
   } finally {
     await server.close();
-    if (original) Object.defineProperty(globalThis, 'localStorage', original);
-    else delete (globalThis as { localStorage?: unknown }).localStorage;
+  }
+  // No second key outside the versioned record.
+  for (const file of readdirSync('src', { recursive: true }) as string[]) {
+    if (!/\.tsx?$/.test(file)) continue;
+    assert.doesNotMatch(readFileSync(`src/${file}`, 'utf8'), /cleared-cells/, file);
   }
 });
