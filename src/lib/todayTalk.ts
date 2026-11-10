@@ -32,6 +32,8 @@ export interface TalkState {
   pain: boolean;
   /** Anything asked that could not be used as asked (time clamped, unsupported gear). */
   notices: ConstraintNotice[];
+  /** (#298) The saved kit is a full gym, so "dumbbells only" reads as the dumbbell-and-bench kit. */
+  gymKit?: true;
 }
 
 /* ---------- the composer's reading of a sentence ---------- */
@@ -42,7 +44,12 @@ export interface TalkParse extends ParsedConstraints {
   avoid?: Area[];
   sore?: Area[];
   pain?: true;
+  /** (#298) "Dumbbells only", "just dumbbells": a restriction, not the saved setup. */
+  dumbbellsOnly?: true;
 }
+
+/** (#298) A restriction to dumbbells. Best effort, one round only (lessons #3). */
+const DUMBBELLS_ONLY = /\b(?:dumbbells?\s+only|only\s+(?:the\s+)?dumbbells?|just\s+(?:the\s+)?dumbbells?)\b/i;
 
 /** Words for each area; "upper body", "lower body" and "full body" name several. */
 const AREA_WORDS: { word: string; areas: Area[] }[] = [
@@ -194,13 +201,14 @@ export function talkParse(text: string): TalkParse {
   if (areas.skip.length > 0) result.avoid = areas.skip;
   if (areas.sore.length > 0) result.sore = areas.sore;
   if (PAIN.test(plain) || PAIN_EXCEPT.test(text)) result.pain = true;
+  if (DUMBBELLS_ONLY.test(plain)) result.dumbbellsOnly = true;
   return result;
 }
 
 /* ---------- chips ---------- */
 
 /** The chips before anything is said: today's gear and time, and today's day. */
-export function baseTalk(constraints: Pick<Constraints, 'minutes' | 'equipment' | 'focus' | 'skip'>, plannedFocus: MuscleGroup[]): TalkState {
+export function baseTalk(constraints: Pick<Constraints, 'minutes' | 'equipment' | 'focus' | 'skip'>, plannedFocus: MuscleGroup[], gymKit = false): TalkState {
   const skip = areasOf(constraints.skip ?? []);
   return {
     equipment: constraints.equipment,
@@ -210,6 +218,7 @@ export function baseTalk(constraints: Pick<Constraints, 'minutes' | 'equipment' 
     sore: [],
     pain: false,
     notices: [],
+    ...(gymKit ? { gymKit: true as const } : {}),
   };
 }
 
@@ -217,9 +226,12 @@ export function baseTalk(constraints: Pick<Constraints, 'minutes' | 'equipment' 
 export function talkFromText(text: string, base: TalkState): TalkState {
   if (!text.trim()) return base;
   const parsed = talkParse(text);
+  // (#298) At a gym, "dumbbells only" restricts today to the dumbbell-and-bench kit (the travel gym's).
+  if (base.gymKit && parsed.dumbbellsOnly && parsed.equipment === 'home') parsed.equipment = 'hotel';
   const resolved = resolveConstraints({ minutes: base.minutes, equipment: base.equipment }, parsed);
   const skip = parsed.avoid ?? base.skip;
   return {
+    ...(base.gymKit ? { gymKit: true as const } : {}),
     equipment: resolved.constraints.equipment,
     minutes: resolved.constraints.minutes,
     train: (parsed.train ?? base.train).filter((area) => !skip.includes(area)),

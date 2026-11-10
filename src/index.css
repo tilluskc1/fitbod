@@ -4549,6 +4549,35 @@ button.aw-exercise__name-btn {
   font-weight: 500;
 }
 .t7-pill .ms { color: var(--muted); }
+/* (#298) Today's gear differs from the saved setup: a small dot beside the saved name. */
+.t7-pill__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-text); flex: 0 0 auto; }
+/* (#298) The today-only bar: white card under the hero, one line, Undo a 44px underlined text button. */
+.t7-today-only {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px 0 14px;
+  border-radius: 12px;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font-size: 14px;
+  font-weight: 500;
+}
+.t7-today-only > .ms { color: var(--muted); flex: 0 0 auto; }
+.t7-today-only__l { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t7-today-only__undo {
+  flex: 0 0 auto;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  color: var(--on-surface);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+}
 .t7-pill:disabled { opacity: 0.55; }
 .len-scope {
   display: grid;
