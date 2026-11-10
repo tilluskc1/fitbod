@@ -27,7 +27,7 @@ test("every planner step and the summary keep their actions in the pinned bar", 
 
 test('the entry comes before the backup note so the reminder cannot push it under the dock', () => {
   const today = read('src/screens/TodayScreen.tsx');
-  assert.ok(today.indexOf('{!current && composer}') < today.indexOf('{backup && onBackup && !current'));
+  assert.ok(today.indexOf('{!current && composer}') < today.indexOf("{card === 'backup' && onBackup"));
 });
 
 test('the keyboard inset is what the visual viewport hides, never negative', async () => {

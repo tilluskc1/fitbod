@@ -48,7 +48,7 @@ export async function shareBackup(
     } catch (error) {
       // The user closed the sheet: nothing to report.
       if ((error as { name?: unknown } | null)?.name === 'AbortError') return { ok: false };
-      return { ok: false, message: 'Backup not shared, so nothing was recorded. Try again, or use Export JSON backup in Settings.' };
+      return { ok: false, message: 'Backup not shared, nothing recorded. Try Export in Settings.' };
     }
   }
   try {

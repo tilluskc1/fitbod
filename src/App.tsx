@@ -36,7 +36,7 @@ import
 import  { FULL_BODY_A } from './data/flagship';
 import { cursorFor, dayCounter, isDescribedSession, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
 import { withoutCustomDay } from './lib/plan';
-import { todayOnly, undoToast, usualGear } from './lib/todayOnly';
+import { CHANGED_FOR_TODAY, todayOnly, undoToast, usualGear } from './lib/todayOnly';
 import { baseTalk, customDayPreview, describedDayStatus, describedSessionStatus, talkConstraints } from './lib/todayTalk';
 import type { TalkState } from './lib/todayTalk';
 import TodayTalk from './components/TodayTalk';
@@ -147,6 +147,8 @@ import { skipForward, switchOptions, upcomingDays } from './lib/switchDay';
 import type { SwitchOption } from './lib/switchDay';
 import { keepKey, todayFresher } from './lib/recovery';
 import { opensOnSplash, splashAfterAdopt } from './lib/firstScreen';
+import { done, headsUp, problem, toastShows, TOAST_MS, type Notice } from './lib/notices';
+import { DoneToast, MessageCard, NoticeCard } from './components/ui/Notices';
 import
  Onboarding from './components/Onboarding';
 import
@@ -255,7 +257,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const [pending, setPending] = useState<Proposal | null>(null);
   const [pendingNotices, setPendingNotices] = useState<ConstraintNotice[]>([]);
   const [recapId, setRecapId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   // #306: the carry the toast's Undo would reverse; one burst per edited set while its toast is up.
   const [carryUndo, setCarryUndo] = useState<{
     key: string;
@@ -396,19 +398,23 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
+  // (#295) Only a Done toast passes on its own, 4 s from when it shows; one fired during a sheet
+  // waits for the sheet to close. Heads-up and Problem cards wait for the user.
+  const toastUp = toastShows(notice, sheet.kind !== 'none');
   useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(null), 4000); // at most 4 s (#259)
+    if (!toastUp) return;
+    const timer = window.setTimeout(() => setNotice(null), TOAST_MS);
     return () => window.clearTimeout(timer);
-  }, [notice]);
+  }, [notice, toastUp]);
 
   // (#259) A message stays on the screen it was raised on. A new message is stamped with the screen
   // it first shows on, so a handler that sets a message and moves screen in one update stamps the new
   // screen; a later move clears it (or carries it, recap to Today). A layout effect, so a message
   // leaving with the screen is gone before the next screen paints.
   const screen = screenKey(view, tab);
+  const onToday = view === 'tabs' && tab === 'today';
   const noticeScreenRef = useRef<string | null>(null);
-  const stampedNoticeRef = useRef<string | null>(null);
+  const stampedNoticeRef = useRef<Notice | null>(null);
   useLayoutEffect(() => {
     if (notice !== stampedNoticeRef.current) {
       stampedNoticeRef.current = notice;
@@ -618,7 +624,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const startSession = (next: Constraints): boolean => {
     const workout = adaptFor(next);
     if (workout.exercises.length === 0) {
-      setNotice('No movement in this workout can be done with that setup.');
+      setNotice(problem('No movement in this workout can be done with that setup.'));
       return false;
     }
     if (current) {
@@ -642,12 +648,12 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
    */  const skipTodaySlot = () => {
     if (!slot) return;
     if (current) {
-      setNotice('Finish or discard the open session before skipping this one.');
+      setNotice(headsUp('Finish or discard the open session before skipping.'));
       return;
     }
     const offered = cursorFor(state);
     setState((currentState) => skipCurrentSlot(currentState, new Date().toISOString(), offered));
-    setNotice('Session skipped. A skip is not a workout and earns no progression.');
+    setNotice(done('Session skipped. Skips earn no progression.'));
   };
 
   /** Explicit discard consent from the in-app sheet (#19) runs the replacement once. */
@@ -684,9 +690,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       return;
     }
     if (decision === 'stale') {
-      setNotice(
-        'That preview is stale — a set was logged or equipment changed. Preview again for a fresh approval.',
-      );
+      setNotice(problem('That preview is out of date. Preview again to approve it.'));
       setView('tabs');
       setTab('today');
       setSheet({ kind: 'adjust' });
@@ -710,7 +714,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const workout = adaptFor(next);
     if (current) {
       if (workout.exercises.length === 0) {
-        setNotice('No movement in this workout can be done with that setup.');
+        setNotice(problem('No movement in this workout can be done with that setup.'));
         return;
       }
       setState((currentState) => ({
@@ -750,13 +754,13 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       patchProfile({ sessionMinutes: minutes });
       if (override) restoreOriginal();
       else setSheet({ kind: 'none' });
-      setNotice(`${minutes} min is now your default length.`);
+      setNotice(done(`${minutes} min is now your default length.`));
       return;
     }
     // The saved setup is savedSetup(profile): 'bodyweight' for a no-gear profile, else 'home'.
     if (minutes === fallback && (constraints.equipment === 'home' || constraints.equipment === savedSetup(profile)) && !constraints.focus) {
       restoreOriginal();
-      setNotice('Back to your program.');
+      setNotice(done('Back to your program.'));
       return;
     }
     const choice: EquipmentChoice = constraints.equipment;
@@ -777,7 +781,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setPending(null);
     setPendingNotices([]);
     setSheet({ kind: 'none' });
-    setNotice('Today only. Your program is unchanged.');
+    setNotice(done(CHANGED_FOR_TODAY));
   };
 
   /** (#149) Today's equipment. Today only; the saved setup at the default length restores the original. */
@@ -785,7 +789,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     if (!profile || current) return;
     if ((choice === 'home' || choice === savedSetup(profile)) && constraints.minutes === (profile.sessionMinutes ?? 35) && !constraints.focus) {
       restoreOriginal();
-      setNotice('Back to your gear.');
+      setNotice(done('Back to your gear.'));
       return;
     }
     setState((currentState) => ({
@@ -805,7 +809,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setPending(null);
     setPendingNotices([]);
     setSheet({ kind: 'none' });
-    setNotice('Today only. Your program is unchanged.');
+    setNotice(done(CHANGED_FOR_TODAY));
   };
 
   /**
@@ -872,19 +876,19 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       return;
     }
     if (current) {
-      setNotice('Finish or discard the open session before switching days.');
+      setNotice(headsUp('Finish or discard the open session before switching days.'));
       return;
     }
     // A planned day picked here replaces a described one (#193).
     setState((currentState) => withoutCustomDay(skipForward(currentState, option.offset, new Date().toISOString())));
     setSheet({ kind: 'none' });
-    setNotice(`${option.name} is up. Skipped ${option.skips.join(', ')}; a skip earns no progression.`);
+    setNotice(done(`${option.name} is up. Skipped ${option.skips.join(', ')}; a skip earns no progression.`));
   };
 
   /** A described session (#193) has no planned work to restore into; it is finished or discarded instead. */
   const describedSession = Boolean(current && isDescribedSession(current));
 
-  const restoreOriginal = (message = 'Original remaining work restored. Logged sets were kept.') => {
+  const restoreOriginal = (message = 'Back to your plan. Logged sets kept.') => {
     if (describedSession) return;
     setState((currentState) => {
       const original = adaptWorkout(
@@ -906,7 +910,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setPending(null);
     setPendingNotices([]);
     setSheet({ kind: 'none' });
-    setNotice(message);
+    setNotice(done(message));
   };
 
   /** Show what a carry changed, with Undo; typing 1, 13, 135 into one set is one burst with one Undo. */
@@ -952,7 +956,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       // Nothing to say, but the burst still opens (its followers fixed now, even if none), so a later
       // keystroke can never re-read them from a half-typed value. A cleared field drops a stale toast.
       setCarryUndo({ ...entry, message: '' });
-      if (open !== null && open.message !== '' && notice === open.message) setNotice(null);
+      if (open !== null && open.message !== '' && notice?.text === open.message) setNotice(null);
       return;
     }
     if (result.carried.length === 0 && !self) {
@@ -969,7 +973,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       text = `${text}. ${note}`;
     }
     setCarryUndo({ ...entry, message: text, note: warned ? note : undefined });
-    setNotice(text);
+    setNotice(done(text));
   };
 
   /**
@@ -1066,7 +1070,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     // A logged set ends any carry burst: Undo must not reverse the reps #182 carries on log (#306).
     // Its toast goes with it, rather than staying up without the Undo it offered (#309 review 1); a
     // "Big jump" heads-up it carried stays, on its own, since the load it warns about is still there.
-    if (liveCarry !== null && notice === liveCarry.message) setNotice(liveCarry.note ?? null);
+    if (liveCarry !== null && notice?.text === liveCarry.message) {
+      if (liveCarry.note) setNotice(headsUp(liveCarry.note));
+      else setNotice(null);
+    }
     setCarryUndo(null);
     setState((currentState) => {
       const session = currentState.current;
@@ -1105,7 +1112,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       setSheet({ kind: 'none' });
       setView('tabs');
       setTab('today');
-      setNotice('No completed sets, so nothing was saved. The session was discarded.');
+      setNotice(done('No sets logged, so nothing was saved.'));
       return;
     }
     const early = progress.done < progress.total;
@@ -1116,13 +1123,13 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setRecapId(id);
     setSheet({ kind: 'none' });
     setView('recap');
-    setNotice(
+    setNotice(done(
       early
         ? progress.skipped > 0
-          ? 'Saved the completed sets. Skipped and unfinished work was not recorded.'
+          ? 'Saved the completed sets. The rest was not recorded.'
           : 'Saved the completed sets. Unfinished work was not recorded.'
-        : 'Session saved to history.',
-    );
+        : 'Workout saved.',
+    ));
   };
 
   /** An empty session on Finish: close it and move the plan to the next day, recorded as a skip (#184). */
@@ -1135,7 +1142,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setSheet({ kind: 'none' });
     setView('tabs');
     setTab('today');
-    setNotice(`${slot.name} skipped${next ? `; ${next} is next` : ''}. A skip is not a workout and earns no progression.`);
+    setNotice(done(`${slot.name} skipped${next ? `; ${next} is next` : ''}. Skips earn no progression.`));
   };
 
   const discardSession = () => {
@@ -1144,7 +1151,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setSheet({ kind: 'none' });
     setView('tabs');
     setTab('today');
-    setNotice('Session discarded. Nothing was added to history.');
+    setNotice(done('Session discarded. Nothing was added to history.'));
   };
 
   const correctSet = (
@@ -1155,7 +1162,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     refused?: string,
   ) => {
     // A refused history load or reps arrives as the focus value the field reverts to; say why (#101, #109).
-    if (refused) setNotice(refused);
+    if (refused) setNotice(problem(refused));
     setState((currentState) =>
       applyCorrection(currentState, workoutId, exerciseIndex, setIndex, patch, new Date().toISOString()),
     );
@@ -1167,7 +1174,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       ...currentState,
       history: currentState.history.filter((workout) => workout.id !== id),
     }));
-    setNotice('Workout deleted.');
+    setNotice(done('Workout deleted.'));
   };
 
   /** (#307) × on Today's install note: this browser's choice, at most two dates. */
@@ -1184,11 +1191,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     try {
       downloadText(serializeExport(state), exportFilename());
     } catch {
-      setNotice('Backup not saved, so nothing was recorded. Try again.');
+      setNotice(problem('Backup not saved, so nothing was recorded. Try again.'));
       return;
     }
     recordBackup();
-    setNotice('Backup downloaded.');
+    setNotice(done('Backup downloaded.'));
   };
 
   /** (#225) Same file as Export, through the Share sheet; a cancel or failure records nothing. */
@@ -1200,7 +1207,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     // Returned too, for a sheet that covers the notice (#263).
     const message = result.ok ? (result.via === 'share' ? 'Backup shared.' : 'Backup downloaded.') : result.message ?? null;
     if (result.ok) recordBackup();
-    if (message) setNotice(message);
+    if (message && result.ok) setNotice(done(message));
+    else if (message) setNotice(problem(message));
     return { ok: result.ok, message };
   };
 
@@ -1217,29 +1225,29 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     try {
       text = await file.text();
     } catch {
-      setNotice('The file could not be read. Nothing changed.');
+      setNotice(problem('The file could not be read. Nothing changed.'));
       return false;
     }
     const parsed = parseState(text);
     if (!parsed.ok) {
-      setNotice(`Restore rejected: ${parsed.error}`);
+      setNotice(problem(`Restore rejected: ${parsed.error}`));
       return false;
     }
     const merged = mergeImport(state, parsed.state);
     setState({ ...merged.state, todayOverride: state.todayOverride ?? null });
-    setNotice(
+    setNotice(done(
       `Restored ${merged.summary.newWorkouts} workout${merged.summary.newWorkouts === 1 ? '' : 's'}; ${merged.summary.duplicateWorkouts} already present.` +
         (merged.summary.activeSessionConflict
-          ? ' Both files had the same open session; the copy with more logged sets was kept.'
+          ? ' Kept the open session with more logged sets.'
           : '') +
         // Restore must not drop an answer the backup simply predates, and it
         // must say so rather than keeping it quietly.
         (merged.summary.feedbackPreserved > 0
-          ? ` Kept your saved workout feedback on ${merged.summary.feedbackPreserved} workout${
+          ? ` Kept feedback on ${merged.summary.feedbackPreserved} workout${
               merged.summary.feedbackPreserved === 1 ? '' : 's'
-            } the backup did not contain.`
+            } the backup lacked.`
           : ''),
-    );
+    ));
     return Boolean(merged.state.profile);
   };
 
@@ -1260,17 +1268,17 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         : currentState,
     );
     setSheet({ kind: 'none' });
-    setNotice(`${target.name} swapped in for the remaining sets. Completed sets stay put.`);
+    setNotice(done(`${target.name} swapped in. Logged sets stay put.`));
   };
 
   const skipCurrentExercise = (exerciseIndex: number) => {
-    const notice = removeTodayNotice(current?.exercises[exerciseIndex]);
+    const removed = removeTodayNotice(current?.exercises[exerciseIndex]);
     setState((currentState) => {
       if (!currentState.current) return currentState;
       const skipped = skipExercise(currentState.current, exerciseIndex);
       return skipped === currentState.current ? currentState : { ...currentState, current: skipped };
     });
-    setNotice(notice);
+    setNotice(done(removed));
   };
 
   const returnToExercise = (exerciseIndex: number) => {
@@ -1282,7 +1290,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         ? currentState
         : { ...currentState, current: restored };
     });
-    setNotice(`${name} is back in today's session. Nothing else changed.`);
+    setNotice(done(`${name} is back in today's session.`));
   };
 
   /**
@@ -1312,7 +1320,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             // opens straight on Today (#285).
             setShowSplash(opensOnSplash(next));
             setRecovery(null);
-            setNotice(`Restored ${summary.newWorkouts} workouts.`);
+            setNotice(done(`Restored ${summary.newWorkouts} workouts.`));
           }}
           onStartFresh={() => {
             if (recovery.raw) backupRaw(recovery.raw);
@@ -1321,7 +1329,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             setState({ ...EMPTY_STATE });
             setShowSplash(opensOnSplash(EMPTY_STATE));
             setRecovery(null);
-            setNotice('Started with empty data.');
+            setNotice(done('Started with empty data.'));
           }}
         />
       </PhoneFrame>
@@ -1333,16 +1341,12 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     return (
       <PhoneFrame>
         {/* (#258) A rejected restore from the installed-app prompt must say why. */}
-        {notice && (
-          <div className="app-alerts" role="status">
-            <div className="banner" style={{ margin: '8px 0 0' }}>
-              <span>{notice}</span>
-              <button onClick={() => setNotice(null)} aria-label="Dismiss message">
-                Dismiss
-              </button>
-            </div>
+        {notice && notice.kind !== 'done' && (
+          <div className="app-alerts">
+            <MessageCard notice={notice} onDismiss={() => setNotice(null)} />
           </div>
         )}
+        {toastUp && notice && <DoneToast text={notice.text} screen="splash" />}
         <SplashScreen
           onStart={() => setShowSplash(false)}
           installed={typeof window !== 'undefined' && currentDevice().standalone}
@@ -1528,6 +1532,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             }
             onInstall={() => setSheet({ kind: 'install', from: 'today' })}
             onDismissInstall={dismissInstall}
+            message={notice?.kind === 'headsUp' ? notice.text : null}
+            onDismissMessage={() => setNotice(null)}
             fresher={fresher}
             onPickFresher={pickDay}
             onKeepNext={() => slot && setKeptFresher(keepKey(slot.id, today))}
@@ -1600,44 +1606,48 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
   return (
     <PhoneFrame>
-      {notice && (
-        // (#276) Float only on Today, where it would push the planner entry under the dock, and
-        // never over a save-error or conflict alert's buttons.
-        <div className={view === 'tabs' && tab === 'today' && !conflict && saveUi.kind !== 'error' ? 'app-alerts app-alerts--toast' : 'app-alerts'} role="status">
-          <div className="banner" style={{ margin: '8px 0 0' }}>
-            <span>{notice}</span>
-            {liveCarry !== null && liveCarry.message === notice && (
-              <button onClick={undoLastCarry}>Undo</button>
-            )}
-            <button onClick={() => setNotice(null)} aria-label="Dismiss message">
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
-
-      {conflict && (
-        <div className="app-alerts" role="alert">
-          <div className="banner error" style={{ margin: '8px 0 0' }}>
-            <span>{conflict} Reload to load the newer data, or export this tab first.</span>
-            <button onClick={() => window.location.reload()}>Reload</button>
-          </div>
-        </div>
-      )}
-
-      {saveUi.kind === 'error' && !conflict && (
-        <div className="app-alerts" role="alert">
-          <div className="banner error" style={{ margin: '8px 0 0' }}>
-            <span>
-              <strong>Not saved.</strong> {saveUi.message}
-            </span>
-            <button onClick={attemptSave}>Retry</button>
-            <button onClick={() => setSheet({ kind: 'settings' })}>Data</button>
-          </div>
+      {/* (#295) Problems sit at the top of the screen until resolved; a passing Heads-up joins them
+          off Today (Today shows it in its own flow, one card at a time). */}
+      {(conflict || (saveUi.kind === 'error' && !conflict) || (notice && (notice.kind === 'problem' || (notice.kind === 'headsUp' && !onToday)))) && (
+        <div className="app-alerts">
+          {conflict && (
+            <NoticeCard
+              kind="problem"
+              title="Newer data in another tab."
+              actions={<button className="notice-card__fix" onClick={() => window.location.reload()}>Reload</button>}
+            >
+              <p className="notice-card__body">{conflict} Reload to load the newer data, or export this tab first.</p>
+            </NoticeCard>
+          )}
+          {saveUi.kind === 'error' && !conflict && (
+            <NoticeCard
+              kind="problem"
+              title="Not saved."
+              actions={
+                <>
+                  <button className="notice-card__fix" onClick={attemptSave}>Retry</button>
+                  <button className="notice-card__alt" onClick={() => setSheet({ kind: 'settings' })}>Data</button>
+                </>
+              }
+            >
+              <p className="notice-card__body">{saveUi.message}</p>
+            </NoticeCard>
+          )}
+          {notice && (notice.kind === 'problem' || (notice.kind === 'headsUp' && !onToday)) && (
+            <MessageCard notice={notice} onDismiss={() => setNotice(null)} />
+          )}
         </div>
       )}
 
       {activeScreen}
+
+      {toastUp && notice && (
+        <DoneToast
+          text={notice.text}
+          screen={screen}
+          action={liveCarry !== null && liveCarry.message === notice.text ? { label: 'Undo', onClick: undoLastCarry } : undefined}
+        />
+      )}
 
       {sheet.kind === 'length' && profile && (
         <DurationSheet
@@ -1802,7 +1812,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           // letting an action land on whichever exercise now sits at that index.
           if (!exercise || exercise.exerciseId !== sheet.exerciseId || !profile) return null;
           const pending = exercise.performed.filter((set) => !set.done).length;
-          const done = exercise.performed.filter((set) => set.done).length;
+          const doneSets = exercise.performed.filter((set) => set.done).length;
           return (
             <ExerciseActionsSheet
               exerciseId={exercise.exerciseId}
@@ -1812,7 +1822,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               initialMode={sheet.mode}
               planned={exercise.planned}
               pending={pending}
-              done={done}
+              done={doneSets}
               history={state.history}
               unit={unit}
               profile={profile}
@@ -1823,7 +1833,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
                 // Closing first: a saved preference can reorder today's preview under the sheet.
                 closeSheet();
                 patchProfile(patch);
-                setNotice('Saved for future workouts. Logged sets are unchanged.');
+                setNotice(done('Saved for future workouts. Logged sets are unchanged.'));
               }}
               onRemoveToday={() => {
                 const index = sheet.exerciseIndex;

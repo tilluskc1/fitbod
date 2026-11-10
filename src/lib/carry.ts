@@ -39,7 +39,7 @@ export function setAllMessage(args: { kg: number; reps: number; carried: number[
  */
 export function bigJumpNote(firstTime: boolean, startKg: number, kg: number, unit: Unit, mode: 'each' | 'total' | 'none'): string | null {
   if (!firstTime || startKg <= 0 || kg <= startKg * 2) return null;
-  return `Big jump from the starting load. Make sure ${formatActualWeight(kg, unit, { perSide: mode === 'each' })} moves well for all sets.`;
+  return `Big jump from the start. Check ${formatActualWeight(kg, unit, { perSide: mode === 'each' })} moves well.`;
 }
 
 /** What an exercise's sets look like right after a carry burst's latest edit (#306). */

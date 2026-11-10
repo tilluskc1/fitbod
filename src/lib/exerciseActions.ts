@@ -96,6 +96,6 @@ export function removeTodayNotice(exercise: Pick<WorkoutExercise, 'name' | 'perf
   const name = exercise?.name ?? 'That exercise';
   const done = exercise?.performed.filter((set) => set.done).length ?? 0;
   return done === 0
-    ? `${name} skipped for today. Nothing was recorded for it.`
-    : `${name}: the remaining sets are removed for today. ${done} logged ${done === 1 ? 'set is' : 'sets are'} kept.`;
+    ? `${name} skipped today. Nothing was recorded.`
+    : `${name}: rest removed today. ${done} logged ${done === 1 ? 'set' : 'sets'} kept.`;
 }

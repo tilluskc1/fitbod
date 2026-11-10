@@ -149,7 +149,7 @@ try {
     await weightCell(page, 1).click();
     await page.keyboard.type('140');
     await weightCell(page, 1).blur();
-    const toast = page.locator('.app-alerts .banner');
+    const toast = page.locator('.done-toast, .app-alerts .notice-card').first();
     const toastText = (await toast.innerText()).replace(/\s+/g, ' ');
     check(/^Set 1 updated/.test(toastText), `${where}: logged-set toast (${toastText})`);
     r = await rows(page);
@@ -281,7 +281,7 @@ try {
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     const hint = (await page.locator('.lg-coach').innerText()).match(/Suggested start (\d+)/)?.[1];
-    const toast = page.locator('.app-alerts .banner');
+    const toast = page.locator('.done-toast, .app-alerts .notice-card').first();
     const toastText = async () => (await toast.count()) ? (await toast.innerText()).replace(/\s+/g, ' ') : '';
     const paste = async (text) => {
       await page.evaluate((value) => navigator.clipboard.writeText(value), text);
@@ -341,7 +341,7 @@ try {
     await onboard(page);
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
-    const toast = page.locator('.app-alerts .banner');
+    const toast = page.locator('.done-toast, .app-alerts .notice-card').first();
     const toastText = async () => (await toast.count()) ? (await toast.innerText()).replace(/\s+/g, ' ') : '';
     await weightCell(page, 1).click();
     await page.keyboard.type('13');

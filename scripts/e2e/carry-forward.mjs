@@ -97,10 +97,10 @@ try {
     r = await rows(page);
     check(r[0].weight === heavy, `${where}: set 1 shows ${heavy} (${r[0].weight})`);
     check(r.slice(1).every((row) => row.weight === r[0].weight), `${where}: sets 2+ show set 1's ${r[0].weight} (${JSON.stringify(r)})`);
-    const toast = page.locator('.app-alerts .banner');
+    const toast = page.locator('.done-toast, .app-alerts .notice-card').first();
     const toastText = (await toast.innerText()).replace(/\s+/g, ' ');
     check(toastText.includes(`${heavy} ${unit} applied to sets 2 to ${r.length}`), `${where}: toast names the carry (${toastText})`);
-    if (unit === 'lb') check(/Big jump from the starting load/.test(toastText), `${where}: a first-time jump says heads-up (${toastText})`);
+    if (unit === 'lb') check(/Big jump from the start/.test(toastText), `${where}: a first-time jump says heads-up (${toastText})`);
     check(await toast.getByRole('button', { name: 'Undo' }).count() === 1, `${where}: the toast offers Undo`);
     if (shots && unit === 'lb') await page.screenshot({ path: `${shots}/306-after-carry-${width}.png` });
 
