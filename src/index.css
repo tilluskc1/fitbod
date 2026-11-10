@@ -4717,3 +4717,106 @@ button.aw-exercise__name-btn {
 /* (#193) While the composer is open or previewing, its button is the screen's one primary. */
 .flow-dock[hidden] { display: none; }
 .tt-stop .secondary { margin-top: 10px; min-height: 44px; background: var(--card); }
+
+/* #300: the warm-up block and ramp rows. Muted, labelled Warm-up, never counted as sets. */
+.lg-warm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 12px 14px;
+  border-radius: 16px;
+  background: rgba(20, 26, 26, 0.036);
+  border: 1px dashed rgba(20, 26, 26, 0.16);
+}
+
+.lg-warm__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.lg-warm__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.lg-warm__title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.01em;
+}
+
+.lg-warm__note {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--on-surface-variant);
+}
+
+.lg-warm--done {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.lg-warm--done .lg-warm__head {
+  align-items: center;
+}
+
+.lg-warm--done .lg-warm__title {
+  color: var(--on-surface-variant);
+}
+
+.lg-warm__timer {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lg-wcheck {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  border: 1.5px dashed rgba(20, 26, 26, 0.198);
+  color: var(--on-surface-variant);
+}
+
+.lg-wcheck[aria-pressed='true'] {
+  border-style: solid;
+  border-color: transparent;
+  background: rgba(20, 26, 26, 0.12);
+  color: var(--on-surface);
+}
+
+.lg-table .lg-row--warm td {
+  height: 48px;
+  background: none;
+  box-shadow: inset 0 1px 0 rgba(20, 26, 26, 0.06), inset 0 -1px 0 rgba(20, 26, 26, 0.06);
+  color: var(--on-surface-variant);
+}
+
+.lg-row--warm abbr {
+  text-decoration: none;
+}
+
+.lg-warm-tag {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lg-cell--warm {
+  border-color: transparent;
+  background: none;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+}
