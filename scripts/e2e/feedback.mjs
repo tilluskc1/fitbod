@@ -3,7 +3,8 @@
 // is mocked with context.route (every firestore.googleapis.com call), so this never writes to the real
 // database; a call to any other URL or method there is a failure.
 // Checks the posted body: rule field names, screen, workout count, one tester ID kept per phone.
-// 390x844 and 360x780.
+// #330: reopening clears a leftover Sent / Not sent line (mid-send keeps Sending…); a rejected send
+// ends as Not sent with the text kept. 390x844 and 360x780.
 //
 //   npm run e2e        (builds, then runs every scripts/e2e check against the built app)
 import { execSync } from 'node:child_process';
@@ -140,6 +141,8 @@ try {
     await settings.getByRole('button', { name: /Send feedback/ }).click();
     await sheet.waitFor();
     check((await box.inputValue()) === 'The rest timer is too quiet', `${where}: closing the sheet lost the text`);
+    // (#330) Reopening after a failed send shows no leftover "Not sent" line.
+    check(!(await sheet.getByRole('alert').count()), `${where}: reopened sheet still shows Not sent`);
     const storedText = await page.evaluate(() => Object.keys(localStorage).some((key) => (localStorage.getItem(key) ?? '').includes('rest timer is too quiet')));
     check(!storedText, `${where}: the draft was written to storage`);
 
@@ -160,6 +163,16 @@ try {
     check(/^[0-9a-f]{7}$|^dev$/.test(sent.appVersion?.stringValue ?? ''), `${where}: appVersion ${JSON.stringify(sent.appVersion)}`);
     const stored = await page.evaluate((key) => localStorage.getItem(key), TESTER_KEY);
     check(stored && sent.testerId?.stringValue === stored, `${where}: testerId ${JSON.stringify(sent.testerId)} not the stored ${stored}`);
+
+    // 5a. (#330) Reopening after a sent note shows no status line, twice over.
+    for (let round = 1; round <= 2; round += 1) {
+      await sheet.getByRole('button', { name: /Close/ }).click();
+      await settings.getByRole('button', { name: /Send feedback/ }).click();
+      await sheet.waitFor();
+      if (shots && round === 1) { await settle(page); await page.screenshot({ path: join(shots, `330-reopen-after-sent-${where}.png`) }); }
+      check(!(await sheet.getByText('Sent. Thanks.').count()), `${where}: reopen ${round} after a send still shows Sent. Thanks.`);
+      check(((await sheet.getByRole('status').innerText()) ?? '').trim() === '', `${where}: reopen ${round} shows a status line`);
+    }
 
     // 5b. A send in flight (review 1): fields lock, Send stays off across a close and reopen, the
     // note posts once, and its result reaches the reopened sheet without wiping a newer note.
@@ -188,6 +201,25 @@ try {
     check((await name.inputValue()) === 'Sam', `${where}: name lost after the in-flight send`);
     await box.fill('A newer note');
     check(!(await sheet.getByText('Sent. Thanks.').count()), `${where}: Sent still shows after typing again`);
+
+    // 5c. (#330) A rejected send ends as "Not sent" with the text kept, and the next send works.
+    // A throwing AbortController makes sendFeedback's promise reject before any post.
+    await page.evaluate(() => {
+      window.__realAbortController = window.AbortController;
+      window.AbortController = function Refused() { throw new Error('rejected send (#330 e2e)'); };
+    });
+    const beforeReject = posts.length;
+    await send.click();
+    const notSent = await sheet.getByText(NOT_SENT).waitFor({ timeout: 3000 }).then(() => true, () => false);
+    check(notSent, `${where}: a rejected send did not end as Not sent`);
+    if (!notSent) throw new Error(`feedback: stuck after a rejected send\n- ${failures.join('\n- ')}`);
+    check((await box.inputValue()) === 'A newer note', `${where}: a rejected send lost the text`);
+    check(!(await box.evaluate((el) => el.readOnly)), `${where}: box stayed read-only after a rejected send`);
+    check(posts.length === beforeReject, `${where}: a rejected send posted`);
+    await page.evaluate(() => { window.AbortController = window.__realAbortController; });
+    await send.click();
+    await sheet.getByText('Sent. Thanks.').waitFor({ timeout: 5000 }).catch(() => check(false, `${where}: send after a rejected one did not go`));
+    check(posts.at(-1)?.fields?.message?.stringValue === 'A newer note', `${where}: send after a rejected one posted the wrong note`);
     await box.fill('');
     await sheet.getByRole('button', { name: /Close/ }).click();
     await settings.getByRole('button', { name: 'Done' }).click();
@@ -208,6 +240,11 @@ try {
     check(fromRecap.screen?.stringValue === 'recap', `${where}: recap note screen ${JSON.stringify(fromRecap.screen)}`);
     check(fromRecap.workoutCount?.integerValue === '1', `${where}: recap workoutCount ${JSON.stringify(fromRecap.workoutCount)}`);
     check(fromRecap.testerId?.stringValue === stored, `${where}: tester ID changed between notes`);
+    await sheet.getByRole('button', { name: /Close/ }).click();
+    // (#330) Reopening from the recap after a sent note shows no status line.
+    await recapEntry.click();
+    await sheet.waitFor();
+    check(!(await sheet.getByText('Sent. Thanks.').count()), `${where}: recap reopen still shows Sent. Thanks.`);
     await sheet.getByRole('button', { name: /Close/ }).click();
     check(await page.getByRole('button', { name: 'Back to Today' }).isVisible(), `${where}: closing from the recap left the recap`);
 
