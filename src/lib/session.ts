@@ -210,6 +210,22 @@ export function setRemaining(
   return applyToSets(session, exerciseIndex, exercise.performed.map((set) => (set.done ? {} : { ...value })), now);
 }
 
+/**
+ * (#327) "Apply to all" after a held jump: the sets that followed the typed one, not yet logged, take
+ * its weight, as the carry would have done (#309).
+ */
+export function carryWeight(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  indices: number[],
+  weight: number,
+  now: string,
+): CarryResult {
+  const exercise = session.exercises[exerciseIndex];
+  if (!exercise) return { session, carried: [], previous: [] };
+  return applyToSets(session, exerciseIndex, exercise.performed.map((set, i) => (!set.done && indices.includes(i) ? { weight } : {})), now);
+}
+
 function applyToSets(
   session: WorkoutRecord,
   exerciseIndex: number,

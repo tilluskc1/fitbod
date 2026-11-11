@@ -4211,6 +4211,19 @@ button.aw-exercise__name-btn {
   color: var(--on-surface-variant);
 }
 
+/* (#327) A held jump's Heads-up, under the row it was typed in; kept clear of the header, dock and keyboard. */
+.lg-table .lg-note--held td {
+  padding: 4px 0 8px;
+  text-align: left;
+  font-size: inherit;
+  color: inherit;
+}
+
+.lg-note--held .notice-card {
+  scroll-margin-top: calc(72px + var(--vv-top, 0px));
+  scroll-margin-bottom: calc(132px + var(--kb, 0px));
+}
+
 .lg-row--current td {
   background: rgba(20, 26, 26, 0.063);
 }

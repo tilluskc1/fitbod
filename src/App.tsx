@@ -70,10 +70,12 @@ import
   setRemaining,
   undoCarry,
   revertBurst,
+  carryWeight,
+  pendingExerciseIndex,
   type CarryResult,
   type Followers,
 } from './lib/session';
-import { bigJumpNote, burstLive, burstMark, carryMessage, setAllMessage } from './lib/carry';
+import { bigJumpNote, burstLive, burstMark, carryMessage, heldMessage, overLastTime, setAllMessage } from './lib/carry';
 import { loadModeOf, needsLoad, setUnit } from './data/flagship';
 import { lastExercisePerformance } from './lib/progression';import { setWorkoutFeedback } from './lib/feedback';
 import
@@ -280,6 +282,24 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   } | null>(null);
   // A burst whose exercise changed by any other path is over: no Undo, no fixed followers.
   const liveCarry = carryUndo !== null && burstLive(state.current, carryUndo.exerciseIndex, carryUndo.mark) ? carryUndo : null;
+  /**
+   * (#327) A typed weight more than 10% over last time, held on its own set. Its Heads-up offers
+   * "Apply to all" until then, the next edit in any cell, leaving the exercise, or Finish. In memory only.
+   */
+  const [held, setHeld] = useState<{
+    text: string;
+    sessionId: string;
+    exerciseIndex: number;
+    exerciseId: string;
+    setIndex: number;
+    kg: number;
+    /** The sets that followed the typed one when its burst began. */
+    followers: number[];
+    /** Those sets' values when the burst began: Undo after Apply to all puts them back. */
+    previous: CarryResult['previous'];
+    edited?: CarryResult['previous'][number];
+    origin?: CarryResult['previous'][number];
+  } | null>(null);
   const jumpWarned = useRef(new Map<string, string>());
   const jumpBase = useRef(new Map<string, number>());
   const [saveUi, setSaveUi] = useState<SaveUi>(() => initialSaveUi(initial));
@@ -524,6 +544,13 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   );
 
   const current = state.current;
+  // (#327) A held jump's Heads-up lasts while its exercise is the one being logged and its card is up.
+  const heldLive = held !== null && view === 'train' && current?.id === held.sessionId && notice?.text === held.text
+    && pendingExerciseIndex(current) === held.exerciseIndex && current.exercises[held.exerciseIndex]?.exerciseId === held.exerciseId;
+  if (held !== null && !heldLive) {
+    setHeld(null);
+    if (notice?.text === held.text) setNotice(null);
+  }
   /**
    * (#219) A described day's status and reasons, read as its preview did; null on a planned day.
    * (#220) While a described session runs, the session's own, until its day's override expires.
@@ -999,6 +1026,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const open = session ? openBurst(burstKey(session, exerciseIndex, `${setIndex}:${field}`)) : null;
     const fixed = open?.followers;
     const before = session?.exercises[exerciseIndex]?.performed[setIndex];
+    // (#327) Any edit ends a held jump's Heads-up; this cell's keystroke may raise it again below.
+    if (held !== null) {
+      setHeld(null);
+      if (notice?.text === held.text) setNotice(null);
+    }
     if (revert && session && before) {
       // Nothing open: a refused keystroke changed nothing, and an emptied logged set keeps its value.
       const origin = open?.origin ?? { index: setIndex, weight: before.weight, reps: before.reps };
@@ -1017,6 +1049,38 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           () => null, undefined, before.done ? { index: setIndex, weight: before.weight, reps: before.reps } : undefined, origin);
         return;
       }
+    }
+    // (#327) A weight more than 10% over last time applies to this set only: everything this burst
+    // carried goes back to its start-of-burst value, and a Heads-up offers "Apply to all".
+    const typedKg = patch.weight;
+    const exercise = session?.exercises[exerciseIndex];
+    const jump = session && before && exercise && typedKg !== undefined && typedKg > 0
+      ? overLastTime({ history: state.history, exerciseId: exercise.exerciseId, setup: exercise.setup, kg: typedKg, unit })
+      : null;
+    if (jump && session && before && exercise && typedKg !== undefined) {
+      const exerciseId = exercise.exerciseId;
+      // The carry this keystroke would make fixes the burst's followers and their start values.
+      const would = editSet(session, exerciseIndex, setIndex, patch, stamp, fixed);
+      const carried = open?.previous ?? [];
+      const previous = [...carried, ...would.previous.filter((p) => !carried.some((q) => q.index === p.index))];
+      setState((currentState) =>
+        currentState.current
+          ? { ...currentState, current: revertBurst(currentState.current, exerciseIndex, exerciseId, setIndex, { weight: typedKg }, carried, stamp) }
+          : currentState,
+      );
+      const heldSession = revertBurst(session, exerciseIndex, exerciseId, setIndex, { weight: typedKg }, carried, stamp);
+      const followers = would.followers ?? { weight: [], reps: [] };
+      const edited = open ? open.edited : before.done ? { index: setIndex, weight: before.weight, reps: before.reps } : undefined;
+      const origin = open?.origin ?? { index: setIndex, weight: before.weight, reps: before.reps };
+      // The burst stays open, silent, so the next keystroke keeps its followers (lesson 26).
+      setCarryUndo({
+        key: burstKey(session, exerciseIndex, `${setIndex}:weight`), message: '', sessionId: session.id, exerciseIndex, exerciseId,
+        previous, followers, mark: burstMark(heldSession, exerciseIndex), edited, origin,
+      });
+      const text = heldMessage({ kg: typedKg, percent: jump.percent, setIndex, unit, mode: loadModeOf(exerciseId) });
+      setHeld({ text, sessionId: session.id, exerciseIndex, exerciseId, setIndex, kg: typedKg, followers: followers.weight, previous, edited, origin });
+      setNotice(headsUp(text));
+      return;
     }
     setState((currentState) =>
       currentState.current
@@ -1043,10 +1107,44 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     { index: setIndex, weight: before.weight, reps: before.reps });
   };
 
+  /** (#327) "Apply to all" on a held jump: it carries as #309 does, with Undo for every set it moved. */
+  const applyHeldToAll = () => {
+    const h = heldLive ? held : null;
+    const session = state.current;
+    if (!h || !session) return;
+    const stamp = stampNow();
+    const matches = (s: WorkoutRecord | null): s is WorkoutRecord =>
+      s?.id === h.sessionId && s.exercises[h.exerciseIndex]?.exerciseId === h.exerciseId;
+    setState((currentState) =>
+      matches(currentState.current)
+        ? { ...currentState, current: carryWeight(currentState.current, h.exerciseIndex, h.followers, h.kg, stamp).session }
+        : currentState,
+    );
+    setHeld(null);
+    if (!matches(session)) return setNotice(null);
+    const result = carryWeight(session, h.exerciseIndex, h.followers, h.kg, stamp);
+    const previous = [...h.previous, ...result.previous.filter((p) => !h.previous.some((q) => q.index === p.index))];
+    const carriedText = result.carried.length > 0
+      ? carryMessage({ field: 'weight', kg: h.kg, reps: 0, carried: result.carried, unit, mode: loadModeOf(h.exerciseId), seconds: false })
+      : null;
+    const text = h.edited ? `Set ${h.setIndex + 1} updated${carriedText ? `. ${carriedText}` : ''}` : carriedText;
+    if (text === null) return setNotice(null);
+    setCarryUndo({
+      key: burstKey(session, h.exerciseIndex, `${h.setIndex}:weight`), message: text, sessionId: session.id,
+      exerciseIndex: h.exerciseIndex, exerciseId: h.exerciseId, previous, followers: { weight: h.followers, reps: [] },
+      mark: burstMark(result.session, h.exerciseIndex), edited: h.edited, origin: h.origin,
+    });
+    setNotice(done(text));
+  };
+
   /** "Set all remaining sets to…" from the exercise menu (#306). */
   const setAllRemaining = (exerciseIndex: number, exerciseId: string, value: { weight: number; reps: number }) => {
     const stamp = stampNow();
     const session = state.current;
+    if (held !== null) {
+      setHeld(null);
+      if (notice?.text === held.text) setNotice(null);
+    }
     if (!session || session.exercises[exerciseIndex]?.exerciseId !== exerciseId) return;
     setState((currentState) =>
       currentState.current?.exercises[exerciseIndex]?.exerciseId === exerciseId
@@ -1403,6 +1501,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         }}
         onFinish={requestFinish}
         onUpdateSet={updateSet}
+        held={heldLive ? { exerciseIndex: held.exerciseIndex, setIndex: held.setIndex, text: held.text, onApply: applyHeldToAll, onDismiss: () => setNotice(null) } : null}
         onLogSet={logOneSet}
         onToggleRestPause={() => {
           const stamp = new Date().toISOString();
@@ -1627,7 +1726,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     <PhoneFrame>
       {/* (#295) Problems sit at the top of the screen until resolved; a passing Heads-up joins them
           off Today (Today shows it in its own flow, one card at a time). */}
-      {(conflict || (saveUi.kind === 'error' && !conflict) || (notice && (notice.kind === 'problem' || (notice.kind === 'headsUp' && !onToday)))) && (
+      {(conflict || (saveUi.kind === 'error' && !conflict) || (notice && !heldLive && (notice.kind === 'problem' || (notice.kind === 'headsUp' && !onToday)))) && (
         <div className="app-alerts">
           {conflict && (
             <NoticeCard
@@ -1652,7 +1751,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               <p className="notice-card__body">{saveUi.message}</p>
             </NoticeCard>
           )}
-          {notice && (notice.kind === 'problem' || (notice.kind === 'headsUp' && !onToday)) && (
+          {/* (#327) A held jump's Heads-up shows under the row it was typed in, not up here. */}
+          {notice && !heldLive && (notice.kind === 'problem' || (notice.kind === 'headsUp' && !onToday)) && (
             <MessageCard
               notice={notice}
               onDismiss={() => setNotice(null)}
