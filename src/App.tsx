@@ -219,6 +219,8 @@ function initialSaveUi(load: LoadedState): SaveUi {
 }
 
 const NO_EXCLUSIONS: string[] = [];
+/** (#333) Finish's partial-save Heads-up, which a failed save makes untrue. */
+const PARTIAL_SAVE = /^Saved the completed sets\./;
 
 function backupRaw(raw: string): boolean {
   try {
@@ -402,9 +404,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   // waits for the sheet to close. Heads-up and Problem cards wait for the user.
   const problemUp = saveUi.kind === 'error' || conflict !== null;
   const toastUp = toastShows(notice, sheet.kind !== 'none') && !problemUp;
-  // A Problem while a toast shows: the toast goes, the Problem stays (#295).
+  // A Problem while a toast shows: the toast goes, the Problem stays (#295). Finish's partial-save
+  // Heads-up (#333) says the sets were saved, which a failed save makes untrue, so it goes too.
   useEffect(() => {
-    if (problemUp && notice?.kind === 'done') setNotice(null);
+    if (problemUp && notice && (notice.kind === 'done' || PARTIAL_SAVE.test(notice.text))) setNotice(null);
   }, [problemUp, notice]);
   useEffect(() => {
     if (!toastUp) return;
@@ -1129,13 +1132,16 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setRecapId(id);
     setSheet({ kind: 'none' });
     setView('recap');
-    setNotice(done(
-      early
-        ? progress.skipped > 0
+    // (#333) Part of the workout was dropped, so a partial save is a Heads-up, not a Done tick.
+    if (early) {
+      setNotice(headsUp(
+        progress.skipped > 0
           ? 'Saved the completed sets. The rest was not recorded.'
-          : 'Saved the completed sets. Unfinished work was not recorded.'
-        : 'Workout saved.',
-    ));
+          : 'Saved the completed sets. Unfinished work was not recorded.',
+      ));
+    } else {
+      setNotice(done('Workout saved.'));
+    }
   };
 
   /** An empty session on Finish: close it and move the plan to the next day, recorded as a skip (#184). */
@@ -1656,6 +1662,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         <DoneToast
           notice={notice}
           screen={screen}
+          top={onToday}
           action={liveCarry !== null && liveCarry.message === notice.text ? { label: 'Undo', onClick: undoLastCarry } : undefined}
         />
       )}

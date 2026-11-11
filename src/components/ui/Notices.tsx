@@ -63,8 +63,11 @@ function toastBottom(host: HTMLElement): number {
   return Math.max(GAP, frame.bottom - floor + GAP);
 }
 
-/** A Done toast: one at a time, 4 s (App's timer), no Dismiss link; taps pass through it except its action. */
-export function DoneToast({ notice, screen, action }: { notice: Notice; screen: string; action?: { label: string; onClick: () => void } }) {
+/**
+ * A Done toast: one at a time, 4 s (App's timer), no Dismiss link; taps pass through it except its action.
+ * On Today it sits at the top, over the greeting row, so it never covers a card's text (#333).
+ */
+export function DoneToast({ notice, screen, action, top = false }: { notice: Notice; screen: string; action?: { label: string; onClick: () => void }; top?: boolean }) {
   const text = notice.text;
   const ref = useRef<HTMLDivElement>(null);
   const [bottom, setBottom] = useState<number | null>(null);
@@ -89,7 +92,12 @@ export function DoneToast({ notice, screen, action }: { notice: Notice; screen: 
     // A toast carried to the next screen (recap to Today) is placed again against that screen's controls.
   }, [notice, screen]);
   return (
-    <div ref={ref} className="done-toast" role="status" style={bottom === null ? { visibility: 'hidden' } : { bottom }}>
+    <div
+      ref={ref}
+      className={top ? 'done-toast done-toast--top' : 'done-toast'}
+      role="status"
+      style={top ? undefined : bottom === null ? { visibility: 'hidden' } : { bottom }}
+    >
       <div className="done-toast__pill" key={idOf(notice)}>
         <CheckGlyph />
         <span className="done-toast__text">{text}</span>

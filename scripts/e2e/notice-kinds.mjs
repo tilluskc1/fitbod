@@ -148,6 +148,9 @@ try {
     await card.waitFor({ timeout: 3000 }).catch(() => {});
     check(await card.getByText('Not saved.').isVisible().catch(() => false), `${where}: no Problem card on a failed save`);
     check(await card.getAttribute('role') === 'alert', `${where}: the Problem card is not role=alert`);
+    // (#333) Plain copy, no developer talk.
+    const body = (await card.locator('.notice-card__body').innerText().catch(() => '')).trim();
+    check(body === "Couldn't save on this phone. Tap Retry. Until then, this change is only in this tab.", `${where}: Problem copy reads "${body}"`);
     // A Problem while a toast shows: the toast goes, the Problem stays (review 1).
     check(toastBefore === 1, `${where}: no toast was up before the failed save, so the check below proves nothing`);
     check(!(await toast.count()), `${where}: a Done toast still shows beside the Problem card`);
@@ -161,22 +164,44 @@ try {
     await page.waitForTimeout(300);
     check(!(await card.count()), `${where}: the Problem card stayed after Retry worked`);
 
-    // Heads-up: after the workout, Today shows one card, the install note, white with an amber title.
+    // (#333) Today's remaining work was removed, so Finish is a partial save: a Heads-up card on the
+    // recap, never a Done toast. A failed save then removes it, as it removes a toast (planner-reach).
     await page.locator('.finish-btn').click();
     await page.getByRole('button', { name: /Save completed work|Finish workout/ }).first().click();
+    await page.locator('.recap-actions').waitFor({ timeout: 3000 });
+    const partial = page.locator('.app-alerts .notice-card--headsUp', { hasText: 'Saved the completed sets. The rest was not recorded.' });
+    check(await partial.count() === 1, `${where}: the partial save is not a Heads-up card on the recap`);
+    check(!(await toast.count()), `${where}: the partial save shows a Done toast`);
+    await shot(page, 'partial-recap', where);
+    await page.waitForTimeout(4300);
+    check(await partial.count() === 1, `${where}: the partial-save Heads-up passed on its own`);
+    // On Today the install note is the one Heads-up card; the carried message waits behind it (#295, #307).
+    await page.getByRole('button', { name: 'Back to Today' }).click();
+    await page.waitForSelector('.t7-hero');
+    check(await page.locator('.notice-card--headsUp').count() === 1, `${where}: Today shows more than one Heads-up card after a partial save`);
+    check(await page.locator('.install-note').count() === 1, `${where}: the install note is not the one card after a partial save`);
+    await shot(page, 'partial-today', where);
+
+    // A full workout: "Workout saved." is a Done toast on the recap and follows it to Today.
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForSelector('.lg-ex');
+    for (let i = 0; i < 80 && await page.locator('button.lg-check:not([disabled])').count(); i += 1) {
+      await page.locator('button.lg-check:not([disabled])').first().click();
+      await page.waitForTimeout(30);
+    }
+    await page.locator('.finish-btn').click();
     // On the recap, scrolling its buttons up never puts them under the toast (review 1).
     await page.locator('.recap-actions').waitFor({ timeout: 3000 });
     await toast.waitFor({ timeout: 3000 }).catch(() => {});
-    check(await toast.count() === 1, `${where}: no toast on the recap`);
+    check((await toast.innerText().catch(() => '')).trim() === 'Workout saved.', `${where}: the recap toast is not "Workout saved."`);
     await page.locator('.recap-actions').evaluate((n) => n.scrollIntoView({ block: 'end' }));
     await page.waitForTimeout(150);
-    await clearOf(page, page.locator('.recap-actions'), 'the recap buttons', where);
+    if (await toast.count()) await clearOf(page, page.locator('.recap-actions'), 'the recap buttons', where);
     await page.getByRole('button', { name: 'Back to Today' }).click();
     await page.waitForSelector('.t7-hero');
     await page.waitForTimeout(100);
     check(await toast.count() === 1, `${where}: "Workout saved." (the finish toast) did not follow the recap to Today`);
-    await clearOf(page, page.locator('.tabbar'), 'the tab bar (toast carried from the recap)', where);
-    await clearOf(page, page.locator('.tab-action'), 'Start (toast carried from the recap)', where);
+    // Heads-up: Today shows one card, the install note, white with an amber title.
     const cards = page.locator(".notice-card--headsUp");
     check(await cards.count() === 1, `${where}: Today shows ${await cards.count()} Heads-up cards`);
     check(await page.locator('.install-note').count() === 1, `${where}: the install note is not the one card`);
@@ -184,6 +209,16 @@ try {
     check(amber === 'rgb(138, 83, 0)', `${where}: Heads-up title is ${amber}, not --amber`);
     const white = await page.locator('.install-note').evaluate((n) => getComputedStyle(n).backgroundColor).catch(() => '');
     check(white === 'rgb(255, 255, 255)', `${where}: Heads-up card is ${white}, not white`);
+    // (#333) On Today the toast sits at the top, over the greeting row, and covers no card text.
+    if (await toast.count()) {
+      const pill = await page.locator(`${TOAST} .done-toast__pill`).boundingBox();
+      const greeting = await page.locator('.today__greeting').boundingBox();
+      check(pill && greeting && pill.y < greeting.y + greeting.height && pill.y + pill.height > greeting.y, `${where}: the Today toast is not over the greeting row`);
+      await clearOf(page, page.locator('.install-note'), 'the install card', where);
+      await clearOf(page, page.locator('.t7-hero'), "today's workout card", where);
+      await tapLands(page, page.getByRole('button', { name: 'Open profile and settings' }), 'the avatar', where);
+    }
+    await shot(page, 'today-toast', where);
     const x = await page.getByRole('button', { name: 'Dismiss for 7 days' }).boundingBox();
     check(x && x.width >= 44 && x.height >= 44, `${where}: × is under 44px`);
     await page.locator('.install-note').evaluate((n) => n.scrollIntoView({ block: 'center' }));

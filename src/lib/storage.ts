@@ -328,8 +328,8 @@ export function saveState(
       ok: false,
       reason: isQuotaError(error) ? 'quota' : 'unavailable',
       error: isQuotaError(error)
-        ? 'Storage is full. This change is only in this tab until you free space and retry.'
-        : 'The browser refused the write. This change is only in this tab until you retry.',
+        ? 'Phone storage is full. Free some space, then tap Retry. Until then, this change is only in this tab.'
+        : "Couldn't save on this phone. Tap Retry. Until then, this change is only in this tab.",
     };
   }
 
