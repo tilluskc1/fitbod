@@ -1311,6 +1311,12 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
    * it saved once the persistence boundary has confirmed it. A stale id never
    * attaches an answer to another workout.
    */
+  // (#330) Opening the sheet clears a leftover "Sent" or "Not sent" line; a send in flight keeps "Sending…".
+  const openFeedback = (from: 'settings' | 'recap') => {
+    if (!feedbackSending.current) setFeedbackStatus('idle');
+    setSheet({ kind: 'feedback', from });
+  };
+
   const saveFeedback = (workoutId: string, value: WorkoutFeedback | null) => {
     if (!state.history.some((workout) => workout.id === workoutId)) return;
     setFeedbackWrite({ key: `${workoutId}:${value ?? 'none'}`, kind: 'saving' });
@@ -1442,7 +1448,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         }}
         offerBackup={offerFirstBackup(state) && state.history.some((workout) => workout.id === recap.id)}
         onBackup={backupNow}
-        onSendFeedback={() => setSheet({ kind: 'feedback', from: 'recap' })}
+        onSendFeedback={() => openFeedback('recap')}
       />
     ) : view === 'library' ? (
       <LibraryScreen
@@ -1752,7 +1758,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           onRestore={restoreFile}
           onStartOver={() => setSheet({ kind: 'startOver' })}
           onInstall={() => setSheet({ kind: 'install', from: 'settings' })}
-          onFeedback={() => setSheet({ kind: 'feedback', from: 'settings' })}
+          onFeedback={() => openFeedback('settings')}
           onClose={closeSheet}
           storageNote={storageNote}
         />
@@ -1794,6 +1800,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               } else {
                 setFeedbackStatus('failed');
               }
+            }).catch(() => {
+              // (#330) A rejected send ends as "Not sent" with the text kept, never stuck read-only.
+              feedbackSending.current = false;
+              setFeedbackStatus('failed');
             });
           }}
           onClose={sheet.from === 'settings' ? () => setSheet({ kind: 'settings' }) : closeSheet}
