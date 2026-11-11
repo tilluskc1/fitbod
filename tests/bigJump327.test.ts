@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { heldMessage, lastWorkingKg, overLastTime } from '../src/lib/carry.ts';
-import { carryWeight, createSession, editSet, revertBurst, undoCarry, type CarryResult, type Followers } from '../src/lib/session.ts';
+import { carryWeight, createSession, editSet, logSet, revertBurst, undoCarry, type CarryResult, type Followers } from '../src/lib/session.ts';
 import { toKg } from '../src/lib/units.ts';
 import type { PerformedSet, SetupChoice, WorkoutRecord } from '../src/types.ts';
 
@@ -158,8 +158,37 @@ test('Apply to all carries to the burst\'s sets; Undo restores every one, includ
   const applied = carryWeight(held.session, 0, held.followers.weight, 80, NOW);
   assert.deepEqual(weights(applied.session), [80, 80, 80, 80, 80]);
   assert.deepEqual(applied.carried, [1, 2, 3, 4]);
-  const undone = undoCarry(applied.session, 0, BENCH, held.previous, NOW);
+  const undone = undoCarry(applied.session, 0, BENCH, applied.previous, NOW);
   assert.deepEqual(weights(undone), [80, 60, 60, 60, 60]);
+});
+
+function empty(): WorkoutRecord {
+  const s = bench60();
+  s.exercises[0].performed = s.exercises[0].performed.map((set) => ({ ...set, weight: 0 }));
+  return s;
+}
+
+test('review 1: on a day whose later sets are empty, logging the held set carries no load to them; reps still carry', () => {
+  const held = type(empty(), 0, [8, 80]);
+  assert.deepEqual(weights(held.session), [80, 0, 0, 0, 0]);
+  const reps3 = editSet(held.session, 0, 0, { reps: 3 }, NOW).session;
+  const logged = logSet(reps3, 0, 0, NOW, 75, { carryWeight: false });
+  assert.deepEqual(weights(logged), [80, 0, 0, 0, 0], '"Applied to set 1 only" stays true');
+  assert.deepEqual(logged.exercises[0].performed.map((set) => set.reps), [3, 3, 3, 3, 3]);
+  // Without a hold, #182 still carries the load into empty sets.
+  assert.deepEqual(weights(logSet(reps3, 0, 0, NOW)), [80, 80, 80, 80, 80]);
+  // Apply to all after the log still carries to the burst's sets.
+  assert.deepEqual(weights(carryWeight(logged, 0, held.followers.weight, 80, NOW).session), [80, 80, 80, 80, 80]);
+});
+
+test('review 1: Undo after Apply to all never reverses the reps a logged set carried (#182, #306)', () => {
+  const held = type(bench60(), 0, [8, 80]);
+  const reps3 = editSet(held.session, 0, 0, { reps: 3 }, NOW, { weight: [], reps: [] }).session;
+  const logged = logSet(reps3, 0, 0, NOW, 75, { carryWeight: false });
+  assert.deepEqual(logged.exercises[0].performed.map((set) => set.reps), [3, 3, 3, 3, 3]);
+  const applied = carryWeight(logged, 0, held.followers.weight, 80, NOW);
+  const undone = undoCarry(applied.session, 0, BENCH, applied.previous, NOW);
+  assert.deepEqual(undone.exercises[0].performed.map((set) => [set.weight, set.reps]), [[80, 3], [60, 3], [60, 3], [60, 3], [60, 3]]);
 });
 
 test('any set, not only set 1: typing in set 3 holds set 3 only', () => {

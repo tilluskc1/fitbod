@@ -295,8 +295,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     kg: number;
     /** The sets that followed the typed one when its burst began. */
     followers: number[];
-    /** Those sets' values when the burst began: Undo after Apply to all puts them back. */
-    previous: CarryResult['previous'];
     edited?: CarryResult['previous'][number];
     origin?: CarryResult['previous'][number];
   } | null>(null);
@@ -1078,7 +1076,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         previous, followers, mark: burstMark(heldSession, exerciseIndex), edited, origin,
       });
       const text = heldMessage({ kg: typedKg, percent: jump.percent, setIndex, unit, mode: loadModeOf(exerciseId) });
-      setHeld({ text, sessionId: session.id, exerciseIndex, exerciseId, setIndex, kg: typedKg, followers: followers.weight, previous, edited, origin });
+      setHeld({ text, sessionId: session.id, exerciseIndex, exerciseId, setIndex, kg: typedKg, followers: followers.weight, edited, origin });
       setNotice(headsUp(text));
       return;
     }
@@ -1123,7 +1121,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setHeld(null);
     if (!matches(session)) return setNotice(null);
     const result = carryWeight(session, h.exerciseIndex, h.followers, h.kg, stamp);
-    const previous = [...h.previous, ...result.previous.filter((p) => !h.previous.some((q) => q.index === p.index))];
+    // The followers already hold their start-of-burst values (the hold put them back), so Undo restores
+    // what Apply to all found, never undoing reps a logged set carried since (#182, #306; #327 review 1).
+    const { previous } = result;
     const carriedText = result.carried.length > 0
       ? carryMessage({ field: 'weight', kg: h.kg, reps: 0, carried: result.carried, unit, mode: loadModeOf(h.exerciseId), seconds: false })
       : null;
@@ -1192,7 +1192,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       // Only an empty load takes the suggestion; logSet then carries it to later empty sets (#182).
       const filled = weight !== undefined && weight > 0 && exercise.performed[setIndex]?.weight === 0
         ? updatePerformedSet(session, exerciseIndex, setIndex, { weight }, stamp) : session;
-      const logged = logSet(filled, exerciseIndex, setIndex, stamp, rest);
+      // (#327 review 1) A held jump's set logs without carrying its load: "Applied to set N only" stays true
+      // on a day whose later sets are still empty. Reps still carry.
+      const holding = held !== null && heldLive && held.sessionId === session.id && held.exerciseIndex === exerciseIndex && held.setIndex === setIndex;
+      const logged = logSet(filled, exerciseIndex, setIndex, stamp, rest, { carryWeight: !holding });
       return logged === session ? currentState : { ...currentState, current: logged };
     });
   };

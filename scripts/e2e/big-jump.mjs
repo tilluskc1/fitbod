@@ -54,8 +54,8 @@ async function onboard(page) {
  * The lead lift was last done at 60 kg (a finished session a week ago), and today's sets all show 60.
  * Written to storage, then reloaded, so every scenario starts from the same sets.
  */
-async function seed(page) {
-  await page.evaluate((key) => {
+async function seed(page, today = 60, reps1 = null) {
+  await page.evaluate(([key, today, reps1]) => {
     const saved = JSON.parse(localStorage.getItem(key));
     const { state } = saved;
     const current = state.current;
@@ -71,10 +71,12 @@ async function seed(page) {
     done.exercises[0].performed = done.exercises[0].performed.map((set) => ({ ...set, weight: 60, done: true, completedAt: week }));
     done.exercises[0].planned = done.exercises[0].planned.map((set) => ({ ...set, weight: 60 }));
     state.history = [done];
-    current.exercises[lead].performed = current.exercises[lead].performed.map((set) => ({ ...set, weight: 60, done: false, completedAt: null }));
-    current.exercises[lead].planned = current.exercises[lead].planned.map((set) => ({ ...set, weight: 60 }));
+    current.exercises[lead].performed = current.exercises[lead].performed.map((set) => ({ ...set, weight: today, done: false, completedAt: null }));
+    current.exercises[lead].planned = current.exercises[lead].planned.map((set) => ({ ...set, weight: today }));
+    current.exercises[lead].planned = current.exercises[lead].planned.map((set, i) => ({ ...set, reps: current.exercises[lead].performed[i].reps }));
+    if (reps1 !== null) current.exercises[lead].performed[0].reps = reps1;
     localStorage.setItem(key, JSON.stringify(saved));
-  }, KEY);
+  }, [KEY, today, reps1]);
   await page.reload();
   const resume = page.getByRole('button', { name: 'Resume workout', exact: true });
   await Promise.race([page.waitForSelector('.lg-ex'), resume.waitFor()]);
@@ -91,6 +93,15 @@ async function shown(page) {
   return out.join(',');
 }
 
+/** The lead lift's stored reps. */
+async function storedReps(page) {
+  return page.evaluate((key) => {
+    const { state } = JSON.parse(localStorage.getItem(key));
+    const lead = state.current.exercises.find((exercise) => !exercise.skipped);
+    return lead.performed.map((set) => `${set.weight}x${set.reps}${set.done ? "d" : ""}`).join(',');
+  }, KEY);
+}
+
 /** The lead lift's stored weights, so a value the screen shows is also the value kept (lesson 27). */
 async function stored(page) {
   return page.evaluate((key) => {
@@ -104,6 +115,25 @@ const weightCell = (page, n) => page.getByLabel(new RegExp(`^Set ${n} weight`));
 const card = (page) => page.locator('.lg-note--held .notice-card--headsUp');
 const toast = (page) => page.locator('.done-toast');
 const text = async (locator) => (await locator.count()) ? (await locator.first().innerText()).replace(/\s+/g, ' ').trim() : '';
+
+/**
+ * Rows, storage and the toast in one read: a Done toast lives 4 s (#295), so a step that then taps its
+ * Undo reads everything at once instead of one round trip per check (slow CI runners).
+ */
+async function snapshot(page) {
+  return page.evaluate((key) => {
+    const rows = [...document.querySelectorAll('table.lg-table tbody tr:not(.lg-note):not(.lg-row--warm)')]
+      .map((row) => row.querySelector('input.lg-cell')?.value.trim() ?? '').join(',');
+    const { state } = JSON.parse(localStorage.getItem(key));
+    const lead = state.current.exercises.find((exercise) => !exercise.skipped);
+    return {
+      shown: rows,
+      stored: lead.performed.map((set) => set.weight).join(','),
+      toast: (document.querySelector('.done-toast')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      held: document.querySelectorAll('.lg-note--held .notice-card--headsUp').length,
+    };
+  }, KEY);
+}
 
 /** Tap a control that should be there; a missing one is a failed check, not a crash, so every later step still reports. */
 async function tap(locator, message) {
@@ -176,14 +206,23 @@ try {
     check(await shown(page) === first(80), `${where} A: 0 again holds 80 on set 1 (${await shown(page)})`);
     // Apply to all carries as #309; Undo restores every set, including the ones the burst reverted.
     await tap(card(page).getByRole('button', { name: 'Apply to all' }), `${where} A: Apply to all is offered`);
-    check(await shown(page) === all(80), `${where} A: Apply to all carries 80 (${await shown(page)})`);
-    check(await stored(page) === all(80), `${where} A: Apply to all is stored (${await stored(page)})`);
-    check((await text(toast(page))).includes(`80 kg applied to sets 2 to ${sets}`), `${where} A: the carry toast (${await text(toast(page))})`);
-    check(await card(page).count() === 0, `${where} A: the Heads-up is gone after Apply to all`);
-    if (shots) { await settle(page); await page.screenshot({ path: `${shots}/327-after-apply-${width}.png` }); }
+    const applied = await snapshot(page);
     await tap(toast(page).getByRole('button', { name: 'Undo' }), `${where} A: the carry toast offers Undo`);
+    check(applied.shown === all(80), `${where} A: Apply to all carries 80 (${applied.shown})`);
+    check(applied.stored === all(80), `${where} A: Apply to all is stored (${applied.stored})`);
+    check(applied.toast.includes(`80 kg applied to sets 2 to ${sets}`), `${where} A: the carry toast (${applied.toast})`);
+    check(applied.held === 0, `${where} A: the Heads-up is gone after Apply to all`);
     check(await shown(page) === first(80), `${where} A: Undo puts sets 2+ back to 60 (${await shown(page)})`);
     check(await stored(page) === first(80), `${where} A: Undo is stored (${await stored(page)})`);
+
+    if (shots) {
+      await seed(page);
+      await typeKeys(page, 1, ['8', '0']);
+      await weightCell(page, 1).blur();
+      await card(page).getByRole('button', { name: 'Apply to all' }).click();
+      await settle(page);
+      await page.screenshot({ path: `${shots}/327-after-apply-${width}.png` });
+    }
 
     // B. 6 then 7: 67 is over (12%); backspace and 6 makes 66, exactly 10%, which carries.
     await seed(page);
@@ -230,8 +269,34 @@ try {
     check(await card(page).count() === 0, `${where} D: an edit in another cell clears the Heads-up`);
     check(await shown(page) === first(80), `${where} D: and carries nothing (${await shown(page)})`);
 
+    // F (review 1). A day whose later sets are empty ("go heavier"): logging the held set 1 carries no
+    // load to them, so "Applied to set 1 only" stays true; Apply to all still carries.
+    await seed(page, 0);
+    await typeKeys(page, 1, ['8', '0']);
+    const bare = [80, ...Array(sets - 1).fill('')].join(',');
+    check(await shown(page) === bare, `${where} F: 80 on set 1, the rest empty (${await shown(page)})`);
+    await weightCell(page, 1).blur();
+    await page.getByRole('button', { name: 'Log set 1', exact: true }).click();
+    check(await shown(page) === bare, `${where} F: logging the held set carries no load (${await shown(page)})`);
+    check(await stored(page) === [80, ...Array(sets - 1).fill(0)].join(','), `${where} F: stored as shown (${await stored(page)})`);
+    check((await text(card(page))).startsWith(HELD(80, 1)), `${where} F: the Heads-up stays (${await text(card(page))})`);
+    await tap(card(page).getByRole('button', { name: 'Apply to all' }), `${where} F: Apply to all is offered`);
+    check(await shown(page) === all(80), `${where} F: Apply to all carries 80 (${await shown(page)})`);
+
+    // G (review 1). Set 1 at 3 reps, the rest at the planned reps; hold 80 on set 1, log it (#182 carries its
+    // 3 reps to the later sets), Apply to all, Undo: the loads go back, the reps the log carried stay.
+    await seed(page, 60, 3);
+    await typeKeys(page, 1, ['8', '0']);
+    await weightCell(page, 1).blur();
+    await page.getByRole('button', { name: 'Log set 1', exact: true }).click();
+    const loggedReps = await storedReps(page);
+    check(loggedReps === ['80x3d', ...Array(sets - 1).fill('60x3')].join(','), `${where} G: the log carries 3 reps, no load (${loggedReps})`);
+    await tap(card(page).getByRole('button', { name: 'Apply to all' }), `${where} G: Apply to all is offered`);
+    await tap(toast(page).getByRole('button', { name: 'Undo' }), `${where} G: the carry toast offers Undo`);
+    check(await storedReps(page) === loggedReps, `${where} G: Undo keeps the reps the log carried (${await storedReps(page)} vs ${loggedReps})`);
+
     check(errors.length === 0, `${where}: no page errors (${errors.join('; ')})`);
-    console.log(`${where}: ${sets} sets; A-D done`);
+    console.log(`${where}: ${sets} sets; A-G done`);
     await context.close();
   }
 

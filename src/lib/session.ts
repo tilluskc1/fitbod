@@ -117,7 +117,10 @@ export function logSet(
   setIndex: number,
   now: string,
   seconds = 75,
+  /** (#327) false: a held jump's set logs without carrying its load into later sets; reps still carry. */
+  options: { carryWeight?: boolean } = {},
 ): WorkoutRecord {
+  const { carryWeight: carriesLoad = true } = options;
   // A repeated tap must not rewrite when a logged set was done.
   if (session.exercises[exerciseIndex]?.performed[setIndex]?.done) return session;
   let updated = updatePerformedSet(session, exerciseIndex, setIndex, { done: true }, now);
@@ -131,7 +134,7 @@ export function logSet(
   exercise.performed.forEach((set, i) => {
     if (i <= setIndex || set.done) return;
     const patch: { weight?: number; reps?: number } = {};
-    if (logged.weight > 0 && set.weight === 0) patch.weight = logged.weight;
+    if (carriesLoad && logged.weight > 0 && set.weight === 0) patch.weight = logged.weight;
     if (repsChanged && logged.reps > 0 && set.reps === exercise.planned[i]?.reps) patch.reps = logged.reps;
     if (patch.weight !== undefined || patch.reps !== undefined) updated = updatePerformedSet(updated, exerciseIndex, i, patch, now);
   });
