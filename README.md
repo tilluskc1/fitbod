@@ -83,8 +83,10 @@ before clearing site data, changing phones or moving into the installed app.
 
 ## Provenance
 
-Code and CSS are original. Exercise photography comes from free-exercise-db (public domain). No
-third-party app code or assets are included.
+Code and CSS are original. The files in `public/` come from several sources: exercise photos from
+free-exercise-db (public domain / Unlicense), the hero photo and welcome video made by the owner with AI,
+and self-hosted fonts under their own licences. [CREDITS.md](CREDITS.md) lists every file with its source
+and licence, and says "not recorded" where the repository cannot prove one.
 
 ## Project documents
 

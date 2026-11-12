@@ -1,0 +1,31 @@
+/* ---------- Settings > About (#253) ----------
+ * Uses the Settings sheet's grouped glass cards. Body text is the full-size on-surface ink
+ * (#141a1a on the white card over mint, well above WCAG AA), not the small note grey. */
+.about__card {
+  padding: 14px 16px;
+}
+
+.about__text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--on-surface);
+  overflow-wrap: anywhere;
+}
+
+.about__feedback {
+  margin-top: 12px;
+}
+
+.about__credits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--on-surface);
+  overflow-wrap: anywhere;
+}
