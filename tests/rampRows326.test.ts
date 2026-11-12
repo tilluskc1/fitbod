@@ -60,21 +60,27 @@ async function withTrain(run: (render: Render) => void) {
 test('a first-time Dumbbell Bench lead ramps two W rows from its suggested start (lb and kg)', async () => {
   await withTrain((render) => {
     const session = firstTime('dumbbell-bench-press', 'Dumbbell Bench Press');
-    // Intermediate upper-body start: 25 lb or 10 kg each.
-    const lb = render(session, 'lb');
-    assert.match(lb, /Suggested start 25 lb each/);
-    const lbRamps = rampSets({ equipment: 'Dumbbell', working: toKg(25, 'lb'), unit: 'lb' });
-    assert.deepEqual(warmRows(lb).map((row) => row.weight), [10, 20]);
+    // Advanced upper-body start: 35 lb or 16 kg each, above the #345 floor.
+    const advanced = { experience: 'Advanced' };
+    const lb = render(session, 'lb', advanced);
+    assert.match(lb, /Suggested start 35 lb each/);
+    const lbRamps = rampSets({ equipment: 'Dumbbell', working: toKg(35, 'lb'), unit: 'lb' });
+    assert.deepEqual(warmRows(lb).map((row) => row.weight), [15, 25]);
     assert.deepEqual(warmRows(lb).map((row) => row.reps), lbRamps.map((ramp) => ramp.reps));
-    const kg = render(session, 'kg');
-    assert.match(kg, /Suggested start 10 kg each/);
-    assert.deepEqual(warmRows(kg).map((row) => row.weight), rampSets({ equipment: 'Dumbbell', working: 10, unit: 'kg' }).map((r) => r.weight));
+    const kg = render(session, 'kg', advanced);
+    assert.match(kg, /Suggested start 16 kg each/);
+    assert.deepEqual(warmRows(kg).map((row) => row.weight), rampSets({ equipment: 'Dumbbell', working: 16, unit: 'kg' }).map((r) => r.weight));
     assert.equal(warmRows(kg).length, 2);
     // On the user's own rack, the start and its ramps come from the same dumbbells.
-    const rack = [toKg(10, 'lb'), toKg(15, 'lb'), toKg(20, 'lb'), toKg(25, 'lb')];
-    const owned = render(session, 'lb', { rampLoads: rack, calibrationLoads: rack });
+    const rack = [10, 15, 20, 25, 30, 35].map((load) => toKg(load, 'lb'));
+    const owned = render(session, 'lb', { ...advanced, rampLoads: rack, calibrationLoads: rack });
     assert.equal(warmRows(owned).length, 2);
-    assert.ok(warmRows(owned).every((row) => row.weight < 25));
+    assert.ok(warmRows(owned).every((row) => row.weight < 35));
+    // #345: the Intermediate start (25 lb or 10 kg each) is under the floor, so no W rows.
+    assert.match(render(session, 'lb'), /Suggested start 25 lb each/);
+    assert.equal(warmRows(render(session, 'lb')).length, 0);
+    assert.match(render(session, 'kg'), /Suggested start 10 kg each/);
+    assert.equal(warmRows(render(session, 'kg')).length, 0);
   });
 });
 

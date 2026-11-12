@@ -1,6 +1,6 @@
 // #326: the warm-up ramp (W) rows hold still while set 1's weight is typed. They read the load set 1
 // showed when focus began, through every keystroke (lesson 26), and follow the new load on blur.
-// A first-time lead ramps from its muted suggested start.
+// A first-time lead ramps from its muted suggested start, and gets none under 30 lb / 15 kg (#345).
 //
 //   npm run e2e        (builds, then runs this at 390x844, 360x780 and 390x650 with the keyboard open)
 //   E2E_SHOTS=<dir>    also writes set 1 mid-typing and the first-time lead there
@@ -192,24 +192,67 @@ try {
     await context.close();
   }
 
-  // A first-time Dumbbell Bench lead: two W rows from the suggested start (25 lb each, Intermediate).
+  // #345: a first-time Dumbbell Bench lead opens on its suggested start (25 lb each, Intermediate), which is
+  // under the 30 lb floor: no W rows. Typed up to 35 then 40 lb, two rows; back down to 25, none. Rows only
+  // change on blur, never mid-burst (#326). A kg lifter's 10 kg start is under 15 kg: no rows either.
+  const settle = (page) => page.evaluate(() => Promise.all(document.getAnimations()
+    .filter((a) => Number.isFinite(a.effect?.getComputedTiming?.().endTime)).map((a) => a.finished.catch(() => {}))));
+  const shot = async (page, name) => {
+    if (!SHOTS) return;
+    await page.evaluate(() => document.fonts.ready);
+    await settle(page);
+    await page.screenshot({ path: join(SHOTS, name) });
+  };
+  const warmLoads = async (page) => (await page.locator('tr.lg-row--warm td:nth-child(3)').allInnerTexts()).map(number);
   for (const [width, height] of [[390, 844], [360, 780]]) {
     const where = `${width}x${height} first-time`;
     const page = await browser.newPage({ viewport: { width, height } });
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(String(error)));
     await page.clock.setFixedTime(MONDAY);
     await onboard(page, 'lb');
     await seedLead(page, { firstTime: true });
     const hint = (await page.locator('.lg-coach').innerText()).match(/Suggested start (\d+)/)?.[1];
     const setOne = page.getByRole('textbox', { name: /^Set 1 weight/ });
-    check(hint !== undefined && (await setOne.inputValue()) === hint, `${where}: set 1 shows the suggested ${hint} (${await setOne.inputValue()})`);
-    const loads = (await page.locator('tr.lg-row--warm td:nth-child(3)').allInnerTexts()).map(number);
-    check(loads.length === 2, `${where}: two W rows from the suggested start (${loads})`);
-    check(loads.every((load) => load < Number(hint)) && loads[0] < loads[1], `${where}: ramps climb under ${hint} (${loads})`);
-    if (SHOTS) {
-      await page.evaluate(() => document.fonts.ready);
-      await page.screenshot({ path: join(SHOTS, `326-first-time-${width}x${height}.png`) });
-    }
-    console.log(`${where}: suggested ${hint} lb, ramps ${loads.join(' / ')}`);
+    check(hint === '25' && (await setOne.inputValue()) === hint, `${where}: set 1 shows the suggested 25 (${hint}, ${await setOne.inputValue()})`);
+    const opened = await warmLoads(page);
+    check(opened.length === 0, `${where}: no W rows under the 30 lb floor at ${hint} lb (${opened})`);
+    await shot(page, `345-first-time-25lb-${width}x${height}.png`);
+
+    /** Types `keys` one at a time into set 1; the W rows must stay at `held` through the burst. */
+    const burst = async (keys, held) => {
+      await setOne.click();
+      for (const key of keys) {
+        await page.keyboard.press(key);
+        const now = (await warmLoads(page)).join('/');
+        check(now === held, `${where}: typed ${key} of ${keys.join('')}: W rows changed mid-burst (${held} -> ${now})`);
+      }
+      await page.keyboard.press('Enter');
+      return warmLoads(page);
+    };
+    // 25 -> 35: none through the burst, two rows on blur.
+    const at35 = await burst(['3', '5'], '');
+    check(at35.length === 2 && at35.every((load) => load < 35) && at35[0] < at35[1], `${where}: 35 lb ramps two rows (${at35})`);
+    // 35 -> 40: 35's rows hold mid-burst, then follow 40.
+    const at40 = await burst(['4', '0'], at35.join('/'));
+    check(at40.length === 2 && at40.every((load) => load < 40) && at40[0] < at40[1], `${where}: 40 lb ramps two rows (${at40})`);
+    await shot(page, `345-lead-40lb-${width}x${height}.png`);
+    // 40 -> 2 -> 25: rows hold through the burst, then go on blur.
+    const at25 = await burst(['2', '5'], at40.join('/'));
+    check(at25.length === 0, `${where}: back to 25 lb, no W rows (${at25})`);
+    check(errors.length === 0, `${where}: no page errors (${errors.join('; ')})`);
+    console.log(`${where}: suggested ${hint} lb none; 35 lb ${at35.join(' / ')}; 40 lb ${at40.join(' / ')}; 25 lb none`);
+    await page.close();
+  }
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.clock.setFixedTime(MONDAY);
+    await onboard(page, 'kg');
+    await seedLead(page, { firstTime: true });
+    const hint = (await page.locator('.lg-coach').innerText()).match(/Suggested start (\d+)/)?.[1];
+    const loads = await warmLoads(page);
+    check(hint === '10' && loads.length === 0, `390x844 kg first-time: no W rows under 15 kg at ${hint} kg (${loads})`);
+    console.log(`390x844 kg first-time: suggested ${hint} kg, ${loads.length} W rows`);
     await page.close();
   }
 } finally {
@@ -221,4 +264,4 @@ if (failures.length > 0) {
   console.error(`FAIL\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('PASS: W rows hold still while set 1 is typed and ramp from a first-time suggested start');
+console.log('PASS: W rows hold still while set 1 is typed, ramp from a first-time suggested start, and stop under 30 lb / 15 kg');
