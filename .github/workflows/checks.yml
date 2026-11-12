@@ -99,7 +99,6 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           JOB_STATUS: ${{ job.status }}
         run: |
-          echo "#319 probe: forced comment-step failure"; exit 1
           marker='<!-- checks-screenshots -->'
           body="${marker}
           **checks** ${JOB_STATUS} at \`${SHA:0:7}\`
