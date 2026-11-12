@@ -209,6 +209,12 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    prefilled sets; Undo restores what its own action found. Check: steps F and G in
    `scripts/e2e/big-jump.mjs` (both fail at fce9f92) and the "review 1" tests in `tests/bigJump327.test.ts`.
 
+32. **"Fails on main" means the main you were given.** #332: the lesson-26 check ran the new e2e
+   steps against `git checkout main -- src/App.tsx`, but the clone's local `main` sat at 9d4285a, older
+   than the base beadabe; the steps passed there and looked useless. Against beadabe they failed.
+   Rule: run the "fails on old code" check against the named base SHA (`git show <base>:<file>`), never
+   a local branch name. Check: the issue comment names the SHA the e2e failed on.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
