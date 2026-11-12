@@ -4995,6 +4995,33 @@ button.aw-exercise__name-btn {
   vertical-align: bottom;
 }
 
+/*
+ * (#342) An on-screen keyboard covers the page instead of shrinking it (lesson 16). The sheet sits on
+ * top of it (--kb), fits the band the phone still shows (--vv-top is what it scrolled off the top),
+ * and Send stays pinned at the sheet's foot while the rest scrolls. With the keyboard closed both are
+ * 0 and the form fits, so nothing moves.
+ */
+.sheet--feedback {
+  margin-bottom: var(--kb, 0px);
+  max-height: min(88%, calc(100% - var(--kb, 0px) - var(--vv-top, 0px) - 12px));
+}
+
+.sheet--feedback .sheet-actions {
+  position: sticky;
+  bottom: calc(-26px - env(safe-area-inset-bottom, 0px));
+  z-index: 1;
+  margin-bottom: calc(-26px - env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px));
+  background: #f6fbfa;
+}
+
+.sheet--feedback .feedback-form__message,
+.sheet--feedback .feedback-form__name {
+  /* The app re-reveals the focused field after the lift; keep it clear of the pinned Send. */
+  scroll-margin-bottom: 96px;
+  scroll-margin-top: 12px;
+}
+
 /* (#255) Send feedback sheet. 16px text keeps iPhone from zooming on focus. */
 .feedback-form .field-label {
   margin-top: 4px;

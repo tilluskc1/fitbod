@@ -6,7 +6,8 @@
 // #330: reopening clears a leftover Sent / Not sent line (mid-send keeps Sending…); a rejected send
 // ends as Not sent with the text kept. 390x844 and 360x780.
 // #253: Settings > About, its Send feedback round trip (draft kept, back to About), and the note box
-// with the keyboard open at 390x650.
+// with the keyboard open at 390x650. #342: Send stays in the visible band with the keyboard open, from
+// Settings, About and the recap (also after a send and with a long note), and returns when it closes.
 //
 //   npm run e2e        (builds, then runs every scripts/e2e check against the built app)
 import { execSync } from 'node:child_process';
@@ -94,9 +95,11 @@ async function about(page, settings, sheet, box, send, posts, where, context) {
   await aboutSheet.waitFor();
   await settleSheet(page);
   const text = (await aboutSheet.innerText()).replace(/\s+/g, ' ');
-  for (const line of ['Home Strength is built and run by a small independent team.', ABOUT_RECEIVE, SAFETY, 'Full list in CREDITS.md.']) {
+  for (const line of ['Home Strength is built and run by a small independent team.', ABOUT_RECEIVE, SAFETY, 'Welcome photo and video: made with AI by the Home Strength team.']) {
     check(text.includes(line), `${where}: About is missing "${line.slice(0, 40)}…"`);
   }
+  // (#343) A stranger cannot open a repo file, so About does not point at one.
+  check(!text.includes('CREDITS.md'), `${where}: About still points at CREDITS.md`);
   const overflow = await aboutSheet.evaluate((el) => [...el.querySelectorAll('*')].some((node) => node.scrollWidth > node.clientWidth + 1 && getComputedStyle(node).overflowX !== 'hidden' && node.clientWidth > 0));
   check(!overflow, `${where}: About scrolls sideways`);
   for (const button of await aboutSheet.getByRole('button').all()) {
@@ -342,12 +345,20 @@ try {
     await context.close();
   }
 
-  // (#253) 390x650 with the keyboard open on the note started from About. Chromium cannot shrink the
-  // visual viewport without the layout, so a controllable visualViewport stands in (lesson 16): the
-  // layout keeps its height and the keyboard covers the bottom 330px, unshifted and partly shifted (iPhone).
+  // (#253, #342) 390x650 with the keyboard open on the note, from Settings, About and the recap.
+  // Chromium cannot shrink the visual viewport without the layout, so a controllable visualViewport
+  // stands in (lesson 16): the layout keeps its height and the keyboard covers the bottom 330px,
+  // unshifted, partly shifted and fully shifted (iPhone). The test never scrolls for the app.
   {
     const where = '390x650-keyboard';
+    const KB = 330;
     const context = await browser.newContext({ viewport: { width: 390, height: 650 } });
+    await context.route('https://firestore.googleapis.com/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: '{"name":"projects/home-strength/databases/(default)/documents/feedback/x"}',
+    }));
     await context.addInitScript(() => {
       const real = window.visualViewport;
       const fake = new EventTarget();
@@ -362,9 +373,60 @@ try {
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', (error) => errors.push(String(error)));
+    const sheet = page.getByRole('dialog', { name: 'Send feedback' });
+    const box = sheet.getByLabel('What should we know?');
+    const send = sheet.getByRole('button', { name: 'Send', exact: true });
+    const owns = (loc) => loc.evaluate((el) => {
+      const b = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+      return Boolean(hit && (hit === el || el.contains(hit)));
+    });
+
+    /** (#342) With the note focused and the keyboard up, Send and the box sit in the visible band. */
+    async function keyboardChecks(from, typed) {
+      await settleSheet(page);
+      const closed = await send.boundingBox();
+      for (const shift of [0, 120, KB]) {
+        const tag = `${where} from ${from} (offsetTop ${shift})`;
+        const top = shift;
+        const bottom = 650 - KB + shift;
+        await box.focus();
+        await page.evaluate(([h, o]) => window.__fakeKeyboard(h, o), [650 - KB, shift]);
+        await page.waitForTimeout(80);
+        if (typed && shift === 0) await page.keyboard.type(typed);
+        const s = await send.boundingBox();
+        const b = await box.boundingBox();
+        check(s && s.y >= top && s.y + s.height <= bottom, `${tag}: Send outside the visible band (y ${s && Math.round(s.y)}-${s && Math.round(s.y + s.height)}, band ${top}-${bottom})`);
+        check(b && b.y < bottom && b.y + Math.min(b.height, 44) > top && b.y >= top, `${tag}: note box not in the visible band (y ${b && Math.round(b.y)}, band ${top}-${bottom})`);
+        check(b && s && b.y < s.y, `${tag}: note box below Send`);
+        check(await owns(send), `${tag}: Send does not own its tap`);
+        check(await owns(box), `${tag}: note box does not own its tap`);
+        if (shots && from !== 'recap') { await page.screenshot({ path: join(shots, `342-feedback-keyboard-${from}${shift ? `-shifted${shift}` : ''}-390x650.png`) }); }
+        await box.blur();
+        await page.evaluate(() => window.__fakeKeyboard(null, 0));
+        await page.waitForTimeout(80);
+        // Keyboard closed again: Send goes back where it was.
+        const back = await send.boundingBox();
+        check(closed && back && Math.abs(back.y - closed.y) < 1 && Math.abs(back.x - closed.x) < 1, `${tag}: Send did not return after the keyboard closed (was y ${closed && Math.round(closed.y)}, now ${back && Math.round(back.y)})`);
+      }
+    }
+
     await onboard(page);
+    // From Settings, with a long note that scrolls the box.
     await page.getByRole('button', { name: 'Open profile and settings' }).click();
     const settings = page.getByRole('dialog', { name: 'Training settings' });
+    const entry = settings.getByRole('button', { name: /Send feedback/ });
+    await entry.scrollIntoViewIfNeeded();
+    await entry.click();
+    await sheet.waitFor();
+    await box.fill(Array.from({ length: 30 }, (_, i) => `Line ${i + 1} of a long note about the rest timer.`).join('\n'));
+    check(await box.evaluate((el) => el.scrollHeight > el.clientHeight), `${where}: long note does not scroll the box`);
+    await keyboardChecks('settings');
+    await box.fill('');
+    await sheet.getByRole('button', { name: /Close/ }).click();
+    await settings.waitFor();
+
+    // From About.
     const row = settings.getByRole('button', { name: 'About Home Strength' });
     await row.scrollIntoViewIfNeeded();
     await row.click();
@@ -373,29 +435,34 @@ try {
     await settleSheet(page);
     if (shots) { await page.screenshot({ path: join(shots, `253-about-top-390x650.png`) }); }
     await aboutSheet.getByRole('button', { name: 'Send feedback' }).click();
-    const sheet = page.getByRole('dialog', { name: 'Send feedback' });
     await sheet.waitFor();
-    await settleSheet(page);
-    const box = sheet.getByLabel('What should we know?');
-    for (const shift of [0, 120]) {
-      const top = shift;
-      const bottom = 650 - 330 + shift;
-      await box.focus();
-      await page.evaluate(([h, o]) => window.__fakeKeyboard(h, o), [650 - 330, shift]);
-      await page.waitForTimeout(80);
-      await page.keyboard.type(shift ? '' : 'Typed with the keyboard open');
-      const b = await box.boundingBox();
-      check(b && b.y < bottom && b.y + Math.min(b.height, 44) > top, `${where} (offsetTop ${shift}): note box not in the visible band (y ${b && Math.round(b.y)}, band ${top}-${bottom})`);
-      if (shots) { await page.screenshot({ path: join(shots, `253-feedback-keyboard${shift ? '-shifted' : ''}-390x650.png`) }); }
-      await box.blur();
-      await page.evaluate(() => window.__fakeKeyboard(null, 0));
-    }
+    await keyboardChecks('about', 'Typed with the keyboard open');
     await sheet.getByRole('button', { name: /Close/ }).click();
     await aboutSheet.waitFor();
     check((await aboutSheet.isVisible()), `${where}: closing feedback did not return to About`);
     await aboutSheet.getByRole('button', { name: 'Send feedback' }).click();
     await sheet.waitFor();
     check((await box.inputValue()) === 'Typed with the keyboard open', `${where}: draft typed with the keyboard open was lost`);
+    await box.fill('');
+    await sheet.getByRole('button', { name: /Close/ }).click();
+    await aboutSheet.getByRole('button', { name: 'Done' }).click();
+    await settings.getByRole('button', { name: 'Done' }).click();
+
+    // From the recap, then the same sheet reopened after a send.
+    await finishToRecap(page);
+    const recapEntry = page.getByRole('button', { name: 'Send feedback' });
+    await recapEntry.scrollIntoViewIfNeeded();
+    await recapEntry.click();
+    await sheet.waitFor();
+    await keyboardChecks('recap', 'From the recap');
+    await send.click();
+    await sheet.getByText('Sent. Thanks.').waitFor();
+    await sheet.getByRole('button', { name: /Close/ }).click();
+    await recapEntry.click();
+    await sheet.waitFor();
+    await keyboardChecks('recap reopened after a send');
+    await sheet.getByRole('button', { name: /Close/ }).click();
+
     check(errors.length === 0, `${where}: page errors: ${errors.join(' | ')}`);
     await context.close();
   }

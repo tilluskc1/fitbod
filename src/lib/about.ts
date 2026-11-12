@@ -32,7 +32,6 @@ export const ABOUT_HOSTING = 'Like any website, the host keeps basic server logs
 export const ABOUT_CREDITS = [
   'Exercise photos: free-exercise-db (public domain).',
   'Welcome photo and video: made with AI by the Home Strength team.',
-  'Full list in CREDITS.md.',
 ] as const;
 
 /*

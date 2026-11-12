@@ -39,7 +39,6 @@ test('#253 the About copy is the product default, word for word', () => {
   assert.deepEqual(ABOUT_CREDITS, [
     'Exercise photos: free-exercise-db (public domain).',
     'Welcome photo and video: made with AI by the Home Strength team.',
-    'Full list in CREDITS.md.',
   ]);
 });
 
