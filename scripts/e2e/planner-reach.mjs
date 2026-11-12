@@ -3,6 +3,8 @@
 // at 390x844, 360x780 and 390x650 (iPhone Chrome's visible area), with and without the backup
 // reminder, and with the keyboard open on the text box. The entry also clears the dock by at least
 // 8px (#276), including right after Finish while the "Workout saved." toast shows.
+// (#279) The dock's primary label ("Preview workout", or "Resume workout" with a session running)
+// is one line high; "Short on time or gear?" keeps its whole text and a 44px target; no sideways scroll.
 // A message floats only on Today: on Train it never covers Finish or Minimize, and with a save
 // error showing, Retry and Data stay tappable.
 //
@@ -95,6 +97,42 @@ async function clearsDock(page, where) {
   check(gap && gap.entry <= gap.dock - 8, `${where}: entry bottom ${gap?.entry} not 8px above dock top ${gap?.dock}`);
 }
 
+/**
+ * (#279) The dock's primary label is one line: its text (icon left out) has one line box and a
+ * one-line-high box. The adjust action, when shown, keeps its whole text and a 44px target.
+ */
+async function dockLabels(page, where, want) {
+  const got = await page.locator('.flow-dock').evaluate((dock) => {
+    const primary = dock.querySelector('.pill-primary');
+    const text = [...primary.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim());
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    const tops = new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
+    const box = range.getBoundingClientRect();
+    const adjust = dock.querySelector('.text-action');
+    return {
+      label: text.textContent.trim(),
+      lines: tops.size,
+      height: Math.round(box.height),
+      lineHeight: parseFloat(getComputedStyle(primary).lineHeight),
+      primaryHeight: Math.round(primary.getBoundingClientRect().height),
+      adjust: adjust ? adjust.textContent.trim() : null,
+      adjustClipped: adjust ? adjust.scrollWidth > adjust.clientWidth : false,
+      adjustHeight: adjust ? Math.round(adjust.getBoundingClientRect().height) : null,
+      overflowX: document.documentElement.scrollWidth > window.innerWidth,
+    };
+  });
+  check(got.label === want, `${where}: dock primary says "${got.label}", want "${want}"`);
+  check(got.lines === 1 && got.height < got.lineHeight * 1.5, `${where}: "${got.label}" is ${got.lines} lines (${got.height}px high), want one line`);
+  check(got.primaryHeight >= 44, `${where}: dock primary ${got.primaryHeight}px tall, want 44`);
+  if (want === 'Preview workout') {
+    check(/Short on time or gear\?$/.test(got.adjust ?? ''), `${where}: adjust action reads "${got.adjust}"`);
+    check(!got.adjustClipped, `${where}: adjust action clipped`);
+    check(got.adjustHeight >= 44, `${where}: adjust action ${got.adjustHeight}px tall, want 44`);
+  }
+  check(!got.overflowX, `${where}: page scrolls sideways`);
+}
+
 async function shot(page, name) {
   if (shots) await page.screenshot({ path: join(shots, `256-${name}.png`) });
 }
@@ -183,6 +221,7 @@ try {
     page.on('pageerror', (error) => errors.push(String(error)));
     await page.clock.setFixedTime(day(0));
     await onboard(page);
+    await dockLabels(page, `${width}x${height}`, 'Preview workout');
     await walkPlanner(page, `${width}x${height}`);
 
     // With the backup reminder: one finished workout, then the next day.
@@ -199,6 +238,7 @@ try {
     await page.waitForSelector('.t7-hero');
     const reminder = await page.getByText(/back up/i).first().isVisible().catch(() => false);
     check(reminder, `${width}x${height}: backup reminder did not show after a finished workout`);
+    await dockLabels(page, `${width}x${height}-reminder`, 'Preview workout');
     await walkPlanner(page, `${width}x${height}-reminder`);
     check(errors.length === 0, `${width}x${height}: page errors: ${errors.join(' | ')}`);
     await page.close();
@@ -217,6 +257,13 @@ try {
     await train.getByRole('button', { name: 'Start workout' }).click();
     await train.waitForSelector('.lg-ex');
     await train.locator('button.lg-check:not([disabled])').first().click();
+    // (#279) A running session (no planner entry then): Today's dock shows Resume on one line.
+    await train.getByRole('button', { name: 'Minimize workout' }).click();
+    await train.waitForSelector('.t7-hero');
+    await dockLabels(train, `${width}x${height}-running`, 'Resume workout');
+    await shot(train, `${width}x${height}-running`);
+    await train.locator('.flow-dock .pill-primary').click();
+    await train.waitForSelector('.lg-ex');
     await train.locator('[aria-label^="More actions for"]').first().click();
     await train.getByRole('button', { name: "Remove today's remaining work" }).click();
     await train.getByRole('button', { name: "Remove from today's workout" }).click();

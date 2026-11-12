@@ -2190,6 +2190,8 @@ body {
   /* (#256) Short visible area: the dock's two actions share one row so the planner entry stays above it. */
   .flow-dock.flow-dock { flex-direction: row; align-items: center; gap: 8px; padding-top: 4px; padding-bottom: 8px; }
   .flow-dock.flow-dock > .pill-primary { flex: 1; }
+  /* (#279) Today's primary label stays on one line; "Short on time or gear?" takes the width left and may wrap. */
+  .today + .flow-dock > .pill-primary { white-space: nowrap; }
 }
 
 .flow-dock--edge {
