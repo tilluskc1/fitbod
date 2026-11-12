@@ -1,6 +1,5 @@
 import type { Exercise, MovementPattern, Profile } from '../types.ts';
 import { exerciseById } from '../data/exercises.ts';
-import { leadCompoundId } from './progression.ts';
 import { TRANSITION_SECONDS, WORK_SECONDS, exerciseSeconds } from './sessionTime.ts';
 
 /**
@@ -61,39 +60,67 @@ export function canPair(a: Pick<Exercise, 'muscles' | 'pattern' | 'equipment'>, 
   return !a.muscles.some((muscle) => b.muscles.includes(muscle));
 }
 
-/** An entry of a session, or a planned exercise: only its id and whether it was set aside today. */
+/** An entry of a session, or a planned exercise: its id, whether it was set aside today, and its sets. */
 export interface PairEntry {
   exerciseId: string;
   skipped?: boolean;
+  planned?: unknown[];
+  performed?: { done: boolean }[];
+  originalPlannedSets?: number;
 }
 
 /**
- * The day's pairs as index pairs `[a, b]`, a before b, always next to each other in the list. Walked
- * from the top: an exercise pairs with the one after it when both can (never the lead), else it stays
- * straight. A skipped exercise keeps its place, so its partner goes straight and nothing re-pairs.
+ * Entry `index` carries on the slot before it: a gear switch's next segment (same exercise, #188), or
+ * a swap's replacement after its done half (`swapPendingExercise`): the half is all done and short of
+ * the slot's requirement, both carry that requirement, together they hold no more sets than it, and
+ * the replacement works the same main muscle (the swap sheet only offers those).
+ */
+function continues(entries: PairEntry[], index: number): boolean {
+  const before = entries[index - 1];
+  const here = entries[index];
+  if (!before || !here) return false;
+  if (before.exerciseId === here.exerciseId) return true;
+  const required = before.originalPlannedSets;
+  const kept = before.planned?.length ?? 0;
+  return required !== undefined && here.originalPlannedSets === required && kept < required
+    && kept + (here.planned?.length ?? 0) <= required
+    && (before.performed ?? []).length > 0 && (before.performed ?? []).every((set) => set.done)
+    && exerciseById(before.exerciseId)?.muscles[0] === exerciseById(here.exerciseId)?.muscles[0];
+}
+
+const doneCount = (entry: PairEntry) => entry.performed?.filter((set) => set.done).length ?? 0;
+const hasPending = (entry: PairEntry) => (entry.performed ?? []).some((set) => !set.done);
+
+/**
+ * The day's pairs as index pairs `[a, b]`, a before b. The walk goes over slots, not entries: a split
+ * slot's later entries (`continues`) belong to its first, so a swap never moves where pairs fall. The
+ * first slot is the lead, by position (lesson 23), and never pairs, whatever now fills it. From the
+ * second slot down, a slot pairs with the next one when their exercises can; else it stays straight.
+ * Then a pair is dropped, its partner going straight from the next set, when one half was skipped or
+ * split by a swap or gear switch, or when its logged sets show it did not run as a pair (both still
+ * open, more than one set apart: a lifter who already did straight sets is not switched mid-way).
+ * On a planned day the halves of each pair sit next to each other.
  */
 export function sessionPairs(entries: PairEntry[], pairing: Pairing | null | undefined, minutes: number | undefined): [number, number][] {
   if (!pairingOn(pairing, minutes)) return [];
-  const lead = leadCompoundId(entries.map((entry) => entry.exerciseId));
-  const eligible = (index: number) => {
-    const id = entries[index]?.exerciseId;
-    return id !== undefined && id !== lead && exerciseById(id) !== undefined;
-  };
+  const slots = entries.map((_, index) => index).filter((index) => !continues(entries, index));
+  const split = (index: number) => continues(entries, index + 1);
+  const known = (index: number) => exerciseById(entries[index].exerciseId) !== undefined;
   const pairs: [number, number][] = [];
-  for (let index = 0; index + 1 < entries.length; index += 1) {
-    if (!eligible(index) || !eligible(index + 1)) continue;
-    if (!canPair(exerciseById(entries[index].exerciseId)!, exerciseById(entries[index + 1].exerciseId)!)) continue;
-    pairs.push([index, index + 1]);
-    index += 1;
+  for (let slot = 1; slot + 1 < slots.length; slot += 1) {
+    const [a, b] = [slots[slot], slots[slot + 1]];
+    if (!known(a) || !known(b) || !canPair(exerciseById(entries[a].exerciseId)!, exerciseById(entries[b].exerciseId)!)) continue;
+    pairs.push([a, b]);
+    slot += 1;
   }
-  return pairs.filter(([a, b]) => !entries[a].skipped && !entries[b].skipped);
+  return pairs.filter(([a, b]) => !entries[a].skipped && !entries[b].skipped && !split(a) && !split(b)
+    && !(hasPending(entries[a]) && hasPending(entries[b]) && Math.abs(doneCount(entries[a]) - doneCount(entries[b])) > 1));
 }
 
 /**
- * The generator's order with more pairs side by side (#88): walking the day top down, an exercise that
- * cannot pair with the one after it takes the first later one it can pair with, but only from its own
- * group (`movable`), so the day keeps its order of roles (#133). `sessionPairs` on the result finds
- * the pairs this built, and any others already side by side.
+ * The generator's order with more pairs side by side (#88): walking the day top down as `sessionPairs`
+ * does, an exercise that cannot pair with the one after it takes the first later one it can pair with,
+ * but only from its own group (`movable`), so the day keeps its order of roles (#133).
  */
 export function pairOrder<T extends PairEntry>(
   entries: T[],
@@ -103,13 +130,13 @@ export function pairOrder<T extends PairEntry>(
   movable: (entry: T, later: T) => boolean,
 ): T[] {
   if (!pairingOn(pairing, minutes)) return entries;
-  const lead = leadCompoundId(entries.map((entry) => entry.exerciseId));
+  // A planned day has no split slots, so each entry is a slot; the first is the lead.
   const out = [...entries];
-  const eligible = (entry: T) => entry.exerciseId !== lead && exerciseById(entry.exerciseId) !== undefined;
-  for (let index = 0; index + 1 < out.length; index += 1) {
-    if (!eligible(out[index])) continue;
+  const known = (entry: T) => exerciseById(entry.exerciseId) !== undefined;
+  for (let index = 1; index + 1 < out.length; index += 1) {
+    if (!known(out[index])) continue;
     const first = exerciseById(out[index].exerciseId)!;
-    const fits = (entry: T) => eligible(entry) && canPair(first, exerciseById(entry.exerciseId)!);
+    const fits = (entry: T) => exerciseById(entry.exerciseId) !== undefined && canPair(first, exerciseById(entry.exerciseId)!);
     if (fits(out[index + 1])) { index += 1; continue; }
     const partner = out.findIndex((entry, other) => other > index + 1 && movable(out[index], entry) && fits(entry));
     if (partner < 0) continue;

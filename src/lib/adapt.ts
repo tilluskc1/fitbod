@@ -203,7 +203,9 @@ export interface DayGlance {
  * View session, Coach, the switch and gym sheets and the review (#203).
  * Minutes are the work's own time, with the rests the timer will run for this goal and length.
  * A running session is priced from itself alone (its exercises, planned sets and the length it
- * was started at), so Start, a later settings change or a new slot cannot move it (#200).
+ * was started at), so Start, a later settings change or a new slot cannot move it (#200). One exception
+ * (#88): supersets are read live, so turning the toggle or the level changes them, and these minutes, from
+ * the next set on.
  */
 export function todayGlance(adapted: AdaptedWorkout, current: WorkoutRecord | null, overridden = false, goal?: Goal, pairing?: Pairing | null): DayGlance {
   const asked = current ? current.durationMin : adapted.minutes;

@@ -96,6 +96,8 @@ try {
     await page.clock.setFixedTime(MONDAY);
     await onboard(page, unit);
 
+    // Today's hero names the day's minutes; the preview must name the same figure (lesson 12).
+    const hero = Number((await page.locator('section.t7-hero').getAttribute('aria-label'))?.match(/(\d+) minutes$/)?.[1]);
     // 1. Preview: the pair in one bracket, the minutes within the 45 asked.
     await page.getByRole('button', { name: 'Preview workout' }).click();
     const sheet = page.getByRole('dialog').filter({ hasText: 'Start workout' });
@@ -107,6 +109,7 @@ try {
       `${where}: preview bracket reads "${groupText}"`);
     const minutes = Number((await sheet.locator('.sheet-copy').innerText()).match(/(\d+) min/)?.[1]);
     check(minutes > 0 && minutes <= 45, `${where}: preview promises ${minutes} min for a 45 min day`);
+    check(minutes === hero, `${where}: preview reads ${minutes} min, Today ${hero} min`);
     if (size !== '390x650') await shot(page, `88-preview-${size}.png`);
     await sheet.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');

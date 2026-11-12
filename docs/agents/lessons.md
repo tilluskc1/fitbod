@@ -215,6 +215,13 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: run the "fails on old code" check against the named base SHA (`git show <base>:<file>`), never
    a local branch name. Check: the issue comment names the SHA the e2e failed on.
 
+33. **A derived grouping walks slots, not entries.** #88 review 1: pairs were derived by walking the
+   session's entries top down, so a swap (which splits a slot into a done half and a replacement) or a
+   lead swapped to a fly moved where every later pair fell: 563 of 4,553 swap-sheet swaps re-paired
+   exercises nobody touched. Rule: when grouping is derived from the list (no stored id), walk slots (a
+   split's entries are one slot, the lead is slot 0 by position), and let a change drop only its own
+   group. Check: the "review 1" sweep in `tests/supersets88.test.ts` (every swap-sheet option at every slot).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
