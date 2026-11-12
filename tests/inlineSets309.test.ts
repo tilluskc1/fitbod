@@ -29,7 +29,7 @@ async function withTrain(run: (render: Render) => void) {
   try {
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     run((session, extra = {}) => renderToStaticMarkup(createElement(Train, { session, history: [], now: Date.parse(at(1)),
-      loadOptions: [], calibrationLoads: [], unit: 'lb', experience: 'Beginner', onMinimize: noop, onFinish: noop,
+      rampLoads: [], calibrationLoads: [], unit: 'lb', experience: 'Beginner', onMinimize: noop, onFinish: noop,
       onUpdateSet: noop, onLogSet: noop, onToggleRestPause: noop, onExtendRest: noop, onOpenActions: noop, onReturn: noop, ...extra })));
   } finally { await server.close(); }
 }

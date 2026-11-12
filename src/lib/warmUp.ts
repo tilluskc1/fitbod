@@ -71,6 +71,17 @@ export function rampSets(args: { equipment: Equipment; working: number; unit: Un
   });
 }
 
+/**
+ * (#326) The load the ramp rows read: the one set 1 shows, its typed load or else the muted suggested
+ * start a first-time lift shows. While set 1's weight is being typed, the value it showed when that
+ * burst began (lesson 26), so a half-typed "1" on the way to 140 never adds or removes rows.
+ */
+export function rampWorking(args: { setOneKg: number; suggestedKg: number | null; burstStartKg?: number | null }): number {
+  if (args.burstStartKg !== undefined && args.burstStartKg !== null) return args.burstStartKg;
+  if (args.setOneKg > 0) return args.setOneKg;
+  return args.suggestedKg !== null && args.suggestedKg > 0 ? args.suggestedKg : 0;
+}
+
 /** The listed load closest to `kg`, the lighter on a tie. */
 function nearest(loads: number[], kg: number): number {
   return [...loads].sort((a, b) => Math.abs(a - kg) - Math.abs(b - kg) || a - b)[0];

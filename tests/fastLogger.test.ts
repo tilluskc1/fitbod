@@ -31,7 +31,7 @@ async function withTrain(run: (render: Render) => void) {
   try {
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     run((session, extra = {}) => renderToStaticMarkup(createElement(Train, { session, history: [], now: Date.parse(at(1)),
-      loadOptions: RACK, calibrationLoads: RACK, profileLoads: { Dumbbell: RACK }, unit: 'kg', onMinimize: noop,
+      rampLoads: RACK, calibrationLoads: RACK, profileLoads: { Dumbbell: RACK }, unit: 'kg', onMinimize: noop,
       onFinish: noop, onUpdateSet: noop, onConfirmWeight: noop, onLogSet: noop, onToggleRestPause: noop,
       onExtendRest: noop, onOpenActions: noop, onReturn: noop, ...extra })));
   } finally { await server.close(); }
@@ -106,13 +106,13 @@ test('#80: switching exercise through a skip or a swap never shows the previous 
   ] });
   for (const set of day.exercises[0].performed) set.weight = 42.3;
   await withTrain((render) => {
-    const row = render(day, { loadOptions: [], calibrationLoads: [], profileLoads: {} });
+    const row = render(day, { rampLoads: [], calibrationLoads: [], profileLoads: {} });
     assert.equal(cell(row, 'Set 1 weight, kilograms'), '42.3');
     assert.match(row, /id="barbell-row:0:0:weight"/, 'rows are keyed by exercise, segment and set');
 
     // Skip: the press is calibrating; its typed entry is its own, empty, and keyed to it.
     const skipped = skipExercise(day, 0);
-    const press = render(skipped, { loadOptions: [], calibrationLoads: [], profileLoads: {} });
+    const press = render(skipped, { rampLoads: [], calibrationLoads: [], profileLoads: {} });
     // #309: the typed first-weight field is gone; the press's own set cells are empty and keyed to it.
     assert.match(press, /id="overhead-press:1:0:weight"/);
     assert.equal(cell(press, 'Set 1 weight, kilograms'), '');
@@ -121,7 +121,7 @@ test('#80: switching exercise through a skip or a swap never shows the previous 
     // Swap the press for a bench press with its own 30 kg: new key, its own value.
     const swapped = swapPendingExercise(skipped, 1,
       { exerciseId: 'barbell-bench-press', name: 'Barbell Bench Press', weight: 30, reps: 8 });
-    const bench = render(swapped, { loadOptions: [], calibrationLoads: [], profileLoads: {} });
+    const bench = render(swapped, { rampLoads: [], calibrationLoads: [], profileLoads: {} });
     assert.match(bench, /id="barbell-bench-press:1:0:weight"/);
     assert.equal(cell(bench, 'Set 1 weight, kilograms'), '30');
     assert.doesNotMatch(bench, /overhead-press:1|42\.3/);
@@ -134,7 +134,7 @@ test('Mute reads Muted while pressed, and Up next skips set-aside or finished wo
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
     const { setRestMuted } = await server.ssrLoadModule('/src/lib/restCue.ts');
     const render = (session: WorkoutRecord) => renderToStaticMarkup(createElement(Train, { session, history: [],
-      now: Date.parse(at(1)), loadOptions: RACK, unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop,
+      now: Date.parse(at(1)), rampLoads: RACK, unit: 'kg', onMinimize: noop, onFinish: noop, onUpdateSet: noop,
       onLogSet: noop, onToggleRestPause: noop, onExtendRest: noop, onOpenActions: noop, onReturn: noop }));
     const rested = logSet(pressDay(), 0, 0, at(1));
     assert.match(render(rested), /<button aria-pressed="false" aria-label="Mute rest cue">Mute</);

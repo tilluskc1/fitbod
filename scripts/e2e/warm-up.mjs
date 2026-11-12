@@ -140,6 +140,8 @@ try {
     await setOne.click();
     await setOne.press('Control+a');
     await setOne.pressSequentially('80');
+    // #326: the rows hold set 1's start-of-burst load while it is typed and follow it on blur.
+    await setOne.press('Enter');
     const edited = (await page.locator('tr.lg-row--warm td:nth-child(3)').allInnerTexts()).map(number);
     check(edited.join() === `${step(40)},${step(60)}`, `${where}: ramps follow the typed 80 kg (${edited})`);
     if (SHOTS) await page.screenshot({ path: join(SHOTS, `warm-up-edit-${width}x${height}.png`) });
