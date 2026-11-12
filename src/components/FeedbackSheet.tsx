@@ -21,13 +21,14 @@ interface Props {
 /**
  * (#255) Send feedback: one required box, an optional name, a dark Send pill. While a note is on
  * its way both fields are read-only and Send is off, so nothing typed is lost and nothing posts twice.
+ * (#342) With a phone keyboard open the sheet sits on top of it and Send stays in view (index.css).
  */
 export default function FeedbackSheet({ draft, status, onDraft, onSend, onClose }: Props) {
   const sending = status === 'sending';
   const canSend = draft.message.trim().length > 0 && !sending;
 
   return (
-    <Sheet title="Send feedback" onClose={onClose}>
+    <Sheet title="Send feedback" onClose={onClose} variant="feedback">
       <form
         className="feedback-form"
         onSubmit={(event) => {
