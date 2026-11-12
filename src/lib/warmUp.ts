@@ -25,6 +25,9 @@ export const RAMP_STEPS: readonly { share: number; reps: number }[] = [
 /** The empty bar, by display unit: the floor for barbell ramps. */
 const BAR: Record<Unit, number> = { kg: 20, lb: 45 };
 
+/** (#345) Below this working load, in the display unit, the lift is its own warm-up: no ramp rows. */
+export const RAMP_FLOOR: Record<Unit, number> = { kg: 15, lb: 30 };
+
 /** Plate steps by display unit, for kit with no listed loads. */
 const STEPS: Record<Unit, Partial<Record<Equipment, number>>> = {
   kg: { Barbell: 2.5, Dumbbell: 2.5, Kettlebell: 4, Machine: 5, Cable: 2.5 },
@@ -43,11 +46,13 @@ const EPSILON = 0.001;
  * Ramp sets for a working load, rounded to the kit's load steps: a listed rack's own loads,
  * otherwise plate steps in the lifter's unit. Rounding never goes past the working load; the
  * empty bar is the floor for a barbell and the lightest load for anything else. None when the
- * working load is at or below that floor, or the lift carries no load.
+ * working load is at or below that floor, under `RAMP_FLOOR` in the lifter's unit (#345), or the lift
+ * carries no load.
  */
 export function rampSets(args: { equipment: Equipment; working: number; unit: Unit; rack?: number[] }): RampSet[] {
   const { equipment, working, unit } = args;
   if (equipment === 'Bodyweight' || !(working > 0)) return [];
+  if (toDisplay(working, unit) < RAMP_FLOOR[unit] - EPSILON) return [];
   const rack = (args.rack ?? []).filter((load) => Number.isFinite(load) && load > 0).sort((a, b) => a - b);
   if (rack.length > 0 && equipment !== 'Barbell') {
     if (working <= rack[0] + EPSILON) return [];

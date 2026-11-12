@@ -77,7 +77,9 @@ test('dumbbells ramp from the rack: none at the lightest, never above the workin
   const rack = [5, 7.5, 10, 12.5, 15, 17.5, 20];
   assert.deepEqual(rampSets({ equipment: 'Dumbbell', working: 5, unit: 'kg', rack }), []);
   assert.deepEqual(rampSets({ equipment: 'Dumbbell', working: 20, unit: 'kg', rack }).map((set) => set.weight), [10, 15]);
-  assert.deepEqual(rampSets({ equipment: 'Dumbbell', working: 7.5, unit: 'kg', rack }).map((set) => set.weight), [5, 5]);
+  // Under the #345 floor (15 kg): none, even with lighter dumbbells on the rack.
+  assert.deepEqual(rampSets({ equipment: 'Dumbbell', working: 7.5, unit: 'kg', rack }), []);
+  assert.deepEqual(rampSets({ equipment: 'Dumbbell', working: 15, unit: 'kg', rack }).map((set) => set.weight), [7.5, 10]);
   // No listed rack: the step is the lightest dumbbell.
   assert.deepEqual(rampSets({ equipment: 'Dumbbell', working: 2.5, unit: 'kg' }), []);
   // Travel today-only kit: the hotel rack's own loads.
