@@ -224,8 +224,106 @@ try {
     await page.locator('.install-note').evaluate((n) => n.scrollIntoView({ block: 'center' }));
     await shot(page, 'heads-up', where);
 
+    // (#332) Only a Done already showing when a Problem appears goes. One raised while the Problem
+    // stands shows as usual, below the card.
+    await page.waitForTimeout(4300); // "Workout saved." has passed
+    await page.evaluate(() => { window.__failSaves = true; });
+    await page.locator('.t7-controls .t7-pill').first().click();
+    await page.getByRole('button', { name: /^45 min/ }).click();
+    const problemCard = page.locator('.app-alerts .notice-card--problem');
+    await problemCard.waitFor({ timeout: 3000 }).catch(() => {});
+    check(await problemCard.count() === 1, `${where} (#332): no Problem card after a failed save on Today`);
+    check(!(await toast.count()), `${where} (#332): the Done showing when the save failed stayed beside the card`);
+    // Raised after: export from the card's own Data button; "Backup downloaded." shows, the card stays.
+    await problemCard.getByRole('button', { name: 'Data' }).click();
+    const downloaded = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export JSON backup' }).click();
+    await downloaded;
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await toast.waitFor({ timeout: 3000 }).catch(() => {});
+    const exported = (await toast.innerText().catch(() => '')).trim();
+    check(exported === 'Backup downloaded.', `${where} (#332): export under a save error shows "${exported}", not "Backup downloaded."`);
+    check(await problemCard.count() === 1, `${where} (#332): the Problem card left when the export toast showed`);
+    const pill = page.locator(`${TOAST} .done-toast__pill`);
+    const [cardBox, pillBox] = await toast.count() ? [await problemCard.boundingBox(), await pill.boundingBox()] : [null, null];
+    check(!cardBox || !pillBox || pillBox.y >= cardBox.y + cardBox.height, `${where} (#332): the toast is not below the Problem card`);
+    if (shots) {
+      await settle(page);
+      await page.waitForTimeout(250);
+      await page.screenshot({ path: join(shots, `332-export-${where}.png`) });
+    }
+    // Raised after: a carry's Undo is reachable while the save error stands.
+    await page.waitForTimeout(4300);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForSelector('.lg-ex');
+    const set1 = page.getByLabel(/^Set 1 weight/);
+    const before = await page.getByLabel(/^Set 2 weight/).inputValue();
+    await set1.click();
+    await set1.fill('');
+    await set1.pressSequentially(String(Number(before) + 5));
+    await set1.blur();
+    await toast.waitFor({ timeout: 3000 }).catch(() => {});
+    const undo = page.locator(TOAST).getByRole('button', { name: 'Undo' });
+    check(await undo.count() === 1, `${where} (#332): a carry under a save error has no Undo toast`);
+    check(await problemCard.count() === 1, `${where} (#332): the Problem card left when the carry toast showed`);
+    if (await undo.count()) {
+      await tapLands(page, undo, 'Undo', `${where} (#332)`);
+      await undo.click();
+      check(await page.getByLabel(/^Set 2 weight/).inputValue() === before, `${where} (#332): Undo did not put set 2 back to ${before}`);
+    }
+    await page.evaluate(() => { window.__failSaves = false; });
+    await problemCard.getByRole('button', { name: 'Retry' }).click();
+
     check(errors.length === 0, `${where}: page errors: ${errors.join(' | ')}`);
     await page.close();
+  }
+
+  // (#332) Same rules when the Problem is a tab conflict. Two pages in one context share storage; a
+  // tab with a failed save that sees another tab's newer write gets the conflict card.
+  {
+    const where = '390x844 conflict';
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: SAFARI });
+    await context.addInitScript(() => {
+      const setItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (window.__failSaves && key === 'fitbod-clone-v1') throw new Error('blocked');
+        return setItem.call(this, key, value);
+      };
+    });
+    const a = await context.newPage();
+    await onboard(a);
+    const b = await context.newPage();
+    await b.goto(url);
+    await b.waitForSelector('.t7-hero');
+    const exportFrom = async (page) => {
+      await page.getByRole('button', { name: 'Open profile and settings' }).click();
+      const downloaded = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Export JSON backup' }).click();
+      await downloaded;
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await page.locator(TOAST).waitFor({ timeout: 3000 }).catch(() => {});
+      return (await page.locator(TOAST).innerText().catch(() => '')).trim();
+    };
+    await a.bringToFront();
+    await a.evaluate(() => { window.__failSaves = true; });
+    await a.locator('.t7-controls .t7-pill').first().click();
+    await a.getByRole('button', { name: /^45 min/ }).click();
+    await a.locator('.app-alerts .notice-card--problem').waitFor({ timeout: 3000 }).catch(() => {});
+    await a.waitForTimeout(4300);
+    // A Done showing under "Not saved." when the conflict appears: it goes.
+    const first = await exportFrom(a);
+    check(first === 'Backup downloaded.', `${where}: export under a save error shows "${first}"`);
+    await b.locator('.t7-controls .t7-pill').first().click();
+    await b.getByRole('button', { name: /^30 min/ }).click();
+    const conflictCard = a.locator('.app-alerts .notice-card--problem', { hasText: 'Newer data in another tab.' });
+    await conflictCard.waitFor({ timeout: 3000 }).catch(() => {});
+    check(await conflictCard.count() === 1, `${where}: no conflict card after another tab saved`);
+    check(!(await a.locator(TOAST).count()), `${where}: the Done showing when the conflict appeared stayed beside the card`);
+    // Raised after: an export under the conflict shows its toast; the card stays.
+    const second = await exportFrom(a);
+    check(second === 'Backup downloaded.', `${where}: export under a conflict shows "${second}", not "Backup downloaded."`);
+    check(await conflictCard.count() === 1, `${where}: the conflict card left when the export toast showed`);
+    await context.close();
   }
 } finally {
   await browser.close();

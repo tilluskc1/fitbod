@@ -420,12 +420,23 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
   // (#295) Only a Done toast passes on its own, 4 s from when it shows; one fired during a sheet
   // waits for the sheet to close. Heads-up and Problem cards wait for the user.
-  const problemUp = saveUi.kind === 'error' || conflict !== null;
-  const toastUp = toastShows(notice, sheet.kind !== 'none') && !problemUp;
-  // A Problem while a toast shows: the toast goes, the Problem stays (#295). Finish's partial-save
-  // Heads-up (#333) says the sets were saved, which a failed save makes untrue, so it goes too.
+  const saveFailed = saveUi.kind === 'error';
+  const problemUp = saveFailed || conflict !== null;
+  // (#332) A Problem appearing clears the Done showing at that moment: the toast goes, the Problem
+  // stays (#295). A Done raised while a Problem is already up (an export, an Undo-able carry) shows
+  // as usual, below the card. "Appears" is per source: a failed save, then a tab conflict. Adjusted
+  // while rendering, so a cleared toast never paints beside the card.
+  const [problemWas, setProblemWas] = useState({ saveFailed, conflict });
+  if (problemWas.saveFailed !== saveFailed || problemWas.conflict !== conflict) {
+    setProblemWas({ saveFailed, conflict });
+    const appeared = (saveFailed && !problemWas.saveFailed) || (conflict !== null && problemWas.conflict === null);
+    if (appeared && notice?.kind === 'done') setNotice(null);
+  }
+  const toastUp = toastShows(notice, sheet.kind !== 'none');
+  // Finish's partial-save Heads-up (#333) says the sets were saved, which a failed save makes untrue,
+  // so it goes whenever a Problem is up.
   useEffect(() => {
-    if (problemUp && notice && (notice.kind === 'done' || PARTIAL_SAVE.test(notice.text))) setNotice(null);
+    if (problemUp && notice && PARTIAL_SAVE.test(notice.text)) setNotice(null);
   }, [problemUp, notice]);
   useEffect(() => {
     if (!toastUp) return;
@@ -1771,7 +1782,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         <DoneToast
           notice={notice}
           screen={screen}
-          top={onToday}
+          top={onToday && !problemUp}
           action={liveCarry !== null && liveCarry.message === notice.text ? { label: 'Undo', onClick: undoLastCarry } : undefined}
         />
       )}
