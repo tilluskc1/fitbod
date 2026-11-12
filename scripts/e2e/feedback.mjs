@@ -5,6 +5,8 @@
 // Checks the posted body: rule field names, screen, workout count, one tester ID kept per phone.
 // #330: reopening clears a leftover Sent / Not sent line (mid-send keeps Sending…); a rejected send
 // ends as Not sent with the text kept. 390x844 and 360x780.
+// #253: Settings > About, its Send feedback round trip (draft kept, back to About), and the note box
+// with the keyboard open at 390x650.
 //
 //   npm run e2e        (builds, then runs every scripts/e2e check against the built app)
 import { execSync } from 'node:child_process';
@@ -67,6 +69,86 @@ async function finishToRecap(page) {
 
 /** Lets the sheet's rise animation settle before a screenshot. */
 const settle = (page) => page.waitForTimeout(450);
+
+const ABOUT_RECEIVE = 'Only what you choose to send. A feedback note sends your message, your name if you add one, the screen you were on, your phone type, the app version, how many workouts you have logged, and a random ID that is the same for every note from this phone. Your workout details are never sent.';
+const SAFETY = 'Strength training carries risk. Start light. Stop if something hurts, and check with a doctor first if you have an injury or a health condition.';
+
+/** Waits for the open sheet's rise to finish (lesson 29), then one more frame. */
+async function settleSheet(page) {
+  await page.waitForFunction(() => {
+    const sheet = document.querySelector('[role="dialog"]');
+    return sheet && sheet.getAnimations({ subtree: true }).every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity);
+  });
+  await page.waitForTimeout(100);
+}
+
+/** (#253) The About sheet, reached from Settings, and the Send feedback round trip. */
+async function about(page, settings, sheet, box, send, posts, where, context) {
+  const row = settings.getByRole('button', { name: 'About Home Strength' });
+  await row.scrollIntoViewIfNeeded();
+  const rowBox = await row.boundingBox();
+  check(rowBox && rowBox.height >= 44, `${where}: About row is ${rowBox?.height}px tall`);
+  if (shots) { await settleSheet(page); await page.screenshot({ path: join(shots, `253-settings-about-row-${where}.png`) }); }
+  await row.click();
+  const aboutSheet = page.getByRole('dialog', { name: 'About Home Strength' });
+  await aboutSheet.waitFor();
+  await settleSheet(page);
+  const text = (await aboutSheet.innerText()).replace(/\s+/g, ' ');
+  for (const line of ['Home Strength is built and run by a small independent team.', ABOUT_RECEIVE, SAFETY, 'Full list in CREDITS.md.']) {
+    check(text.includes(line), `${where}: About is missing "${line.slice(0, 40)}…"`);
+  }
+  const overflow = await aboutSheet.evaluate((el) => [...el.querySelectorAll('*')].some((node) => node.scrollWidth > node.clientWidth + 1 && getComputedStyle(node).overflowX !== 'hidden' && node.clientWidth > 0));
+  check(!overflow, `${where}: About scrolls sideways`);
+  for (const button of await aboutSheet.getByRole('button').all()) {
+    const b = await button.boundingBox();
+    check(b && b.height >= 44 && b.width >= 44, `${where}: About button "${await button.getAttribute('aria-label') ?? await button.innerText()}" is ${b?.width}x${b?.height}`);
+  }
+  if (shots) {
+    await page.screenshot({ path: join(shots, `253-about-top-${where}.png`) });
+    // Whichever box scrolls inside the sheet goes to its end, so Credits and Done show.
+    await aboutSheet.evaluate((el) => {
+      for (const node of [el, ...el.querySelectorAll('*')]) {
+        if (node.scrollHeight > node.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(node).overflowY)) node.scrollTop = node.scrollHeight;
+      }
+    });
+    await page.waitForTimeout(100);
+    await page.screenshot({ path: join(shots, `253-about-bottom-${where}.png`) });
+  }
+
+  // Send feedback from About: the draft written there survives a close and reopen, and offline
+  // shows the feedback sheet's own Not sent line. Each close comes back to About, not Settings.
+  const before = posts.length;
+  await aboutSheet.getByRole('button', { name: 'Send feedback' }).click();
+  await sheet.waitFor();
+  await box.fill('Written from About');
+  await sheet.getByRole('button', { name: /Close/ }).click();
+  await aboutSheet.waitFor();
+  check(!(await settings.count()), `${where}: closing feedback from About went to Settings`);
+  await aboutSheet.getByRole('button', { name: 'Send feedback' }).click();
+  await sheet.waitFor();
+  check((await box.inputValue()) === 'Written from About', `${where}: draft lost between About and feedback`);
+  await context.setOffline(true);
+  await send.click();
+  await sheet.getByText(NOT_SENT).waitFor();
+  check(posts.length === before, `${where}: offline send from About posted`);
+  await context.setOffline(false);
+  await sheet.getByRole('button', { name: /Close/ }).click();
+  await aboutSheet.waitFor();
+  check((await aboutSheet.innerText()).includes('What we receive'), `${where}: About not shown after closing feedback`);
+  await aboutSheet.getByRole('button', { name: 'Done' }).click();
+  await settings.waitFor();
+  check(!(await aboutSheet.count()), `${where}: About still open after Done`);
+  // Settings opened again later starts on Settings, not About.
+  await settings.getByRole('button', { name: 'Done' }).click();
+  await page.getByRole('button', { name: 'Open profile and settings' }).click();
+  await settings.waitFor();
+  check(!(await aboutSheet.count()), `${where}: Settings reopened on About`);
+  await settings.getByRole('button', { name: /Send feedback/ }).click();
+  await sheet.waitFor();
+  await box.fill('');
+  await sheet.getByRole('button', { name: /Close/ }).click();
+  await settings.waitFor();
+}
 
 const browser = await chromium.launch();
 try {
@@ -222,6 +304,11 @@ try {
     check(posts.at(-1)?.fields?.message?.stringValue === 'A newer note', `${where}: send after a rejected one posted the wrong note`);
     await box.fill('');
     await sheet.getByRole('button', { name: /Close/ }).click();
+
+    // 5d. (#253) Settings > About: one tap from Settings, Send feedback inside it opens the same
+    // sheet with the draft kept, and closing it comes back to About; Done goes back to Settings.
+    await about(page, settings, sheet, box, send, posts, where, context);
+
     await settings.getByRole('button', { name: 'Done' }).click();
 
     // 6. The recap after a workout has the entry; its note says recap and counts the workout.
@@ -254,6 +341,64 @@ try {
     check(errors.length === 0, `${where}: page errors: ${errors.join(' | ')}`);
     await context.close();
   }
+
+  // (#253) 390x650 with the keyboard open on the note started from About. Chromium cannot shrink the
+  // visual viewport without the layout, so a controllable visualViewport stands in (lesson 16): the
+  // layout keeps its height and the keyboard covers the bottom 330px, unshifted and partly shifted (iPhone).
+  {
+    const where = '390x650-keyboard';
+    const context = await browser.newContext({ viewport: { width: 390, height: 650 } });
+    await context.addInitScript(() => {
+      const real = window.visualViewport;
+      const fake = new EventTarget();
+      let covered = null;
+      let shifted = 0;
+      Object.defineProperty(fake, 'height', { get: () => covered ?? window.innerHeight });
+      Object.defineProperty(fake, 'offsetTop', { get: () => shifted });
+      Object.defineProperty(fake, 'width', { get: () => real?.width ?? window.innerWidth });
+      Object.defineProperty(window, 'visualViewport', { get: () => fake });
+      window.__fakeKeyboard = (visible, offsetTop = 0) => { covered = visible; shifted = offsetTop; fake.dispatchEvent(new Event('resize')); };
+    });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(String(error)));
+    await onboard(page);
+    await page.getByRole('button', { name: 'Open profile and settings' }).click();
+    const settings = page.getByRole('dialog', { name: 'Training settings' });
+    const row = settings.getByRole('button', { name: 'About Home Strength' });
+    await row.scrollIntoViewIfNeeded();
+    await row.click();
+    const aboutSheet = page.getByRole('dialog', { name: 'About Home Strength' });
+    await aboutSheet.waitFor();
+    await settleSheet(page);
+    if (shots) { await page.screenshot({ path: join(shots, `253-about-top-390x650.png`) }); }
+    await aboutSheet.getByRole('button', { name: 'Send feedback' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Send feedback' });
+    await sheet.waitFor();
+    await settleSheet(page);
+    const box = sheet.getByLabel('What should we know?');
+    for (const shift of [0, 120]) {
+      const top = shift;
+      const bottom = 650 - 330 + shift;
+      await box.focus();
+      await page.evaluate(([h, o]) => window.__fakeKeyboard(h, o), [650 - 330, shift]);
+      await page.waitForTimeout(80);
+      await page.keyboard.type(shift ? '' : 'Typed with the keyboard open');
+      const b = await box.boundingBox();
+      check(b && b.y < bottom && b.y + Math.min(b.height, 44) > top, `${where} (offsetTop ${shift}): note box not in the visible band (y ${b && Math.round(b.y)}, band ${top}-${bottom})`);
+      if (shots) { await page.screenshot({ path: join(shots, `253-feedback-keyboard${shift ? '-shifted' : ''}-390x650.png`) }); }
+      await box.blur();
+      await page.evaluate(() => window.__fakeKeyboard(null, 0));
+    }
+    await sheet.getByRole('button', { name: /Close/ }).click();
+    await aboutSheet.waitFor();
+    check((await aboutSheet.isVisible()), `${where}: closing feedback did not return to About`);
+    await aboutSheet.getByRole('button', { name: 'Send feedback' }).click();
+    await sheet.waitFor();
+    check((await box.inputValue()) === 'Typed with the keyboard open', `${where}: draft typed with the keyboard open was lost`);
+    check(errors.length === 0, `${where}: page errors: ${errors.join(' | ')}`);
+    await context.close();
+  }
 } finally {
   await browser.close();
   await server.httpServer.close();
@@ -263,4 +408,4 @@ if (failures.length) {
   console.error(`feedback: ${failures.length} failure(s)\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('feedback: Settings and recap send, offline and refused keep the text, body matches the rules, 390x844 and 360x780');
+console.log('feedback: Settings, About and recap send, offline and refused keep the text, body matches the rules, About returns after feedback, 390x844, 360x780 and 390x650 keyboard');

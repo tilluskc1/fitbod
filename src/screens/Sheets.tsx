@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
 import { calibrationInputValue, dumbbellLoadsPatch, formatWeight, loadLimitMessage, loadsInputText, overLoadLimit, parseLoads, toKg, unitLabel, unitOf } from '../lib/units';
@@ -36,6 +36,8 @@ import { currentDevice, installGuide, installSteps, type InstallGuide } from '..
 import { START_OVER_BLOCKED } from '../lib/storage';
 import { lastBackupLine, startOverBackupNote } from '../lib/backup';
 import { SAFETY_NOTICE } from '../lib/safety';
+import { clearReturnToAbout, markReturnToAbout, returnsToAbout } from '../lib/about';
+import AboutSheet from './AboutSheet';
 
 /* ---------------- Adjust today ---------------- */
 
@@ -1128,6 +1130,9 @@ export function SettingsSheet({
   const [textUnit, setTextUnit] = useState(unit);
   const [loadsRefused, setLoadsRefused] = useState(false);
   const minutes = profile.sessionMinutes ?? 35;
+  // (#253) About opens over Settings in place; back from Send feedback it opens again (lib/about).
+  const [aboutOpen, setAboutOpen] = useState(returnsToAbout);
+  useEffect(() => clearReturnToAbout(), []);
 
   // The text is in textUnit; on a unit switch, re-read the stored kg instead of converting the typed text.
   if (textUnit !== unit) {
@@ -1165,6 +1170,21 @@ export function SettingsSheet({
       ))}
     </div>
   );
+
+  if (aboutOpen) {
+    return (
+      <AboutSheet
+        onFeedback={
+          onFeedback &&
+          (() => {
+            markReturnToAbout();
+            onFeedback();
+          })
+        }
+        onClose={() => setAboutOpen(false)}
+      />
+    );
+  }
 
   return (
     <Sheet title="Training settings" onClose={onClose} variant="settings">
@@ -1350,6 +1370,9 @@ export function SettingsSheet({
           </h3>
           <div className="settings-card">
             <p className="settings-row settings-row__note">{SAFETY_NOTICE}</p>
+            <button className="settings-row settings-row--action" onClick={() => setAboutOpen(true)}>
+              About Home Strength
+            </button>
           </div>
         </section>
 
