@@ -116,11 +116,17 @@ export function fitSets(
     minCount = 1,
     leadFloor = 2,
     twoPresses = false,
-  }: { cap?: number; minCount?: number; leadFloor?: number; twoPresses?: boolean } = {},
+    secondsOf,
+  }: {
+    cap?: number; minCount?: number; leadFloor?: number; twoPresses?: boolean;
+    /** The day's seconds for these set counts, when it is not the straight-set sum (supersets, #88). */
+    secondsOf?: (sets: number[]) => number;
+  } = {},
 ): number[] {
   const most = items.map((item) => Math.min(item.sets, cap));
   const sets = [...most];
-  const seconds = () => sessionSeconds(items.map((item, index) => ({ sets: sets[index], rest: item.rest })), warmUp);
+  const seconds = () => secondsOf ? secondsOf(sets)
+    : sessionSeconds(items.map((item, index) => ({ sets: sets[index], rest: item.rest })), warmUp);
   const floor = (item: FitItem) => (item.hold ? 1 : item.lead ? leadFloor : 2);
   if (seconds() > budget) items.forEach((item, index) => { sets[index] = Math.min(sets[index], floor(item)); });
   for (const index of dropOrder) {

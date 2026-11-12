@@ -185,6 +185,8 @@ function validateProfile(value: unknown, path: string): Profile {
         ? undefined
         : integer(raw.sessionMinutes, `${path}.sessionMinutes`, 10, 120),
     preferences,
+    // (#88) Absent stays absent: an older backup restores as On, the default.
+    ...(raw.pairExercises === undefined ? {} : { pairExercises: boolean(raw.pairExercises, `${path}.pairExercises`) }),
   };
 }
 

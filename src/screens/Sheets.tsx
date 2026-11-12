@@ -38,6 +38,8 @@ import { lastBackupLine, startOverBackupNote } from '../lib/backup';
 import { SAFETY_NOTICE } from '../lib/safety';
 import { clearReturnToAbout, markReturnToAbout, returnsToAbout } from '../lib/about';
 import AboutSheet from './AboutSheet';
+import { partnerOf } from '../lib/supersets';
+import './supersets.css';
 
 /* ---------------- Adjust today ---------------- */
 
@@ -635,6 +637,7 @@ export function DaySheet({
   minutes,
   approx = false,
   exercises,
+  pairs = [],
   unit,
   history = [],
   loads = {},
@@ -646,6 +649,8 @@ export function DaySheet({
   /** The work falls short of the length asked for: "≈15 min", as Plan and Today show it. */
   approx?: boolean;
   exercises: WorkoutExercise[];
+  /** (#88) Supersets as index pairs, side by side in `exercises`: shown in one bracket. */
+  pairs?: [number, number][];
   unit: Unit;
   history?: WorkoutRecord[];
   loads?: Profile['loads'];
@@ -662,14 +667,28 @@ export function DaySheet({
       </p>
 
       <div style={{ marginTop: 14 }}>
-        {exercises.map((exercise, index) => (
-          <div className="context-row" key={`${exercise.exerciseId}-${index}`}>
-            <span>{exercise.name}</span>
-            <span>
-              {exercise.planned.length} sets · {targetLine(exercise.planned, unit, exercise.exerciseId, plannedLoad(loads, history, exercise.exerciseId, unit))}
-            </span>
-          </div>
-        ))}
+        {exercises.map((exercise, index) => {
+          const row = (entry: WorkoutExercise, at: number) => (
+            <div className="context-row" key={`${entry.exerciseId}-${at}`}>
+              <span>{entry.name}</span>
+              <span>
+                {entry.planned.length} sets · {targetLine(entry.planned, unit, entry.exerciseId, plannedLoad(loads, history, entry.exerciseId, unit))}
+              </span>
+            </div>
+          );
+          const partner = partnerOf(pairs, index);
+          if (partner === undefined) return row(exercise, index);
+          // (#88) A pair is listed once, at its first exercise, in a bracket that says how it runs.
+          if (partner < index) return null;
+          const rounds = Math.min(exercise.planned.length, exercises[partner].planned.length);
+          return (
+            <div className="ss-group" key={`pair-${index}`} role="group" aria-label={`Superset: ${exercise.name} and ${exercises[partner].name}`}>
+              <p className="ss-group__label">Superset · {rounds} {rounds === 1 ? 'round' : 'rounds'}, back to back</p>
+              {row(exercise, index)}
+              {row(exercises[partner], partner)}
+            </div>
+          );
+        })}
       </div>
 
       <p className="data-note">
@@ -1266,6 +1285,27 @@ export function SettingsSheet({
                   </option>
                 ))}
               </select>
+            </div>
+            {/* (#88) Supersets: absent means On; only Off is a choice the lifter makes. */}
+            <div className="settings-row settings-row--stack">
+              <div className="settings-row__line">
+                <span id="pair-label">Pair exercises to save time</span>
+                <div className="unit-toggle" role="group" aria-labelledby="pair-label" aria-describedby="pair-note">
+                  <button className={profile.pairExercises !== false ? 'on' : ''} aria-pressed={profile.pairExercises !== false}
+                    onClick={() => onChange({ pairExercises: true })}>
+                    On
+                  </button>
+                  <button className={profile.pairExercises === false ? 'on' : ''} aria-pressed={profile.pairExercises === false}
+                    onClick={() => onChange({ pairExercises: false })}>
+                    Off
+                  </button>
+                </div>
+              </div>
+              <p className="settings-row__note" id="pair-note">
+                {profile.experience === 'Beginner'
+                  ? 'Starts once you move past Beginner: straight sets build technique first.'
+                  : 'On days of 45 min or less, two accessories alternate set by set with a short switch.'}
+              </p>
             </div>
           </div>
         </section>

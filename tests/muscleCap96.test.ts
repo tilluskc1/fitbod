@@ -38,7 +38,7 @@ const DESCRIBED: MuscleGroup[][] = [['Chest'], ['Chest', 'Triceps'], ['Back', 'B
 const FIXTURE = new URL('./fixtures/muscleCap96-main.json.gz', import.meta.url);
 
 const profileOf = (kit: Kit, experience: Profile['experience'], daysPerWeek: number, sessionMinutes: number, goal: Goal = 'Build Muscle') =>
-  ({ goal, experience, daysPerWeek, unit: 'lb', sessionMinutes, ...KITS[kit], exclusions: [], loads: {} }) as unknown as Profile;
+  ({ goal, experience, daysPerWeek, unit: 'lb', sessionMinutes, ...KITS[kit], exclusions: [], loads: {}, pairExercises: false }) as unknown as Profile; // #88: straight sets, as main's fixture
 const listOf = (exercises: { exerciseId: string; sets: number }[]) => exercises.map((exercise) => `${exercise.exerciseId}:${exercise.sets}`).join(' ');
 
 /**

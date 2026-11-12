@@ -19,7 +19,7 @@ const BACK_MOVES = EXERCISES.filter((exercise) => exercise.muscles[0] === 'Back'
 
 type Kit = { equipment: Equipment[]; support: SupportEquipment[]; exclusions?: string[] };
 const profileOf = (kit: Kit, daysPerWeek: number, sessionMinutes: number, experience: Profile['experience'] = 'Intermediate') =>
-  ({ goal: 'Build Muscle', experience, daysPerWeek, exclusions: [], ...kit, loads: {}, sessionMinutes }) as Profile;
+  ({ goal: 'Build Muscle', experience, daysPerWeek, exclusions: [], ...kit, loads: {}, sessionMinutes, pairExercises: false }) as Profile; // #88: straight sets
 
 const isCore = (id: string) => ['core_flexion', 'core_stability'].includes(exerciseById(id)?.pattern ?? '');
 const pattern = (id: string) => exerciseById(id)?.pattern;

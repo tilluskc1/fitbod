@@ -33,7 +33,7 @@ const logSet = (session: WorkoutRecord, _e: number, _s: number, at: string): Wor
 const gym: Profile = {
   goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 4,
   equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'], support: ['Bench', 'Rack', 'Pull-up bar'],
-  exclusions: [], loads: {}, unit: 'lb', sessionMinutes: 60,
+  exclusions: [], loads: {}, unit: 'lb', sessionMinutes: 60, pairExercises: false, // #88: straight sets
 };
 const plan = buildPlan(gym);
 const lower = planSlots(plan)[1];

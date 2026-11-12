@@ -24,7 +24,7 @@ const LEVELS = ['Beginner', 'Intermediate', 'Advanced'] as const;
 
 function* days(kits: (keyof typeof KITS)[], sessionMinutes: number) {
   for (const kit of kits) for (const goal of GOALS) for (const experience of LEVELS) for (const daysPerWeek of [2, 3, 4, 5, 6]) {
-    const profile = { goal, experience, daysPerWeek, unit: 'lb', sessionMinutes, ...KITS[kit], exclusions: [], loads: {} } as unknown as Profile;
+    const profile = { goal, experience, daysPerWeek, unit: 'lb', sessionMinutes, ...KITS[kit], exclusions: [], loads: {}, pairExercises: false } as unknown as Profile; // #88: straight sets
     for (const slot of planSlots(buildPlan(profile))) yield { kit, profile, slot, label: `${kit} ${goal} ${experience} ${daysPerWeek}d ${slot.name}` };
   }
 }
@@ -96,7 +96,7 @@ test('a gym or home day shortened to 30 for today has at least 4 movements, from
 });
 
 test('a day shortened under 45 for today names what it dropped and says it was trimmed', () => {
-  const profile = { goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 4, unit: 'lb', sessionMinutes: 60, ...KITS.gym, exclusions: [], loads: {} } as unknown as Profile;
+  const profile = { goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 4, unit: 'lb', sessionMinutes: 60, ...KITS.gym, exclusions: [], loads: {}, pairExercises: false } as unknown as Profile;
   const slot = planSlots(buildPlan(profile))[0];
   const { adapted } = today(profile, slot, 30);
   assert.ok(adapted.skipped.some((item) => item.reason === 'time'), JSON.stringify(adapted.skipped));

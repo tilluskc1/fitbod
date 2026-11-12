@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
-import { elapsedMs, pendingExerciseIndex, restRemaining, sessionProgress } from '../lib/session';
+import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
+import { pairRound, pairedPendingIndex, partnerOf, restAfterLog } from '../lib/supersets';
+import './supersets.css';
 import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
 import { exerciseInWorkout, lastPerformance } from '../lib/plan';
 import { firstTimeLoaded, plannedLoad } from '../lib/liveProgression';
@@ -35,6 +37,8 @@ interface Props {
   targetNotes?: Record<string, string>;
   /** Rest after a set, per exercise in session order, by role (#132). */
   rests?: number[];
+  /** (#88) Supersets as index pairs: they alternate set by set. Empty: every exercise runs straight. */
+  pairs?: [number, number][];
   /** #165: exercises ready to go heavier, keyed to last time's load (the floor for the next pick). */
   goHeavier?: Record<string, number>;
   onMinimize: () => void;
@@ -162,6 +166,7 @@ export default function TrainScreen({
   unit,
   targetNotes,
   rests = [],
+  pairs = [],
   goHeavier = {},
   onMinimize,
   onFinish,
@@ -248,11 +253,25 @@ export default function TrainScreen({
   // Only unskipped, unfinished work is offered. When nothing is left to log,
   // the trainer shows a review state instead of quietly landing on the last
   // exercise as if it were current.
-  const index = pendingExerciseIndex(session);
+  // (#88) In a superset the half that is behind is up: A1, B1, A2, B2.
+  const index = pairedPendingIndex(session, pairs);
   const exercise = index === -1 ? undefined : session.exercises[index];
-  // Up next is work still on offer: never a skipped or finished exercise.
-  const next = index === -1 ? undefined : session.exercises
-    .find((entry, entryIndex) => entryIndex > index && !entry.skipped && entry.performed.some((set) => !set.done));
+  // Up next is work still on offer: never a skipped or finished exercise. In a superset it is the
+  // exercise that follows this set: the partner, or A again for the next round.
+  const afterThisSet = exercise ? (() => {
+    const setIndex = exercise.performed.findIndex((set) => !set.done);
+    const exercises = session.exercises.map((entry, entryIndex) => entryIndex !== index ? entry
+      : { ...entry, performed: entry.performed.map((set, i) => (i === setIndex ? { ...set, done: true } : set)) });
+    return pairedPendingIndex({ exercises }, pairs);
+  })() : -1;
+  const next = index === -1 ? undefined
+    : afterThisSet >= 0 && afterThisSet !== index && partnerOf(pairs, index) === afterThisSet ? session.exercises[afterThisSet]
+    : session.exercises
+      .find((entry, entryIndex) => entryIndex > index && !entry.skipped && entry.performed.some((set) => !set.done));
+  const round = index === -1 ? null : pairRound(session, index, pairs);
+  const partner = index === -1 ? undefined : partnerOf(pairs, index);
+  /** The rest this set starts: 30 s to the partner, the pair's rest after a round (#88), else the role's. */
+  const restAfter = index === -1 || rests[index] === undefined ? undefined : restAfterLog(session, index, rests, pairs);
   const skippedToday = session.exercises
     .map((entry, entryIndex) => ({ entry, entryIndex }))
     .filter(({ entry }) => entry.skipped);
@@ -592,6 +611,13 @@ export default function TrainScreen({
           </section>
         )}
 
+        {round && partner !== undefined && (
+          <p className="ss-band">
+            <span className="ss-band__tag">Superset</span>
+            <span>Round {round.round} of {round.rounds} · with {session.exercises[partner].name}</span>
+          </p>
+        )}
+
         <section className="lg-ex" aria-label={exercise.name}>
           <button type="button" className="lg-thumb" onClick={() => onOpenActions(index, 'instructions')}
             aria-label={`${exercise.name} demo and instructions`} aria-haspopup="dialog">
@@ -606,7 +632,7 @@ export default function TrainScreen({
             </h2>
             <p className="lg-ex__meta">
               Exercise {index + 1} of {session.exercises.length} · Target <b>{shortTarget(exercise)}</b>
-              {rests[index] ? <> · Rest {restLabel(rests[index])}</> : null}
+              {restAfter ? <> · Rest {restLabel(restAfter)}</> : null}
             </p>
           </div>
           {/* The same menu the row opens: instructions, history, replace, remove for today. */}

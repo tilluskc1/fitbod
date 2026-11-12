@@ -15,7 +15,7 @@ import type { Profile, WorkoutRecord } from '../src/types.ts';
 
 // #189: Plan's header and Up next described the saved day while View session showed today's.
 const gym = { name: 'K', goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 4, equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable'],
-  support: ['Bench', 'Rack', 'Pull-up bar'], exclusions: [], loads: {}, unit: 'kg', sessionMinutes: 60 } as unknown as Profile;
+  support: ['Bench', 'Rack', 'Pull-up bar'], exclusions: [], loads: {}, unit: 'kg', sessionMinutes: 60, pairExercises: false } as unknown as Profile; // #88: straight sets
 const bodyweight = { ...gym, equipment: [], support: [] } as unknown as Profile;
 const firstDay = (who: Profile) => {
   const slot = planSlots(buildPlan(who))[0];

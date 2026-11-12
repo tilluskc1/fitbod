@@ -17,7 +17,7 @@ import type { Profile, WorkoutRecord } from '../src/types.ts';
 const gym: Profile = {
   goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 5,
   equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'], support: ['Bench', 'Rack', 'Pull-up bar'],
-  exclusions: [], loads: {}, unit: 'kg', sessionMinutes: 60,
+  exclusions: [], loads: {}, unit: 'kg', sessionMinutes: 60, pairExercises: false, // #88: straight sets
 };
 const legs = planSlots(buildPlan(gym)).find((slot) => slot.name === 'Legs')!;
 
@@ -421,7 +421,7 @@ test('#188: after a switch the finish summary describes each exercise once, by a
 // bodyweight, so its own day is never a today-only rebuild (#188 follow-up).
 const noGear: Profile = {
   goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 3, equipment: [], support: [],
-  exclusions: [], loads: {}, unit: 'kg', sessionMinutes: 45,
+  exclusions: [], loads: {}, unit: 'kg', sessionMinutes: 45, pairExercises: false,
 };
 
 test('#188: a no-gear profile\'s saved bodyweight day is its program, not a rebuild', async () => {

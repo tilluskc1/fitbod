@@ -16,6 +16,7 @@ const FULL_GYM: Profile = {
   support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'],
   exclusions: [],
   loads: {},
+  pairExercises: false, // #88: straight sets; supersets have their own tests
 };
 
 const at = (sessionMinutes: number | undefined, overrides: Partial<Profile> = {}): Profile =>

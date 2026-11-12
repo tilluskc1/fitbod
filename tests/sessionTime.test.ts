@@ -62,11 +62,13 @@ test('the rest timer starts with the seconds it is given', () => {
 
 test('the app logs sets with the role rest and the logger shows it', () => {
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
-  assert.match(app, /const rest = sessionRests\(/);
+  // (#88) The role rests go through the superset step: 30 s to a partner, the pair's rest after a round.
+  assert.match(app, /const rest = restAfterLog\(session, exerciseIndex,\s+sessionRests\(/);
   // (#327) A held jump passes an options argument after the rest seconds.
   assert.match(app, /logSet\(filled, exerciseIndex, setIndex, stamp, rest[,)]/);
   const train = readFileSync(new URL('../src/screens/TrainScreen.tsx', import.meta.url), 'utf8');
-  assert.match(train, /Rest \{restLabel\(rests\[index\]\)\}/);
+  assert.match(train, /const restAfter = .*restAfterLog\(session, index, rests, pairs\)/);
+  assert.match(train, /Rest \{restLabel\(restAfter\)\}/);
   assert.equal(restLabel(150), '2:30');
   assert.equal(restLabel(180), '3:00');
   assert.equal(restLabel(90), '90 s');

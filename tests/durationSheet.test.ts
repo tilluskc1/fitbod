@@ -7,7 +7,7 @@ import type { Profile } from '../src/types.ts';
 const plan = [{ name: 'Push', focus: ['Chest', 'Shoulders', 'Triceps'] }] as never;
 const profile = {
   goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 3, equipment: ['Dumbbell'], support: ['Bench'],
-  exclusions: [], loads: {}, name: 'Alex', unit: 'lb', sessionMinutes: 45,
+  exclusions: [], loads: {}, name: 'Alex', unit: 'lb', sessionMinutes: 45, pairExercises: false, // #88: straight sets
 } as unknown as Profile;
 const program = slotProgram(profile, planSlots(plan)[0], []);
 
@@ -56,7 +56,7 @@ test('#17: Today builds the day at a longer today-only length and the length she
   assert.match(app, /const program = useMemo\(\(\) => programFor\(constraints\)/);
   assert.match(app, /todayProgram\(profile, slot, state\.history, today\)/);
   // #203 passes the goal so each length is trimmed by the timer's model.
-  assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programFor\(\{ \.\.\.constraints, minutes \}\), profile\.goal\)/);
+  assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programFor\(\{ \.\.\.constraints, minutes \}\), profile\.goal, profile\)/);
 });
 
 test('back to the saved length or setup restores for a no-gear profile too (savedSetup, #188/#193)', async () => {

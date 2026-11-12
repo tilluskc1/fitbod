@@ -23,17 +23,19 @@ const KITS = {
   bodyweight: { equipment: [], support: [] },
 };
 
-const profileFor = (gear: { equipment: string[]; support: string[] }, days: number, minutes: number, goal = 'Build Muscle') => ({
+const profileFor = (gear: { equipment: string[]; support: string[] }, days: number, minutes: number, goal = 'Build Muscle', pairExercises: boolean | undefined = false) => ({
   name: 'K', goal, experience: 'Intermediate', daysPerWeek: days, ...gear, exclusions: [], loads: {}, unit: 'kg', sessionMinutes: minutes,
+  // #88: straight sets unless a test asks for supersets (absent = On); the app passes the profile as pairing.
+  ...(pairExercises === undefined ? {} : { pairExercises }),
 }) as unknown as Profile;
 
-test('#203: each day reads the same minutes on Plan, the switch and gym sheets and as today', () => {
+test('#203: each day reads the same minutes on Plan, the switch and gym sheets and as today, with supersets On and Off (#88)', () => {
   const over: string[] = [];
-  for (const [kit, gear] of Object.entries(KITS)) {
+  for (const pairing of [false, undefined]) for (const [kit, gear] of Object.entries(KITS)) {
     for (const goal of ['Build Muscle', 'Get Stronger']) {
       for (const days of [2, 3, 4, 5, 6]) {
         for (const minutes of [20, 30, 45, 60]) {
-          const profile = profileFor(gear, days, minutes, goal);
+          const profile = profileFor(gear, days, minutes, goal, pairing);
           const plan = buildPlan(profile);
           const slots = planSlots(plan);
           const state = { ...EMPTY_STATE, profile, plan, planRevision: 1, programCursor: { revision: 1, seq: 0 } } as unknown as AppState;
@@ -42,8 +44,8 @@ test('#203: each day reads the same minutes on Plan, the switch and gym sheets a
           const later = upcomingDays(profile, plan, slots[0], []);
           slots.forEach((slot, k) => {
             const program = slotProgram(profile, slot, []);
-            const today = todayGlance(adaptWorkout(program, constraints, [], profile.goal), null, false, profile.goal);
-            const where = `${kit} ${goal} ${days}d ${minutes}min ${slot.name}`;
+            const today = todayGlance(adaptWorkout(program, constraints, [], profile.goal, profile), null, false, profile.goal, profile);
+            const where = `${pairing === false ? 'straight' : 'paired'} ${kit} ${goal} ${days}d ${minutes}min ${slot.name}`;
             assert.equal(switches[k].minutes, today.minutes, `switch sheet, ${where}`);
             assert.equal(switches[k].approx, today.approx, `switch sheet ≈, ${where}`);
             if (k > 0) {
@@ -51,7 +53,7 @@ test('#203: each day reads the same minutes on Plan, the switch and gym sheets a
               assert.equal(later[k - 1].approx, today.approx, `Plan later day ≈, ${where}`);
               assert.equal(later[k - 1].sets, today.sets, `Plan later day sets, ${where}`);
             }
-            const gymSheet = setupOptions(program, constraints, [], profile.goal).find((option) => option.choice === constraints.equipment);
+            const gymSheet = setupOptions(program, constraints, [], profile.goal, undefined, profile).find((option) => option.choice === constraints.equipment);
             assert.equal(gymSheet?.minutes, today.minutes, `gym sheet, ${where}`);
             if (today.minutes > minutes) over.push(`${where}: ${today.minutes}`);
           });
@@ -63,19 +65,19 @@ test('#203: each day reads the same minutes on Plan, the switch and gym sheets a
   assert.deepEqual(over, []);
 });
 
-test('#197: no day promises more than its length, at any level, and a short day keeps its movements', () => {
+test('#197: no day promises more than its length, at any level, and a short day keeps its movements, supersets On and Off (#88)', () => {
   const over: string[] = [];
-  for (const [kit, gear] of Object.entries(KITS)) {
+  for (const pairing of [false, undefined]) for (const [kit, gear] of Object.entries(KITS)) {
     for (const goal of ['Build Muscle', 'Get Stronger']) {
       for (const experience of ['Beginner', 'Intermediate', 'Advanced']) {
         for (const days of [2, 3, 4, 5, 6]) {
           for (const saved of [20, 30, 45, 60]) {
-            const profile = { ...profileFor(gear, days, saved, goal), experience } as Profile;
+            const profile = { ...profileFor(gear, days, saved, goal, pairing), experience } as Profile;
             for (const slot of planSlots(buildPlan(profile))) {
               for (const minutes of new Set([saved, 15, 20])) {
                 if (minutes > saved) continue;
                 const today = todayDay(profile, slot, minutes);
-                if (today.minutes > minutes) over.push(`${kit} ${goal} ${experience} ${days}d saved ${saved} today ${minutes} ${slot.name}: ${today.minutes}`);
+                if (today.minutes > minutes) over.push(`${pairing === false ? 'straight' : 'paired'} ${kit} ${goal} ${experience} ${days}d saved ${saved} today ${minutes} ${slot.name}: ${today.minutes}`);
               }
             }
           }
@@ -126,7 +128,7 @@ test('#203: the review names the honest figure, not the asked length', async () 
 const todayDay = (profile: Profile, slot: Parameters<typeof slotProgram>[1], minutes: number) => {
   // The day Today builds for that length: longer or under 45 rebuilds there (#17, #229), else trims.
   const program = slotProgramAt(profile, slot, [], minutes);
-  return todayGlance(adaptWorkout(program, { ...defaultConstraints(profile), minutes }, [], profile.goal), null, false, profile.goal);
+  return todayGlance(adaptWorkout(program, { ...defaultConstraints(profile), minutes }, [], profile.goal, profile), null, false, profile.goal, profile);
 };
 
 test('#203: a length chosen for today reads one figure in the switch sheet and on Today, never over the ask', () => {
