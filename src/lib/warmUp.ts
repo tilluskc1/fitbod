@@ -82,6 +82,14 @@ export function rampWorking(args: { setOneKg: number; suggestedKg: number | null
   return args.suggestedKg !== null && args.suggestedKg > 0 ? args.suggestedKg : 0;
 }
 
+/**
+ * (#344) The ramp burst still in force: one that began in this slot's set 1 while that cell is still the
+ * ramp cell (`rampIndex === index`). Anything else is stale and is dropped.
+ */
+export function liveRampBurst<T extends { key: string }>(burst: T | null, at: { key: string; rampIndex: number; index: number }): T | null {
+  return burst !== null && burst.key === at.key && at.rampIndex === at.index ? burst : null;
+}
+
 /** The listed load closest to `kg`, the lighter on a tie. */
 function nearest(loads: number[], kg: number): number {
   return [...loads].sort((a, b) => Math.abs(a - kg) - Math.abs(b - kg) || a - b)[0];

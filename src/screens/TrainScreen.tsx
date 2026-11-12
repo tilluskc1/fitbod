@@ -9,7 +9,7 @@ import { nearestLoad, suggestedFirstLoad } from '../lib/firstLoad';
 import { availableLoads } from '../lib/progression';
 import { calibrationInputValue, loadLimitMessage, loadValue, repsLimitMessage, typedLoad, typedReps, unitLabel } from '../lib/units';
 import { restLabel } from '../lib/sessionTime';
-import { GENERAL_WARM_UP_TEXT, generalWarmUpMinutes, rampExerciseIndex, rampSets, rampWorking, setWarmUpChecks, showsGeneralWarmUp, warmUpChecks } from '../lib/warmUp';
+import { GENERAL_WARM_UP_TEXT, generalWarmUpMinutes, liveRampBurst, rampExerciseIndex, rampSets, rampWorking, setWarmUpChecks, showsGeneralWarmUp, warmUpChecks } from '../lib/warmUp';
 import type { WarmUpChecks } from '../lib/warmUp';
 import type { Experience, PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
@@ -445,6 +445,10 @@ export default function TrainScreen({
 
   // #300/#326: the ramp rows' slot, and the load set 1 shows (its typed load, else the suggested start).
   const rampIndex = mode !== 'none' ? rampExerciseIndex(session) : -1;
+  // #344: set 1's cell can stop being the ramp cell while still focused (its ✓ keeps focus), and then no
+  // blur clears the burst. Drop it here, so a later ramp never starts from a stale burst.
+  const burst = liveRampBurst(rampBurst, { key: calibrationKey, rampIndex, index });
+  if (rampBurst !== null && burst === null) setRampBurst(null);
   const setOne = exercise.performed[0];
   const setOneKg = rampWorking({
     setOneKg: setOne?.weight ?? 0,
@@ -537,20 +541,20 @@ export default function TrainScreen({
   // hotel rack on a today-only day), else plate steps.
   const rampRack = equipment === 'Dumbbell' ? rampLoads : rack;
   const ramps = index === rampIndex
-    ? rampSets({ equipment, unit, rack: rampRack, working: rampBurst?.key === calibrationKey ? rampBurst.kg : setOneKg })
+    ? rampSets({ equipment, unit, rack: rampRack, working: burst !== null ? burst.kg : setOneKg })
     : [];
-  const rampRows = ramps.map((ramp, rampIndex) => {
-    const key = `${exercise.exerciseId}:${rampIndex}`;
+  const rampRows = ramps.map((ramp, rampNumber) => {
+    const key = `${exercise.exerciseId}:${rampNumber}`;
     const ticked = warm.ramps.includes(key);
     return (
-      <tr key={`${exerciseKey}:warm-${rampIndex}`} className={ticked ? 'lg-row--warm lg-row--warm-done' : 'lg-row--warm'}>
+      <tr key={`${exerciseKey}:warm-${rampNumber}`} className={ticked ? 'lg-row--warm lg-row--warm-done' : 'lg-row--warm'}>
         <td><abbr title="Warm-up">W</abbr></td>
         <td className="lg-warm-tag">Warm-up</td>
         <td><span className="lg-cell lg-cell--warm">{loadValue(ramp.weight, unit, rampRack)}</span></td>
         <td><span className="lg-cell lg-cell--warm">{ramp.reps}</span></td>
         <td>
           <button type="button" className="lg-wcheck" aria-pressed={ticked}
-            aria-label={`Warm-up set ${rampIndex + 1}, ${loadValue(ramp.weight, unit, rampRack)} ${weightLabel} × ${ramp.reps}, done`}
+            aria-label={`Warm-up set ${rampNumber + 1}, ${loadValue(ramp.weight, unit, rampRack)} ${weightLabel} × ${ramp.reps}, done`}
             onClick={() => updateWarm({ ramps: ticked ? warm.ramps.filter((item) => item !== key) : [...warm.ramps, key] })}>
             <Icon name="check" size={20} />
           </button>
