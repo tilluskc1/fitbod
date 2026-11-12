@@ -201,6 +201,14 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    apply it to each. Check: "toast goes, Problem stays" in `scripts/e2e/notice-kinds.mjs` (it fails on
    c5c05cf).
 
+31. **A rule that stops a carry stops every carry.** #327 review 1: the 10% hold stopped the keystroke carry,
+   but logging the held set still ran #182's log carry, so on a "go heavier" day (later sets empty) 80 reached
+   every set under "Applied to set 1 only". Apply to all's Undo also used values from before the log, so it
+   reversed the reps the log had carried. Rule: when a story says a value "does not carry", grep every path
+   that writes later sets (`editSet`, `logSet`, `setRemaining`, Apply to all) and test each from empty and
+   prefilled sets; Undo restores what its own action found. Check: steps F and G in
+   `scripts/e2e/big-jump.mjs` (both fail at fce9f92) and the "review 1" tests in `tests/bigJump327.test.ts`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

@@ -14,6 +14,7 @@ import type { WarmUpChecks } from '../lib/warmUp';
 import type { Experience, PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
+import { NoticeCard } from '../components/ui/Notices';
 import { MoreIcon } from '../components/ui/Icons';
 
 interface Props {
@@ -39,6 +40,11 @@ interface Props {
   onMinimize: () => void;
   onFinish: () => void;
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>, how?: SetEdit) => void;
+  /**
+   * (#327) A weight more than 10% over last time, held on the set typed: its Heads-up shows under that
+   * row, next to the field the phone keeps in view, with its one action.
+   */
+  held?: { exerciseIndex: number; setIndex: number; text: string; onApply: () => void; onDismiss: () => void } | null;
   /**
    * The exercise id lets the handler refuse a tap rendered against a since-changed session. `weight`:
    * the suggested start the empty cell showed (#309), written to that set before it is logged.
@@ -158,6 +164,7 @@ export default function TrainScreen({
   onMinimize,
   onFinish,
   onUpdateSet,
+  held = null,
   onLogSet,
   onToggleRestPause,
   onExtendRest,
@@ -187,6 +194,14 @@ export default function TrainScreen({
     (element?.matches('button, input') ? element
       : element?.querySelector<HTMLElement>('[aria-pressed="true"]') ?? element?.querySelector<HTMLElement>('button, input'))?.focus();
   });
+
+  // (#327) A held jump's card appears under the row being typed; keep it in view above the dock or
+  // keyboard, the way the phone keeps the field in view (its scroll margins include --kb and --vv-top).
+  const heldKey = held === null ? null : `${held.exerciseIndex}:${held.setIndex}`;
+  useEffect(() => {
+    if (heldKey === null) return;
+    document.querySelector('.lg-note--held .notice-card')?.scrollIntoView({ block: 'nearest' });
+  }, [heldKey]);
 
   // #300: warm-up checks live in memory for the session; nothing reaches the record.
   // Read by session id every render, so a session replaced under a mounted logger never shows another's checks.
@@ -486,7 +501,15 @@ export default function TrainScreen({
     const error = refused && (
       <tr key={refused} className="lg-note"><td colSpan={5} id={refused} className="error-text" role="alert">{refusal?.text}</td></tr>
     );
-    return [row, note, error].filter(Boolean);
+    const heads = held !== null && held.exerciseIndex === index && held.setIndex === setIndex && (
+      <tr key={`${key}:held`} className="lg-note lg-note--held">
+        <td colSpan={5}>
+          <NoticeCard kind="headsUp" title={held.text} onDismiss={held.onDismiss}
+            actions={<button type="button" className="notice-card__fix" onPointerDown={(event) => event.preventDefault()} onClick={held.onApply}>Apply to all</button>} />
+        </td>
+      </tr>
+    );
+    return [row, note, error, heads].filter(Boolean);
   });
 
   // #300: two ramp sets before the lead's working sets, from the load set 1 shows. Not sets: never

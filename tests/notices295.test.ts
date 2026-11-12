@@ -73,6 +73,9 @@ const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> 
   ['done', 'message'],
   ['headsUp', 'text'],
   ['done', 'text'],
+  // #327: a weight more than 10% over last time, held on its set; then Apply to all's carry.
+  ['headsUp', 'text'],
+  ['done', 'text'],
   ['headsUp', 'liveCarry.note'],
   ['done', "'No sets logged, so nothing was saved.'"],
   ['headsUp', 'progress.skipped > 0'],

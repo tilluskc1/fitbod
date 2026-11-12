@@ -117,7 +117,10 @@ export function logSet(
   setIndex: number,
   now: string,
   seconds = 75,
+  /** (#327) false: a held jump's set logs without carrying its load into later sets; reps still carry. */
+  options: { carryWeight?: boolean } = {},
 ): WorkoutRecord {
+  const { carryWeight: carriesLoad = true } = options;
   // A repeated tap must not rewrite when a logged set was done.
   if (session.exercises[exerciseIndex]?.performed[setIndex]?.done) return session;
   let updated = updatePerformedSet(session, exerciseIndex, setIndex, { done: true }, now);
@@ -131,7 +134,7 @@ export function logSet(
   exercise.performed.forEach((set, i) => {
     if (i <= setIndex || set.done) return;
     const patch: { weight?: number; reps?: number } = {};
-    if (logged.weight > 0 && set.weight === 0) patch.weight = logged.weight;
+    if (carriesLoad && logged.weight > 0 && set.weight === 0) patch.weight = logged.weight;
     if (repsChanged && logged.reps > 0 && set.reps === exercise.planned[i]?.reps) patch.reps = logged.reps;
     if (patch.weight !== undefined || patch.reps !== undefined) updated = updatePerformedSet(updated, exerciseIndex, i, patch, now);
   });
@@ -208,6 +211,22 @@ export function setRemaining(
   const exercise = session.exercises[exerciseIndex];
   if (!exercise) return { session, carried: [], previous: [] };
   return applyToSets(session, exerciseIndex, exercise.performed.map((set) => (set.done ? {} : { ...value })), now);
+}
+
+/**
+ * (#327) "Apply to all" after a held jump: the sets that followed the typed one, not yet logged, take
+ * its weight, as the carry would have done (#309).
+ */
+export function carryWeight(
+  session: WorkoutRecord,
+  exerciseIndex: number,
+  indices: number[],
+  weight: number,
+  now: string,
+): CarryResult {
+  const exercise = session.exercises[exerciseIndex];
+  if (!exercise) return { session, carried: [], previous: [] };
+  return applyToSets(session, exerciseIndex, exercise.performed.map((set, i) => (!set.done && indices.includes(i) ? { weight } : {})), now);
 }
 
 function applyToSets(
