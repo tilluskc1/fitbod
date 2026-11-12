@@ -9,7 +9,7 @@ import { nearestLoad, suggestedFirstLoad } from '../lib/firstLoad';
 import { availableLoads } from '../lib/progression';
 import { calibrationInputValue, loadLimitMessage, loadValue, repsLimitMessage, typedLoad, typedReps, unitLabel } from '../lib/units';
 import { restLabel } from '../lib/sessionTime';
-import { GENERAL_WARM_UP_TEXT, generalWarmUpMinutes, rampExerciseIndex, rampSets, setWarmUpChecks, showsGeneralWarmUp, warmUpChecks } from '../lib/warmUp';
+import { GENERAL_WARM_UP_TEXT, generalWarmUpMinutes, rampExerciseIndex, rampSets, rampWorking, setWarmUpChecks, showsGeneralWarmUp, warmUpChecks } from '../lib/warmUp';
 import type { WarmUpChecks } from '../lib/warmUp';
 import type { Experience, PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
@@ -104,7 +104,7 @@ type CellAnswer = null | 'block' | 'reset';
  * while focused it shows exactly what was typed, so a value is never reformatted mid-keystroke.
  * `typed` is true for a key typed on the keyboard, false for a paste, autofill or drop.
  */
-function SetCell({ id, label, shown, inputMode, enterKeyHint, empty, onText, onEnter }: {
+function SetCell({ id, label, shown, inputMode, enterKeyHint, empty, onText, onEnter, onFocusChange }: {
   id: string;
   label: string;
   shown: string;
@@ -113,6 +113,8 @@ function SetCell({ id, label, shown, inputMode, enterKeyHint, empty, onText, onE
   empty: boolean;
   onText: (text: string, typed: boolean) => CellAnswer;
   onEnter: (input: HTMLInputElement) => void;
+  /** Called with true on focus and false on blur: the cell's typing burst begins and ends (#326). */
+  onFocusChange?: (focused: boolean) => void;
 }) {
   const [text, setText] = useState<string | null>(null);
   /** Set by a reset; the render it causes selects the stored value it shows. */
@@ -127,7 +129,7 @@ function SetCell({ id, label, shown, inputMode, enterKeyHint, empty, onText, onE
     <input ref={input} id={id} className={empty ? 'lg-cell lg-input lg-cell--empty' : 'lg-cell lg-input'} type="text"
       inputMode={inputMode} enterKeyHint={enterKeyHint} autoComplete="off" aria-label={label}
       placeholder="—" value={text ?? shown}
-      onFocus={(event) => { setText(shown); event.currentTarget.select(); }}
+      onFocus={(event) => { setText(shown); event.currentTarget.select(); onFocusChange?.(true); }}
       onChange={(event) => {
         const typed = event.target.value.replace(',', '.');
         const answer = onText(typed, (event.nativeEvent as InputEvent).inputType === 'insertText');
@@ -140,7 +142,7 @@ function SetCell({ id, label, shown, inputMode, enterKeyHint, empty, onText, onE
         }
         setText(typed);
       }}
-      onBlur={() => setText(null)}
+      onBlur={() => { setText(null); onFocusChange?.(false); }}
       onKeyDown={(event) => {
         if (event.key !== 'Enter') return;
         event.preventDefault();
@@ -180,6 +182,12 @@ export default function TrainScreen({
   const [cleared, setCleared] = useState<string[]>([]);
   /** A refused keystroke's message, under the row it was typed in. */
   const [refusal, setRefusal] = useState<{ key: string; text: string } | null>(null);
+  /**
+   * (#326) While set 1's weight cell is focused, the load it showed when focus began: the ramp rows read
+   * it until blur, so typing 135 to 140 ("1", "14", "140") never adds or removes a row. Keyed by session,
+   * slot and exercise, so a swap or another session never inherits it. In memory only.
+   */
+  const [rampBurst, setRampBurst] = useState<{ key: string; kg: number } | null>(null);
   /** After the focused control unmounts, focus moves here (an element id, or 'log' for the next open ✓) instead of <body>. */
   const focusNext = useRef<string | null>(null);
   useEffect(() => {
@@ -435,6 +443,14 @@ export default function TrainScreen({
     return null;
   };
 
+  // #300/#326: the ramp rows' slot, and the load set 1 shows (its typed load, else the suggested start).
+  const rampIndex = mode !== 'none' ? rampExerciseIndex(session) : -1;
+  const setOne = exercise.performed[0];
+  const setOneKg = rampWorking({
+    setOneKg: setOne?.weight ?? 0,
+    suggestedKg: setOne && !setOne.done && prefill !== null && !cleared.includes(`${calibrationKey}:0`) ? prefill : null,
+  });
+
   const rows = exercise.performed.flatMap((set, setIndex) => {
     const key = rowKey(setIndex);
     const n = setIndex + 1;
@@ -447,6 +463,7 @@ export default function TrainScreen({
     const noReps = set.reps <= 0;
     const reason = !set.done && (noLoad || noReps) && setIndex === activeSet ? `${key}:reason` : undefined;
     const refused = refusal?.key === key ? `${key}:refused` : undefined;
+    const rampCell = setIndex === 0 && rampIndex === index;
     const weightShown = set.weight > 0 ? showPending(set.weight, setIndex)
       : shownPrefill !== null ? showActual(shownPrefill) : '';
     const row = (
@@ -462,7 +479,10 @@ export default function TrainScreen({
             <SetCell id={`${key}:weight`} label={`Set ${n} weight, ${unitWord}`} shown={weightShown}
               empty={set.weight <= 0} inputMode="decimal" enterKeyHint="next"
               onText={(text, typed) => typeWeight(set, setIndex, key, text, typed)}
-              onEnter={() => document.getElementById(`${key}:reps`)?.focus()} />
+              onEnter={() => document.getElementById(`${key}:reps`)?.focus()}
+              onFocusChange={rampCell
+                ? (focused) => setRampBurst(focused ? { key: calibrationKey, kg: setOneKg } : null)
+                : undefined} />
           )}
         </td>
         <td>
@@ -516,8 +536,8 @@ export default function TrainScreen({
   // logged, counted or stored. A dumbbell ramps on the rack the logger's own picker offers (Travel's
   // hotel rack on a today-only day), else plate steps.
   const rampRack = equipment === 'Dumbbell' ? rampLoads : rack;
-  const ramps = mode !== 'none' && index === rampExerciseIndex(session)
-    ? rampSets({ equipment, working: exercise.performed[0]?.weight ?? 0, unit, rack: rampRack })
+  const ramps = index === rampIndex
+    ? rampSets({ equipment, unit, rack: rampRack, working: rampBurst?.key === calibrationKey ? rampBurst.kg : setOneKg })
     : [];
   const rampRows = ramps.map((ramp, rampIndex) => {
     const key = `${exercise.exerciseId}:${rampIndex}`;

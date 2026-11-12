@@ -18,7 +18,7 @@ test('calibrated barbell actuals retain fractional kg and lb in the CTA and comp
         now: '2026-11-03T10:00:00.000Z', exercises: [{ exerciseId: 'barbell-row', name: 'Barbell Row',
           planned: [{ weight: 0, reps: 8 }, { weight: 0, reps: 8 }],
           performed: [{ weight: stored, reps: 8, done: false }, { weight: stored, reps: 8, done: false }] }] });
-      const props = { history: [], now: Date.parse('2026-11-03T10:01:00.000Z'), loadOptions: [], unit,
+      const props = { history: [], now: Date.parse('2026-11-03T10:01:00.000Z'), rampLoads: [], unit,
         onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {},
         onExtendRest() {}, onReturn() {} };
       const label = `Set 1 weight, ${unit === 'kg' ? 'kilograms' : 'pounds'}`;
@@ -46,11 +46,11 @@ test('a dumbbell set takes typed entry in its cell, with or without a confirmed 
         onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {},
         onExtendRest() {}, onReturn() {} };
       const word = unit === 'kg' ? 'kilograms' : 'pounds';
-      const blank = renderToStaticMarkup(createElement(TrainScreen, { ...props, loadOptions: [] }));
+      const blank = renderToStaticMarkup(createElement(TrainScreen, { ...props, rampLoads: [] }));
       assert.match(blank, new RegExp(`aria-label="Set 1 weight, ${word} each"[^>]*value=""`));
       // #309: the confirmed rack's pill row (lg-quick) is gone; a rack changes nothing in the cell.
       assert.doesNotMatch(blank, /lg-quick|<button(?![^>]*lg-wcheck)[^>]*aria-pressed|Enter dumbbell load/);
-      const rack = renderToStaticMarkup(createElement(TrainScreen, { ...props, loadOptions: [10, 15, 18] }));
+      const rack = renderToStaticMarkup(createElement(TrainScreen, { ...props, rampLoads: [10, 15, 18] }));
       assert.match(rack, new RegExp(`aria-label="Set 1 weight, ${word} each"[^>]*value=""`));
       assert.doesNotMatch(rack, /lg-quick|<button(?![^>]*lg-wcheck)[^>]*aria-pressed|Enter dumbbell load/);
     }

@@ -11,7 +11,7 @@ Repo: `tilluskc1/fitbod`. Board: GitHub Project 11. Design system: `DESIGN.md`. 
 
 ## 0. Latest product-chat handoff (2026-11-09, 21:30 UTC) — read this first
 
-**Product chat role:** product owner + UI/UX lead + strength coach. Writes stories, never code. Rules: AGENTS.md (story first with named defaults, screenshots on every UI story, one dev chat per story on Opus with routine work on Sonnet), `docs/agents/lessons.md` (22 lessons; 18 = never close or archive anything the owner didn't ask for).
+**Product chat role:** product owner + UI/UX lead + strength coach. Writes stories, never code. Rules: AGENTS.md (story first with named defaults, screenshots on every UI story, one dev chat per story on Opus with routine work on Sonnet), `docs/agents/lessons.md` (read it in full; lesson 18 = never close or archive anything the owner didn't ask for).
 
 **State:** `main` at 9d4285a (Vercel success). Nothing merged on 2026-11-09 after that.
 

@@ -62,7 +62,7 @@ test('rack loads read like the target on every surface; typed loads keep their e
     const { progressionLines } = await server.ssrLoadModule('/src/lib/liveProgression.ts');
     for (const unit of ['lb', 'kg'] as const) {
       const who = { ...profile, unit };
-      const props = { now: Date.parse('2026-11-04T10:01:00.000Z'), loadOptions: RACK, profileLoads: who.loads, unit,
+      const props = { now: Date.parse('2026-11-04T10:01:00.000Z'), rampLoads: RACK, profileLoads: who.loads, unit,
         onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {},
         onExtendRest() {}, onReturn() {} };
       const trainHtml = (history: WorkoutRecord[], weight: number, planned: number) =>
@@ -124,7 +124,7 @@ test('a held typed load reads as typed on target, header, chip, Today row and re
       assert.equal(held.planned[0].weight, typed, 'held load');
       const session = createSession({ id: 'n', name: 'A', dayIndex: 0, now: '2026-11-04T10:00:00.000Z', exercises: [held] });
       const trainHtml = renderToStaticMarkup(createElement(TrainScreen, { now: Date.parse('2026-11-04T10:01:00.000Z'),
-        loadOptions: RACK, profileLoads: who.loads, unit, history, session, onMinimize() {}, onFinish() {}, onUpdateSet() {},
+        rampLoads: RACK, profileLoads: who.loads, unit, history, session, onMinimize() {}, onFinish() {}, onUpdateSet() {},
         onLogSet() {}, onToggleRestPause() {}, onExtendRest() {}, onReturn() {} }));
       assert.match(plain(trainHtml), new RegExp(`Previous ${unit} each Reps Log ${WARM_ROWS}1 42\\.3 × 9 `), `${unit} previous`);
       assert.deepEqual(weights(trainHtml, unit), ['42.3', '42.3', '42.3'], `${unit} target rows`);
@@ -148,7 +148,7 @@ test('a held typed load reads as typed on target, header, chip, Today row and re
       assert.equal(progressionLines(topped[0], who, topped, unit)[0].next, '8 reps @ your next dumbbell up', `${unit} recap Next`);
       const raise = createSession({ id: 'g', name: 'A', dayIndex: 0, now: '2026-11-04T10:00:00.000Z', exercises: [liveExercises(adapted, who, topped)[0]] });
       const logger = plain(renderToStaticMarkup(createElement(TrainScreen, { now: Date.parse('2026-11-04T10:01:00.000Z'),
-        loadOptions: RACK, calibrationLoads: RACK, experience: 'Beginner', goHeavier: { [id]: typed }, profileLoads: who.loads, unit,
+        rampLoads: RACK, calibrationLoads: RACK, experience: 'Beginner', goHeavier: { [id]: typed }, profileLoads: who.loads, unit,
         history: topped, session: raise, onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {},
         onExtendRest() {}, onReturn() {} })));
       assert.match(logger, new RegExp(`Ready to go heavier\\. Pick your next dumbbell up from ${exact.replace('.', '\\.')} each, for 8 reps\\.`), `${unit} logger asks for the next load`);
@@ -201,7 +201,7 @@ test('an app-prescribed barbell step reads the same on target, rows, Log button 
     const held = liveExercises(adapted, bar, history)[0]; // unused shape check
     const session = createSession({ id: 'n', name: 'B', dayIndex: 0, now: '2026-11-04T10:00:00.000Z', exercises: [{ exerciseId: 'barbell-row',
       name: 'Barbell Row', planned: [0, 1, 2].map(() => ({ weight: step, reps: 10 })), performed: [0, 1, 2].map(() => ({ weight: step, reps: 10, done: false })) }] });
-    const html = renderToStaticMarkup(createElement(TrainScreen, { now: Date.parse('2026-11-04T10:01:00.000Z'), loadOptions: [], profileLoads: bar.loads,
+    const html = renderToStaticMarkup(createElement(TrainScreen, { now: Date.parse('2026-11-04T10:01:00.000Z'), rampLoads: [], profileLoads: bar.loads,
       unit: 'lb', history, session, onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {}, onExtendRest() {},
       onReturn() {} }));
     const text = plain(html);
@@ -249,7 +249,7 @@ test('a logged load reads like its target when accepted unchanged and as typed o
       const step = prescribeExercise(ohp, bar, first).weight;
       assert.equal(step, 22.5, 'the app steps to 22.5 kg');
       const X = inputValue(step, unit); // 49.5 lb / 22.5 kg
-      const trainProps = { now: Date.parse('2026-11-04T10:01:00.000Z'), loadOptions: [], profileLoads: bar.loads, unit,
+      const trainProps = { now: Date.parse('2026-11-04T10:01:00.000Z'), rampLoads: [], profileLoads: bar.loads, unit,
         onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {}, onExtendRest() {},
         onReturn() {} };
       const re = (value: string) => value.replace('.', '\\.');
