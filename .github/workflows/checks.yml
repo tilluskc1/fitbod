@@ -11,7 +11,8 @@ on:
 
 concurrency:
   group: checks-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded PR runs only; every push to main finishes (#319).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -77,16 +78,19 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots-${{ github.sha }}
+          # run_attempt keeps "Re-run jobs" from colliding with the first attempt's artifact (#319).
+          name: screenshots-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/shots
           if-no-files-found: warn
           retention-days: 14
 
+      # A read-only token (Dependabot, forks) can 403 here; that must not turn `checks` red (#319).
       - name: Comment screenshot link on the PR
+        continue-on-error: true
         if: >-
-          always() && github.event_name == 'pull_request' &&
+          ${{ !cancelled() && github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
-          steps.shots.outputs.artifact-url != ''
+          steps.shots.outputs.artifact-url != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
@@ -102,7 +106,7 @@ jobs:
           - [Screenshots (390x844, 360x780, 390x650, artifact zip)](${SHOTS_URL})
           - [Run log](${RUN_URL})"
           id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
-            --jq "[.[] | select(.body | startswith(\"${marker}\"))][0].id // empty")"
+            --jq "[.[] | select(.body | startswith(\"${marker}\"))][0].id // empty" | head -n1)"
           if [ -n "$id" ]; then
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -f body="$body" >/dev/null
           else
