@@ -34,6 +34,20 @@ export function toastShows(notice: Notice | null, sheetOpen: boolean): boolean {
 }
 
 /**
+ * (#351) A Done that says something was saved. Under a standing save error it is untrue, so it never
+ * shows there; the Problem card says what happened. "No sets logged, so nothing was saved." claims
+ * nothing and is not one.
+ */
+const SAVE_CLAIMS = ['Workout saved.', 'Saved for future workouts.'];
+
+export function claimsSave(notice: Notice | null): boolean {
+  return notice !== null && notice.kind === 'done' && SAVE_CLAIMS.some((claim) => notice.text.startsWith(claim));
+}
+
+/** (#351) A notice updater for a failed save: a save claim goes, anything else stays. */
+export const dropSaveClaim = (notice: Notice | null): Notice | null => (claimsSave(notice) ? null : notice);
+
+/**
  * (#295, #307) Today's Heads-up cards, in priority order. Product default (owner can override):
  * at most one shows at a time; the install note first, then the backup note, then the rest
  * (a passing Heads-up message, the Limited day, the fresher-day offer).
