@@ -27,9 +27,32 @@ export function areasOf(muscles: MuscleGroup[]): Area[] {
   return AREAS.filter((area) => AREA_MUSCLES[area].some((muscle) => muscles.includes(muscle)));
 }
 
-/** A today-only day is named after what it trains: "Chest + Core". */
+/** (#296) Switch's presets, each the coach's call and matching the split day it is named after. */
+export type Preset = 'Upper' | 'Lower' | 'Push' | 'Pull' | 'Full body';
+export const PRESETS: Preset[] = ['Upper', 'Lower', 'Push', 'Pull', 'Full body'];
+export const PRESET_MUSCLES: Record<Preset, MuscleGroup[]> = {
+  Upper: ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps'],
+  Lower: ['Quads', 'Hamstrings', 'Glutes', 'Calves'],
+  Push: ['Chest', 'Shoulders', 'Triceps'],
+  Pull: ['Back', 'Biceps'],
+  'Full body': ['Chest', 'Back', 'Quads', 'Hamstrings', 'Shoulders', 'Core'],
+};
+
+/** The preset these muscles are exactly, in any order, or null. */
+export function presetOf(focus: MuscleGroup[]): Preset | null {
+  return PRESETS.find((preset) => PRESET_MUSCLES[preset].length === focus.length
+    && PRESET_MUSCLES[preset].every((muscle) => focus.includes(muscle))) ?? null;
+}
+
+/**
+ * A today-only day is named after what it trains: "Chest + Core". A preset that whole areas cannot
+ * say is named for itself (#296): Pull trains Back and Biceps, not "Back + Arms". Days the areas
+ * do say keep their area names, as Plan today with me has always named them ("Legs").
+ */
 export function customDayName(focus: MuscleGroup[]): string {
-  return areasOf(focus).join(' + ') || 'Today';
+  const areas = areasOf(focus);
+  const whole = musclesOf(areas).length === new Set(focus).size;
+  return (whole ? null : presetOf(focus)) ?? (areas.join(' + ') || 'Today');
 }
 
 const ARM_MUSCLES: MuscleGroup[] = ['Biceps', 'Triceps'];

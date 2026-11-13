@@ -385,7 +385,7 @@ export interface DayStatus {
  * pulling work") do not apply: the lifter asked for areas, not a Push or Pull day.
  */
 export function describedStatus(
-  day: Pick<TalkState, 'train' | 'skip' | 'equipment' | 'minutes'>,
+  day: Pick<TalkState, 'train' | 'skip' | 'equipment' | 'minutes'> & { focus?: MuscleGroup[] },
   program: Pick<Program, 'feasibility'>,
   adapted: DayExercises,
   profile: Profile,
@@ -394,7 +394,10 @@ export function describedStatus(
   const skipMuscles = musclesOf(day.skip);
   const kit = kitProfile(profile, day.equipment);
   const caps = capabilitiesFor(kit);
-  const gaps = day.train.flatMap((area) => AREA_MUSCLES[area].flatMap((muscle): CustomDayPreview['gaps'] => {
+  // (#296) A preset's own muscles when it carries them (Push trains Triceps, not all of Arms), else the asked areas'.
+  const asked = day.focus ?? day.train.flatMap((area) => AREA_MUSCLES[area]);
+  const gaps = asked.flatMap((muscle): CustomDayPreview['gaps'] => {
+    const area = areasOf([muscle])[0];
     if (adapted.exercises.some((exercise) => primary(exercise.exerciseId) === muscle)) return [];
     const possible = EXERCISES.filter((exercise) => exercise.muscles[0] === muscle
       && provides(caps, exercise.needs) && !kit.exclusions.includes(exercise.id));
@@ -410,7 +413,7 @@ export function describedStatus(
     // An empty day left nothing out for time or the cap: it is the day's "Not enough equipment" (#216).
     if (adapted.exercises.length === 0) return [{ area, muscle, cause: 'gear' }];
     return [{ area, muscle, cause: adapted.exercises.length >= MAX_EXERCISES[profile.experience] ? 'cap' : 'time' }];
-  }));
+  });
   const of = (cause: GapCause) => gaps.filter((gap) => gap.cause === cause).map((gap) => gap.muscle);
   const reasons: DayStatus['reasons'] = [];
   if (of('gear').length) reasons.push({ label: 'Not possible here:', text: `no ${nouns(of('gear'))} exercise with this gear.` });
@@ -429,7 +432,8 @@ export function describedStatus(
 /** Today's described day, read back from its constraints (#219); null on a planned day. */
 export function describedDayStatus(constraints: Constraints, program: Pick<Program, 'feasibility'>, adapted: DayExercises, profile: Profile): DayStatus | null {
   if (!constraints.focus) return null;
-  const day = { train: areasOf(constraints.focus), skip: areasOf(constraints.skip ?? []), equipment: constraints.equipment, minutes: constraints.minutes };
+  const skip = constraints.skip ?? [];
+  const day = { train: areasOf(constraints.focus), skip: areasOf(skip), equipment: constraints.equipment, minutes: constraints.minutes, focus: constraints.focus.filter((muscle) => !skip.includes(muscle)) };
   return describedStatus(day, program, adapted, profile);
 }
 

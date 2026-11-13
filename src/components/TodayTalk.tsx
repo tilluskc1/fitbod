@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Profile } from '../types';
 import type { EquipmentChoice } from '../lib/adapt';
 import { AREAS } from '../lib/areas';
@@ -31,6 +31,8 @@ interface Props {
   onStart: (talk: TalkState) => void;
   /** Open or previewing: the screen's other primary steps aside. */
   onActive?: (active: boolean) => void;
+  /** (#296) Bumped by Switch's "Sore or hurt? Plan today with me": opens at the first question. */
+  openAsk?: number;
 }
 
 const QUESTION_TEXT: Record<Question, string> = {
@@ -47,7 +49,7 @@ const minutesLabel = (minutes: number) => (minutes === 60 ? '1 hr' : `${minutes}
  * same answers from a sentence. Answers are chip taps over the text (`composeTalk`), so every way
  * of answering builds the same day. Voice is the keyboard's own dictation: nothing here listens.
  */
-export default function TodayTalk({ profile, plannedName, plannedAreas, savedGear, savedMinutes, base, preview, onStart, onActive }: Props) {
+export default function TodayTalk({ profile, plannedName, plannedAreas, savedGear, savedMinutes, base, preview, onStart, onActive, openAsk = 0 }: Props) {
   const [step, setStep] = useState<Question | 'summary' | null>(null);
   const [text, setText] = useState('');
   // Answers sit on top of the text, so typing more never undoes them (see `tapsAfterEdit`).
@@ -65,6 +67,20 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
     onActive?.(step !== null);
     return () => onActive?.(false);
   }, [step, onActive]);
+  // (#296) Asked from Switch: open at Q1, after the sheet has closed.
+  const [seenAsk, setSeenAsk] = useState(openAsk);
+  if (seenAsk !== openAsk) {
+    setSeenAsk(openAsk);
+    setStep('time');
+    setBuilt(null);
+  }
+  useEffect(() => {
+    if (openAsk === 0) return;
+    requestAnimationFrame(() => {
+      titleRef.current?.scrollIntoView({ block: 'nearest' });
+      titleRef.current?.focus();
+    });
+  }, [openAsk]);
   // Gear or time changed in another sheet: that newer choice shows through the answers.
   const baseKey = `${base.equipment}:${base.minutes}`;
   const [seenBase, setSeenBase] = useState(baseKey);
