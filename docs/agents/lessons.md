@@ -233,6 +233,14 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    model; pin the old output only where the feature is off by design (Beginner, over 45, switch Off), and
    say so in the test. Check: `grep -rn "pairExercises" tests` lists only the supersets tests.
 
+35. **A calendar-day e2e pins its clock.** #296 review 2: the switch-picks e2e seeded sessions "26 h" and
+   "40 h" ago and asserted "trained yesterday" and "trained 2 days ago"; at some hours (and in some time
+   zones) those land on another calendar day, so the suite failed by time of day. Review 1 had also failed
+   on a cut label that only the longest text ("trained 2 days ago") showed, which the first e2e never seeded.
+   Rule: an e2e that asserts a calendar-day word fixes the page clock (`page.clock.setFixedTime(local noon)`)
+   and seeds the longest label it can show. Check: `scripts/e2e/switch-picks.mjs` passes under
+   `TZ=Europe/Moscow` and `TZ=Asia/Tokyo`; its 5f58f9c version fails under Moscow.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

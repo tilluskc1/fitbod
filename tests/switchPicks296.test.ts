@@ -60,6 +60,10 @@ test('#296 a preset fills its parts, editing a part clears the preset, every par
   assert.deepEqual(edited, { preset: null, parts: ['Chest', 'Shoulders'] });
   assert.equal(pickLabel(parts('Shoulders', 'Arms')), 'Shoulders + Arms');
   assert.equal(pickLabel(parts('Core')), 'Abs', 'the Core area reads Abs');
+  // Parts that are exactly a preset read as it, as Today will name the day (review 2).
+  assert.equal(pickLabel(parts('Legs')), 'Lower');
+  assert.equal(pickLabel(parts('Chest', 'Back', 'Shoulders', 'Arms')), 'Upper');
+  assert.equal(customDayName(pickedMuscles(parts('Legs'))), pickLabel(parts('Legs')));
   const all = parts(...AREAS);
   assert.equal(all.preset, null);
   assert.equal(pickLabel(all), 'Full body');

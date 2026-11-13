@@ -3,7 +3,7 @@ import { exerciseById } from '../data/exercises.ts';
 import type { MuscleGroup, Profile, WorkoutRecord } from '../types.ts';
 import { todayGlance } from './adapt.ts';
 import type { AdaptedWorkout, Constraints } from './adapt.ts';
-import { AREAS, AREA_MUSCLES, PRESET_MUSCLES, areasOf, musclesOf } from './areas.ts';
+import { AREAS, AREA_MUSCLES, PRESET_MUSCLES, areasOf, musclesOf, presetOf } from './areas.ts';
 import type { Area, Preset } from './areas.ts';
 import { isCompound } from './progression.ts';
 import { dayLabel, recentlyTrained } from './recovery.ts';
@@ -55,7 +55,9 @@ export function pickedMuscles(picks: Picks): MuscleGroup[] {
 
 /** "Push", or the parts by their chip names: "Shoulders + Arms". */
 export function pickLabel(picks: Picks): string {
-  return effectivePreset(picks) ?? AREAS.filter((area) => picks.parts.includes(area)).map((area) => PART_LABEL[area]).join(' + ');
+  // Parts that are exactly a preset read as it, as Today names the day (Legs alone is "Lower", review 2).
+  return effectivePreset(picks) ?? presetOf(pickedMuscles(picks))
+    ?? AREAS.filter((area) => picks.parts.includes(area)).map((area) => PART_LABEL[area]).join(' + ');
 }
 
 /**

@@ -91,11 +91,15 @@ async function buildInView(page, where) {
   check(box && box.y >= 0 && box.y + box.height <= height, `${where}: Build is not in view (${JSON.stringify(box)} of ${height})`);
 }
 
+const noon = new Date();
+noon.setHours(12, 0, 0, 0);
 const browser = await chromium.launch();
 try {
   for (const [width, height] of [[390, 844], [360, 780], [390, 650]]) {
     const where = `${width}x${height}`;
     const page = await browser.newPage({ viewport: { width, height } });
+    // (#296 review 2) A fixed local noon, so "yesterday" and "2 days ago" never depend on when this runs.
+    await page.clock.setFixedTime(noon);
     await onboard(page);
     const planned = await heroTitle(page);
     check(/Push/.test(planned), `${where}: a 3-day plan does not start on Push ("${planned}")`);
@@ -104,10 +108,9 @@ try {
     await page.evaluate((key) => {
       const saved = JSON.parse(localStorage.getItem(key));
       const { state } = saved;
+      // The page clock is fixed at local noon: 26 h ago is yesterday 10:00, 40 h ago two days ago 20:00.
       const ended = new Date(Date.now() - 26 * 3_600_000).toISOString();
-      // Two calendar days back whatever the hour: 23:00 two days ago, or 40 h ago if that is later.
-      const back = new Date(); back.setDate(back.getDate() - 2); back.setHours(23, 0, 0, 0);
-      const twoDays = new Date(Math.max(back.getTime(), Date.now() - 40 * 3_600_000)).toISOString();
+      const twoDays = new Date(Date.now() - 40 * 3_600_000).toISOString();
       state.history = [{
         id: 'w-yesterday', date: ended, endedAt: ended, name: 'Earlier', dayIndex: 0, status: 'completed', completedEarly: false,
         exercises: [{ exerciseId: 'barbell-bench-press', name: 'Bench Press', planned: [{ reps: 8, weight: 95 }], performed: [{ weight: 95, reps: 8, done: true, completedAt: ended }] }],
