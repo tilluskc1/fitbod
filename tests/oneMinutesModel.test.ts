@@ -223,10 +223,10 @@ test('#203: rendered, the app\'s Today, Plan\'s later list, the switch sheet and
     const planText = plain(renderToStaticMarkup(createElement(Plan, {
       profile, upcoming: upcomingDays(profile, plan, slots[0], []), focus: slots[0].focus, program: upperA,
       today: todayGlance(adaptWorkout(upperA, defaultConstraints(profile), [], profile.goal), null, false, profile.goal),
-      slotLabel: 'Day 1 of 4', history: [], unit: 'kg', now: new Date('2026-11-07T10:00:00Z'),
-      onOpenSettings() {}, onViewDay() {}, onOpenLibrary() {},
+      history: [], unit: 'kg', onOpenSettings() {}, onViewDay() {}, onOpenLibrary() {},
     })));
-    assert.match(planText, new RegExp(`THEN Lower A [^0-9]*${minutes} min · `));
+    // (#297) Lower A is the row after Upper A ("Next"); its stats line ends with the shared minutes.
+    assert.match(planText, new RegExp(`Next Lower A [^0-9]*\\d+ exercises? · \\d+ sets? · ${minutes} min`));
 
     // The switch sheet from Upper A.
     const { default: SwitchSheet } = await server.ssrLoadModule('/src/components/SwitchSheet.tsx');

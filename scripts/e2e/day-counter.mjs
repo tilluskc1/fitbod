@@ -60,15 +60,20 @@ async function finishWorkout(page) {
   await page.waitForSelector('.t7-hero');
 }
 
-/** Today's hero and Plan's Up next name the same day, and neither claims "this week". */
+/**
+ * Today's hero carries the day counter and names the same day Plan's Today row does; neither claims
+ * "this week". (#297 moved the counter off Plan's rows, which now read Today / Next / Then.)
+ */
 async function heroMatchesPlan(page, where) {
   await page.waitForSelector('.t7-hero');
   const hero = await page.locator('.t7-hero').innerText();
   await page.getByRole('button', { name: 'Plan', exact: true }).click();
+  await page.waitForSelector('.plan-row--today');
+  const planToday = (await page.locator('.plan-row--today .plan-row__name').innerText()).trim();
   const plan = await page.locator('body').innerText();
-  const upNext = plan.match(/UP NEXT · [^\n]*/)?.[0] ?? '';
-  check(counterOf(hero) && counterOf(hero) === counterOf(upNext), `${where}: hero "${counterOf(hero)}" vs Plan "${upNext}"`);
-  check(!/\bDay \d+ of \d+ this week/i.test(hero + plan), `${where}: the counter claims "this week"`);
+  check(counterOf(hero), `${where}: hero lacks a day counter ("${hero.replace(/\n/g, ' | ')}")`);
+  check(planToday && hero.includes(planToday), `${where}: hero "${hero.replace(/\n/g, ' | ')}" does not name Plan Today "${planToday}"`);
+  check(!/\bDay \d+ of \d+ this week/i.test(hero + plan) && !/UP NEXT/i.test(plan), `${where}: the counter claims "this week" or UP NEXT lingers`);
   await page.getByRole('button', { name: 'Today', exact: true }).click();
 }
 
@@ -87,8 +92,10 @@ try {
     if (shots) await page.screenshot({ path: join(shots, `271-today-${where}.png`) });
 
     await page.getByRole('button', { name: 'Plan', exact: true }).click();
+    await page.waitForSelector('.plan-row--today');
     const plan = await page.locator('body').innerText();
-    check(/UP NEXT · DAY 1 OF 4(?! THIS WEEK)/.test(plan), `${where}: Plan Up next lacks the day counter`);
+    // (#297) Plan reads Today / Next / Then with plain-word focus, no "DAY n OF m" counter and no "slot".
+    check(/Today[\s\S]*Next[\s\S]*Then/.test(plan) && !/UP NEXT|DAY \d+ OF/i.test(plan), `${where}: Plan still shows the old day-counter rows`);
     noSlot(plan, `${where} Plan`);
     if (shots) await page.screenshot({ path: join(shots, `271-plan-${where}.png`) });
 

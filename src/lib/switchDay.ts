@@ -1,4 +1,4 @@
-import type { AppState, Profile, WorkoutRecord } from '../types.ts';
+import type { AppState, Feasibility, MuscleGroup, Profile, WorkoutRecord } from '../types.ts';
 import { adaptWorkout, todayGlance } from './adapt.ts';
 import type { Constraints } from './adapt.ts';
 import { defaultConstraints } from './constraints.ts';
@@ -54,12 +54,16 @@ export function switchOptions(
 export interface UpcomingDay {
   id: string;
   name: string;
-  focus: string[];
+  focus: MuscleGroup[];
   exercises: number;
   sets: number;
   minutes: number;
   approx: boolean;
   status?: 'ok' | 'limited' | 'infeasible';
+  /** (#297) The day's exercises as it will run: Plan names core only when one trains it. */
+  exerciseIds?: string[];
+  /** (#297) Its feasibility, for Plan's status chip and reason. */
+  feasibility?: Feasibility;
 }
 
 /**
@@ -70,7 +74,8 @@ export function upcomingDays(profile: Profile, plan: AppState['plan'], slot: Pla
   const slots = planSlots(plan);
   return slots.map((_, k) => slots[(slot.index + k) % slots.length]).slice(1).map((day) => {
     const built = slotProgram(profile, day, history);
-    const glance = todayGlance(adaptWorkout(built, defaultConstraints(profile), profile.exclusions ?? [], profile.goal, profile), null, false, profile.goal, profile);
+    const adapted = adaptWorkout(built, defaultConstraints(profile), profile.exclusions ?? [], profile.goal, profile);
+    const glance = todayGlance(adapted, null, false, profile.goal, profile);
     return {
       id: day.id,
       name: day.name,
@@ -80,6 +85,8 @@ export function upcomingDays(profile: Profile, plan: AppState['plan'], slot: Pla
       minutes: glance.minutes,
       approx: glance.approx,
       status: built.feasibility?.status,
+      exerciseIds: adapted.exercises.map((exercise) => exercise.exerciseId),
+      feasibility: built.feasibility,
     };
   });
 }

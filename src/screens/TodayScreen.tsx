@@ -23,6 +23,7 @@ import type { FresherDay } from '../lib/recovery';
 import type { SwitchOption } from '../lib/switchDay';
 import Icon from '../components/ui/Icon';
 import { NoticeCard } from '../components/ui/Notices';
+import TodayOnlyBar from '../components/ui/TodayOnlyBar';
 import { todayCard } from '../lib/notices';
 
 interface Props {
@@ -397,15 +398,7 @@ export default function TodayScreen({
         </section>
 
         {/* (#298) Today differs from the saved setup: say what, and undo it in one tap. */}
-        {todayBar && !current && (
-          <div className="t7-today-only" role="status">
-            <Icon name="calendar_month" size={18} />
-            <span className="t7-today-only__l">{todayBar.label}</span>
-            {onUndo && canRestore && (
-              <button type="button" className="t7-today-only__undo" onClick={onUndo}>Undo</button>
-            )}
-          </div>
-        )}
+        {!current && <TodayOnlyBar bar={todayBar} onUndo={canRestore ? onUndo : undefined} />}
 
         {/* A described day names its gaps, open or not (#219); otherwise the status describes the saved setup. */}
         {described && <DescribedNote day={described} />}

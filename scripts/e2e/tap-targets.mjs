@@ -109,11 +109,11 @@ try {
     await page.locator('.coach-card__actions').scrollIntoViewIfNeeded();
     await shot(page, 'today', where);
 
-    // Plan: View session, then the Equipment tab's Edit.
+    // Plan: View (the Today row's session preview), then the Equipment tab's Edit.
     await page.getByRole('button', { name: 'Plan', exact: true }).click();
-    await target(page, page.getByRole('button', { name: 'View session' }), 'View session', `${where} Plan`);
+    await page.waitForSelector('.plan-row--today');
+    await target(page, page.locator('.plan-row--today').getByRole('button', { name: 'View' }), 'View', `${where} Plan`);
     await noOverflow(page, `${where} Plan`);
-    await page.locator('.plan-foot').first().scrollIntoViewIfNeeded();
     await shot(page, 'plan', where);
     await page.getByRole('tab', { name: 'Equipment' }).click();
     await target(page, page.getByRole('button', { name: 'Edit', exact: true }), 'Edit', `${where} Plan equipment`);
