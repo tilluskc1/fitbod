@@ -107,7 +107,7 @@ test('#260 with #220: a described session shows its progress, keeps its own stat
   await withToday((Today) => {
     const today = render(Today, session, { profile: gym, adapted: live, program: shortDay,
       described: describedSessionStatus(session, ask, gym) });
-    assert.match(plain(today), /Legs in progress.*Today only/);
+    assert.match(plain(today), /Lower in progress.*Today only/);
     assert.deepEqual(chipOf(today)?.slice(1).map((part) => part.trim()), ['ready', 'play_arrow', `In progress · 1 of ${sets} sets`]);
     assert.match(dockOf(today), /Resume workout/);
     assert.doesNotMatch(today, /Short on time or gear\?/);

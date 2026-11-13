@@ -4731,7 +4731,7 @@ button.aw-exercise__name-btn {
 }
 .sw-chip[aria-pressed='true'] { background: var(--primary); color: var(--on-primary); }
 .sw-chip--part {
-  padding: 4px 6px;
+  padding: 4px 2px;
   border-radius: 16px;
   display: grid;
   place-content: center;
@@ -4740,7 +4740,7 @@ button.aw-exercise__name-btn {
   min-width: 0;
 }
 .sw-chip__name { font-size: 14px; }
-.sw-chip__rec { font-size: 11px; font-weight: 400; color: var(--amber); overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.sw-chip__rec { font-size: 10.5px; letter-spacing: -0.01em; font-weight: 400; color: var(--amber); overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .sw-chip[aria-pressed='true'] .sw-chip__rec { color: inherit; opacity: 0.85; }
 .sw-out { display: grid; gap: 8px; }
 .sw-out:empty { display: none; }

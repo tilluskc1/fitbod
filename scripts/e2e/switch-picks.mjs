@@ -105,9 +105,16 @@ try {
       const saved = JSON.parse(localStorage.getItem(key));
       const { state } = saved;
       const ended = new Date(Date.now() - 26 * 3_600_000).toISOString();
+      // Two calendar days back whatever the hour: 23:00 two days ago, or 40 h ago if that is later.
+      const back = new Date(); back.setDate(back.getDate() - 2); back.setHours(23, 0, 0, 0);
+      const twoDays = new Date(Math.max(back.getTime(), Date.now() - 40 * 3_600_000)).toISOString();
       state.history = [{
         id: 'w-yesterday', date: ended, endedAt: ended, name: 'Earlier', dayIndex: 0, status: 'completed', completedEarly: false,
         exercises: [{ exerciseId: 'barbell-bench-press', name: 'Bench Press', planned: [{ reps: 8, weight: 95 }], performed: [{ weight: 95, reps: 8, done: true, completedAt: ended }] }],
+      }, {
+        // (#296 review 1) 40 h ago, so a chip carries the longest label, "trained 2 days ago", at every size.
+        id: 'w-two-days', date: twoDays, endedAt: twoDays, name: 'Earlier', dayIndex: 1, status: 'completed', completedEarly: false,
+        exercises: [{ exerciseId: 'back-squat', name: 'Back Squat', planned: [{ reps: 8, weight: 135 }], performed: [{ weight: 135, reps: 8, done: true, completedAt: twoDays }] }],
       }];
       localStorage.setItem(key, JSON.stringify(saved));
     }, KEY);
@@ -123,6 +130,9 @@ try {
     const chest = squash(await chip(page, 'Chest').innerText());
     check(/trained (yesterday|today)/.test(chest), `${where}: the Chest chip reads "${chest}"`);
     check(await chip(page, 'Chest').isEnabled(), `${where}: the recovering Chest chip is not selectable`);
+    const legs = squash(await chip(page, 'Legs').innerText());
+    check(legs === 'Legs trained 2 days ago', `${where}: the Legs chip reads "${legs}"`);
+    await chipsFit(page, where);
 
     // A preset fills its parts; the consequence line names it.
     await chip(page, 'Pull').click();

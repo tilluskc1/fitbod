@@ -45,14 +45,12 @@ export function presetOf(focus: MuscleGroup[]): Preset | null {
 }
 
 /**
- * A today-only day is named after what it trains: "Chest + Core". A preset that whole areas cannot
- * say is named for itself (#296): Pull trains Back and Biceps, not "Back + Arms". Days the areas
- * do say keep their area names, as Plan today with me has always named them ("Legs").
+ * A today-only day is named after what it trains: "Chest + Core", or the preset it is exactly
+ * (#296): Switch's Upper reads "Upper" on Today too, and so does the same day built in Plan today
+ * with me (Legs alone is "Lower"), so one day has one name on every screen.
  */
 export function customDayName(focus: MuscleGroup[]): string {
-  const areas = areasOf(focus);
-  const whole = musclesOf(areas).length === new Set(focus).size;
-  return (whole ? null : presetOf(focus)) ?? (areas.join(' + ') || 'Today');
+  return presetOf(focus) ?? (areasOf(focus).join(' + ') || 'Today');
 }
 
 const ARM_MUSCLES: MuscleGroup[] = ['Biceps', 'Triceps'];

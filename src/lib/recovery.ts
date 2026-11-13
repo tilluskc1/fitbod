@@ -133,7 +133,8 @@ export interface FresherDay {
   when: string;
 }
 
-function dayLabel(at: Date, now: Date): string {
+/** "today", "yesterday" or "2 days ago" by calendar day (#134; #296's chip labels). */
+export function dayLabel(at: Date, now: Date): string {
   const startOf = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   const days = Math.round((startOf(now) - startOf(at)) / (24 * HOUR_MS));
   return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;

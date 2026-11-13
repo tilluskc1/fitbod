@@ -123,8 +123,10 @@ test('#296 a Pull pick on a Push day is a described Pull day; the plan cursor is
   assert.match(consequenceLine(preview), /^Pull · \d+ exercises · \d+ sets · ≈?\d+ min$/);
   // Picks equal to the planned day are the planned day, as in Plan today with me.
   assert.equal(pickConstraints(pickPreset(NO_PICKS, 'Push'), defaultConstraints(gym), slotOf(gym, 3, 'Push').focus, 45).focus, undefined);
-  // Area-shaped days keep the names Plan today with me always gave them.
-  assert.equal(customDayName(PRESET_MUSCLES.Lower), 'Legs');
+  // One day, one name: Upper and Lower read so on Today too, whichever screen built them (review 1).
+  assert.equal(customDayName(PRESET_MUSCLES.Upper), 'Upper');
+  assert.equal(customDayName(PRESET_MUSCLES.Lower), 'Lower');
+  assert.equal(customDayName(['Shoulders', 'Biceps', 'Triceps']), 'Shoulders + Arms');
 });
 
 test('#296 bodyweight and Back: Not enough equipment with its gear reason, never padded', () => {

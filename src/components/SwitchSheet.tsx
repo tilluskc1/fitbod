@@ -47,8 +47,14 @@ export default function SwitchSheet({ options, onPick, onClose, preview, recover
       variant="switch"
       footer={(
         <>
-          {picks.parts.length === 0 && <p className="sw-hint">Pick at least one</p>}
-          <button type="button" className="pill-primary sw-build" disabled={!canBuild} onClick={() => onBuild(picks)}>
+          {picks.parts.length === 0 && <p className="sw-hint" id="sw-hint">Pick at least one</p>}
+          <button
+            type="button"
+            className="pill-primary sw-build"
+            disabled={!canBuild}
+            aria-describedby={picks.parts.length === 0 ? 'sw-hint' : built ? 'sw-line' : undefined}
+            onClick={() => onBuild(picks)}
+          >
             Build this workout
           </button>
         </>
@@ -109,7 +115,7 @@ export default function SwitchSheet({ options, onPick, onClose, preview, recover
         <div className="sw-out" aria-live="polite">
           {built && (
             <>
-              <p className={`sw-line sw-line--${built.status}`}>{consequenceLine(built)}</p>
+              <p className={`sw-line sw-line--${built.status}`} id="sw-line">{consequenceLine(built)}</p>
               {built.smallLine && <p className="sw-note">{built.smallLine}</p>}
               {built.status !== 'ready' && built.reasons.length > 0 && (
                 <div className={`feasibility feasibility--${built.status === 'none' ? 'infeasible' : 'limited'}`} role="note">

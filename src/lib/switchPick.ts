@@ -6,7 +6,7 @@ import type { AdaptedWorkout, Constraints } from './adapt.ts';
 import { AREAS, AREA_MUSCLES, PRESET_MUSCLES, areasOf, musclesOf } from './areas.ts';
 import type { Area, Preset } from './areas.ts';
 import { isCompound } from './progression.ts';
-import { recentlyTrained } from './recovery.ts';
+import { dayLabel, recentlyTrained } from './recovery.ts';
 import { describedDayStatus, talkConstraints } from './todayTalk.ts';
 
 export { PRESETS, PRESET_MUSCLES } from './areas.ts';
@@ -94,13 +94,10 @@ export function pickConstraints(picks: Picks, today: Constraints, plannedFocus: 
 export function recoveryLabels(history: WorkoutRecord[], now: Date): Partial<Record<Area, string>> {
   const recent = recentlyTrained(history, now);
   const labels: Partial<Record<Area, string>> = {};
-  const midnight = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   for (const area of AREAS) {
     const times = AREA_MUSCLES[area].map((muscle) => recent.get(muscle)).filter((at): at is Date => at !== undefined);
     if (times.length === 0) continue;
-    const last = new Date(Math.max(...times.map((at) => at.getTime())));
-    const days = Math.round((midnight(now) - midnight(last)) / 86_400_000);
-    labels[area] = days <= 0 ? 'trained today' : days === 1 ? 'trained yesterday' : `trained ${days} days ago`;
+    labels[area] = `trained ${dayLabel(new Date(Math.max(...times.map((at) => at.getTime()))), now)}`;
   }
   return labels;
 }
