@@ -5050,7 +5050,8 @@ button.aw-exercise__name-btn {
 }
 
 .feedback-form__note {
-  margin-top: 8px;
+  /* (#349) Sits between the label and the box; the gap below clears the box's focus ring. */
+  margin: 6px 0 12px;
   color: var(--secondary);
   font-size: 13px;
   line-height: 1.45;

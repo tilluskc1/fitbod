@@ -195,7 +195,7 @@ try {
     const box = sheet.getByLabel('What should we know?');
     const name = sheet.getByLabel('Your name (optional)');
     const send = sheet.getByRole('button', { name: 'Send', exact: true });
-    check((await sheet.innerText()).includes(NOTE), `${where}: privacy line missing under the box`);
+    check((await sheet.innerText()).includes(NOTE), `${where}: privacy line missing`);
     check(await send.isDisabled(), `${where}: Send is on with an empty box`);
     await box.fill('   ');
     check(await send.isDisabled(), `${where}: Send is on with only spaces`);
@@ -376,6 +376,7 @@ try {
     const sheet = page.getByRole('dialog', { name: 'Send feedback' });
     const box = sheet.getByLabel('What should we know?');
     const send = sheet.getByRole('button', { name: 'Send', exact: true });
+    const privacy = sheet.getByText(NOTE);
     const owns = (loc) => loc.evaluate((el) => {
       const b = el.getBoundingClientRect();
       const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
@@ -399,6 +400,16 @@ try {
         check(s && s.y >= top && s.y + s.height <= bottom, `${tag}: Send outside the visible band (y ${s && Math.round(s.y)}-${s && Math.round(s.y + s.height)}, band ${top}-${bottom})`);
         check(b && b.y < bottom && b.y + Math.min(b.height, 44) > top && b.y >= top, `${tag}: note box not in the visible band (y ${b && Math.round(b.y)}, band ${top}-${bottom})`);
         check(b && s && b.y < s.y, `${tag}: note box below Send`);
+        // (#349) The privacy line sits above the box, fully in the band and clear of Send, while typing.
+        const p = await privacy.boundingBox();
+        check(p && p.y >= top && p.y + p.height <= bottom, `${tag}: privacy line outside the visible band (y ${p && Math.round(p.y)}-${p && Math.round(p.y + p.height)}, band ${top}-${bottom})`);
+        check(p && b && s && p.y + p.height <= b.y && p.y + p.height <= s.y, `${tag}: privacy line not above the note box and Send`);
+        const covered = await privacy.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const pts = [[r.left + 2, r.top + 2], [r.right - 2, r.top + 2], [r.left + 2, r.bottom - 2], [r.right - 2, r.bottom - 2], [r.left + r.width / 2, r.top + r.height / 2]];
+          return pts.filter(([x, y]) => { const hit = document.elementFromPoint(x, y); return !(hit && (hit === el || el.contains(hit))); }).length;
+        });
+        check(covered === 0, `${tag}: privacy line partly covered (${covered} of 5 points)`);
         check(await owns(send), `${tag}: Send does not own its tap`);
         check(await owns(box), `${tag}: note box does not own its tap`);
         if (shots && from !== 'recap') { await page.screenshot({ path: join(shots, `342-feedback-keyboard-${from}${shift ? `-shifted${shift}` : ''}-390x650.png`) }); }

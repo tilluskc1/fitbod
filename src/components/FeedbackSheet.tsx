@@ -39,6 +39,10 @@ export default function FeedbackSheet({ draft, status, onDraft, onSend, onClose 
         <label className="field-label" htmlFor="feedback-message">
           What should we know?
         </label>
+        {/* (#349) Above the box, so it stays in view above the field while the keyboard is up. */}
+        <p className="feedback-form__note" id="feedback-note">
+          {FEEDBACK_NOTE}
+        </p>
         <textarea
           id="feedback-message"
           className="feedback-form__message"
@@ -50,9 +54,6 @@ export default function FeedbackSheet({ draft, status, onDraft, onSend, onClose 
           aria-describedby="feedback-note"
           onChange={(event) => onDraft({ ...draft, message: event.target.value })}
         />
-        <p className="feedback-form__note" id="feedback-note">
-          {FEEDBACK_NOTE}
-        </p>
         <label className="field-label" htmlFor="feedback-name">
           Your name (optional)
         </label>
