@@ -361,7 +361,7 @@ export interface CustomDayPreview {
   why: { label: string; text: string }[];
 }
 
-const nouns = (muscles: MuscleGroup[]) => {
+export const nouns = (muscles: MuscleGroup[]) => {
   const list = muscles.map((muscle) => MUSCLE_NOUN[muscle]);
   return list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} or ${list[list.length - 1]}`;
 };

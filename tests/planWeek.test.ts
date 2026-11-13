@@ -23,14 +23,15 @@ test('Plan lists every day of the week after the one up next, and names a gym ki
     const noop = () => {};
     const html = renderToStaticMarkup(createElement(Plan, { profile: gym, upcoming, focus: slots[0].focus, program,
       today: todayGlance(adaptWorkout(program, defaultConstraints(gym), [], gym.goal), null), slotLabel: 'Day 1 of 4', history: [], unit: 'kg',
-      now: new Date('2026-11-07T10:00:00Z'), onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop }));
+      onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop }));
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-    assert.match(text, /UP NEXT · DAY 1 OF 4 Upper A Chest · Back · Shoulders · Biceps · Triceps/);
-    assert.match(text, /THEN Lower A Quads · Hamstrings · Glutes · Calves · Core 58 min · 6 exercises · 20 sets/);
-    assert.match(text, /AFTER THAT Upper B/);
-    assert.match(text, /AFTER THAT Lower B/);
+    // (#297) Rows are Today / Next / Then, focus in plain words, one stats line, no numbered circles.
+    assert.match(text, /Your usual: Gym · 60 min · 4 days a week Edit/);
+    assert.match(text, /Today Upper A chest, back, shoulders, biceps, triceps/);
+    assert.match(text, /Next Lower A quads, hamstrings, glutes, calves 6 exercises · 20 sets · 58 min/);
+    assert.match(text, /Then Upper B/);
+    assert.doesNotMatch(text, /UP NEXT|AFTER THAT|Your selected equipment/);
     assert.match(text, /Then the plan starts again from Upper A/);
-    assert.match(text, /Full gym/);
   } finally {
     await server.close();
   }

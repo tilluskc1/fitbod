@@ -545,53 +545,6 @@ textarea:focus-visible {
 
 /* ---------- Plan ---------- */
 
-.date-strip {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  margin: 6px 0 18px;
-}
-
-.date-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  padding: 10px 0 8px;
-  border-radius: 14px;
-  color: #3d4847;
-}
-
-.date-dow {
-  font-size: 11px;
-  color: #56615f;
-}
-
-.date-num {
-  font-size: 17px;
-}
-
-.date-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #c9d6d4;
-}
-
-.date-cell.active {
-  background: var(--lime);
-  color: #16230b;
-  border-radius: 26px;
-}
-
-.date-cell.active .date-dow {
-  color: #3b4a2a;
-}
-
-.date-cell.active .date-dot {
-  background: #4f5d0c;
-}
-
 .note-card {
   padding: 18px;
   border-radius: 14px;
@@ -603,77 +556,123 @@ textarea:focus-visible {
   margin-bottom: 22px;
 }
 
-.plan-item {
-  display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
-  gap: 14px;
-  padding: 16px 4px;
-  border-top: 1px solid #eef7f6;
-  width: 100%;
-  text-align: left;
-}
-
-.plan-index {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  border: 1px solid #dde8e6;
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  color: var(--accent-text);
-}
-
-.plan-kicker {
-  display: block;
-  font-size: 10.5px;
-  letter-spacing: 0.09em;
-  color: #56615f;
-  margin-bottom: 6px;
-}
-
-.plan-name {
-  display: block;
-  font-size: 22px;
-  letter-spacing: -0.04em;
-}
-
-.plan-meta {
-  display: block;
-  font-size: 13.5px;
-  color: #56615f;
-  margin-top: 5px;
-}
-
-.plan-focus {
-  display: block;
-  font-size: 13.5px;
-  color: var(--on-surface-muted);
-  margin-top: 4px;
-}
-
-.plan-item--later .plan-name {
-  font-size: 19px;
-}
-
-.plan-loop {
-  padding: 4px 4px 0;
-}
-
-.plan-foot {
+/* (#297) Plan's header: the saved setup, length and week, and Edit (44px). */
+.plan-usual {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-top: 14px;
-  font-size: 13.5px;
-  color: #56615f;
+  gap: 8px;
+  margin: 6px 0 0 10px;
+  font-size: 15px;
+  color: var(--secondary);
 }
-
-/* The caption wraps at 360, never the link (#136). */
-.plan-foot .text-link {
+.plan-usual > span { min-width: 0; }
+.plan-usual__edit,
+.plan-row__view {
   flex: none;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 10px;
+  color: var(--accent-text);
+  font-size: 15px;
+  font-weight: 600;
+  background: none;
+}
+/* (#297) Why days differ: one line under the header until tapped away. */
+.plan-explainer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0 0 0 12px;
+  border-radius: 14px;
+  background: var(--surface-container-high);
+  color: var(--on-surface-muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.plan-explainer > span { flex: 1 1 auto; padding: 8px 0; }
+.plan-explainer__close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: none;
+}
+.plan-screen .segmented { margin: 12px 0; }
+
+/* (#297) Plan rows: white cards, a muted label, the day and its focus, one stats line. */
+.plan-rows {
+  display: grid;
+  gap: 10px;
+}
+.plan-row {
+  display: grid;
+  /* A long today-only label ellipsizes inside the card instead of widening it. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 18px;
+  border-radius: 26px;
+  background: var(--surface-container-lowest);
+}
+.plan-row__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 18px;
+}
+.plan-row__label {
+  font-size: 13px;
+  color: var(--muted);
   white-space: nowrap;
+}
+.plan-row__title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  min-width: 0;
+}
+.plan-row__name {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.plan-row__focus {
+  font-size: 14px;
+  color: var(--on-surface-muted);
+}
+.plan-row__stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+/* View and Resume keep a 44px target without growing the line. */
+.plan-row__view { margin: -13px -10px -13px 0; border-radius: 12px; }
+.plan-row .t7-today-only {
+  margin-top: 8px;
+  background: var(--surface-container-high);
+}
+.plan-chip {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.plan-chip--limited { background: #f2c14e; color: #2b1d00; }
+.plan-chip--none { background: #ff9a8c; color: #3a0b05; }
+.plan-chip--progress { background: var(--lime); color: var(--lime-ink); }
+
+.plan-loop {
+  padding: 4px 4px 0;
 }
 
 .equipment-card {
@@ -4432,10 +4431,6 @@ button.aw-exercise__name-btn {
   border-color: var(--outline-variant);
   background: none;
   color: var(--on-surface-muted);
-}
-
-.plan-item .feasibility {
-  margin-top: 12px;
 }
 
 .empty-state p {

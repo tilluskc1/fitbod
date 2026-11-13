@@ -36,6 +36,7 @@ import
 import  { FULL_BODY_A } from './data/flagship';
 import { cursorFor, dayCounter, isDescribedSession, planSlots, revisePlan, skipCurrentSlot, slotAt, slotLinkFor, todayProgram, updateProfile, withSkipped } from './lib/sequence';
 import { withoutCustomDay } from './lib/plan';
+import { skippedToday } from './lib/planPage';
 import { CHANGED_FOR_TODAY, todayDiff, todayOnly, undoToast, usualGear } from './lib/todayOnly';
 import { baseTalk, customDayPreview, describedDayStatus, describedSessionStatus, talkConstraints } from './lib/todayTalk';
 import type { TalkState } from './lib/todayTalk';
@@ -262,6 +263,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const [pendingNotices, setPendingNotices] = useState<ConstraintNotice[]>([]);
   const [recapId, setRecapId] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  /** (#297) Plan's "why days differ" line, tapped away: this app session only, never stored. */
+  const [planTipShown, setPlanTipShown] = useState(true);
   // #306: the carry the toast's Undo would reverse; one burst per edited set while its toast is up.
   const [carryUndo, setCarryUndo] = useState<{
     key: string;
@@ -947,6 +950,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
   /** A described session (#193) has no planned work to restore into; it is finished or discarded instead. */
   const describedSession = Boolean(current && isDescribedSession(current));
+  /** (#297) Plan's Edit: Settings, scrolled to its Training group. */
+  const openTrainingSettings = () => {
+    setSheet({ kind: 'settings' });
+    requestAnimationFrame(() => document.getElementById('settings-training')?.scrollIntoView({ block: 'start' }));
+  };
 
   const restoreOriginal = (message = 'Back to your plan. Logged sets kept.') => {
     if (describedSession) return;
@@ -1693,22 +1701,27 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onKeepNext={() => slot && setKeptFresher(keepKey(slot.id, today))}
           />
         )}
-        {tab === 'plan' && (            <PlanScreen
+        {tab === 'plan' && (
+          <PlanScreen
             profile={profile}
             upcoming={upcoming}
             focus={slot?.focus}
             program={program}
             today={todayDay}
-            equipment={constraints.equipment}
-            slotLabel={slotLabel}
+            todayIds={todayExercises.map((exercise) => exercise.exerciseId)}
             history={state.history}
             unit={unit}
-            now={today}
-            onOpenSettings={() => setSheet({ kind: 'settings' })}
+            onOpenSettings={openTrainingSettings}
             onViewDay={(dayIndex) => setSheet({ kind: 'day', dayIndex })}
             onOpenLibrary={() => setView('library')}
-            onReviewChange={(change) => setSheet({ kind: 'confirm', change })}
             described={described}
+            todayBar={todayOnly(state, today)}
+            onUndo={describedSession ? undefined : () => restoreOriginal(undoToast(profile))}
+            current={current}
+            onResume={openWorkout}
+            skipped={skippedToday(state.slotSkips, cursorFor(state).revision, today)}
+            explainer={planTipShown}
+            onDismissExplainer={() => setPlanTipShown(false)}
           />
         )}
         {tab === 'progress' && (

@@ -12,6 +12,7 @@ import { liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
 import { planSlots, todayProgram } from '../src/lib/sequence.ts';
 import { createSession } from '../src/lib/session.ts';
 import { customDayPreview, describedDayStatus, talkConstraints } from '../src/lib/todayTalk.ts';
+import { describedChip } from '../src/lib/planPage.ts';
 import type { TalkState } from '../src/lib/todayTalk.ts';
 import type { Profile } from '../src/types.ts';
 
@@ -100,6 +101,8 @@ const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' 
 const noop = () => {};
 /** The hero's state chip: its tone and its words (after the icon's ligature). */
 const chipOf = (html: string) => /<span class="t7-state t7-state--(\w+)"><span [^>]*>\w+<\/span>([^<]+)<\/span>/.exec(html);
+/** (#297) Plan's status chip for a row: its tone and words, null when Ready (no chip). */
+const planChipOf = (html: string) => /<span class="plan-chip plan-chip--(\w+)">([^<]+)<\/span>/.exec(html);
 
 test('#219: Today and Plan show a described day\'s status and reasons as the preview does, pending or running', async () => {
   await withServer(async (load) => {
@@ -137,9 +140,19 @@ test('#219: Today and Plan show a described day\'s status and reasons as the pre
         for (const line of reasons) assert.ok(text.includes(`${line.label} ${line.text}`), `${at}: Today lacks ${line.label} ${line.text}`);
         assert.doesNotMatch(text, REQUIREMENT, at);
       }
-      const plan = plain(renderToStaticMarkup(createElement(Plan as never, { profile: gym, program, today: todayGlance(live, null, true), history: [],
-        unit: 'lb', now, described, onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop, onReviewChange: noop })));
-      for (const line of reasons) assert.ok(plan.includes(`${line.label} ${line.text}`), `${at}: Plan lacks ${line.label}`);
+      const planHtml = renderToStaticMarkup(createElement(Plan as never, { profile: gym, program, today: todayGlance(live, null, true), history: [],
+        unit: 'lb', described, onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop }));
+      const plan = plain(planHtml);
+      // (#297) Plan carries the status as a chip, not the reasons paragraph; its words come from the same gaps.
+      const want = describedChip(described);
+      const planChip = planChipOf(planHtml);
+      if (want) {
+        assert.ok(planChip, `${at}: Plan has no chip`);
+        assert.equal(planChip[1], want.tone, `${at}: Plan chip tone`);
+        assert.equal(planChip[2].trim(), want.label, `${at}: Plan chip words`);
+      } else {
+        assert.equal(planChip, null, `${at}: Plan shows a chip on a Ready day`);
+      }
       assert.doesNotMatch(plan, REQUIREMENT, at);
     }
   });

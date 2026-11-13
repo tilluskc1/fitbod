@@ -34,6 +34,9 @@ const programFor = (who: Profile, name: string) => {
 };
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const noop = () => {};
+/** (#297) Plan's status chip: tone and words, null when Ready. */
+const planChipOf = (html: string) => /<span class="plan-chip plan-chip--(\w+)">([^<]+)<\/span>/.exec(html);
+const rowStats = (html: string) => plain(html).match(/Today [^·]*?(\d+) exercises? · (\d+) sets?(?: · (≈?\d+) min)?/);
 
 test('slotProgram carries the slot feasibility without padding the session', () => {
   const legs = programFor(kettlebell, 'Legs');
@@ -65,9 +68,10 @@ function screens(Today: unknown, Plan: unknown, who: Profile, name: string) {
   const today = renderToStaticMarkup(createElement(Today as never, { profile: who, program, adapted,
     equipment: 'home', adjusted: false, history: [], current: null, now, onPreview: noop, onAdjust: noop,
     onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop }));
-  const plan = renderToStaticMarkup(createElement(Plan as never, { profile: who, program, today: todayGlance(adapted, null), history: [],
-    unit: 'kg', now, onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop, onReviewChange: noop }));
-  return { today, plan, adapted };
+  const planHtml = renderToStaticMarkup(createElement(Plan as never, { profile: who, program, today: todayGlance(adapted, null),
+    todayIds: adapted.exercises.map((exercise: { exerciseId: string }) => exercise.exerciseId), history: [],
+    unit: 'kg', onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop }));
+  return { today, plan: planHtml, adapted };
 }
 
 test('Today and Plan show Limited and Not enough with alternatives, and nothing for Ready', async () => {
@@ -75,47 +79,46 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
     const { default: Today } = await load('/src/screens/TodayScreen.tsx');
     const { default: Plan } = await load('/src/screens/PlanScreen.tsx');
 
+    // (#297) Today keeps the full FeasibilityNote (line, reason, alternatives); Plan carries a short chip
+    // with the same reason words and the honest stats, never the alternative buttons.
     const limited = screens(Today, Plan, kettlebell, 'Legs');
-    for (const html of [limited.today, limited.plan]) {
-      assert.match(plain(html), /Limited session · no calf work/);
-      assert.match(html, /<button[^>]*>Add Machine<\/button>/);
-      // The Limited day still states its time (#200): since #229 a 35-minute day is fitted
-      // movement-first, 13 sets in 35 minutes.
-      assert.match(plain(html), /35 min/);
-      assert.match(plain(html), /13 sets/);
-    }
+    assert.match(plain(limited.today), /Limited session · no calf work/);
+    assert.match(limited.today, /<button[^>]*>Add Machine<\/button>/);
+    assert.match(plain(limited.today), /35 min/);
+    assert.match(plain(limited.today), /13 sets/);
+    assert.deepEqual([...(planChipOf(limited.plan) ?? [])].slice(1), ['limited', 'Limited · no calf work'], 'Plan chip');
+    assert.doesNotMatch(limited.plan, /Add Machine|feasibility__alt/, 'Plan shows no alternatives');
+    assert.match(plain(limited.plan), /13 sets? · 35 min/);
 
     const none = screens(Today, Plan, bodyweight, 'Pull');
-    for (const html of [none.today, none.plan]) {
-      assert.match(plain(html), /Not enough equipment · no pulling or biceps curls/);
-      assert.match(plain(html), /No pull exercise can be performed with the selected equipment and exclusions\./, 'reason is visible');
-      assert.match(html, /<button[^>]*>Add Pull-up bar<\/button>/);
-      assert.doesNotMatch(plain(html), /\d+ min/, 'no minutes for a day with no exercises');
-    }
+    assert.match(plain(none.today), /Not enough equipment · no pulling or biceps curls/);
+    assert.match(plain(none.today), /No pull exercise can be performed with the selected equipment and exclusions\./, 'reason is visible');
+    assert.match(none.today, /<button[^>]*>Add Pull-up bar<\/button>/);
+    assert.deepEqual([...(planChipOf(none.plan) ?? [])].slice(1), ['none', 'Not enough equipment'], 'Plan chip');
+    assert.doesNotMatch(none.plan, /Add Pull-up bar|feasibility__alt/, 'Plan shows no alternatives');
+    // The empty day's own row states no minutes (#200); the header's "usual" line still may.
+    assert.equal(rowStats(none.plan)?.[3], undefined, 'no minutes in an empty day row');
     assert.equal(tabBarAction(null, none.adapted).disabled, true, 'no Start of an empty workout');
     assert.match(none.today, /<button[^>]*disabled=""[^>]*>Preview workout/);
 
     const curls = screens(Today, Plan, noCurls, 'Pull');
     assert.match(curls.today, /<button[^>]*>Allow [^<]+<\/button>/);
-    // Row, rear-delt fly and one core move fill more than half the 45 min, but with every curl excluded
-    // nothing trains biceps: named, with the fix (#67, #174).
     assert.match(plain(curls.today), /Limited session · no biceps work 3 exercises fit\. No biceps exercise is possible with these constraints\./, 'reason under the line');
+    assert.deepEqual([...(planChipOf(curls.plan) ?? [])].slice(1), ['limited', 'Limited · no biceps work'], 'Plan chip');
 
-    // Five alternatives: three chips, the rest behind the equipment settings. A kettlebell cannot fill
-    // half of a 60-minute Push, so that day is short (#67); a barbell Push now fills its 35 min and is Ready.
     const thinPush: Profile = { ...kettlebell, sessionMinutes: 60 };
     const push = screens(Today, Plan, thinPush, 'Push');
     assert.equal(programFor(thinPush, 'Push').feasibility?.alternatives.length, 5);
     assert.equal(programFor(barbell, 'Push').feasibility?.status, 'ok');
-    for (const html of [push.today, push.plan]) {
-      assert.equal((html.match(/class="feasibility__alt"/g) ?? []).length, 3);
-      assert.match(html, /<button[^>]*>More in Equipment<\/button>/);
-    }
+    // Today shows three alternative chips and More; Plan shows one chip and no alternatives.
+    assert.equal((push.today.match(/class="feasibility__alt"/g) ?? []).length, 3);
+    assert.match(push.today, /<button[^>]*>More in Equipment<\/button>/);
+    assert.equal((push.plan.match(/feasibility__alt|More in Equipment/g) ?? []).length, 0);
+    assert.equal(planChipOf(push.plan)?.[1], 'limited');
 
     const ready = screens(Today, Plan, fullGear, 'Push');
-    for (const html of [ready.today, ready.plan]) {
-      assert.doesNotMatch(plain(html), /Limited session|Not enough equipment|Add |Allow /);
-    }
+    assert.doesNotMatch(plain(ready.today), /Limited session|Not enough equipment|Add |Allow /);
+    assert.equal(planChipOf(ready.plan), null, 'Ready day has no Plan chip');
   });
 });
 

@@ -40,8 +40,9 @@ async function surfaces({ who, program, focus, adapted, current, overridden, equ
     const today = todayGlance(adapted, current, overridden, who.goal, who);
     const now = new Date('2026-11-07T10:00:00Z');
     const sheet = plain(renderToStaticMarkup(createElement(DaySheet, { name: today.name, minutes: today.minutes, approx: today.approx, exercises, unit: 'kg', onClose: noop })));
-    const plan = plain(renderToStaticMarkup(createElement(Plan, { profile: who, upcoming: [], focus, program, today, equipment, history: [], unit: 'kg',
-      now, onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop })));
+    const plan = plain(renderToStaticMarkup(createElement(Plan, { profile: who, upcoming: [], focus, program, today,
+      todayIds: exercises.map((exercise: { exerciseId: string }) => exercise.exerciseId), history: [], unit: 'kg',
+      onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop })));
     const todayScreen = plain(renderToStaticMarkup(createElement(Today, { profile: who, program, adapted: live, equipment, adjusted: overridden, history: [], current, now,
       onPreview: noop, onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop, onOpenLength: noop })));
     // App hands Coach the same glance as Plan and View session (#200). A new user's Coach hides its
@@ -58,8 +59,7 @@ async function surfaces({ who, program, focus, adapted, current, overridden, equ
     return {
       today,
       card: pick(todayScreen, /The workout (≈?\d+) min · (\d+) sets/, 'Today card'),
-      header: pick(plan, /(\d+) exercises? · (\d+) sets · (≈?\d+) minutes · (\w+(?: gym)?)/, 'Plan header'),
-      upNext: pick(plan, /UP NEXT .*? (≈?\d+) min · (\d+) exercises? · (\d+) sets/, 'Up next'),
+      todayRow: pick(plan, /Today\b.*? (\d+) exercises? · (\d+) sets? · (≈?\d+) min/, 'Plan Today row'),
       sheet: pick(sheet, /(≈?\d+) min · (\d+) exercises? · (\d+) sets/, 'View session'),
       coach: pick(coach, /Next session .*? · (≈?\d+) min/, 'Coach'),
       plan,
@@ -71,10 +71,11 @@ async function surfaces({ who, program, focus, adapted, current, overridden, equ
 
 function agree(seen: Awaited<ReturnType<typeof surfaces>>, minutes: string, exercises: string, sets: string) {
   assert.deepEqual(seen.card, [minutes, sets], 'Today card');
-  assert.deepEqual(seen.header.slice(0, 3), [exercises, sets, minutes], 'Plan header');
-  assert.deepEqual(seen.upNext, [minutes, exercises, sets], 'Up next');
+  // (#297) Plan's Today row carries the same figures; the setup word moved to the #298 bar.
+  assert.deepEqual(seen.todayRow, [exercises, sets, minutes], 'Plan Today row');
   assert.deepEqual(seen.sheet, [minutes, exercises, sets], 'View session');
   assert.deepEqual(seen.coach, [minutes], 'Coach');
+  assert.doesNotMatch(seen.plan, /Adjusted for today|Your selected equipment|UP NEXT/, 'no removed Plan markup');
 }
 
 test('a today-only 30 min day: Today, Plan header, Up next and View session show the same honest minutes', async () => {
@@ -86,8 +87,6 @@ test('a today-only 30 min day: Today, Plan header, Up next and View session show
   // builds: short rests, the lead at 3 sets. Since #88 accessories pair: 14 sets in 30 minutes
   // (12 sets in 29 minutes in straight sets).
   agree(seen, '30', '6', '14');
-  assert.match(seen.plan, /UP NEXT .*? 30 min · 6 exercises · 14 sets · Adjusted for today/);
-  assert.equal(seen.header[3], 'Full gym', 'a length-only change keeps the saved setup word');
 });
 
 test('a bodyweight day whose work cannot fill the hour reads ≈ everywhere', async () => {
@@ -118,15 +117,15 @@ test('no override and no session: Plan numbers are the saved day, as before', as
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: false, equipment: 'home' });
   // 23 sets take 58 minutes with the timer's rests; ≈ only marks work far short of the hour (#200).
   agree(seen, '58', '7', '23');
-  assert.equal(seen.header[3], 'Full gym');
-  assert.doesNotMatch(seen.plan, /Adjusted for today/);
 });
 
-test('a today-only setup names that setup in the Plan header', async () => {
+test('a today-only setup: Plan keeps the saved "usual" header, not a second setup word (#297)', async () => {
   const { slot, program } = firstDay(gym);
   const adapted = adaptWorkout(program, { ...defaultConstraints(gym), equipment: 'hotel' }, [], gym.goal);
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: true, equipment: 'hotel' });
-  assert.equal(seen.header[3], 'Travel');
+  // The gear that differs for today is named in the #298 bar, not the Plan header (#297).
+  assert.match(seen.plan, /Your usual: Gym · 60 min · 4 days a week/);
+  assert.doesNotMatch(seen.plan, /Your selected equipment/);
 });
 
 test('todayGlance: adjusted only while no session runs', () => {

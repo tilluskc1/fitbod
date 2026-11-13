@@ -1,5 +1,5 @@
 import { exerciseById } from '../../data/exercises';
-import { missingFamilies } from '../../lib/feasibility';
+import { feasibilityParts } from '../../lib/planPage';
 import { exclusionChange, type ProfileChange } from '../../lib/preferences';
 import type { DayStatus } from '../../lib/todayTalk';
 import type { Feasibility, Profile } from '../../types';
@@ -15,20 +15,12 @@ interface Props {
 /** Ready shows nothing; Limited / Not enough says what is missing and offers the explicit alternatives. */
 export default function FeasibilityNote({ feasibility, profile, onOpenSettings, onReviewChange }: Props) {
   if (!feasibility || feasibility.status === 'ok') return null;
-  const { status, selectedCount, targetCount, alternatives } = feasibility;
+  const { status, alternatives } = feasibility;
   // The line already names the status; the reason adds why, visibly (phones show no tooltips).
   const reason = feasibility.reason.replace(/^Limited session: (\w)/, (_, first: string) => first.toUpperCase());
   const MAX_CHIPS = 3;
-  const missing = missingFamilies(feasibility);
-  const countGap = selectedCount > 0 && selectedCount < targetCount;
-  // A full day whose gear cannot train a focus muscle at all names that muscle (#67, #174).
-  const open = !countGap && !missing ? feasibility.reason.match(/ No (.+) exercise is possible/)?.[1] : undefined;
-  const line = [
-    status === 'infeasible' ? 'Not enough equipment' : 'Limited session',
-    countGap ? `${selectedCount} of ${targetCount} exercises` : '',
-    missing ? `no ${missing}` : '',
-    open ? `no ${open} work` : '',
-  ].filter(Boolean).join(' · ');
+  // (#297) The same reason parts as Plan's chip.
+  const line = [status === 'infeasible' ? 'Not enough equipment' : 'Limited session', ...feasibilityParts(feasibility)].join(' · ');
   return (
     <div className={`feasibility feasibility--${status}`} role="note">
       <p className="feasibility__line">{line}</p>
