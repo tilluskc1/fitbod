@@ -959,7 +959,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const previewPick = (picks: Picks) => {
     const next = switchPickFor(picks);
     if (!profile || !next) return null;
-    return pickPreview(picks, next, programFor(next), liveAdapted(adaptFor(next, profile), profile, state.history), profile);
+    return pickPreview(picks, next, programFor(next), liveAdapted(adaptFor(next, profile), profile, state.history), profile, slot?.name);
   };
 
   /**

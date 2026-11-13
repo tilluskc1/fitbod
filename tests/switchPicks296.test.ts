@@ -125,6 +125,12 @@ test('#296 a Pull pick on a Push day is a described Pull day; the plan cursor is
   assert.equal(customDayName(next.focus!), 'Pull', 'Today names it Pull, not "Back + Arms"');
   assert.equal(preview.status, 'ready');
   assert.match(consequenceLine(preview), /^Pull · \d+ exercises · \d+ sets · ≈?\d+ min$/);
+  // Parts equal to the planned day build it and read as it (review 3).
+  const push = picked(gym, parts('Chest', 'Shoulders', 'Arms'), defaultConstraints(gym), 3, 'Push');
+  assert.equal(push.next.focus, undefined);
+  const slot = slotOf(gym, 3, 'Push');
+  const { program, live } = build(gym, push.next, 3, 'Push');
+  assert.equal(pickPreview(parts('Chest', 'Shoulders', 'Arms'), push.next, program, live, gym, slot.name).label, 'Push');
   // Picks equal to the planned day are the planned day, as in Plan today with me.
   assert.equal(pickConstraints(pickPreset(NO_PICKS, 'Push'), defaultConstraints(gym), slotOf(gym, 3, 'Push').focus, 45).focus, undefined);
   // One day, one name: Upper and Lower read so on Today too, whichever screen built them (review 1).

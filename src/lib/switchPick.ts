@@ -146,7 +146,7 @@ export function smallLine(picks: Picks, exerciseIds: string[]): string | undefin
  * A described day reads its status as Today does (#219); picks equal to the planned day read the
  * generator's verdict, as Switch's split rows do.
  */
-export function pickPreview(picks: Picks, next: Constraints, program: Pick<Program, 'feasibility'>, live: AdaptedWorkout, profile: Profile): PickPreview {
+export function pickPreview(picks: Picks, next: Constraints, program: Pick<Program, 'feasibility'>, live: AdaptedWorkout, profile: Profile, plannedName?: string): PickPreview {
   const day = describedDayStatus(next, program, live, profile);
   const status: PickPreview['status'] = day?.status
     ?? (live.exercises.length === 0 || program.feasibility?.status === 'infeasible' ? 'none'
@@ -155,7 +155,8 @@ export function pickPreview(picks: Picks, next: Constraints, program: Pick<Progr
   const { minutes, approx } = todayGlance(live, null, false, profile.goal, profile);
   const ids = live.exercises.map((exercise) => exercise.exerciseId);
   return {
-    label: pickLabel(picks),
+    // Picks equal to the planned day build it, so they read as Today will: "Push" (review 3).
+    label: !next.focus && plannedName ? plannedName : pickLabel(picks),
     exercises: live.exercises.length,
     sets: live.totalSets,
     minutes,

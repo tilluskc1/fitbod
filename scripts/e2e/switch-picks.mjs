@@ -202,14 +202,15 @@ try {
     await page.close();
   }
 
-  // A running session disables Switch.
+  // A running session disables Switch (review 3: this check must reach the pill, not skip it).
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await onboard(page);
   await page.locator('.tab-action').click();
-  await page.waitForTimeout(300);
-  await page.locator('nav.tabbar .tab', { hasText: 'Today' }).click().catch(() => {});
+  await page.getByRole('button', { name: 'Minimize workout' }).click();
+  await page.locator('.t7-hero').waitFor();
   const switchPill = page.getByRole('button', { name: 'Switch workout' });
-  if (await switchPill.count()) check(await switchPill.isDisabled(), '390x844: Switch is enabled while a session runs');
+  check(await switchPill.count() === 1, '390x844: no Switch pill on Today while a session runs');
+  check(await switchPill.isDisabled(), '390x844: Switch is enabled while a session runs');
   await page.close();
 } finally {
   await browser.close();
