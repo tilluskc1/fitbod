@@ -7,7 +7,7 @@ import type { SwapCandidate } from './session.ts';
 import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
 import { estimatedSeconds } from './generator.ts';
 import { SHORT_SESSION_MINUTES, sessionRests, warmUpSeconds } from './sessionTime.ts';
-import { pairedSessionSeconds, pairingOn, sessionPairs } from './supersets.ts';
+import { keepPairs, pairedSessionSeconds, sessionPairs, storedPairs } from './supersets.ts';
 import type { Pairing } from './supersets.ts';
 import { liveExercises } from './liveProgression.ts';
 
@@ -159,21 +159,23 @@ export function estimatedMinutes(program: Program, sets: number): number {
 
 /**
  * Seconds these exercises take in this order, warm-up included, by the timer's own model (#132). With
- * pairing on (#88) the pairs `sessionPairs` finds share their rest, as the logger runs them.
+ * pairing on (#88) the pairs `sessionPairs` finds share their rest, as the logger runs them; `'stored'`
+ * reads a started session's own pairs (`storedPairs`) instead.
  */
 export function workSeconds(
-  exercises: { exerciseId: string; sets: number; skipped?: boolean }[],
+  exercises: { exerciseId: string; sets: number; skipped?: boolean; pair?: number }[],
   goal?: Goal,
   sessionMinutes?: number,
-  pairing?: Pairing | null,
+  pairing?: Pairing | null | 'stored',
 ): number {
   const live = exercises.filter((exercise) => exercise.sets > 0);
   if (live.length === 0) return 0;
   const rests = sessionRests(live.map((exercise) => exercise.exerciseId), goal, sessionMinutes);
   const sets = live.map((exercise) => exercise.sets);
-  if (!pairingOn(pairing, sessionMinutes)) return estimatedSeconds(sets, rests, sessionMinutes);
+  const pairs = pairing === 'stored' ? storedPairs(live) : sessionPairs(live, pairing, sessionMinutes);
+  if (pairs.length === 0) return estimatedSeconds(sets, rests, sessionMinutes);
   return pairedSessionSeconds(sets.map((count, index) => ({ sets: count, rest: rests[index] })),
-    sessionPairs(live, pairing, sessionMinutes), warmUpSeconds(sessionMinutes));
+    pairs, warmUpSeconds(sessionMinutes));
 }
 
 /**
@@ -181,7 +183,7 @@ export function workSeconds(
  * With a goal and session length, rests and warm-up are the ones the timer runs; with the profile's
  * pairing, supersets too (#88).
  */
-export function workMinutes(exercises: { exerciseId: string; sets: number; skipped?: boolean }[], goal?: Goal, sessionMinutes?: number, pairing?: Pairing | null): number {
+export function workMinutes(exercises: { exerciseId: string; sets: number; skipped?: boolean; pair?: number }[], goal?: Goal, sessionMinutes?: number, pairing?: Pairing | null | 'stored'): number {
   const seconds = workSeconds(exercises, goal, sessionMinutes, pairing);
   return seconds === 0 ? 0 : Math.max(1, Math.round(seconds / 60));
 }
@@ -203,16 +205,18 @@ export interface DayGlance {
  * View session, Coach, the switch and gym sheets and the review (#203).
  * Minutes are the work's own time, with the rests the timer will run for this goal and length.
  * A running session is priced from itself alone (its exercises, planned sets and the length it
- * was started at), so Start, a later settings change or a new slot cannot move it (#200). One exception
- * (#88): supersets are read live, so turning the toggle or the level changes them, and these minutes, from
- * the next set on.
+ * was started at, and the pairs stored at its start, #88), so Start, a later settings change or a new
+ * slot cannot move it (#200).
  */
 export function todayGlance(adapted: AdaptedWorkout, current: WorkoutRecord | null, overridden = false, goal?: Goal, pairing?: Pairing | null): DayGlance {
   const asked = current ? current.durationMin : adapted.minutes;
   const work = current
-    ? current.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.planned.length, ...(exercise.skipped ? { skipped: true } : {}) }))
+    ? current.exercises.map((exercise) => ({
+      exerciseId: exercise.exerciseId, sets: exercise.planned.length,
+      ...(exercise.skipped ? { skipped: true } : {}), ...(exercise.pair === undefined ? {} : { pair: exercise.pair }),
+    }))
     : adapted.exercises;
-  const minutes = workMinutes(work, goal, asked, pairing);
+  const minutes = workMinutes(work, goal, asked, current ? 'stored' : pairing);
   return {
     name: current?.name ?? adapted.name,
     exercises: work.length,
@@ -647,7 +651,8 @@ export function restorePendingWorkout(
   });
   // Completed work stays even when the restored equipment/exclusions no longer prescribe it.
   exercises.push(...completed.filter((exercise) => owner.get(exercise) === -1));
-  return { ...session, durationMin: original.minutes, exercises };
+  // (#88) Stored pairs survive only where both halves did; nothing new pairs mid-session.
+  return { ...session, durationMin: original.minutes, exercises: keepPairs(session.exercises, exercises) };
 }
 
 /** Lengths the Today duration sheet offers (#148). */

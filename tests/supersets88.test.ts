@@ -2,14 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildPlan } from '../src/lib/generator.ts';
 import { planSlots, todayProgram } from '../src/lib/sequence.ts';
-import { adaptWorkout, todayGlance, workMinutes } from '../src/lib/adapt.ts';
+import { adaptWorkout, restorePendingWorkout, todayGlance, workMinutes } from '../src/lib/adapt.ts';
+import { liveExercises } from '../src/lib/liveProgression.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import { exerciseById } from '../src/data/exercises.ts';
 import { leadCompoundId } from '../src/lib/progression.ts';
-import { createSession, logSet, skipExercise, swapPendingExercise } from '../src/lib/session.ts';
+import { createSession, logSet, skipExercise, swapPendingExercise, unskipExercise } from '../src/lib/session.ts';
 import { sessionRests, TRANSITION_SECONDS, WORK_SECONDS } from '../src/lib/sessionTime.ts';
 import {
-  PAIR_SWITCH_SECONDS, canPair, pairRound, partnerOf, pairSeconds, pairedPendingIndex, pairingOn, restAfterLog, sessionPairs,
+  PAIR_SWITCH_SECONDS, canPair, keepPairs, pairRound, partnerOf, pairSeconds, pairedPendingIndex, pairingOn, restAfterLog, sessionPairs,
+  startPairs, storedPairs,
 } from '../src/lib/supersets.ts';
 import { validateState } from '../src/lib/validate.ts';
 import { rankedReplacements } from '../src/lib/replacements.ts';
@@ -56,14 +58,12 @@ test('Intermediate, 30 min Upper: at least one accessory pair, the lead stays st
   assert.ok(pairs.includes('face-pull+hammer-curl'), pairs.join());
 });
 
-test('who pairs: Intermediate and Advanced at 45 min or less with the toggle not Off; never Beginner, over 45, or an unknown length', () => {
+test('who pairs: Intermediate and Advanced at 45 min or less; never Beginner, over 45, or an unknown length', () => {
   assert.equal(pairingOn({ experience: 'Intermediate' }, 45), true);
   assert.equal(pairingOn({ experience: 'Advanced' }, 15), true);
-  assert.equal(pairingOn({ experience: 'Advanced', pairExercises: true }, 30), true);
   assert.equal(pairingOn({ experience: 'Beginner' }, 30), false);
   assert.equal(pairingOn({ experience: 'Intermediate' }, 46), false);
   assert.equal(pairingOn({ experience: 'Intermediate' }, 60), false);
-  assert.equal(pairingOn({ experience: 'Intermediate', pairExercises: false }, 30), false);
   assert.equal(pairingOn({ experience: 'Intermediate' }, undefined), false);
   assert.equal(pairingOn(null, 30), false);
 });
@@ -118,22 +118,17 @@ test('a pair is timed as it runs: one move in, A + 30 s + B per round, the longe
   assert.ok(pairSeconds({ sets: 3, rest: 60 }, { sets: 3, rest: 60 }) < straight);
 });
 
-test('promised minutes stay honest and a short day fits at least as much work paired, at 15, 20, 30 and 45 min', () => {
+test('promised minutes stay honest at 15, 20, 30 and 45 min: within the length, or at a 15/20 min floor no longer than straight sets', () => {
   for (const kit of ['gym', 'home', 'homeBar'] as const) for (const goal of GOALS) for (const daysPerWeek of [2, 3, 4, 5, 6]) {
     for (const sessionMinutes of [15, 20, 30, 45]) {
       const on = profileOf({ kit, goal, daysPerWeek, sessionMinutes });
-      const off = { ...on, pairExercises: false };
       for (const slot of planSlots(buildPlan(on))) {
         const label = `${kit} ${goal} ${daysPerWeek}d ${sessionMinutes} ${slot.name}`;
         const paired = adaptWorkout(todayProgram(on, slot, []), defaultConstraints(on), [], goal, on);
-        const straight = adaptWorkout(todayProgram(off, slot, []), defaultConstraints(off), [], goal, off);
         const glanceOn = todayGlance(paired, null, false, goal, on);
-        const glanceOff = todayGlance(straight, null, false, goal, off);
-        assert.ok(paired.totalSets >= straight.totalSets, label);
-        // Within the length whenever the straight day is (the 15/20 min floors may run over either way).
-        if (glanceOff.minutes <= sessionMinutes) assert.ok(glanceOn.minutes <= sessionMinutes, `${label}: ${glanceOn.minutes}`);
-        // At a 15/20 min floor that runs over, pairing never runs longer than the straight day did.
-        else assert.ok(glanceOn.minutes <= glanceOff.minutes, `${label}: floor ${glanceOn.minutes} > ${glanceOff.minutes}`);
+        const straight = workMinutes(paired.exercises, goal, sessionMinutes, null);
+        // Within the length, or (a 15/20 min floor) never longer than the same work in straight sets.
+        assert.ok(glanceOn.minutes <= sessionMinutes || glanceOn.minutes <= straight, `${label}: ${glanceOn.minutes} (straight ${straight})`);
         // The minutes shown are the paired model of the exercises as listed, the one the logger runs.
         assert.equal(glanceOn.minutes, workMinutes(paired.exercises, goal, sessionMinutes, on), label);
       }
@@ -141,24 +136,27 @@ test('promised minutes stay honest and a short day fits at least as much work pa
   }
 });
 
-/** A running session of these exercises, `sets` each, at `durationMin`. */
-const sessionOf = (ids: string[], sets: number[] | number = 3, durationMin = 30): WorkoutRecord => createSession({
+/** A session started from these exercises, `sets` each, at `durationMin`, with the pairs stored as Start stores them. */
+const sessionOf = (ids: string[], sets: number[] | number = 3, durationMin = 30, profile: Profile = profileOf()): WorkoutRecord => createSession({
   id: 's1', name: 'Upper A', dayIndex: 0, now: '2026-11-12T10:00:00.000Z', durationMin,
-  exercises: ids.map((exerciseId, index): WorkoutExercise => {
+  exercises: startPairs(ids.map((exerciseId, index): WorkoutExercise => {
     const count = Array.isArray(sets) ? sets[index] : sets;
     const planned = Array.from({ length: count }, () => ({ weight: 10, reps: 10 }));
     return { exerciseId, name: exerciseId, planned, performed: planned.map((set) => ({ ...set, done: false, completedAt: null })) };
-  }),
+  }), profile, durationMin),
 });
 const IDS = ['barbell-bench-press', 'face-pull', 'hammer-curl', 'triceps-pushdown'];
 const PROFILE = profileOf();
+const pairsOf = (session: WorkoutRecord) => storedPairs(session.exercises);
+/** The session's pairs as exercise ids, for comparing across a swap that inserts an entry. */
+const idPairs = (session: WorkoutRecord) => pairsOf(session).map(([a, b]) => `${session.exercises[a].exerciseId}+${session.exercises[b].exerciseId}`);
 
 /** Logs whatever the logger shows next, with the rest it would start; returns the order and rests. */
-function run(session: WorkoutRecord, steps: number, profile: Pick<Profile, 'experience' | 'pairExercises'> = PROFILE) {
+function run(session: WorkoutRecord, steps: number) {
   const order: string[] = [];
   const rests: number[] = [];
   for (let step = 0; step < steps; step += 1) {
-    const pairs = sessionPairs(session.exercises, profile, session.durationMin);
+    const pairs = pairsOf(session);
     const index = pairedPendingIndex(session, pairs);
     if (index < 0) break;
     const exercise = session.exercises[index];
@@ -171,9 +169,19 @@ function run(session: WorkoutRecord, steps: number, profile: Pick<Profile, 'expe
   return { session, order, rests };
 }
 
+test('Start stores the preview\'s pairs on the record: two entries per number, the lead and straight work hold none', () => {
+  const session = sessionOf(['barbell-bench-press', 'face-pull', 'hammer-curl', 'triceps-pushdown', 'plank']);
+  assert.deepEqual(session.exercises.map((entry) => entry.pair), [undefined, 1, 1, 2, 2]);
+  assert.deepEqual(pairsOf(session), sessionPairs(session.exercises, PROFILE, 30));
+  // A Beginner or a 60 min day stores nothing: the record keeps the shape it always had.
+  for (const straight of [sessionOf(IDS, 3, 30, profileOf({ experience: 'Beginner' })), sessionOf(IDS, 3, 60)]) {
+    assert.ok(straight.exercises.every((entry) => !('pair' in entry)));
+  }
+});
+
 test('logging a pair alternates A1, B1, A2, B2 with 30 s between them and the full rest after each round', () => {
   const session = sessionOf(IDS);
-  assert.deepEqual(sessionPairs(session.exercises, PROFILE, 30), [[1, 2]]);
+  assert.deepEqual(pairsOf(session), [[1, 2]]);
   const { order, rests } = run(session, 9);
   assert.deepEqual(order, [
     'barbell-bench-press#1', 'barbell-bench-press#2', 'barbell-bench-press#3',
@@ -181,7 +189,6 @@ test('logging a pair alternates A1, B1, A2, B2 with 30 s between them and the fu
   ]);
   const short = sessionRests(IDS, 'Build Muscle', 30);
   assert.deepEqual(rests.slice(3), [30, Math.max(short[1], short[2]), 30, Math.max(short[1], short[2]), 30, Math.max(short[1], short[2])]);
-  // Each set is logged on its own exercise.
   const logged = run(session, 9).session;
   assert.ok(logged.exercises.slice(0, 3).every((exercise) => exercise.performed.every((set) => set.done)));
 });
@@ -189,7 +196,7 @@ test('logging a pair alternates A1, B1, A2, B2 with 30 s between them and the fu
 test('"Round 2 of 3" while a pair runs; the leftover sets of an unequal pair run straight with their own rest', () => {
   let session = sessionOf(IDS, [3, 3, 2, 3]);
   session = run(session, 4).session; // bench 3, face pull 1
-  const pairs = sessionPairs(session.exercises, PROFILE, 30);
+  const pairs = pairsOf(session);
   assert.equal(pairedPendingIndex(session, pairs), 2);
   assert.deepEqual(pairRound(session, 2, pairs), { round: 1, rounds: 2 });
   session = run(session, 1).session; // curl 1
@@ -201,138 +208,161 @@ test('"Round 2 of 3" while a pair runs; the leftover sets of an unequal pair run
   assert.equal(pairRound(rest.session, 1, pairs), null);
 });
 
-test('a reload mid-round resumes at the right set: the next step reads only the logged sets', () => {
-  const half = run(sessionOf(IDS), 4).session; // bench 3, face pull 1
+test('a reload or export/restore keeps the stored pairs and resumes mid-round; a session open across midnight keeps them', () => {
+  const half = run({ ...sessionOf(IDS), date: '2026-11-12T23:58:00.000Z' }, 4).session; // bench 3, face pull 1
   const reloaded = valid({ profile: PROFILE, plan: [], history: [], current: half }).current!;
-  const pairs = sessionPairs(reloaded.exercises, PROFILE, reloaded.durationMin);
-  assert.equal(reloaded.exercises[pairedPendingIndex(reloaded, pairs)].exerciseId, 'hammer-curl');
+  assert.deepEqual(reloaded.exercises.map((entry) => entry.pair), half.exercises.map((entry) => entry.pair));
+  assert.equal(reloaded.exercises[pairedPendingIndex(reloaded, pairsOf(reloaded))].exerciseId, 'hammer-curl');
+  const afterMidnight = logSet(reloaded, 2, 0, '2026-11-13T00:01:00.000Z', 30);
+  assert.deepEqual(pairsOf(afterMidnight), [[1, 2]]);
+  // A finished session in history round-trips too.
+  const restored = valid({ profile: PROFILE, plan: [], history: [{ ...run(sessionOf(IDS), 9).session, status: 'completed', endedAt: '2026-11-12T11:00:00.000Z' }], current: null });
+  assert.deepEqual(restored.history[0].exercises.map((entry) => entry.pair), [undefined, 1, 1, undefined]);
 });
 
-test('skipping one exercise of a pair turns its partner straight, and nothing re-pairs', () => {
+test('validate: an older record without pair numbers reads straight; a bad pair value is refused', () => {
+  const legacy = { ...sessionOf(IDS), exercises: sessionOf(IDS).exercises.map(({ pair: _pair, ...entry }) => entry) };
+  const read = valid({ profile: PROFILE, plan: [], history: [], current: legacy }).current!;
+  assert.ok(read.exercises.every((entry) => !('pair' in entry)));
+  assert.deepEqual(pairsOf(read), []);
+  assert.deepEqual(run(read, 5).order, ['barbell-bench-press#1', 'barbell-bench-press#2', 'barbell-bench-press#3', 'face-pull#1', 'face-pull#2']);
+  for (const bad of [0, -1, 1.5, '1', null, 41, true]) {
+    const current = sessionOf(IDS);
+    (current.exercises[1] as unknown as Record<string, unknown>).pair = bad;
+    assert.equal(validateState({ profile: PROFILE, plan: [], history: [], current }).ok, false, String(bad));
+  }
+  // A number held once or three times reads straight rather than pairing the wrong exercises.
+  assert.deepEqual(storedPairs([{ exerciseId: 'a', pair: 1 }, { exerciseId: 'b', pair: 2 }, { exerciseId: 'c', pair: 2 }, { exerciseId: 'd', pair: 2 }]), []);
+});
+
+test('a running session ignores later settings: a Beginner level or another length changes neither its pairs nor its minutes (#200)', () => {
+  const session = run(sessionOf(IDS), 4).session;
+  const adapted = adaptWorkout(todayProgram(PROFILE, upper(PROFILE), []), defaultConstraints(PROFILE), [], 'Build Muscle', PROFILE);
+  const before = todayGlance(adapted, session, false, 'Build Muscle', PROFILE).minutes;
+  for (const later of [profileOf({ experience: 'Beginner' }), profileOf({ sessionMinutes: 60 })]) {
+    assert.equal(todayGlance(adapted, session, false, 'Build Muscle', later).minutes, before);
+  }
+  assert.equal(before, workMinutes(session.exercises.map((entry) => ({ exerciseId: entry.exerciseId, sets: entry.planned.length, pair: entry.pair })), 'Build Muscle', 30, 'stored'));
+  assert.deepEqual(run(session, 1).order, ['hammer-curl#1']);
+});
+
+test('skipping one half sends its partner straight; Return brings it back straight; no other pair moves', () => {
   const ids = ['barbell-bench-press', 'face-pull', 'hammer-curl', 'triceps-pushdown', 'plank'];
   let session = sessionOf(ids);
-  assert.deepEqual(sessionPairs(session.exercises, PROFILE, 30), [[1, 2], [3, 4]]);
+  assert.deepEqual(pairsOf(session), [[1, 2], [3, 4]]);
   session = run(session, 4).session; // bench 3, face pull 1
   session = skipExercise(session, 2);
-  // Face pull goes straight from its next set; pushdown + plank keep their own pair.
-  assert.deepEqual(sessionPairs(session.exercises, PROFILE, 30), [[3, 4]]);
+  assert.deepEqual(pairsOf(session), [[3, 4]]);
   const next = run(session, 2);
   assert.deepEqual(next.order, ['face-pull#2', 'face-pull#3']);
   assert.equal(next.rests[0], sessionRests(ids, 'Build Muscle', 30)[1]);
+  const back = unskipExercise(session, 2);
+  assert.deepEqual(pairsOf(back), [[3, 4]]);
+  assert.equal(back.exercises[2].pair, undefined);
 });
 
-test('a swap keeps the pair when the replacement can pair, and turns the partner straight when it cannot', () => {
-  let session = run(sessionOf(IDS), 4).session; // bench 3, face pull 1
-  const curl = swapPendingExercise(session, 2, { exerciseId: 'dumbbell-curl', name: 'Dumbbell Curl', weight: 10, reps: 10 });
-  assert.deepEqual(sessionPairs(curl.exercises, PROFILE, 30), [[1, 2]]);
-  const press = swapPendingExercise(session, 2, { exerciseId: 'dumbbell-row', name: 'Dumbbell Row', weight: 10, reps: 10 });
-  // Face pull and a row share the back: face pull goes straight. The row now sits beside the pushdown,
-  // which had no partner, and those two may pair (derived from the list; nothing is stored).
-  assert.equal(partnerOf(sessionPairs(press.exercises, PROFILE, 30), 1), undefined);
-  session = press;
-  assert.deepEqual(run(session, 1).order, ['face-pull#2']);
+test('review 2 repro: skip hammer curl, log pushdown 1 + leg curl 1, Return, Replace hammer curl with chin-up: pushdown + leg curl keep their pair', () => {
+  const ids = ['barbell-bench-press', 'face-pull', 'hammer-curl', 'triceps-pushdown', 'leg-curl'];
+  let session = sessionOf(ids);
+  assert.deepEqual(idPairs(session), ['face-pull+hammer-curl', 'triceps-pushdown+leg-curl']);
+  session = skipExercise(session, 2);
+  session = logSet(session, 3, 0, '2026-11-12T10:01:00.000Z', 30);
+  session = logSet(session, 4, 0, '2026-11-12T10:02:00.000Z', 60);
+  session = unskipExercise(session, 2);
+  session = swapPendingExercise(session, 2, { exerciseId: 'chin-up', name: 'Chin-Up', weight: 0, reps: 8 });
+  assert.deepEqual(idPairs(session), ['triceps-pushdown+leg-curl']);
+  const chin = session.exercises.findIndex((entry) => entry.exerciseId === 'chin-up');
+  assert.equal(partnerOf(pairsOf(session), chin), undefined);
 });
 
-test('the toggle is read live: Off mid-session runs the next set straight and leaves logged sets alone', () => {
-  const half = run(sessionOf(IDS), 4).session; // bench 3, face pull 1
-  const off = { ...PROFILE, pairExercises: false };
-  const after = run(half, 1, off);
-  assert.deepEqual(after.order, ['face-pull#2']);
-  assert.deepEqual(after.session.exercises[1].performed[0], half.exercises[1].performed[0]);
-  // On again: face pull already ran two straight sets ahead of the curl, so it is not switched into a
-  // superset mid-way; it finishes straight.
-  assert.deepEqual(run(after.session, 1).order, ['face-pull#3']);
-  // On again one set later than a round: the pair resumes from the logged sets.
-  assert.deepEqual(run(half, 1).order, ['hammer-curl#1']);
+test('the lead swapped to a fly or a push-up, before or after set 1, stays straight and moves no pair', () => {
+  const ids = ['barbell-bench-press', 'face-pull', 'hammer-curl', 'triceps-pushdown', 'leg-curl'];
+  const fresh = sessionOf(ids);
+  const pairs = idPairs(fresh);
+  for (const to of ['cable-fly', 'push-up']) {
+    const before = swapPendingExercise(fresh, 0, { exerciseId: to, name: to, weight: 0, reps: 10 });
+    assert.deepEqual(idPairs(before), pairs, `${to} before set 1`);
+    const after = swapPendingExercise(logSet(fresh, 0, 0, '2026-11-12T10:01:00.000Z', 120), 0, { exerciseId: to, name: to, weight: 0, reps: 10 });
+    assert.deepEqual(idPairs(after), pairs, `${to} after set 1`);
+    assert.ok(after.exercises.slice(0, 2).every((entry) => entry.pair === undefined));
+  }
 });
 
-test('finishing early, an older record without a length, and a Beginner all log straight', () => {
-  const legacy = { ...sessionOf(IDS), durationMin: undefined };
-  assert.deepEqual(sessionPairs(legacy.exercises, PROFILE, legacy.durationMin), []);
-  assert.deepEqual(sessionPairs(sessionOf(IDS).exercises, { experience: 'Beginner' }, 30), []);
-  assert.deepEqual(sessionPairs(sessionOf(IDS, 3, 60).exercises, PROFILE, 60), []);
-  // A finished pair half leaves the other straight: nothing waits on a finished exercise.
-  const { session } = run(sessionOf(IDS, [3, 1, 3, 3]), 5); // bench 3, face pull 1, curl 1
-  assert.equal(pairedPendingIndex(session, sessionPairs(session.exercises, PROFILE, 30)), 2);
-});
-
-test('Settings key: pairExercises round-trips through validate, absent stays absent (On), a bad value is refused', () => {
-  const base = { plan: [], history: [], current: null };
-  const on = valid({ ...base, profile: profileOf() }).profile!;
-  assert.equal('pairExercises' in on, false);
-  const off = valid({ ...base, profile: profileOf({ pairExercises: false }) }).profile!;
-  assert.equal(off.pairExercises, false);
-  assert.equal(validateState({ ...base, profile: { ...profileOf(), pairExercises: 'no' } }).ok, false);
-});
-
-/** The session's pairs as exercise-id pairs, for comparing across a swap that inserts an entry. */
-const idPairs = (session: WorkoutRecord, profile: Profile, skip: number[] = []) => sessionPairs(session.exercises, profile, session.durationMin)
-  .filter(([a, b]) => !skip.includes(a) && !skip.includes(b))
-  .map(([a, b]) => `${session.exercises[a].exerciseId}+${session.exercises[b].exerciseId}`);
-
-test('review 1: a swap after logged sets leaves every other pair where it was; the partner of the swapped slot goes straight (sweep)', () => {
+test('swap sheet sweep, before AND after set 1: the replacement and its partner go straight, 0 untouched pairs move', () => {
   let swaps = 0;
+  const moved: string[] = [];
   for (const kit of ['gym', 'home', 'homeBar'] as const) for (const goal of GOALS) for (const daysPerWeek of [2, 3, 4, 5, 6]) for (const sessionMinutes of [20, 30, 45]) {
     const profile = profileOf({ kit, goal, daysPerWeek, sessionMinutes, experience: 'Advanced' });
     for (const slot of planSlots(buildPlan(profile))) {
       const program = todayProgram(profile, slot, []);
-      const fresh = sessionOf(program.exercises.map((exercise) => exercise.exerciseId), program.exercises.map((exercise) => exercise.sets), sessionMinutes);
-      const pairs = sessionPairs(fresh.exercises, profile, sessionMinutes);
+      const fresh = sessionOf(program.exercises.map((exercise) => exercise.exerciseId), program.exercises.map((exercise) => exercise.sets), sessionMinutes, profile);
       fresh.exercises.forEach((entry, index) => {
-        // One logged set on the slot (and on its partner, so a pair has run a round), then swap the rest.
-        let session = logSet(fresh, index, 0, '2026-11-12T10:01:00.000Z', 60);
-        const partner = partnerOf(pairs, index);
-        if (partner !== undefined) session = logSet(session, partner, 0, '2026-11-12T10:02:00.000Z', 60);
-        const inDay = session.exercises.filter((_, i) => i !== index).map((item) => exerciseById(item.exerciseId)!);
-        for (const option of rankedReplacements(exerciseById(entry.exerciseId)!, profile, inDay, 6)) {
-          const swapped = swapPendingExercise(session, index, swapCandidateFor(option, profile, [], session));
-          swaps += 1;
-          const label = `${kit} ${goal} ${daysPerWeek}d ${sessionMinutes} ${slot.name}: ${entry.exerciseId} -> ${option.id}`;
-          // Every pair not holding the swapped slot is unchanged.
-          const before = idPairs(session, profile, partner === undefined ? [index] : [index, partner]);
-          const after = idPairs(swapped, profile).filter((pair) => !pair.split('+').includes(entry.exerciseId) && !pair.split('+').includes(option.id)
-            && (partner === undefined || !pair.split('+').includes(session.exercises[partner].exerciseId)));
-          assert.deepEqual(after, before, label);
-          // The replacement runs straight, and so does the partner.
-          const replacement = swapped.exercises.findIndex((item, i) => i >= index && item.exerciseId === option.id);
-          const swappedPairs = sessionPairs(swapped.exercises, profile, sessionMinutes);
-          assert.equal(partnerOf(swappedPairs, replacement), undefined, label);
-          if (partner !== undefined) {
-            const moved = swapped.exercises.findIndex((item) => item.exerciseId === session.exercises[partner].exerciseId);
-            const other = partnerOf(swappedPairs, moved);
-            // Its only possible pairing is the done half of the slot, which has nothing left: it runs straight.
-            assert.ok(other === undefined || swapped.exercises[other].performed.every((set) => set.done), label);
+        const partner = partnerOf(pairsOf(fresh), index);
+        // Before set 1, and after a logged round (the slot's set 1 and its partner's).
+        let logged = logSet(fresh, index, 0, '2026-11-12T10:01:00.000Z', 60);
+        if (partner !== undefined) logged = logSet(logged, partner, 0, '2026-11-12T10:02:00.000Z', 60);
+        for (const [when, session] of [['before set 1', fresh], ['after set 1', logged]] as const) {
+          const untouched = idPairs(session).filter((pair) => !pair.split('+').includes(entry.exerciseId));
+          const inDay = session.exercises.filter((_, i) => i !== index).map((item) => exerciseById(item.exerciseId)!);
+          for (const option of rankedReplacements(exerciseById(entry.exerciseId)!, profile, inDay, 6)) {
+            const swapped = swapPendingExercise(session, index, swapCandidateFor(option, profile, [], session));
+            if (swapped === session) continue; // nothing left to swap (a one-set slot already logged)
+            swaps += 1;
+            const label = `${kit} ${goal} ${daysPerWeek}d ${sessionMinutes} ${slot.name} ${when}: ${entry.exerciseId} -> ${option.id}`;
+            if (JSON.stringify(idPairs(swapped)) !== JSON.stringify(untouched)) moved.push(label);
+            const replacement = swapped.exercises.findIndex((item, i) => i >= index && item.exerciseId === option.id);
+            assert.equal(swapped.exercises[replacement].pair, undefined, label);
+            if (partner !== undefined) {
+              const other = swapped.exercises.findIndex((item) => item.exerciseId === session.exercises[partner].exerciseId);
+              assert.equal(swapped.exercises[other].pair, undefined, label);
+            }
           }
         }
       });
     }
   }
-  assert.ok(swaps > 500, `${swaps}`);
+  assert.deepEqual(moved, []);
+  assert.ok(swaps > 1000, `${swaps}`);
 });
 
-test('review 1: the lead is the first slot, by position: a lead swapped to a fly or a push-up stays straight and moves no pair', () => {
-  const ids = ['barbell-bench-press', 'face-pull', 'hammer-curl', 'triceps-pushdown', 'leg-curl'];
-  const fresh = sessionOf(ids);
-  assert.deepEqual(sessionPairs(fresh.exercises, PROFILE, 30), [[1, 2], [3, 4]]);
-  for (const to of ['cable-fly', 'push-up']) {
-    const before = swapPendingExercise(fresh, 0, { exerciseId: to, name: to, weight: 0, reps: 10 });
-    assert.deepEqual(sessionPairs(before.exercises, PROFILE, 30), [[1, 2], [3, 4]], `${to} before set 1`);
-    const after = swapPendingExercise(logSet(fresh, 0, 0, '2026-11-12T10:01:00.000Z', 120), 0, { exerciseId: to, name: to, weight: 0, reps: 10 });
-    assert.deepEqual(sessionPairs(after.exercises, PROFILE, 30), [[2, 3], [4, 5]], `${to} after set 1`);
+test('shortening or lengthening a running session: a cut half sends its partner straight, surviving pairs keep their number, nothing new pairs (sweep)', () => {
+  let kept = 0;
+  let dropped = 0;
+  for (const kit of ['gym', 'home'] as const) for (const goal of GOALS) for (const daysPerWeek of [3, 4, 5]) {
+    const profile = profileOf({ kit, goal, daysPerWeek, sessionMinutes: 45, experience: 'Advanced' });
+    for (const slot of planSlots(buildPlan(profile))) {
+      const at = (minutes: number) => adaptWorkout(todayProgram(profile, slot, [], { minutes }), { ...defaultConstraints(profile), minutes }, [], goal, profile);
+      const start = at(45);
+      let session = createSession({ id: 's', name: start.name, dayIndex: 0, now: '2026-11-12T10:00:00.000Z', durationMin: 45,
+        exercises: startPairs(liveExercises(start, profile, []), profile, 45) });
+      session = run(session, 4).session;
+      const before = new Map(pairsOf(session).map(([a, b]) => [session.exercises[a].exerciseId, session.exercises[b].exerciseId]));
+      for (const minutes of [15, 20, 30, 60]) {
+        const label = `${kit} ${goal} ${daysPerWeek}d ${slot.name} 45 -> ${minutes}`;
+        const rebuilt = restorePendingWorkout(session, at(minutes), profile, []);
+        for (const [a, b] of pairsOf(rebuilt)) {
+          const [x, y] = [rebuilt.exercises[a].exerciseId, rebuilt.exercises[b].exerciseId];
+          assert.ok(before.get(x) === y, `${label}: new pair ${x}+${y}`);
+          assert.equal(rebuilt.exercises[a].pair, session.exercises.find((entry) => entry.exerciseId === x)!.pair, label);
+          kept += 1;
+        }
+        for (const [x, y] of before) {
+          const count = (id: string) => rebuilt.exercises.filter((entry) => entry.exerciseId === id).length;
+          if (count(x) === 1 && count(y) === 1) assert.ok(idPairs(rebuilt).includes(`${x}+${y}`), `${label}: lost ${x}+${y}`);
+          else {
+            dropped += 1;
+            for (const id of [x, y]) assert.ok(rebuilt.exercises.filter((entry) => entry.exerciseId === id).every((entry) => entry.pair === undefined), `${label}: ${id}`);
+          }
+        }
+      }
+    }
   }
-  // Home Full Body A at 20 min: the lead swapped to a push-up keeps the row's pair.
-  const home = profileOf({ kit: 'home', daysPerWeek: 2, sessionMinutes: 20 });
-  const day = todayProgram(home, planSlots(buildPlan(home))[0], []);
-  const session = sessionOf(day.exercises.map((exercise) => exercise.exerciseId), day.exercises.map((exercise) => exercise.sets), 20);
-  const pairs = sessionPairs(session.exercises, home, 20);
-  assert.ok(pairs.length > 0);
-  assert.deepEqual(sessionPairs(swapPendingExercise(session, 0, { exerciseId: 'push-up', name: 'Push-Up', weight: 0, reps: 10 }).exercises, home, 20), pairs);
+  assert.ok(kept > 50 && dropped > 10, `kept ${kept}, dropped ${dropped}`);
 });
 
-test('review 1: a slot that already ran straight sets is not switched into a superset by a later change', () => {
-  // Bench before hip thrust ran 2 straight sets; a swap that would make it pairable does not pair it mid-way.
-  const ids = ['barbell-row', 'deadlift', 'barbell-bench-press', 'glute-bridge', 'chin-up', 'leg-curl'];
-  let session = sessionOf(ids);
-  session = logSet(logSet(session, 2, 0, '2026-11-12T10:01:00.000Z', 90), 2, 1, '2026-11-12T10:02:00.000Z', 90);
-  assert.equal(partnerOf(sessionPairs(session.exercises, PROFILE, 30), 2), undefined);
+test('keepPairs: a half split into two entries (a gear switch) or skipped sends both halves straight', () => {
+  const before = [{ exerciseId: 'a' }, { exerciseId: 'b', pair: 1 }, { exerciseId: 'c', pair: 1 }, { exerciseId: 'd', pair: 2 }, { exerciseId: 'e', pair: 2 }];
+  const after = keepPairs(before, [{ exerciseId: 'a' }, { exerciseId: 'b' }, { exerciseId: 'b' }, { exerciseId: 'c' }, { exerciseId: 'e', skipped: true }, { exerciseId: 'd' }]);
+  assert.ok(after.every((entry) => !('pair' in entry)));
+  assert.deepEqual(keepPairs(before, [{ exerciseId: 'e' }, { exerciseId: 'c' }, { exerciseId: 'd' }, { exerciseId: 'b' }]).map((entry) => entry.pair), [2, 1, 2, 1]);
 });

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EXERCISES, exerciseById } from '../src/data/exercises.ts';
 import { buildPlan, generateWorkout } from '../src/lib/generator.ts';
-import { sessionRests, sessionSeconds, warmUpSeconds } from '../src/lib/sessionTime.ts';
+import { workSeconds } from '../src/lib/adapt.ts';
 import type { Equipment, Profile, SupportEquipment } from '../src/types.ts';
 
 // #190: a split day that lists Core after its main muscles carries one core exercise of at most
@@ -19,7 +19,7 @@ const BACK_MOVES = EXERCISES.filter((exercise) => exercise.muscles[0] === 'Back'
 
 type Kit = { equipment: Equipment[]; support: SupportEquipment[]; exclusions?: string[] };
 const profileOf = (kit: Kit, daysPerWeek: number, sessionMinutes: number, experience: Profile['experience'] = 'Intermediate') =>
-  ({ goal: 'Build Muscle', experience, daysPerWeek, exclusions: [], ...kit, loads: {}, sessionMinutes, pairExercises: false }) as Profile; // #88: straight sets
+  ({ goal: 'Build Muscle', experience, daysPerWeek, exclusions: [], ...kit, loads: {}, sessionMinutes }) as Profile;
 
 const isCore = (id: string) => ['core_flexion', 'core_stability'].includes(exerciseById(id)?.pattern ?? '');
 const pattern = (id: string) => exerciseById(id)?.pattern;
@@ -31,9 +31,9 @@ function day(profile: Profile, name: string) {
   const index = plan.findIndex((item) => item.name === name);
   const session = generateWorkout(profile, plan[index], index, []);
   const core = session.exercises.filter((exercise) => isCore(exercise.exerciseId));
-  const rests = sessionRests(session.exercises.map((exercise) => exercise.exerciseId), profile.goal, profile.sessionMinutes);
-  const seconds = sessionSeconds(session.exercises.map((exercise, i) => ({ sets: exercise.planned.length, rest: rests[i] })),
-    warmUpSeconds(profile.sessionMinutes));
+  // By the timer's model, supersets included (#88).
+  const seconds = workSeconds(session.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.planned.length })),
+    profile.goal, profile.sessionMinutes, profile);
   const label = `${name}: ${session.exercises.map((exercise) => `${exercise.name} ${exercise.planned.length}`).join(', ')}`;
   return { session, core, coreSets: core.reduce((sum, exercise) => sum + exercise.planned.length, 0), seconds, label };
 }

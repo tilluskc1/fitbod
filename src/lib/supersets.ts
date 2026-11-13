@@ -5,23 +5,25 @@ import { TRANSITION_SECONDS, WORK_SECONDS, exerciseSeconds } from './sessionTime
 /**
  * Supersets (#88): two exercises done back to back, set by set, to save time.
  *
- * Nothing is stored. Pairs are derived from the session's own exercise list and the lifter's level,
- * toggle and the session length, by this one file, for the generator's time model, every minute the app
- * promises and the logger alike (lesson 9). Settings are read live: flipping the toggle mid-session
- * changes pairing from the next set and leaves logged sets alone.
+ * A day that has not started derives its pairs here, from its exercise list, the lifter's level and the
+ * session length (`sessionPairs`), for the generator's time model, every minute the app promises and the
+ * preview alike (lesson 9). Starting writes those pairs onto the record (`WorkoutExercise.pair`); from
+ * then on only the stored numbers count (`storedPairs`). Nothing re-derives them: a swap or skip of one
+ * half clears both halves (`unpair`), a rebuild keeps a pair only while both halves survive untouched
+ * (`keepPairs`), and older records, which hold no numbers, run straight.
  */
 
-/** What decides whether a day pairs: the profile fits it. Absent means no pairing (the old path). */
-export type Pairing = Pick<Profile, 'experience' | 'pairExercises'>;
+/** What decides whether a day pairs: the lifter's level. Absent means no pairing (the old path). */
+export type Pairing = Pick<Profile, 'experience'>;
 
 /** Moving from A to B inside a round. */
 export const PAIR_SWITCH_SECONDS = 30;
 /** Pairing saves the most time on short days; longer ones keep straight sets. */
 export const PAIRING_MAX_MINUTES = 45;
 
-/** Intermediate and Advanced, the toggle not Off, on a day of known length 45 min or less. Beginners never. */
+/** Intermediate and Advanced on a day of known length 45 min or less. Beginners never. */
 export function pairingOn(pairing: Pairing | null | undefined, minutes: number | undefined): boolean {
-  return Boolean(pairing) && pairing!.experience !== 'Beginner' && pairing!.pairExercises !== false
+  return Boolean(pairing) && pairing!.experience !== 'Beginner'
     && minutes !== undefined && minutes <= PAIRING_MAX_MINUTES;
 }
 
@@ -66,55 +68,93 @@ export interface PairEntry {
   skipped?: boolean;
   planned?: unknown[];
   performed?: { done: boolean }[];
-  originalPlannedSets?: number;
+  pair?: number;
 }
 
 /**
- * Entry `index` carries on the slot before it: a gear switch's next segment (same exercise, #188), or
- * a swap's replacement after its done half (`swapPendingExercise`): the half is all done and short of
- * the slot's requirement, both carry that requirement, together they hold no more sets than it, and
- * the replacement works the same main muscle (the swap sheet only offers those).
- */
-function continues(entries: PairEntry[], index: number): boolean {
-  const before = entries[index - 1];
-  const here = entries[index];
-  if (!before || !here) return false;
-  if (before.exerciseId === here.exerciseId) return true;
-  const required = before.originalPlannedSets;
-  const kept = before.planned?.length ?? 0;
-  return required !== undefined && here.originalPlannedSets === required && kept < required
-    && kept + (here.planned?.length ?? 0) <= required
-    && (before.performed ?? []).length > 0 && (before.performed ?? []).every((set) => set.done)
-    && exerciseById(before.exerciseId)?.muscles[0] === exerciseById(here.exerciseId)?.muscles[0];
-}
-
-const doneCount = (entry: PairEntry) => entry.performed?.filter((set) => set.done).length ?? 0;
-const hasPending = (entry: PairEntry) => (entry.performed ?? []).some((set) => !set.done);
-
-/**
- * The day's pairs as index pairs `[a, b]`, a before b. The walk goes over slots, not entries: a split
- * slot's later entries (`continues`) belong to its first, so a swap never moves where pairs fall. The
- * first slot is the lead, by position (lesson 23), and never pairs, whatever now fills it. From the
- * second slot down, a slot pairs with the next one when their exercises can; else it stays straight.
- * Then a pair is dropped, its partner going straight from the next set, when one half was skipped or
- * split by a swap or gear switch, or when its logged sets show it did not run as a pair (both still
- * open, more than one set apart: a lifter who already did straight sets is not switched mid-way).
- * On a planned day the halves of each pair sit next to each other.
+ * A planned day's pairs, as index pairs `[a, b]`, a before b. Only for a day that has not started: a
+ * running session reads `storedPairs`. The first exercise is the lead, by position (lesson 23), and never
+ * pairs. From the second down, an exercise pairs with the next one when they can; else it stays straight.
  */
 export function sessionPairs(entries: PairEntry[], pairing: Pairing | null | undefined, minutes: number | undefined): [number, number][] {
   if (!pairingOn(pairing, minutes)) return [];
-  const slots = entries.map((_, index) => index).filter((index) => !continues(entries, index));
-  const split = (index: number) => continues(entries, index + 1);
   const known = (index: number) => exerciseById(entries[index].exerciseId) !== undefined;
   const pairs: [number, number][] = [];
-  for (let slot = 1; slot + 1 < slots.length; slot += 1) {
-    const [a, b] = [slots[slot], slots[slot + 1]];
+  for (let a = 1; a + 1 < entries.length; a += 1) {
+    const b = a + 1;
+    if (entries[a].skipped || entries[b].skipped) continue;
     if (!known(a) || !known(b) || !canPair(exerciseById(entries[a].exerciseId)!, exerciseById(entries[b].exerciseId)!)) continue;
     pairs.push([a, b]);
-    slot += 1;
+    a += 1;
   }
-  return pairs.filter(([a, b]) => !entries[a].skipped && !entries[b].skipped && !split(a) && !split(b)
-    && !(hasPending(entries[a]) && hasPending(entries[b]) && Math.abs(doneCount(entries[a]) - doneCount(entries[b])) > 1));
+  return pairs;
+}
+
+/**
+ * A started session's pairs, from the numbers written at the start: two entries holding the same number,
+ * neither skipped. Any other count reads straight, so a record can never pair three exercises.
+ */
+export function storedPairs(entries: PairEntry[]): [number, number][] {
+  const holders = new Map<number, number[]>();
+  entries.forEach((entry, index) => {
+    if (entry.pair === undefined) return;
+    holders.set(entry.pair, [...(holders.get(entry.pair) ?? []), index]);
+  });
+  return [...holders.values()]
+    .filter((indices) => indices.length === 2 && indices.every((index) => !entries[index].skipped))
+    .map(([a, b]) => [a, b] as [number, number])
+    .sort((x, y) => x[0] - y[0]);
+}
+
+/** The entries with `pairs` written as numbers 1, 2, ...: what a session stores when it starts. */
+export function withPairs<T extends PairEntry>(entries: T[], pairs: [number, number][]): T[] {
+  const number = new Map<number, number>();
+  pairs.forEach(([a, b], k) => { number.set(a, k + 1); number.set(b, k + 1); });
+  return entries.map((entry, index) => {
+    const { pair: _old, ...rest } = entry;
+    const value = number.get(index);
+    return (value === undefined ? rest : { ...rest, pair: value }) as T;
+  });
+}
+
+/** A new session's exercises with the day's pairs stored (#88): the pairs the preview showed. */
+export function startPairs<T extends PairEntry>(entries: T[], pairing: Pairing | null | undefined, minutes: number | undefined): T[] {
+  return withPairs(entries, sessionPairs(entries, pairing, minutes));
+}
+
+/**
+ * The entries with `index`'s pair cleared on both halves: a swap or skip of one half sends its partner
+ * straight. Every other entry keeps its number.
+ */
+export function unpair<T extends PairEntry>(entries: T[], index: number): T[] {
+  const value = entries[index]?.pair;
+  if (value === undefined) return entries;
+  return entries.map((entry) => {
+    if (entry.pair !== value) return entry;
+    const { pair: _old, ...rest } = entry;
+    return rest as T;
+  });
+}
+
+/**
+ * A rebuilt running session (a shorter or longer length, another setup, back to the plan) keeps a stored
+ * pair only when both of its exercises are still there, each as one entry and not skipped; a cut or split
+ * half sends its partner straight. Nothing new is paired, and kept pairs keep their numbers.
+ */
+export function keepPairs<T extends PairEntry>(before: PairEntry[], after: T[]): T[] {
+  const kept = new Map<number, number>();
+  for (const [a, b] of storedPairs(before)) {
+    const at = (id: string) => after.flatMap((entry, index) => (entry.exerciseId === id ? [index] : []));
+    const [here, there] = [at(before[a].exerciseId), at(before[b].exerciseId)];
+    if (here.length !== 1 || there.length !== 1 || after[here[0]].skipped || after[there[0]].skipped) continue;
+    kept.set(here[0], before[a].pair!);
+    kept.set(there[0], before[b].pair!);
+  }
+  return after.map((entry, index) => {
+    const { pair: _old, ...rest } = entry;
+    const value = kept.get(index);
+    return (value === undefined ? rest : { ...rest, pair: value }) as T;
+  });
 }
 
 /**

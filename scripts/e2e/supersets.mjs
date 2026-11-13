@@ -1,10 +1,11 @@
 // #88: supersets. An Intermediate 45-minute gym Upper A pairs Overhead Press with Chin-Up for 3 rounds.
 // Preview lists them in one bracket; the logger alternates A1, B1, A2, B2 with a 30 s switch and the
-// full rest after each round, says "Round 2 of 3", resumes mid-round after a reload, and the Settings
-// toggle (read live) turns the next set straight without touching logged sets.
+// full rest after each round, says "Round 2 of 3", and resumes mid-round after a reload. Start stores
+// the pair on the record (`pair`); replacing Chin-Up mid-pair sends Overhead Press straight and keeps
+// its logged sets. Settings has no superset switch (owner, 2026-11-13).
 //
 //   npm run e2e        (builds, then runs this at 390x844, 360x780 and 390x650, kg and lb)
-//   E2E_SHOTS=<dir>    also writes the preview, the logger mid-pair and the Settings row
+//   E2E_SHOTS=<dir>    also writes the preview, the logger mid-pair and the logger after the swap
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -149,29 +150,41 @@ try {
     const back = await screen(page);
     check(/Chin-Up/.test(back.name) && /Round 2 of 3/.test(back.band), `${where}: reload resumes at Chin-Up round 2 (${JSON.stringify(back)})`);
 
-    // 4. Settings: the toggle, read live. Off runs the next set straight; logged sets stay.
+    // 4. The pair is stored on the record at Start: Overhead Press and Chin-Up hold the same number.
+    const pairOf = () => page.evaluate(() => JSON.parse(localStorage.getItem('fitbod-clone-v1')).state.current.exercises
+      .map((entry) => `${entry.exerciseId}:${entry.pair ?? '-'}`));
+    const stored = await pairOf();
+    const ohp = stored.find((item) => item.startsWith('overhead-press:'))?.split(':')[1];
+    const chin = stored.find((item) => item.startsWith('chin-up:'))?.split(':')[1];
+    check(ohp !== '-' && ohp === chin && stored.filter((item) => item.endsWith(`:${ohp}`)).length === 2,
+      `${where}: the record stores the pair (${stored.join(' ')})`);
+
+    // 5. Replace Chin-Up mid-pair: Overhead Press runs straight from its next set, logged sets stay.
+    await page.locator('.lg-acts').getByRole('button', { name: 'Replace' }).click();
+    const option = page.locator('[role="dialog"] button.context-row').first();
+    const replacement = (await option.locator('span').first().innerText()).trim();
+    await option.click();
+    await page.waitForSelector('.lg-ex');
+    const afterSwap = await pairOf();
+    check(afterSwap.every((item) => !/^(overhead-press|chin-up):\d/.test(item)) && afterSwap.filter((item) => !item.endsWith(':-')).length === stored.filter((item) => !item.endsWith(':-')).length - 2,
+      `${where}: the swap clears the pair on both halves only (${afterSwap.join(' ')})`);
+    const straight = await screen(page);
+    check(/Overhead Press/.test(straight.name) && straight.band === '', `${where}: after the swap, Overhead Press runs straight (${JSON.stringify(straight)})`);
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('fitbod-clone-v1')).state.current.exercises
+      .filter((entry) => ['overhead-press', 'chin-up'].includes(entry.exerciseId)).map((entry) => entry.performed.filter((set) => set.done).length));
+    check(kept.join() === '2,1', `${where}: logged sets untouched by the swap (${kept})`);
+    await shot(page, `88-logger-after-swap-${size}.png`);
+
+    // 6. Settings has no superset switch.
     await page.getByRole('button', { name: 'Minimize workout' }).click();
     await page.getByRole('button', { name: 'Open profile and settings' }).click();
     const settings = page.getByRole('dialog', { name: 'Training settings' });
-    const toggle = settings.getByRole('group', { name: 'Pair exercises to save time' });
-    await toggle.scrollIntoViewIfNeeded();
-    check(await toggle.getByRole('button', { name: 'On' }).getAttribute('aria-pressed') === 'true', `${where}: the toggle starts On`);
-    if (size !== '390x650') await shot(page, `88-settings-${size}.png`);
-    await toggle.getByRole('button', { name: 'Off' }).click();
-    check(await toggle.getByRole('button', { name: 'Off' }).getAttribute('aria-pressed') === 'true', `${where}: Off is pressed`);
-    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('fitbod-clone-v1')).state.profile.pairExercises);
-    check(stored === false, `${where}: profile stores pairExercises false (${stored})`);
+    await settings.waitFor();
+    check(!(await settings.innerText()).includes('Pair exercises'), `${where}: Settings shows no superset switch`);
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Resume workout', exact: true }).click();
-    await page.waitForSelector('.lg-ex');
-    const straight = await screen(page);
-    check(/Overhead Press/.test(straight.name) && straight.band === '', `${where}: Off, Overhead Press runs straight (${JSON.stringify(straight)})`);
-    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('fitbod-clone-v1')).state.current.exercises
-      .filter((entry) => ['overhead-press', 'chin-up'].includes(entry.exerciseId)).map((entry) => entry.performed.filter((set) => set.done).length));
-    check(kept.join() === '2,1', `${where}: logged sets untouched by the toggle (${kept})`);
 
     check(errors.length === 0, `${where}: no page errors (${errors.join('; ')})`);
-    console.log(`${where}: preview ${minutes} min with "${groupText.slice(0, 40)}"; A1 B1 A2 then "${b2.band}" rest ${b2.rest}; reload resumes; Off runs ${straight.name} straight`);
+    console.log(`${where}: preview ${minutes} min with "${groupText.slice(0, 40)}"; A1 B1 A2 then "${b2.band}" rest ${b2.rest}; reload resumes; Chin-Up -> ${replacement}, ${straight.name} runs straight`);
     await page.close();
   }
 } finally {
@@ -183,4 +196,4 @@ if (failures.length > 0) {
   console.error(`FAIL\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('PASS: supersets preview, alternate with a 30 s switch, say the round, resume after a reload, and the toggle reads live');
+console.log('PASS: supersets preview, alternate with a 30 s switch, say the round, resume after a reload, are stored at Start, and a swap sends the partner straight');

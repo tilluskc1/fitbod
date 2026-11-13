@@ -38,7 +38,7 @@ const DESCRIBED: MuscleGroup[][] = [['Chest'], ['Chest', 'Triceps'], ['Back', 'B
 const FIXTURE = new URL('./fixtures/muscleCap96-main.json.gz', import.meta.url);
 
 const profileOf = (kit: Kit, experience: Profile['experience'], daysPerWeek: number, sessionMinutes: number, goal: Goal = 'Build Muscle') =>
-  ({ goal, experience, daysPerWeek, unit: 'lb', sessionMinutes, ...KITS[kit], exclusions: [], loads: {}, pairExercises: false }) as unknown as Profile; // #88: straight sets, as main's fixture
+  ({ goal, experience, daysPerWeek, unit: 'lb', sessionMinutes, ...KITS[kit], exclusions: [], loads: {} }) as unknown as Profile;
 const listOf = (exercises: { exerciseId: string; sets: number }[]) => exercises.map((exercise) => `${exercise.exerciseId}:${exercise.sets}`).join(' ');
 
 /**
@@ -107,12 +107,16 @@ const main = Object.fromEntries(Object.keys(now).map((key, index) => [key, store
 const before = { hashes: stored.hashes };
 const sameOutput = (group: string) => before.hashes[group] === after.hashes[group];
 const keys = Object.keys(now);
-const changed = keys.filter((key) => now[key] !== main[key]);
 const field = (key: string) => {
   const [kind, kit, level, goal, length] = key.split(' ');
   // `built`: the length the day was generated at (the saved one, for a day shortened today).
   return { kind, kit, level, goal: goal.replace('-', ' ') as Goal, built: Number(length.split('>')[0]), today: Number(length.split('>').at(-1)) };
 };
+// #88: Intermediate and Advanced days of 45 min or less pair accessories, which changes them by design;
+// they are checked in tests/supersets88.test.ts. Every other case is held to main here.
+const paired = (key: string) => field(key).level !== 'Beginner' && field(key).today <= 45;
+const pairedGroup = (group: string) => !group.includes(' Beginner ') && Number(group.split(' ')[2]) <= 45;
+const changed = keys.filter((key) => !paired(key) && now[key] !== main[key]);
 const setsOf = (value: string) => new Map(value.split('|')[0].split(' ').filter(Boolean).map((item) => [item.split(':')[0], Number(item.split(':')[1])]));
 
 test('beginners get the same days as on main: every kit, length, shortened day and described day', () => {
@@ -125,7 +129,7 @@ test('beginners get the same days as on main: every kit, length, shortened day a
 test('a day built under 45 minutes, or an intermediate\'s under 60, is unchanged (#229)', () => {
   assert.deepEqual(changed.filter((key) => field(key).built < 45 || (field(key).level === 'Intermediate' && field(key).built < 60)), []);
   const unchanged = (group: string) => Number(group.split(' ')[2]) < 45 || (group.includes(' Intermediate ') && Number(group.split(' ')[2]) < 60);
-  assert.deepEqual(Object.keys(after.hashes).filter((group) => unchanged(group) && !sameOutput(group)), []);
+  assert.deepEqual(Object.keys(after.hashes).filter((group) => !pairedGroup(group) && unchanged(group) && !sameOutput(group)), []);
 });
 
 test('a third only fills spare time: no exercise of main\'s day, built or shortened for today, loses a set', () => {

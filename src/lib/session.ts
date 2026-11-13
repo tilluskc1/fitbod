@@ -3,6 +3,7 @@ import { needsLoad } from '../data/flagship.ts';
 import { advanceAfterFinish } from './sequence.ts';
 import { withoutCustomDay } from './plan.ts';
 import { MAX_REPS, MAX_WEIGHT } from './validate.ts';
+import { unpair } from './supersets.ts';
 
 function cleanNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -423,6 +424,8 @@ export function skipExercise(session: WorkoutRecord, exerciseIndex: number): Wor
   if (!exercise || exercise.skipped) return session;
   if (!exercise.performed.some((set) => !set.done)) return session;
   const next = copyRecord(session);
+  // (#88) A skipped half sends its partner straight; Return brings it back straight too.
+  next.exercises = unpair(next.exercises, exerciseIndex);
   next.exercises[exerciseIndex].skipped = true;
   // A skipped exercise ends its rest, so no end-of-rest cue follows.
   next.restStartedAt = null;
@@ -470,7 +473,9 @@ export function swapPendingExercise(
     if (set.done) keptIndices.push(setIndex);
   });
 
+  // (#88) Neither the done half nor the replacement keeps the pair, and the partner goes straight.
   const next = copyRecord(session);
+  next.exercises = unpair(next.exercises, exerciseIndex);
   const originalEntry: WorkoutExercise | null
     = keptIndices.length > 0
       ? {

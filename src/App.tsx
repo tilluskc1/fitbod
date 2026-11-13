@@ -49,7 +49,7 @@ import {
   goHeavierFloor,
 } from './lib/liveProgression';
 import { sessionRests } from './lib/sessionTime';
-import { pairedPendingIndex, restAfterLog, sessionPairs } from './lib/supersets';
+import { pairedPendingIndex, restAfterLog, sessionPairs, startPairs, storedPairs } from './lib/supersets';
 import { removeTodayNotice } from './lib/exerciseActions';
 import { leadCompoundId, leadSlotIds, savedSetup } from './lib/progression';
 import { areasOf } from './lib/areas';
@@ -553,8 +553,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   );
 
   const current = state.current;
-  /** (#88) The running session's supersets, from its own list and today's settings (read live, nothing stored). */
-  const currentPairs = useMemo(() => (current ? sessionPairs(current.exercises, profile, current.durationMin) : []), [current, profile]);
+  /** (#88) The running session's supersets: the pairs stored when it started, never re-derived. */
+  const currentPairs = useMemo(() => (current ? storedPairs(current.exercises) : []), [current]);
   // (#327) A held jump's Heads-up lasts while its exercise is the one being logged and its card is up.
   const heldLive = held !== null && view === 'train' && current?.id === held.sessionId && notice?.text === held.text
     && pairedPendingIndex(current, currentPairs) === held.exerciseIndex && current.exercises[held.exerciseIndex]?.exerciseId === held.exerciseId;
@@ -653,9 +653,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       name: workout.name,
       dayIndex: slot?.index ?? 0,
       ...slotLinkFor(state, custom),
-      exercises: profile
+      exercises: startPairs(profile
         ? liveExercises(workout, profile, state.history)
-        : toWorkoutExercises(workout),
+        : toWorkoutExercises(workout), profile, workout.minutes),
       now: new Date().toISOString(),
       durationMin: workout.minutes,
     });
@@ -1205,7 +1205,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       // superset the 30 s switch to its partner, or the pair's rest once a round is done (#88).
       const rest = restAfterLog(session, exerciseIndex,
         sessionRests(session.exercises.map((item) => item.exerciseId), currentState.profile?.goal, session.durationMin),
-        sessionPairs(session.exercises, currentState.profile, session.durationMin));
+        storedPairs(session.exercises));
       // Only an empty load takes the suggestion; logSet then carries it to later empty sets (#182).
       const filled = weight !== undefined && weight > 0 && exercise.performed[setIndex]?.weight === 0
         ? updatePerformedSet(session, exerciseIndex, setIndex, { weight }, stamp) : session;
@@ -2025,7 +2025,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           minutes={todayDay.minutes}
           approx={todayDay.approx}
           exercises={todayExercises}
-          pairs={sessionPairs(todayExercises, profile, current ? current.durationMin : adapted.minutes)}
+          pairs={current ? storedPairs(current.exercises) : sessionPairs(todayExercises, profile, adapted.minutes)}
           unit={unit}
           history={state.history}
           loads={profile?.loads}

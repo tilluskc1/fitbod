@@ -12,10 +12,11 @@ import { addPerformedSet, createSession, logSet, removePerformedSet, skipExercis
 import { exerciseById } from '../src/data/exercises.ts';
 import type { Program } from '../src/data/flagship.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
+import { startPairs } from '../src/lib/supersets.ts';
 
 // #189: Plan's header and Up next described the saved day while View session showed today's.
 const gym = { name: 'K', goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 4, equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable'],
-  support: ['Bench', 'Rack', 'Pull-up bar'], exclusions: [], loads: {}, unit: 'kg', sessionMinutes: 60, pairExercises: false } as unknown as Profile; // #88: straight sets
+  support: ['Bench', 'Rack', 'Pull-up bar'], exclusions: [], loads: {}, unit: 'kg', sessionMinutes: 60 } as unknown as Profile;
 const bodyweight = { ...gym, equipment: [], support: [] } as unknown as Profile;
 const firstDay = (who: Profile) => {
   const slot = planSlots(buildPlan(who))[0];
@@ -36,7 +37,7 @@ async function surfaces({ who, program, focus, adapted, current, overridden, equ
     const { default: Coach } = await server.ssrLoadModule('/src/screens/CoachScreen.tsx');
     const live = liveAdapted(adapted, who, []);
     const exercises = current?.exercises ?? liveExercises(live, who, []);
-    const today = todayGlance(adapted, current, overridden, who.goal);
+    const today = todayGlance(adapted, current, overridden, who.goal, who);
     const now = new Date('2026-11-07T10:00:00Z');
     const sheet = plain(renderToStaticMarkup(createElement(DaySheet, { name: today.name, minutes: today.minutes, approx: today.approx, exercises, unit: 'kg', onClose: noop })));
     const plan = plain(renderToStaticMarkup(createElement(Plan, { profile: who, upcoming: [], focus, program, today, equipment, history: [], unit: 'kg',
@@ -79,12 +80,13 @@ function agree(seen: Awaited<ReturnType<typeof surfaces>>, minutes: string, exer
 test('a today-only 30 min day: Today, Plan header, Up next and View session show the same honest minutes', async () => {
   const { slot } = firstDay(gym);
   const program = slotProgramAt(gym, slot, [], 30);
-  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal);
+  const adapted = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal, gym);
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted, current: null, overridden: true, equipment: 'home' });
   // Since #229 a today-only length under 45 is built at that length, the same day a saved 30
-  // builds: short rests, the lead at 3 sets, 12 sets in 29 minutes.
-  agree(seen, '29', '5', '12');
-  assert.match(seen.plan, /UP NEXT .*? 29 min · 5 exercises · 12 sets · Adjusted for today/);
+  // builds: short rests, the lead at 3 sets. Since #88 accessories pair: 14 sets in 30 minutes
+  // (12 sets in 29 minutes in straight sets).
+  agree(seen, '30', '6', '14');
+  assert.match(seen.plan, /UP NEXT .*? 30 min · 6 exercises · 14 sets · Adjusted for today/);
   assert.equal(seen.header[3], 'Full gym', 'a length-only change keeps the saved setup word');
 });
 
@@ -99,12 +101,13 @@ test('a bodyweight day whose work cannot fill the hour reads ≈ everywhere', as
 test('a running session: every surface shows the session, and it is not labelled adjusted', async () => {
   const { slot } = firstDay(gym);
   const program = slotProgramAt(gym, slot, [], 30);
-  const started = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal);
-  const current = createSession({ id: 's1', name: started.name, dayIndex: 0, exercises: liveExercises(started, gym, []), now: '2026-11-07T09:00:00Z', durationMin: started.minutes });
+  const started = adaptWorkout(program, { ...defaultConstraints(gym), minutes: 30 }, [], gym.goal, gym);
+  // Start stores the day's supersets on the record (#88), as App's beginSession does.
+  const current = createSession({ id: 's1', name: started.name, dayIndex: 0, exercises: startPairs(liveExercises(started, gym, []), gym, started.minutes), now: '2026-11-07T09:00:00Z', durationMin: started.minutes });
   // Today's override still applies, but the open session is what runs.
   const seen = await surfaces({ who: gym, program, focus: slot.focus, adapted: started, current, overridden: true, equipment: 'home' });
-  // #200: the promised figure stays after Start (29 since #229 builds the 30-minute day).
-  agree(seen, '29', '5', '12');
+  // #200: the promised figure stays after Start (30 with the pairs Start stored, #88).
+  agree(seen, '30', '6', '14');
   assert.equal(seen.today.adjusted, false);
   assert.doesNotMatch(seen.plan, /Adjusted for today/);
 });

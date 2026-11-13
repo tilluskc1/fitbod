@@ -215,12 +215,22 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: run the "fails on old code" check against the named base SHA (`git show <base>:<file>`), never
    a local branch name. Check: the issue comment names the SHA the e2e failed on.
 
-33. **A derived grouping walks slots, not entries.** #88 review 1: pairs were derived by walking the
-   session's entries top down, so a swap (which splits a slot into a done half and a replacement) or a
-   lead swapped to a fly moved where every later pair fell: 563 of 4,553 swap-sheet swaps re-paired
-   exercises nobody touched. Rule: when grouping is derived from the list (no stored id), walk slots (a
-   split's entries are one slot, the lead is slot 0 by position), and let a change drop only its own
-   group. Check: the "review 1" sweep in `tests/supersets88.test.ts` (every swap-sheet option at every slot).
+33. **A grouping that later steps must keep is stored, not derived.** #88 reviews 1 and 2 failed on the
+   same point: supersets were derived from the session's list, so a swap re-paired exercises nobody touched
+   (563 of 4,553 swap-sheet swaps). Walking slots instead of entries (eb2e17c) only moved the leak: skip,
+   log the next pair, Return, Replace still re-paired started work, and a swap before set 1 moved another
+   pair in 544 of 4,557 options. Storing `WorkoutExercise.pair` at Start fixed it (lesson 1).
+   Rule: when a change to one item must leave the others' grouping alone, store the grouping when the
+   session starts; a change clears its own group only, and nothing re-derives after start. Raise the
+   stored key at the plan stop, not after two reviews. Check: the swap-sheet sweep in
+   `tests/supersets88.test.ts` (before and after set 1, 0 untouched pairs moved) and the review 2 repro test.
+
+34. **A settings switch is stored data and an agreed-look change; it needs the owner's yes.** #88's build
+   added `Profile.pairExercises` and a Settings toggle the story never asked for; the owner approved only
+   the session key, so the toggle came out and the tests that leaned on it to keep straight sets were
+   rewritten against the paired model. Rule: no new profile key or Settings row without an owner
+   decision in the issue; a test never uses a product switch as its fixture shortcut. Check: `git diff
+   origin/main -- src/types.ts` adds only keys named in the issue's decision comment.
 
 ## Recurring edge cases (put the relevant ones in every brief)
 

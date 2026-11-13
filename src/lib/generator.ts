@@ -463,7 +463,14 @@ export function generateWorkout(
       // (`fitSets`): every movement at its floor before any is cut, cut from the end of the priority
       // order, sets handed back evenly, none past 3. Cutting whole movements first left a
       // 30-minute day at 3 exercises and 9 sets.
-      const dropOrder = picked.map((_, index) => index).reverse();
+      const fromEnd = picked.map((_, index) => index).reverse();
+      // (#88) A paired described day times its covers on a partial day whose pairs differ from the final
+      // one, so a cover can miss by seconds: its cut takes a muscle's second exercise before another
+      // muscle's only one (#211), still from the end.
+      const second = (index: number) => picked.slice(0, index).some((other) => other.muscles[0] === picked[index].muscles[0]);
+      const dropOrder = day.everyMuscle && pairing
+        ? [...fromEnd.filter(second), ...fromEnd.filter((index) => !second(index))]
+        : fromEnd;
       const fitted = fitSets(
         picked.map((exercise, index) => ({
           sets: sets[index],

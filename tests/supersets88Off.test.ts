@@ -9,10 +9,10 @@ import { adaptWorkout, todayGlance } from '../src/lib/adapt.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import type { Goal, Profile } from '../src/types.ts';
 
-// #88: with "Pair exercises to save time" Off, a Beginner, or a day over 45 minutes, every day is
-// byte-identical to main before supersets: same exercises, order, sets, loads, reps and minutes.
-// The fixture is every case on main 522f2f1 (`WRITE_FIXTURE=1` with main's code rewrites it; main
-// ignores the pairing argument and the profile key).
+// #88: for a Beginner, or on a day over 45 minutes, every day is byte-identical to main before
+// supersets: same exercises, order, sets, loads, reps and minutes. Supersets have no switch (owner,
+// 2026-11-13). The fixture is every case on main 522f2f1 (`WRITE_FIXTURE=1` with main's code rewrites
+// it; main ignores the pairing argument).
 
 const KITS = {
   gym: { equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'], support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'] },
@@ -27,13 +27,12 @@ const TODAY = [15, 20, 30, 45];
 const SETUPS = ['home', 'hotel', 'bodyweight', 'bands'] as const;
 
 /** Every case, grouped by profile and whether today's length is over 45; the value is what a lifter sees of each day. */
-function cases(pairExercises: boolean | undefined) {
+function cases() {
   const out: Record<string, string> = {};
   for (const kit of Object.keys(KITS) as (keyof typeof KITS)[]) for (const goal of GOALS) for (const experience of LEVELS) {
     for (const daysPerWeek of [2, 3, 4, 5, 6]) for (const sessionMinutes of SAVED) {
       const profile = {
         goal, experience, daysPerWeek, unit: 'kg', sessionMinutes, ...KITS[kit], exclusions: [], loads: {},
-        ...(pairExercises === undefined ? {} : { pairExercises }),
       } as unknown as Profile;
       for (const slot of planSlots(buildPlan(profile))) {
         for (const equipment of SETUPS) for (const minutes of [sessionMinutes, ...TODAY.filter((value) => value !== sessionMinutes)]) {
@@ -60,21 +59,14 @@ const FIXTURE = new URL('./fixtures/supersets88-main.json.gz', import.meta.url);
 const hash = (text: string) => createHash('sha1').update(text).digest('hex').slice(0, 10);
 
 if (process.env.WRITE_FIXTURE === '1') {
-  const all = cases(undefined);
+  const all = cases();
     writeFileSync(FIXTURE, gzipSync(JSON.stringify(Object.fromEntries(Object.entries(all).map(([key, value]) => [key, hash(value)])))));
 }
 
 const main: Record<string, string> = JSON.parse(gunzipSync(readFileSync(FIXTURE)).toString());
-const on = cases(undefined);
+const on = cases();
 
-test('toggle Off: every day, at every saved and today-only length and setup, is byte-identical to main', () => {
-  const off = cases(false);
-  assert.equal(Object.keys(off).length, Object.keys(main).length);
-  const changed = Object.entries(off).filter(([key, value]) => main[key] !== hash(value)).map(([key]) => key);
-  assert.deepEqual(changed, []);
-});
-
-test('toggle absent or On: Beginners and days over 45 minutes are byte-identical to main', () => {
+test('Beginners and days over 45 minutes are byte-identical to main', () => {
   const changed = Object.entries(on)
     .filter(([key]) => {
       const [, , experience, , , length] = key.split('|');
@@ -84,7 +76,7 @@ test('toggle absent or On: Beginners and days over 45 minutes are byte-identical
   assert.deepEqual(changed, []);
 });
 
-test('toggle On changes some Intermediate and Advanced days of 45 min or less (pairing is live)', () => {
+test('pairing changes some Intermediate and Advanced days of 45 min or less', () => {
   const changed = Object.entries(on).filter(([key, value]) => main[key] !== hash(value)).map(([key]) => key);
   assert.ok(changed.length > 0);
   assert.ok(changed.every((key) => !key.includes('|Beginner|')));

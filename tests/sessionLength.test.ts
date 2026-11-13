@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { areIncompatible, EXERCISES } from '../src/data/exercises.ts';
 import { isRelevantToDay } from '../src/lib/feasibility.ts';
-import { buildPlan, estimatedSeconds, generateWorkout } from '../src/lib/generator.ts';
-import { sessionRests } from '../src/lib/sessionTime.ts';
+import { buildPlan, generateWorkout } from '../src/lib/generator.ts';
+import { workSeconds } from '../src/lib/adapt.ts';
 import { catalogRowMeta } from '../src/lib/liveProgression.ts';
 import { planSlots, slotProgram } from '../src/lib/sequence.ts';
 import type { Equipment, Experience, Goal, Profile, SupportEquipment } from '../src/types.ts';
@@ -16,7 +16,6 @@ const FULL_GYM: Profile = {
   support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'],
   exclusions: [],
   loads: {},
-  pairExercises: false, // #88: straight sets; supersets have their own tests
 };
 
 const at = (sessionMinutes: number | undefined, overrides: Partial<Profile> = {}): Profile =>
@@ -28,10 +27,12 @@ const shape = (profile: Profile, dayIndex = 0) => {
 
 test('session minutes set how many exercises an Upper day holds, within the documented bounds', () => {
   // Honest time with rest by role and a warm-up (#132): fewer sets per length than before.
-  assert.deepEqual(shape(at(20)).sets, [3, 2, 2], 'at least 3 exercises; under 30 min even the lead thins');
-  // #229: under 45 minutes movements come before sets: the lead stops at 3 and five movements fit.
-  assert.deepEqual(shape(at(35)).sets, [3, 3, 2, 2, 2]);
-  assert.deepEqual(shape(at(45)).sets, [5, 3, 3, 3]);
+  // #88: an Intermediate day of 45 min or less pairs accessories, so the time pairs save holds more work
+  // (straight sets, before #88: [3, 2, 2] at 20, [3, 3, 2, 2, 2] at 35, [5, 3, 3, 3] at 45).
+  assert.deepEqual(shape(at(20)).sets, [2, 2, 2, 2], 'at least 3 exercises; under 30 min even the lead thins');
+  // #229: under 45 minutes movements come before sets: the lead stops at 3.
+  assert.deepEqual(shape(at(35)).sets, [3, 2, 2, 2, 2, 2, 2]);
+  assert.deepEqual(shape(at(45)).sets, [5, 3, 3, 3, 3]);
   assert.deepEqual(shape(at(60)).sets, [5, 3, 3, 3, 3, 3, 3]);
   assert.equal(shape(at(120)).exercises.length, 8, 'Intermediate tops out at 8 exercises');
   assert.equal(shape(at(120, { experience: 'Advanced' })).exercises.length, 8);
@@ -107,11 +108,11 @@ test('every generated day fits its labelled minutes, except a 20-minute floor by
     buildPlan(profile).forEach((day, index) => {
       const exercises = generateWorkout(profile, day, index).exercises;
       const sets = exercises.map((exercise) => exercise.planned.length);
-      // The timer's own rest by role, plus the warm-up (#132).
-      const rests = sessionRests(exercises.map((exercise) => exercise.exerciseId), goal, sessionMinutes);
+      // The timer's own rest by role, plus the warm-up (#132), supersets included (#88).
+      const seconds = workSeconds(exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.planned.length })), goal, sessionMinutes, profile);
       const slack = sessionMinutes === 20 ? 60 : 0;
-      assert.ok(estimatedSeconds(sets, rests, sessionMinutes) <= sessionMinutes * 60 + slack,
-        `${experience} ${goal} ${day.name} at ${sessionMinutes} min: ${sets.join('')} is ${Math.round(estimatedSeconds(sets, rests, sessionMinutes) / 60)} min`);
+      assert.ok(seconds <= sessionMinutes * 60 + slack,
+        `${experience} ${goal} ${day.name} at ${sessionMinutes} min: ${sets.join('')} is ${Math.round(seconds / 60)} min`);
     });
   }
 });

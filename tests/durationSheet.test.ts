@@ -7,7 +7,7 @@ import type { Profile } from '../src/types.ts';
 const plan = [{ name: 'Push', focus: ['Chest', 'Shoulders', 'Triceps'] }] as never;
 const profile = {
   goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 3, equipment: ['Dumbbell'], support: ['Bench'],
-  exclusions: [], loads: {}, name: 'Alex', unit: 'lb', sessionMinutes: 45, pairExercises: false, // #88: straight sets
+  exclusions: [], loads: {}, name: 'Alex', unit: 'lb', sessionMinutes: 45,
 } as unknown as Profile;
 const program = slotProgram(profile, planSlots(plan)[0], []);
 

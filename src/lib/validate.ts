@@ -185,8 +185,6 @@ function validateProfile(value: unknown, path: string): Profile {
         ? undefined
         : integer(raw.sessionMinutes, `${path}.sessionMinutes`, 10, 120),
     preferences,
-    // (#88) Absent stays absent: an older backup restores as On, the default.
-    ...(raw.pairExercises === undefined ? {} : { pairExercises: boolean(raw.pairExercises, `${path}.pairExercises`) }),
   };
 }
 
@@ -229,6 +227,8 @@ function validateExercise(value: unknown, path: string): WorkoutExercise {
     skipped: raw.skipped === undefined ? undefined : boolean(raw.skipped, `${path}.skipped`),
     // Optional (#188): absent on every record written before today-only setups were recorded.
     ...(raw.setup === undefined ? {} : { setup: oneOf(raw.setup, `${path}.setup`, SETUPS) }),
+    // Optional (#88): absent on every record written before supersets, which read as straight sets.
+    ...(raw.pair === undefined ? {} : { pair: integer(raw.pair, `${path}.pair`, 1, MAX_EXERCISES) }),
     planned: plannedRaw.map((item, i) => validatePlannedSet(item, `${path}.planned[${i}]`)),
     performed: performedRaw.map((item, i) => validatePerformedSet(item, `${path}.performed[${i}]`)),
   };
