@@ -225,12 +225,13 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    stored key at the plan stop, not after two reviews. Check: the swap-sheet sweep in
    `tests/supersets88.test.ts` (before and after set 1, 0 untouched pairs moved) and the review 2 repro test.
 
-34. **A settings switch is stored data and an agreed-look change; it needs the owner's yes.** #88's build
-   added `Profile.pairExercises` and a Settings toggle the story never asked for; the owner approved only
-   the session key, so the toggle came out and the tests that leaned on it to keep straight sets were
-   rewritten against the paired model. Rule: no new profile key or Settings row without an owner
-   decision in the issue; a test never uses a product switch as its fixture shortcut. Check: `git diff
-   origin/main -- src/types.ts` adds only keys named in the issue's decision comment.
+34. **A product switch is not a test fixture.** #88's older tests set `pairExercises: false` to keep their
+   straight-set numbers, so no sweep ever checked a paired described day. Once they ran paired, one did
+   fail: a 30-minute "arms, legs, core" day left Glutes out "for time" beside a second Quads move (#211),
+   because the cover check timed a partial day whose pairs differ from the final one.
+   Rule: when a feature changes the model a test checks (time, sets, order), move the test onto the new
+   model; pin the old output only where the feature is off by design (Beginner, over 45, switch Off), and
+   say so in the test. Check: `grep -rn "pairExercises" tests` lists only the supersets tests.
 
 ## Recurring edge cases (put the relevant ones in every brief)
 

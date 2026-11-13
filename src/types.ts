@@ -123,6 +123,12 @@ export interface Profile {
   sessionMinutes?: number;
   /** Per-variant "more often" / "less often". Absent key = neutral. Optional so older data still loads. */
   preferences?: Record<string, ExercisePreference>;
+  /**
+   * "Pair exercises to save time" (#88). Absent means On: supersets for Intermediate and Advanced on
+   * days of 45 min or less. False keeps every day in straight sets. Read when a session starts: a
+   * running session keeps the pairs it stored. Optional so older data still loads.
+   */
+  pairExercises?: boolean;
 }
 
 export type ExercisePreference = 'more' | 'less';

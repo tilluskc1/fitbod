@@ -5,12 +5,12 @@ import { planSlots, todayProgram } from '../src/lib/sequence.ts';
 import { adaptWorkout, restorePendingWorkout, todayGlance, workMinutes } from '../src/lib/adapt.ts';
 import { liveExercises } from '../src/lib/liveProgression.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
-import { exerciseById } from '../src/data/exercises.ts';
+import { EXERCISES, exerciseById } from '../src/data/exercises.ts';
 import { leadCompoundId } from '../src/lib/progression.ts';
 import { createSession, logSet, skipExercise, swapPendingExercise, unskipExercise } from '../src/lib/session.ts';
 import { sessionRests, TRANSITION_SECONDS, WORK_SECONDS } from '../src/lib/sessionTime.ts';
 import {
-  PAIR_SWITCH_SECONDS, canPair, keepPairs, pairRound, partnerOf, pairSeconds, pairedPendingIndex, pairingOn, restAfterLog, sessionPairs,
+  PAIR_SWITCH_SECONDS, canPair, heavyBarbell, keepPairs, pairRound, partnerOf, pairSeconds, pairedPendingIndex, pairingOn, restAfterLog, sessionPairs,
   startPairs, storedPairs,
 } from '../src/lib/supersets.ts';
 import { validateState } from '../src/lib/validate.ts';
@@ -58,9 +58,11 @@ test('Intermediate, 30 min Upper: at least one accessory pair, the lead stays st
   assert.ok(pairs.includes('face-pull+hammer-curl'), pairs.join());
 });
 
-test('who pairs: Intermediate and Advanced at 45 min or less; never Beginner, over 45, or an unknown length', () => {
+test('who pairs: Intermediate and Advanced at 45 min or less with the switch not Off; never Beginner, over 45, or an unknown length', () => {
   assert.equal(pairingOn({ experience: 'Intermediate' }, 45), true);
   assert.equal(pairingOn({ experience: 'Advanced' }, 15), true);
+  assert.equal(pairingOn({ experience: 'Advanced', pairExercises: true }, 30), true);
+  assert.equal(pairingOn({ experience: 'Intermediate', pairExercises: false }, 30), false);
   assert.equal(pairingOn({ experience: 'Beginner' }, 30), false);
   assert.equal(pairingOn({ experience: 'Intermediate' }, 46), false);
   assert.equal(pairingOn({ experience: 'Intermediate' }, 60), false);
@@ -91,6 +93,8 @@ test('sweep: pairs never share a main muscle, never hold the lead or two barbell
             assert.ok(!second.muscles.includes(first.muscles[0]) && !first.muscles.includes(second.muscles[0]), label);
             assert.ok(!(first.equipment === 'Barbell' && second.equipment === 'Barbell'), label);
             assert.ok(canPair(first, second), label);
+            // Owner, 2026-11-13: never a barbell squat or hinge, by the catalog's tags.
+            assert.ok(!heavyBarbell(first) && !heavyBarbell(second), label);
           }
         }
       }
@@ -365,4 +369,37 @@ test('keepPairs: a half split into two entries (a gear switch) or skipped sends 
   const after = keepPairs(before, [{ exerciseId: 'a' }, { exerciseId: 'b' }, { exerciseId: 'b' }, { exerciseId: 'c' }, { exerciseId: 'e', skipped: true }, { exerciseId: 'd' }]);
   assert.ok(after.every((entry) => !('pair' in entry)));
   assert.deepEqual(keepPairs(before, [{ exerciseId: 'e' }, { exerciseId: 'c' }, { exerciseId: 'd' }, { exerciseId: 'b' }]).map((entry) => entry.pair), [2, 1, 2, 1]);
+});
+
+test('a barbell squat or hinge never pairs, by catalog tags; dumbbell and machine versions still can', () => {
+  const heavy = EXERCISES.filter(heavyBarbell).map((exercise) => exercise.id).sort();
+  assert.deepEqual(heavy, ['back-squat', 'deadlift', 'front-squat', 'good-morning', 'romanian-deadlift']);
+  for (const id of heavy) for (const other of EXERCISES) {
+    assert.equal(canPair(exerciseById(id)!, other), false, `${id}+${other.id}`);
+    assert.equal(canPair(other, exerciseById(id)!), false, `${other.id}+${id}`);
+  }
+  assert.ok(EXERCISES.some((other) => canPair(exerciseById('dumbbell-romanian-deadlift')!, other)));
+  assert.ok(EXERCISES.some((other) => canPair(exerciseById('goblet-squat')!, other)));
+});
+
+test('the switch: Off at Start stores no pair; flipping it mid-session leaves the running pairs alone', () => {
+  const off = profileOf({ pairExercises: false });
+  const straight = sessionOf(IDS, 3, 30, off);
+  assert.ok(straight.exercises.every((entry) => !('pair' in entry)));
+  // On at Start, Off later: the logger reads the record, never the profile.
+  const half = run(sessionOf(IDS), 4).session;
+  const adapted = adaptWorkout(todayProgram(PROFILE, upper(PROFILE), []), defaultConstraints(PROFILE), [], 'Build Muscle', PROFILE);
+  assert.equal(todayGlance(adapted, half, false, 'Build Muscle', off).minutes, todayGlance(adapted, half, false, 'Build Muscle', PROFILE).minutes);
+  assert.deepEqual(run(half, 1).order, ['hammer-curl#1']);
+  // Off at Start, On later: still straight.
+  assert.deepEqual(pairsOf(run(straight, 4).session), []);
+});
+
+test('Settings key: pairExercises round-trips through validate, absent stays absent (On), a bad value is refused', () => {
+  const base = { plan: [], history: [], current: null };
+  const on = valid({ ...base, profile: profileOf() }).profile!;
+  assert.equal('pairExercises' in on, false);
+  const off = valid({ ...base, profile: profileOf({ pairExercises: false }) }).profile!;
+  assert.equal(off.pairExercises, false);
+  assert.equal(validateState({ ...base, profile: { ...profileOf(), pairExercises: 'no' } }).ok, false);
 });

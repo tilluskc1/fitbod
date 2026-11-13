@@ -13,17 +13,20 @@ import { TRANSITION_SECONDS, WORK_SECONDS, exerciseSeconds } from './sessionTime
  * (`keepPairs`), and older records, which hold no numbers, run straight.
  */
 
-/** What decides whether a day pairs: the lifter's level. Absent means no pairing (the old path). */
-export type Pairing = Pick<Profile, 'experience'>;
+/** What decides whether a day pairs: the lifter's level and switch. Absent means no pairing (the old path). */
+export type Pairing = Pick<Profile, 'experience' | 'pairExercises'>;
 
 /** Moving from A to B inside a round. */
 export const PAIR_SWITCH_SECONDS = 30;
 /** Pairing saves the most time on short days; longer ones keep straight sets. */
 export const PAIRING_MAX_MINUTES = 45;
 
-/** Intermediate and Advanced on a day of known length 45 min or less. Beginners never. */
+/**
+ * Intermediate and Advanced, the switch not Off, on a day of known length 45 min or less. Beginners
+ * never. Read for a day that has not started; a running session keeps the pairs it stored.
+ */
 export function pairingOn(pairing: Pairing | null | undefined, minutes: number | undefined): boolean {
-  return Boolean(pairing) && pairing!.experience !== 'Beginner'
+  return Boolean(pairing) && pairing!.experience !== 'Beginner' && pairing!.pairExercises !== false
     && minutes !== undefined && minutes <= PAIRING_MAX_MINUTES;
 }
 
@@ -51,12 +54,19 @@ const REGION: Record<MovementPattern, string> = {
   core_stability: 'core',
 };
 
+/** A barbell squat or hinge (back squat, deadlift, RDL, good morning): never paired (owner, 2026-11-13). */
+export function heavyBarbell(exercise: Pick<Exercise, 'pattern' | 'equipment'>): boolean {
+  return exercise.equipment === 'Barbell' && (exercise.pattern === 'squat' || exercise.pattern === 'hinge');
+}
+
 /**
- * Two exercises can run back to back: they work different regions (antagonists like chest and back,
- * or unrelated ones like rear delts and biceps, core with anything), they share no muscle at all (so
- * never the same main muscle, and no deadlift beside lunges), and they are not two barbell lifts.
+ * Two exercises can run back to back: neither is a barbell squat or hinge; they work different regions
+ * (antagonists like chest and back, or unrelated ones like rear delts and biceps, core with anything),
+ * they share no muscle at all (so never the same main muscle, and no deadlift beside lunges), and they
+ * are not two barbell lifts.
  */
 export function canPair(a: Pick<Exercise, 'muscles' | 'pattern' | 'equipment'>, b: Pick<Exercise, 'muscles' | 'pattern' | 'equipment'>): boolean {
+  if (heavyBarbell(a) || heavyBarbell(b)) return false;
   if (a.equipment === 'Barbell' && b.equipment === 'Barbell') return false;
   if (REGION[a.pattern] === REGION[b.pattern]) return false;
   return !a.muscles.some((muscle) => b.muscles.includes(muscle));

@@ -2,10 +2,11 @@
 // Preview lists them in one bracket; the logger alternates A1, B1, A2, B2 with a 30 s switch and the
 // full rest after each round, says "Round 2 of 3", and resumes mid-round after a reload. Start stores
 // the pair on the record (`pair`); replacing Chin-Up mid-pair sends Overhead Press straight and keeps
-// its logged sets. Settings has no superset switch (owner, 2026-11-13).
+// its logged sets. The Settings switch starts On; Off mid-session stores false and leaves the running
+// session's stored pairs alone (it applies from the next Start).
 //
 //   npm run e2e        (builds, then runs this at 390x844, 360x780 and 390x650, kg and lb)
-//   E2E_SHOTS=<dir>    also writes the preview, the logger mid-pair and the logger after the swap
+//   E2E_SHOTS=<dir>    also writes the preview, the logger mid-pair, after the swap and the Settings row
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -175,13 +176,20 @@ try {
     check(kept.join() === '2,1', `${where}: logged sets untouched by the swap (${kept})`);
     await shot(page, `88-logger-after-swap-${size}.png`);
 
-    // 6. Settings has no superset switch.
+    // 6. Settings: the switch starts On; Off applies from the next Start, so the stored pairs stay.
     await page.getByRole('button', { name: 'Minimize workout' }).click();
     await page.getByRole('button', { name: 'Open profile and settings' }).click();
     const settings = page.getByRole('dialog', { name: 'Training settings' });
-    await settings.waitFor();
-    check(!(await settings.innerText()).includes('Pair exercises'), `${where}: Settings shows no superset switch`);
+    const toggle = settings.getByRole('group', { name: 'Pair exercises to save time' });
+    await toggle.scrollIntoViewIfNeeded();
+    check(await toggle.getByRole('button', { name: 'On' }).getAttribute('aria-pressed') === 'true', `${where}: the switch starts On`);
+    if (size !== '390x650') await shot(page, `88-settings-${size}.png`);
+    await toggle.getByRole('button', { name: 'Off' }).click();
+    const off = await page.evaluate(() => JSON.parse(localStorage.getItem('fitbod-clone-v1')).state.profile.pairExercises);
+    check(off === false, `${where}: profile stores pairExercises false (${off})`);
     await page.keyboard.press('Escape');
+    const afterOff = await pairOf();
+    check(afterOff.join() === afterSwap.join(), `${where}: Off leaves the running session's pairs (${afterOff.join(' ')})`);
 
     check(errors.length === 0, `${where}: no page errors (${errors.join('; ')})`);
     console.log(`${where}: preview ${minutes} min with "${groupText.slice(0, 40)}"; A1 B1 A2 then "${b2.band}" rest ${b2.rest}; reload resumes; Chin-Up -> ${replacement}, ${straight.name} runs straight`);
@@ -196,4 +204,4 @@ if (failures.length > 0) {
   console.error(`FAIL\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('PASS: supersets preview, alternate with a 30 s switch, say the round, resume after a reload, are stored at Start, and a swap sends the partner straight');
+console.log('PASS: supersets preview, alternate with a 30 s switch, say the round, resume after a reload, are stored at Start, a swap sends the partner straight, and the switch waits for the next Start');

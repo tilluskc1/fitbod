@@ -1286,6 +1286,27 @@ export function SettingsSheet({
                 ))}
               </select>
             </div>
+            {/* (#88) Supersets: absent means On; only Off is a choice the lifter makes. */}
+            <div className="settings-row settings-row--stack">
+              <div className="settings-row__line">
+                <span id="pair-label">Pair exercises to save time</span>
+                <div className="unit-toggle" role="group" aria-labelledby="pair-label" aria-describedby="pair-note">
+                  <button className={profile.pairExercises !== false ? 'on' : ''} aria-pressed={profile.pairExercises !== false}
+                    onClick={() => onChange({ pairExercises: true })}>
+                    On
+                  </button>
+                  <button className={profile.pairExercises === false ? 'on' : ''} aria-pressed={profile.pairExercises === false}
+                    onClick={() => onChange({ pairExercises: false })}>
+                    Off
+                  </button>
+                </div>
+              </div>
+              <p className="settings-row__note" id="pair-note">
+                {profile.experience === 'Beginner'
+                  ? 'Starts once you move past Beginner: straight sets build technique first.'
+                  : 'On days of 45 min or less, two accessories alternate set by set with a short switch.'}
+              </p>
+            </div>
           </div>
         </section>
 

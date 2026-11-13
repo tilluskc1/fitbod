@@ -9,10 +9,10 @@ import { adaptWorkout, todayGlance } from '../src/lib/adapt.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import type { Goal, Profile } from '../src/types.ts';
 
-// #88: for a Beginner, or on a day over 45 minutes, every day is byte-identical to main before
-// supersets: same exercises, order, sets, loads, reps and minutes. Supersets have no switch (owner,
-// 2026-11-13). The fixture is every case on main 522f2f1 (`WRITE_FIXTURE=1` with main's code rewrites
-// it; main ignores the pairing argument).
+// #88: with "Pair exercises to save time" Off, a Beginner, or a day over 45 minutes, every day is
+// byte-identical to main before supersets: same exercises, order, sets, loads, reps and minutes.
+// The fixture is every case on main 522f2f1 (`WRITE_FIXTURE=1` with main's code rewrites it; main
+// ignores the pairing argument and the profile key).
 
 const KITS = {
   gym: { equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'], support: ['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'] },
@@ -27,12 +27,13 @@ const TODAY = [15, 20, 30, 45];
 const SETUPS = ['home', 'hotel', 'bodyweight', 'bands'] as const;
 
 /** Every case, grouped by profile and whether today's length is over 45; the value is what a lifter sees of each day. */
-function cases() {
+function cases(pairExercises?: boolean) {
   const out: Record<string, string> = {};
   for (const kit of Object.keys(KITS) as (keyof typeof KITS)[]) for (const goal of GOALS) for (const experience of LEVELS) {
     for (const daysPerWeek of [2, 3, 4, 5, 6]) for (const sessionMinutes of SAVED) {
       const profile = {
         goal, experience, daysPerWeek, unit: 'kg', sessionMinutes, ...KITS[kit], exclusions: [], loads: {},
+        ...(pairExercises === undefined ? {} : { pairExercises }),
       } as unknown as Profile;
       for (const slot of planSlots(buildPlan(profile))) {
         for (const equipment of SETUPS) for (const minutes of [sessionMinutes, ...TODAY.filter((value) => value !== sessionMinutes)]) {
@@ -66,7 +67,14 @@ if (process.env.WRITE_FIXTURE === '1') {
 const main: Record<string, string> = JSON.parse(gunzipSync(readFileSync(FIXTURE)).toString());
 const on = cases();
 
-test('Beginners and days over 45 minutes are byte-identical to main', () => {
+test('switch Off: every day, at every saved and today-only length and setup, is byte-identical to main', () => {
+  const off = cases(false);
+  assert.equal(Object.keys(off).length, Object.keys(main).length);
+  const changed = Object.entries(off).filter(([key, value]) => main[key] !== hash(value)).map(([key]) => key);
+  assert.deepEqual(changed, []);
+});
+
+test('switch absent (On): Beginners and days over 45 minutes are byte-identical to main', () => {
   const changed = Object.entries(on)
     .filter(([key]) => {
       const [, , experience, , , length] = key.split('|');
