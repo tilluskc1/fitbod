@@ -149,7 +149,7 @@ import { skipForward, switchOptions, upcomingDays } from './lib/switchDay';
 import type { SwitchOption } from './lib/switchDay';
 import { keepKey, todayFresher } from './lib/recovery';
 import { opensOnSplash, splashAfterAdopt } from './lib/firstScreen';
-import { done, headsUp, problem, toastShows, TOAST_MS, type Notice } from './lib/notices';
+import { done, headsUp, problem, toastShows, claimsSave, dropSaveClaim, TOAST_MS, type Notice } from './lib/notices';
 import { DoneToast, MessageCard, NoticeCard } from './components/ui/Notices';
 import
  Onboarding from './components/Onboarding';
@@ -354,6 +354,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     } else {
       if (result.pendingWrite) pendingWriteRef.current = result.pendingWrite;
       setSaveUi({ kind: 'error', reason: result.reason, message: result.error });
+      // (#351) The save a "Workout saved." toast claimed did not happen; a later Retry raises nothing.
+      setNotice(dropSaveClaim);
       if (result.reason === 'stale') setConflict(result.error);
       setFeedbackWrite((current) => (current ? { ...current, kind: 'error' } : current));
     }
@@ -432,7 +434,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const appeared = (saveFailed && !problemWas.saveFailed) || (conflict !== null && problemWas.conflict === null);
     if (appeared && notice?.kind === 'done') setNotice(null);
   }
-  const toastUp = toastShows(notice, sheet.kind !== 'none');
+  // (#351) A Done claiming a save never paints under a standing save error. Hidden here, because the
+  // save that may clear the error runs after this render; cleared in attemptSave once it fails.
+  const toastUp = !(saveFailed && claimsSave(notice)) && toastShows(notice, sheet.kind !== 'none');
   // Finish's partial-save Heads-up (#333) says the sets were saved, which a failed save makes untrue,
   // so it goes whenever a Problem is up.
   useEffect(() => {

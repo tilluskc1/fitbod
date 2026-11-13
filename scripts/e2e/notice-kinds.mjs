@@ -271,8 +271,30 @@ try {
       await undo.click();
       check(await page.getByLabel(/^Set 2 weight/).inputValue() === before, `${where} (#332): Undo did not put set 2 back to ${before}`);
     }
+    // (#351) Finishing under a standing save error: no "Workout saved." toast, the Problem card stays
+    // and says what happened. Retry then saves with no new message.
+    await page.waitForTimeout(4300); // the carry toast has passed
+    for (let i = 0; i < 80 && await page.locator('button.lg-check:not([disabled])').count(); i += 1) {
+      await page.locator('button.lg-check:not([disabled])').first().click();
+      await page.waitForTimeout(30);
+    }
+    if (await page.locator('.finish-btn').count()) await page.locator('.finish-btn').click();
+    await page.locator('.recap-actions').waitFor({ timeout: 3000 }).catch(() => {});
+    check(await page.locator('.recap-actions').count() === 1, `${where} (#351): finishing under a save error did not reach the recap`);
+    await page.waitForTimeout(300);
+    const claim = (await toast.innerText().catch(() => '')).trim();
+    check(claim !== 'Workout saved.', `${where} (#351): "Workout saved." shows beside "Not saved."`);
+    check(await problemCard.getByText('Not saved.').count() === 1, `${where} (#351): the Problem card left when the workout finished`);
+    if (shots) {
+      await settle(page);
+      await page.waitForTimeout(250);
+      await page.screenshot({ path: join(shots, `351-finish-${where}.png`) });
+    }
     await page.evaluate(() => { window.__failSaves = false; });
     await problemCard.getByRole('button', { name: 'Retry' }).click();
+    await page.waitForTimeout(300);
+    check(!(await problemCard.count()), `${where} (#351): the Problem card stayed after Retry worked`);
+    check(!(await toast.count()), `${where} (#351): Retry raised a message ("${(await toast.innerText().catch(() => '')).trim()}")`);
 
     check(errors.length === 0, `${where}: page errors: ${errors.join(' | ')}`);
     await page.close();

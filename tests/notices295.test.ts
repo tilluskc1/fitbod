@@ -104,7 +104,7 @@ test('every message App raises is exactly one kind, enumerated here (#295)', () 
   const all: Array<[string, string]> = [];
   for (const match of source.matchAll(/setNotice\(/g)) {
     const rest = source.slice((match.index ?? 0) + match[0].length);
-    if (rest.startsWith('null)')) continue;
+    if (rest.startsWith('null)') || rest.startsWith('dropSaveClaim)')) continue; // (#351) clears, raises nothing
     const built = rest.match(/^\s*(done|headsUp|problem)\(\s*([^\n]*)/);
     assert.ok(built, `unclassified message: setNotice(${rest.slice(0, 80)}`);
     all.push([built[1], built[2]]);
