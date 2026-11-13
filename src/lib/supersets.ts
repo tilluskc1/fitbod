@@ -16,6 +16,14 @@ import { TRANSITION_SECONDS, WORK_SECONDS, exerciseSeconds } from './sessionTime
 /** What decides whether a day pairs: the lifter's level and switch. Absent means no pairing (the old path). */
 export type Pairing = Pick<Profile, 'experience' | 'pairExercises'>;
 
+/**
+ * A running session's own pairs, by exercise id (#88): what a rebuild mid-session is fitted and priced
+ * with, because `keepPairs` keeps exactly these and pairs nothing new.
+ */
+export interface KeptPairs { kept: [string, string][] }
+/** Where a list's pairs come from: the profile (a day not started) or a running session's kept pairs. */
+export type PairSource = Pairing | KeptPairs;
+
 /** Moving from A to B inside a round. */
 export const PAIR_SWITCH_SECONDS = 30;
 /** Pairing saves the most time on short days; longer ones keep straight sets. */
@@ -86,7 +94,8 @@ export interface PairEntry {
  * running session reads `storedPairs`. The first exercise is the lead, by position (lesson 23), and never
  * pairs. From the second down, an exercise pairs with the next one when they can; else it stays straight.
  */
-export function sessionPairs(entries: PairEntry[], pairing: Pairing | null | undefined, minutes: number | undefined): [number, number][] {
+export function sessionPairs(entries: PairEntry[], pairing: PairSource | null | undefined, minutes: number | undefined): [number, number][] {
+  if (pairing && 'kept' in pairing) return keptPairsIn(entries, pairing);
   if (!pairingOn(pairing, minutes)) return [];
   const known = (index: number) => exerciseById(entries[index].exerciseId) !== undefined;
   const pairs: [number, number][] = [];
@@ -114,6 +123,21 @@ export function storedPairs(entries: PairEntry[]): [number, number][] {
     .filter((indices) => indices.length === 2 && indices.every((index) => !entries[index].skipped))
     .map(([a, b]) => [a, b] as [number, number])
     .sort((x, y) => x[0] - y[0]);
+}
+
+/** A running session's stored pairs as exercise ids: what a rebuild keeps (`keepPairs`). */
+export function keptPairsOf(entries: PairEntry[]): KeptPairs {
+  return { kept: storedPairs(entries).map(([a, b]) => [entries[a].exerciseId, entries[b].exerciseId]) };
+}
+
+/** `kept` pairs found in a list: both exercises there once each, neither skipped (as `keepPairs` keeps them). */
+function keptPairsIn(entries: PairEntry[], { kept }: KeptPairs): [number, number][] {
+  const at = (id: string) => entries.flatMap((entry, index) => (entry.exerciseId === id ? [index] : []));
+  return kept.flatMap(([x, y]) => {
+    const [here, there] = [at(x), at(y)];
+    if (here.length !== 1 || there.length !== 1 || entries[here[0]].skipped || entries[there[0]].skipped) return [];
+    return [[Math.min(here[0], there[0]), Math.max(here[0], there[0])] as [number, number]];
+  }).sort((p, q) => p[0] - q[0]);
 }
 
 /** The entries with `pairs` written as numbers 1, 2, ...: what a session stores when it starts. */

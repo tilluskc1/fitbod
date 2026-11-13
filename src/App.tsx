@@ -49,7 +49,7 @@ import {
   goHeavierFloor,
 } from './lib/liveProgression';
 import { sessionRests } from './lib/sessionTime';
-import { pairedPendingIndex, restAfterLog, sessionPairs, startPairs, storedPairs } from './lib/supersets';
+import { keptPairsOf, pairedPendingIndex, restAfterLog, sessionPairs, startPairs, storedPairs, type PairSource } from './lib/supersets';
 import { removeTodayNotice } from './lib/exerciseActions';
 import { leadCompoundId, leadSlotIds, savedSetup } from './lib/progression';
 import { areasOf } from './lib/areas';
@@ -532,11 +532,20 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     () => programFor({ equipment: constraints.equipment, focus: constraints.focus, skip: constraints.skip }),
     [programFor, constraints.equipment, constraints.focus, constraints.skip],
   );
+  /**
+   * (#88) The pairs a change is fitted and priced with: the profile's for a day not started; while a
+   * session runs, the pairs it stored, the only ones a rebuild keeps (`keepPairs`), so a shorter length
+   * never runs over the minutes it promised.
+   */
+  const fitPairing = useMemo(
+    () => (state.current ? keptPairsOf(state.current.exercises) : profile),
+    [state.current, profile],
+  );
   /** A proposed adaptation: another setup or a described day is rebuilt, the saved one adapts the saved day. */
   const adaptFor = useCallback(
     // The saved day at another length is the length sheet's rebuild (#193: the composer's time chip).
-    (next: Constraints) => adaptWorkout(next.equipment === 'home' && !next.focus && next.minutes === constraints.minutes ? homeProgram : programFor(next), next, exclusions, profile?.goal, profile),
-    [homeProgram, programFor, exclusions, constraints.minutes, profile],
+    (next: Constraints, pairing: PairSource | null = fitPairing) => adaptWorkout(next.equipment === 'home' && !next.focus && next.minutes === constraints.minutes ? homeProgram : programFor(next), next, exclusions, profile?.goal, pairing),
+    [homeProgram, programFor, exclusions, constraints.minutes, profile?.goal, fitPairing],
   );
   const adapted = useMemo(
     () => adaptWorkout(program, constraints, exclusions, profile?.goal, profile),
@@ -707,7 +716,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const next = replacePrompt;
     setReplacePrompt(null);
     if (!next) return;
-    const workout = adaptFor(next);
+    // A new session: fitted with the profile's pairs, which Start stores (#88).
+    const workout = adaptFor(next, profile);
     if (workout.exercises.length > 0) beginSession(workout, Boolean(next.focus));
   };
 
@@ -942,7 +952,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         currentState.profile ? defaultConstraints(currentState.profile) : DEFAULT_CONSTRAINTS,
         currentState.profile?.exclusions ?? [],
         currentState.profile?.goal,
-        currentState.profile,
+        // (#88) A running session is fitted with the pairs it keeps.
+        currentState.current ? keptPairsOf(currentState.current.exercises) : currentState.profile,
       );
       return {
         ...currentState,
@@ -1587,7 +1598,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         described={pendingDescribed}
         // Before is what Today shows now; after is the change; both by the timer's model (#203).
         before={todayDay}
-        after={todayGlance(pendingAdapted, null, false, profile?.goal, profile)}
+        after={todayGlance(pendingAdapted, null, false, profile?.goal, fitPairing)}
         notices={pendingNotices}
         unit={unit}
         loads={profile?.loads}
@@ -1796,7 +1807,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
       {sheet.kind === 'length' && profile && (
         <DurationSheet
-          options={lengthOptions(defaultProgram, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35, (minutes) => programFor({ ...constraints, minutes }), profile.goal, profile)}
+          options={lengthOptions(defaultProgram, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35, (minutes) => programFor({ ...constraints, minutes }), profile.goal, fitPairing)}
           current={constraints.minutes}
           onClose={closeSheet}
           onPick={pickLength}
@@ -1805,7 +1816,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
       {sheet.kind === 'gym' && profile && (
         <GymSheet
-          options={setupOptions(program, constraints, profile.exclusions ?? [], profile.goal, (choice) => (choice === 'home' && !constraints.focus ? homeProgram : programFor({ ...constraints, equipment: choice })), profile)}
+          options={setupOptions(program, constraints, profile.exclusions ?? [], profile.goal, (choice) => (choice === 'home' && !constraints.focus ? homeProgram : programFor({ ...constraints, equipment: choice })), fitPairing)}
           current={constraints.equipment}
           dayName={program.name}
           savedGear={isGymKit(profile) ? 'full gym' : [...profile.equipment, ...profile.support].join(', ') || 'none'}

@@ -8,7 +8,7 @@ import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, rep
 import { estimatedSeconds } from './generator.ts';
 import { SHORT_SESSION_MINUTES, sessionRests, warmUpSeconds } from './sessionTime.ts';
 import { keepPairs, pairedSessionSeconds, sessionPairs, storedPairs } from './supersets.ts';
-import type { Pairing } from './supersets.ts';
+import type { PairSource } from './supersets.ts';
 import { liveExercises } from './liveProgression.ts';
 
 /**
@@ -166,7 +166,7 @@ export function workSeconds(
   exercises: { exerciseId: string; sets: number; skipped?: boolean; pair?: number }[],
   goal?: Goal,
   sessionMinutes?: number,
-  pairing?: Pairing | null | 'stored',
+  pairing?: PairSource | null | 'stored',
 ): number {
   const live = exercises.filter((exercise) => exercise.sets > 0);
   if (live.length === 0) return 0;
@@ -183,7 +183,7 @@ export function workSeconds(
  * With a goal and session length, rests and warm-up are the ones the timer runs; with the profile's
  * pairing, supersets too (#88).
  */
-export function workMinutes(exercises: { exerciseId: string; sets: number; skipped?: boolean; pair?: number }[], goal?: Goal, sessionMinutes?: number, pairing?: Pairing | null | 'stored'): number {
+export function workMinutes(exercises: { exerciseId: string; sets: number; skipped?: boolean; pair?: number }[], goal?: Goal, sessionMinutes?: number, pairing?: PairSource | null | 'stored'): number {
   const seconds = workSeconds(exercises, goal, sessionMinutes, pairing);
   return seconds === 0 ? 0 : Math.max(1, Math.round(seconds / 60));
 }
@@ -208,7 +208,7 @@ export interface DayGlance {
  * was started at, and the pairs stored at its start, #88), so Start, a later settings change or a new
  * slot cannot move it (#200).
  */
-export function todayGlance(adapted: AdaptedWorkout, current: WorkoutRecord | null, overridden = false, goal?: Goal, pairing?: Pairing | null): DayGlance {
+export function todayGlance(adapted: AdaptedWorkout, current: WorkoutRecord | null, overridden = false, goal?: Goal, pairing?: PairSource | null): DayGlance {
   const asked = current ? current.durationMin : adapted.minutes;
   const work = current
     ? current.exercises.map((exercise) => ({
@@ -238,7 +238,7 @@ export function adaptWorkout(
    */
   goal: Goal | undefined,
   /** The profile's pairing (#88): the length is fitted with supersets as the logger will run them. */
-  pairing?: Pairing | null,
+  pairing?: PairSource | null,
 ): AdaptedWorkout {
   const minutes = clamp(Math.round(constraints.minutes), 10, 120);
   const setup = EQUIPMENT_OPTIONS[constraints.equipment] ?? EQUIPMENT_OPTIONS.home;
@@ -680,7 +680,7 @@ export function lengthOptions(
   /** The day rebuilt at a longer length, so more time can add work (#17). Absent: longer only keeps the day. */
   programAt?: (minutes: number) => Program,
   goal?: Goal,
-  pairing?: Pairing | null,
+  pairing?: PairSource | null,
 ): LengthOption[] {
   const base = adaptWorkout(program, { ...constraints, minutes: defaultMinutes }, exclusions, goal, pairing);
   const kept = new Set(base.exercises.map((exercise) => exercise.exerciseId));
@@ -746,7 +746,7 @@ export function setupOptions(
   exclusions: string[],
   goal?: Goal,
   programFor?: (choice: EquipmentChoice) => Program,
-  pairing?: Pairing | null,
+  pairing?: PairSource | null,
 ): SetupOption[] {
   const sourceFor = (choice: EquipmentChoice) => programFor?.(choice) ?? program;
   const base = adaptWorkout(sourceFor('home'), { ...constraints, equipment: 'home' }, exclusions, goal, pairing);

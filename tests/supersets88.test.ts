@@ -11,7 +11,7 @@ import { createSession, logSet, skipExercise, swapPendingExercise, unskipExercis
 import { sessionRests, TRANSITION_SECONDS, WORK_SECONDS } from '../src/lib/sessionTime.ts';
 import {
   PAIR_SWITCH_SECONDS, canPair, heavyBarbell, keepPairs, pairRound, partnerOf, pairSeconds, pairedPendingIndex, pairingOn, restAfterLog, sessionPairs,
-  startPairs, storedPairs,
+  keptPairsOf, startPairs, storedPairs,
 } from '../src/lib/supersets.ts';
 import { validateState } from '../src/lib/validate.ts';
 import { rankedReplacements } from '../src/lib/replacements.ts';
@@ -402,4 +402,33 @@ test('Settings key: pairExercises round-trips through validate, absent stays abs
   const off = valid({ ...base, profile: profileOf({ pairExercises: false }) }).profile!;
   assert.equal(off.pairExercises, false);
   assert.equal(validateState({ ...base, profile: { ...profileOf(), pairExercises: 'no' } }).ok, false);
+});
+
+test('review 3: a running session shortened for today never runs over the length or the minutes its review showed', () => {
+  const over: string[] = [];
+  let checked = 0;
+  for (const kit of ['gym', 'home'] as const) for (const goal of GOALS) for (const daysPerWeek of [3, 4, 5]) for (const saved of [30, 45]) {
+    const profile = profileOf({ kit, goal, daysPerWeek, sessionMinutes: saved, experience: 'Advanced' });
+    for (const slot of planSlots(buildPlan(profile))) {
+      const at = (minutes: number, pairing: Parameters<typeof adaptWorkout>[4]) =>
+        adaptWorkout(todayProgram(profile, slot, [], { minutes }), { ...defaultConstraints(profile), minutes }, [], goal, pairing);
+      const start = at(saved, profile);
+      let session = createSession({ id: 's', name: start.name, dayIndex: 0, now: '2026-11-12T10:00:00.000Z', durationMin: saved,
+        exercises: startPairs(liveExercises(start, profile, []), profile, saved) });
+      session = run(session, 4).session;
+      for (const minutes of [15, 20, 30]) {
+        if (minutes >= saved) continue;
+        // As App fits a change to a running session: with the pairs it keeps.
+        const kept = keptPairsOf(session.exercises);
+        const target = at(minutes, kept);
+        const rebuilt = restorePendingWorkout(session, target, profile, []);
+        const shown = todayGlance(target, rebuilt, false, goal, profile).minutes;
+        const review = todayGlance(target, null, false, goal, kept).minutes;
+        checked += 1;
+        if (shown > Math.max(minutes, review)) over.push(`${kit} ${goal} ${daysPerWeek}d ${saved}->${minutes} ${slot.name}: review ${review}, running ${shown}`);
+      }
+    }
+  }
+  assert.deepEqual(over, []);
+  assert.ok(checked > 400, `${checked}`);
 });
