@@ -23,7 +23,7 @@ const legs = planSlots(buildPlan(gym)).find((slot) => slot.name === 'Legs')!;
 
 const day = (equipment: EquipmentChoice, minutes = 60, history: Parameters<typeof todayProgram>[2] = []) => {
   const program = todayProgram(gym, legs, history, { minutes, equipment });
-  return { program, adapted: adaptWorkout(program, { minutes, equipment }, [], gym.goal) };
+  return { program, adapted: adaptWorkout(program, { minutes, equipment }, [], gym.goal, gym) }; // the app passes the profile as pairing (#88)
 };
 const patterns = (ids: string[]) => ids.map((id) => exerciseById(id)?.pattern);
 
@@ -53,7 +53,7 @@ test('#188: promised minutes never exceed the length shown', () => {
       assert.ok(adapted.minutes <= minutes, `${choice} ${minutes}: label ${adapted.minutes}`);
       // #203 removed promisedMinutes/promisedProgramMinutes: todayGlance is the one minutes figure
       // every surface shows (Today, Plan, the sheets), so the rebuilt day is held to it.
-      const glance = todayGlance(adapted, null, true, gym.goal);
+      const glance = todayGlance(adapted, null, true, gym.goal, gym);
       assert.ok(glance.minutes <= minutes, `${choice} ${minutes}: shown ${glance.minutes}`);
     }
   }

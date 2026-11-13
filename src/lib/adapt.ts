@@ -6,7 +6,9 @@ import { latestDoneSet } from './session.ts';
 import type { SwapCandidate } from './session.ts';
 import { atOrUnder, isCompound, isGymKit, leadCompoundId, prescribeExercise, repRangeFor } from './progression.ts';
 import { estimatedSeconds } from './generator.ts';
-import { SHORT_SESSION_MINUTES, sessionRests } from './sessionTime.ts';
+import { SHORT_SESSION_MINUTES, sessionRests, warmUpSeconds } from './sessionTime.ts';
+import { keepPairs, pairedSessionSeconds, sessionPairs, storedPairs } from './supersets.ts';
+import type { PairSource } from './supersets.ts';
 import { liveExercises } from './liveProgression.ts';
 
 /**
@@ -156,14 +158,34 @@ export function estimatedMinutes(program: Program, sets: number): number {
 }
 
 /**
- * Minutes these exercises take, warm-up included, by the generator's own time model (#132).
- * With a goal and session length, rests and warm-up are the ones the timer runs.
+ * Seconds these exercises take in this order, warm-up included, by the timer's own model (#132). With
+ * pairing on (#88) the pairs `sessionPairs` finds share their rest, as the logger runs them; `'stored'`
+ * reads a started session's own pairs (`storedPairs`) instead.
  */
-export function workMinutes(exercises: { exerciseId: string; sets: number }[], goal?: Goal, sessionMinutes?: number): number {
+export function workSeconds(
+  exercises: { exerciseId: string; sets: number; skipped?: boolean; pair?: number }[],
+  goal?: Goal,
+  sessionMinutes?: number,
+  pairing?: PairSource | null | 'stored',
+): number {
   const live = exercises.filter((exercise) => exercise.sets > 0);
   if (live.length === 0) return 0;
   const rests = sessionRests(live.map((exercise) => exercise.exerciseId), goal, sessionMinutes);
-  return Math.max(1, Math.round(estimatedSeconds(live.map((exercise) => exercise.sets), rests, sessionMinutes) / 60));
+  const sets = live.map((exercise) => exercise.sets);
+  const pairs = pairing === 'stored' ? storedPairs(live) : sessionPairs(live, pairing, sessionMinutes);
+  if (pairs.length === 0) return estimatedSeconds(sets, rests, sessionMinutes);
+  return pairedSessionSeconds(sets.map((count, index) => ({ sets: count, rest: rests[index] })),
+    pairs, warmUpSeconds(sessionMinutes));
+}
+
+/**
+ * Minutes these exercises take, warm-up included, by the generator's own time model (#132).
+ * With a goal and session length, rests and warm-up are the ones the timer runs; with the profile's
+ * pairing, supersets too (#88).
+ */
+export function workMinutes(exercises: { exerciseId: string; sets: number; skipped?: boolean; pair?: number }[], goal?: Goal, sessionMinutes?: number, pairing?: PairSource | null | 'stored'): number {
+  const seconds = workSeconds(exercises, goal, sessionMinutes, pairing);
+  return seconds === 0 ? 0 : Math.max(1, Math.round(seconds / 60));
 }
 
 /** Today's day at a glance: the running session, else today's adapted day (#189). */
@@ -183,14 +205,18 @@ export interface DayGlance {
  * View session, Coach, the switch and gym sheets and the review (#203).
  * Minutes are the work's own time, with the rests the timer will run for this goal and length.
  * A running session is priced from itself alone (its exercises, planned sets and the length it
- * was started at), so Start, a later settings change or a new slot cannot move it (#200).
+ * was started at, and the pairs stored at its start, #88), so Start, a later settings change or a new
+ * slot cannot move it (#200).
  */
-export function todayGlance(adapted: AdaptedWorkout, current: WorkoutRecord | null, overridden = false, goal?: Goal): DayGlance {
+export function todayGlance(adapted: AdaptedWorkout, current: WorkoutRecord | null, overridden = false, goal?: Goal, pairing?: PairSource | null): DayGlance {
   const asked = current ? current.durationMin : adapted.minutes;
   const work = current
-    ? current.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.planned.length }))
+    ? current.exercises.map((exercise) => ({
+      exerciseId: exercise.exerciseId, sets: exercise.planned.length,
+      ...(exercise.skipped ? { skipped: true } : {}), ...(exercise.pair === undefined ? {} : { pair: exercise.pair }),
+    }))
     : adapted.exercises;
-  const minutes = workMinutes(work, goal, asked);
+  const minutes = workMinutes(work, goal, asked, current ? 'stored' : pairing);
   return {
     name: current?.name ?? adapted.name,
     exercises: work.length,
@@ -211,6 +237,8 @@ export function adaptWorkout(
    * length by the timer's own clock and a Get Stronger day is never trimmed with short rests (#203).
    */
   goal: Goal | undefined,
+  /** The profile's pairing (#88): the length is fitted with supersets as the logger will run them. */
+  pairing?: PairSource | null,
 ): AdaptedWorkout {
   const minutes = clamp(Math.round(constraints.minutes), 10, 120);
   const setup = EQUIPMENT_OPTIONS[constraints.equipment] ?? EQUIPMENT_OPTIONS.home;
@@ -298,11 +326,7 @@ export function adaptWorkout(
   // A length under the program's trims until the rest timer's model fits it (#203); at or over it,
   // the day stays as built (the generator already fitted it to its own length).
   const budget = minutes < program.minutes ? minutes * 60 : Infinity;
-  const seconds = () => {
-    const live = exercises.filter((exercise) => exercise.sets > 0);
-    const rests = sessionRests(live.map((exercise) => exercise.exerciseId), goal, minutes);
-    return estimatedSeconds(live.map((exercise) => exercise.sets), rests, minutes);
-  };
+  const seconds = () => workSeconds(exercises, goal, minutes, pairing);
 
   // Trim order: isolation first, then other compounds, the lead compound last;
   // within a role, the later movement in the session goes first.
@@ -448,7 +472,7 @@ export function adaptWorkout(
     name: program.name,
     minutes: appliedMinutes,
     // The ceiling notice names what the capped day takes by the timer's model, as every other figure does.
-    cappedMinutes: capped ? { asked: minutes, applied: workMinutes(kept, goal, appliedMinutes) } : null,
+    cappedMinutes: capped ? { asked: minutes, applied: workMinutes(kept, goal, appliedMinutes, pairing) } : null,
     originalMinutes: program.minutes,
     exercises: kept,
     skipped,
@@ -627,7 +651,8 @@ export function restorePendingWorkout(
   });
   // Completed work stays even when the restored equipment/exclusions no longer prescribe it.
   exercises.push(...completed.filter((exercise) => owner.get(exercise) === -1));
-  return { ...session, durationMin: original.minutes, exercises };
+  // (#88) Stored pairs survive only where both halves did; nothing new pairs mid-session.
+  return { ...session, durationMin: original.minutes, exercises: keepPairs(session.exercises, exercises) };
 }
 
 /** Lengths the Today duration sheet offers (#148). */
@@ -655,15 +680,16 @@ export function lengthOptions(
   /** The day rebuilt at a longer length, so more time can add work (#17). Absent: longer only keeps the day. */
   programAt?: (minutes: number) => Program,
   goal?: Goal,
+  pairing?: PairSource | null,
 ): LengthOption[] {
-  const base = adaptWorkout(program, { ...constraints, minutes: defaultMinutes }, exclusions, goal);
+  const base = adaptWorkout(program, { ...constraints, minutes: defaultMinutes }, exclusions, goal, pairing);
   const kept = new Set(base.exercises.map((exercise) => exercise.exerciseId));
   return LENGTH_CHOICES.map((minutes) => {
     // A day rebuilt for today's setup (#188) is rebuilt at every length, as picking it would.
     // So is a shorter one under 45 minutes, built at that length the way picking it would (#229).
     const source = programAt && (minutes > defaultMinutes || (minutes < defaultMinutes && minutes < SHORT_SESSION_MINUTES) || program.setup)
       ? programAt(minutes) : program;
-    const adapted = adaptWorkout(source, { ...constraints, minutes }, exclusions, goal);
+    const adapted = adaptWorkout(source, { ...constraints, minutes }, exclusions, goal, pairing);
     const now = new Set(adapted.exercises.map((exercise) => exercise.exerciseId));
     const dropped = base.exercises.filter((exercise) => kept.has(exercise.exerciseId) && !now.has(exercise.exerciseId)).map((exercise) => exercise.name);
     const added = adapted.exercises.filter((exercise) => !kept.has(exercise.exerciseId)).map((exercise) => exercise.name);
@@ -720,11 +746,12 @@ export function setupOptions(
   exclusions: string[],
   goal?: Goal,
   programFor?: (choice: EquipmentChoice) => Program,
+  pairing?: PairSource | null,
 ): SetupOption[] {
   const sourceFor = (choice: EquipmentChoice) => programFor?.(choice) ?? program;
-  const base = adaptWorkout(sourceFor('home'), { ...constraints, equipment: 'home' }, exclusions, goal);
+  const base = adaptWorkout(sourceFor('home'), { ...constraints, equipment: 'home' }, exclusions, goal, pairing);
   return SETUP_CHOICES.map((choice) => {
-    const adapted = adaptWorkout(sourceFor(choice), { ...constraints, equipment: choice }, exclusions, goal);
+    const adapted = adaptWorkout(sourceFor(choice), { ...constraints, equipment: choice }, exclusions, goal, pairing);
     const kind: SetupOption['kind'] =
       adapted.totalSets === 0 ? 'none'
       : choice === 'home' ? 'program'
@@ -732,7 +759,7 @@ export function setupOptions(
       : programFor && adapted.setup ? 'rebuilt'
       : adapted.totalSets === base.totalSets ? 'same'
       : 'fewer';
-    const { minutes, approx } = todayGlance(adapted, null, false, goal);
+    const { minutes, approx } = todayGlance(adapted, null, false, goal, pairing);
     return { choice, totalSets: adapted.totalSets, baseSets: base.totalSets, minutes, approx, kind };
   });
 }

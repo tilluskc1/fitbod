@@ -479,7 +479,7 @@ export function customDayPreview(
   const ids = adapted.exercises.map((exercise) => exercise.exerciseId);
   const rests = sessionRests(ids, profile.goal, adapted.minutes);
   // One minutes model on every surface (#203): the preview names what Today will.
-  const glance = todayGlance(adapted, null, false, profile.goal);
+  const glance = todayGlance(adapted, null, false, profile.goal, profile);
   const lead = leadCompoundId(ids);
   const status = shown?.status
     ?? (adapted.exercises.length === 0 || program.feasibility?.status === 'infeasible' ? 'none'

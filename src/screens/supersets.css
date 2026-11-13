@@ -1,0 +1,41 @@
+/* ---------- Supersets (#88) ----------
+ * The logger's band over a paired exercise, and the preview's bracket around a pair. Navy on the
+ * sky blue the app already uses for its blue card (#0f2f3c on #a3d1e5, well above WCAG AA). */
+.ss-band {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--sky);
+  color: var(--on-sky);
+  font-size: 13px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ss-band__tag {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Preview: the two exercises of a pair sit in one bracket with a label above them. */
+.ss-group {
+  margin: 6px 0;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--sky);
+}
+
+.ss-group__label {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--on-sky);
+}

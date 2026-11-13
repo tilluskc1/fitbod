@@ -39,13 +39,13 @@ export function switchOptions(
     // Built at today's length, as Today builds it, so the sheet and Today agree (#203). The saved
     // setup rates the saved day; another setup rates the day it rebuilds from its kit (#188).
     const program = todayProgram(profile, slot, history, constraints);
-    const adapted = adaptWorkout(program, constraints, profile.exclusions ?? [], profile.goal);
+    const adapted = adaptWorkout(program, constraints, profile.exclusions ?? [], profile.goal, profile);
     const status: SwitchOption['status'] =
       adapted.totalSets === 0 || program.feasibility?.status === 'infeasible' ? 'none'
       : program.feasibility?.status === 'limited' ? 'limited'
       : 'ready';
     const skips = Array.from({ length: step }, (_, k) => slots[(start + k) % slots.length].name);
-    const { minutes, approx } = todayGlance(adapted, null, false, profile.goal);
+    const { minutes, approx } = todayGlance(adapted, null, false, profile.goal, profile);
     return { slotId: slot.id, name: slot.name, offset: step, skips, totalSets: adapted.totalSets, minutes, approx, status };
   });
 }
@@ -70,7 +70,7 @@ export function upcomingDays(profile: Profile, plan: AppState['plan'], slot: Pla
   const slots = planSlots(plan);
   return slots.map((_, k) => slots[(slot.index + k) % slots.length]).slice(1).map((day) => {
     const built = slotProgram(profile, day, history);
-    const glance = todayGlance(adaptWorkout(built, defaultConstraints(profile), profile.exclusions ?? [], profile.goal), null, false, profile.goal);
+    const glance = todayGlance(adaptWorkout(built, defaultConstraints(profile), profile.exclusions ?? [], profile.goal, profile), null, false, profile.goal, profile);
     return {
       id: day.id,
       name: day.name,

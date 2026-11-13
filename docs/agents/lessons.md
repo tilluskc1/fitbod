@@ -215,6 +215,24 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: run the "fails on old code" check against the named base SHA (`git show <base>:<file>`), never
    a local branch name. Check: the issue comment names the SHA the e2e failed on.
 
+33. **A grouping that later steps must keep is stored, not derived.** #88 reviews 1 and 2 failed on the
+   same point: supersets were derived from the session's list, so a swap re-paired exercises nobody touched
+   (563 of 4,553 swap-sheet swaps). Walking slots instead of entries (eb2e17c) only moved the leak: skip,
+   log the next pair, Return, Replace still re-paired started work, and a swap before set 1 moved another
+   pair in 544 of 4,557 options. Storing `WorkoutExercise.pair` at Start fixed it (lesson 1).
+   Rule: when a change to one item must leave the others' grouping alone, store the grouping when the
+   session starts; a change clears its own group only, and nothing re-derives after start. Raise the
+   stored key at the plan stop, not after two reviews. Check: the swap-sheet sweep in
+   `tests/supersets88.test.ts` (before and after set 1, 0 untouched pairs moved) and the review 2 repro test.
+
+34. **A product switch is not a test fixture.** #88's older tests set `pairExercises: false` to keep their
+   straight-set numbers, so no sweep ever checked a paired described day. Once they ran paired, one did
+   fail: a 30-minute "arms, legs, core" day left Glutes out "for time" beside a second Quads move (#211),
+   because the cover check timed a partial day whose pairs differ from the final one.
+   Rule: when a feature changes the model a test checks (time, sets, order), move the test onto the new
+   model; pin the old output only where the feature is off by design (Beginner, over 45, switch Off), and
+   say so in the test. Check: `grep -rn "pairExercises" tests` lists only the supersets tests.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

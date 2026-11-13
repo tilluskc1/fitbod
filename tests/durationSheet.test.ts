@@ -56,7 +56,7 @@ test('#17: Today builds the day at a longer today-only length and the length she
   assert.match(app, /const program = useMemo\(\(\) => programFor\(constraints\)/);
   assert.match(app, /todayProgram\(profile, slot, state\.history, today\)/);
   // #203 passes the goal so each length is trimmed by the timer's model.
-  assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programFor\(\{ \.\.\.constraints, minutes \}\), profile\.goal\)/);
+  assert.match(app, /lengthOptions\(defaultProgram, constraints, profile\.exclusions \?\? \[\], profile\.sessionMinutes \?\? 35, \(minutes\) => programFor\(\{ \.\.\.constraints, minutes \}\), profile\.goal, fitPairing\)/);
 });
 
 test('back to the saved length or setup restores for a no-gear profile too (savedSetup, #188/#193)', async () => {

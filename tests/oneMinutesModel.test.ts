@@ -5,11 +5,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { buildPlan } from '../src/lib/generator.ts';
 import { planSlots, slotProgram, slotProgramAt } from '../src/lib/sequence.ts';
-import { estimatedSeconds } from '../src/lib/generator.ts';
-import { sessionRests } from '../src/lib/sessionTime.ts';
 import { leadCompoundId } from '../src/lib/progression.ts';
 import { readFileSync } from 'node:fs';
-import { adaptWorkout, setupOptions, todayGlance } from '../src/lib/adapt.ts';
+import { adaptWorkout, setupOptions, todayGlance, workSeconds } from '../src/lib/adapt.ts';
 import { defaultConstraints, noticeText, withCeiling } from '../src/lib/constraints.ts';
 import { switchOptions, upcomingDays } from '../src/lib/switchDay.ts';
 import { EMPTY_STATE, saveState } from '../src/lib/storage.ts';
@@ -23,11 +21,12 @@ const KITS = {
   bodyweight: { equipment: [], support: [] },
 };
 
+// #88: Intermediate days of 45 min or less pair accessories; the app passes the profile as pairing.
 const profileFor = (gear: { equipment: string[]; support: string[] }, days: number, minutes: number, goal = 'Build Muscle') => ({
   name: 'K', goal, experience: 'Intermediate', daysPerWeek: days, ...gear, exclusions: [], loads: {}, unit: 'kg', sessionMinutes: minutes,
 }) as unknown as Profile;
 
-test('#203: each day reads the same minutes on Plan, the switch and gym sheets and as today', () => {
+test('#203: each day reads the same minutes on Plan, the switch and gym sheets and as today, with supersets (#88)', () => {
   const over: string[] = [];
   for (const [kit, gear] of Object.entries(KITS)) {
     for (const goal of ['Build Muscle', 'Get Stronger']) {
@@ -42,7 +41,7 @@ test('#203: each day reads the same minutes on Plan, the switch and gym sheets a
           const later = upcomingDays(profile, plan, slots[0], []);
           slots.forEach((slot, k) => {
             const program = slotProgram(profile, slot, []);
-            const today = todayGlance(adaptWorkout(program, constraints, [], profile.goal), null, false, profile.goal);
+            const today = todayGlance(adaptWorkout(program, constraints, [], profile.goal, profile), null, false, profile.goal, profile);
             const where = `${kit} ${goal} ${days}d ${minutes}min ${slot.name}`;
             assert.equal(switches[k].minutes, today.minutes, `switch sheet, ${where}`);
             assert.equal(switches[k].approx, today.approx, `switch sheet ≈, ${where}`);
@@ -51,7 +50,7 @@ test('#203: each day reads the same minutes on Plan, the switch and gym sheets a
               assert.equal(later[k - 1].approx, today.approx, `Plan later day ≈, ${where}`);
               assert.equal(later[k - 1].sets, today.sets, `Plan later day sets, ${where}`);
             }
-            const gymSheet = setupOptions(program, constraints, [], profile.goal).find((option) => option.choice === constraints.equipment);
+            const gymSheet = setupOptions(program, constraints, [], profile.goal, undefined, profile).find((option) => option.choice === constraints.equipment);
             assert.equal(gymSheet?.minutes, today.minutes, `gym sheet, ${where}`);
             if (today.minutes > minutes) over.push(`${where}: ${today.minutes}`);
           });
@@ -63,7 +62,7 @@ test('#203: each day reads the same minutes on Plan, the switch and gym sheets a
   assert.deepEqual(over, []);
 });
 
-test('#197: no day promises more than its length, at any level, and a short day keeps its movements', () => {
+test('#197: no day promises more than its length, at any level, and a short day keeps its movements, with supersets (#88)', () => {
   const over: string[] = [];
   for (const [kit, gear] of Object.entries(KITS)) {
     for (const goal of ['Build Muscle', 'Get Stronger']) {
@@ -126,7 +125,7 @@ test('#203: the review names the honest figure, not the asked length', async () 
 const todayDay = (profile: Profile, slot: Parameters<typeof slotProgram>[1], minutes: number) => {
   // The day Today builds for that length: longer or under 45 rebuilds there (#17, #229), else trims.
   const program = slotProgramAt(profile, slot, [], minutes);
-  return todayGlance(adaptWorkout(program, { ...defaultConstraints(profile), minutes }, [], profile.goal), null, false, profile.goal);
+  return todayGlance(adaptWorkout(program, { ...defaultConstraints(profile), minutes }, [], profile.goal, profile), null, false, profile.goal, profile);
 };
 
 test('#203: a length chosen for today reads one figure in the switch sheet and on Today, never over the ask', () => {
@@ -255,21 +254,21 @@ test('#203: rendered, the app\'s Today, Plan\'s later list, the switch sheet and
 });
 
 test('#203: a trimmed day fits its length, cannot take one more set back, and keeps its lead', () => {
-  const seconds = (work: { exerciseId: string; sets: number }[], goal: Profile['goal'], minutes: number) => {
-    const live = work.filter((exercise) => exercise.sets > 0);
-    return estimatedSeconds(live.map((exercise) => exercise.sets), sessionRests(live.map((exercise) => exercise.exerciseId), goal, minutes), minutes);
-  };
+  // By the timer's model, supersets included (#88): the app passes the profile as pairing.
+  let pairing: Profile | null = null;
+  const seconds = (work: { exerciseId: string; sets: number }[], goal: Profile['goal'], minutes: number) => workSeconds(work, goal, minutes, pairing);
   const problems: string[] = [];
   for (const [kit, gear] of Object.entries(KITS)) {
     for (const goal of ['Build Muscle', 'Get Stronger']) {
       for (const days of [2, 3, 4, 5, 6]) {
         for (const saved of [20, 30, 45, 60]) {
           const profile = profileFor(gear, days, saved, goal);
+          pairing = profile;
           for (const slot of planSlots(buildPlan(profile))) {
             for (const minutes of [15, 20, 30, 45]) {
               if (minutes >= saved) continue;
               const program = slotProgramAt(profile, slot, [], minutes);
-              const adapted = adaptWorkout(program, { ...defaultConstraints(profile), minutes }, [], profile.goal);
+              const adapted = adaptWorkout(program, { ...defaultConstraints(profile), minutes }, [], profile.goal, profile);
               const where = `${kit} ${goal} ${days}d saved ${saved} today ${minutes} ${slot.name}`;
               if (adapted.exercises.length === 0) continue;
               const work = adapted.exercises.map((exercise) => ({ exerciseId: exercise.exerciseId, sets: exercise.sets }));

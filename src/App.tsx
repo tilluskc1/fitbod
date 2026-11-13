@@ -49,6 +49,7 @@ import {
   goHeavierFloor,
 } from './lib/liveProgression';
 import { sessionRests } from './lib/sessionTime';
+import { keptPairsOf, pairedPendingIndex, restAfterLog, sessionPairs, startPairs, storedPairs, type PairSource } from './lib/supersets';
 import { removeTodayNotice } from './lib/exerciseActions';
 import { leadCompoundId, leadSlotIds, savedSetup } from './lib/progression';
 import { areasOf } from './lib/areas';
@@ -71,7 +72,6 @@ import
   undoCarry,
   revertBurst,
   carryWeight,
-  pendingExerciseIndex,
   type CarryResult,
   type Followers,
 } from './lib/session';
@@ -532,15 +532,24 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     () => programFor({ equipment: constraints.equipment, focus: constraints.focus, skip: constraints.skip }),
     [programFor, constraints.equipment, constraints.focus, constraints.skip],
   );
+  /**
+   * (#88) The pairs a change is fitted and priced with: the profile's for a day not started; while a
+   * session runs, the pairs it stored, the only ones a rebuild keeps (`keepPairs`), so a shorter length
+   * never runs over the minutes it promised.
+   */
+  const fitPairing = useMemo(
+    () => (state.current ? keptPairsOf(state.current.exercises) : profile),
+    [state.current, profile],
+  );
   /** A proposed adaptation: another setup or a described day is rebuilt, the saved one adapts the saved day. */
   const adaptFor = useCallback(
     // The saved day at another length is the length sheet's rebuild (#193: the composer's time chip).
-    (next: Constraints) => adaptWorkout(next.equipment === 'home' && !next.focus && next.minutes === constraints.minutes ? homeProgram : programFor(next), next, exclusions, profile?.goal),
-    [homeProgram, programFor, exclusions, constraints.minutes, profile?.goal],
+    (next: Constraints, pairing: PairSource | null = fitPairing) => adaptWorkout(next.equipment === 'home' && !next.focus && next.minutes === constraints.minutes ? homeProgram : programFor(next), next, exclusions, profile?.goal, pairing),
+    [homeProgram, programFor, exclusions, constraints.minutes, profile?.goal, fitPairing],
   );
   const adapted = useMemo(
-    () => adaptWorkout(program, constraints, exclusions, profile?.goal),
-    [program, constraints, exclusions, profile?.goal],
+    () => adaptWorkout(program, constraints, exclusions, profile?.goal, profile),
+    [program, constraints, exclusions, profile],
   );
 
   /**
@@ -553,9 +562,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   );
 
   const current = state.current;
+  /** (#88) The running session's supersets: the pairs stored when it started, never re-derived. */
+  const currentPairs = useMemo(() => (current ? storedPairs(current.exercises) : []), [current]);
   // (#327) A held jump's Heads-up lasts while its exercise is the one being logged and its card is up.
   const heldLive = held !== null && view === 'train' && current?.id === held.sessionId && notice?.text === held.text
-    && pendingExerciseIndex(current) === held.exerciseIndex && current.exercises[held.exerciseIndex]?.exerciseId === held.exerciseId;
+    && pairedPendingIndex(current, currentPairs) === held.exerciseIndex && current.exercises[held.exerciseIndex]?.exerciseId === held.exerciseId;
   if (held !== null && !heldLive) {
     setHeld(null);
     if (notice?.text === held.text) setNotice(null);
@@ -594,7 +605,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     [current, adapted, liveProgram, profile, state.history],
   );
   /** The name, counts and minutes of that same day, for Plan, View session and Coach alike (#189, #200). */
-  const todayDay = useMemo(() => todayGlance(adapted, current, Boolean(override), profile?.goal), [adapted, current, override, profile?.goal]);
+  const todayDay = useMemo(() => todayGlance(adapted, current, Boolean(override), profile?.goal, profile), [adapted, current, override, profile]);
 
   /** The one-line reason behind each computed target, keyed by exercise. */
   const targetNotes = useMemo(() => {
@@ -651,9 +662,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       name: workout.name,
       dayIndex: slot?.index ?? 0,
       ...slotLinkFor(state, custom),
-      exercises: profile
+      exercises: startPairs(profile
         ? liveExercises(workout, profile, state.history)
-        : toWorkoutExercises(workout),
+        : toWorkoutExercises(workout), profile, workout.minutes),
       now: new Date().toISOString(),
       durationMin: workout.minutes,
     });
@@ -705,7 +716,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const next = replacePrompt;
     setReplacePrompt(null);
     if (!next) return;
-    const workout = adaptFor(next);
+    // A new session: fitted with the profile's pairs, which Start stores (#88).
+    const workout = adaptFor(next, profile);
     if (workout.exercises.length > 0) beginSession(workout, Boolean(next.focus));
   };
 
@@ -865,7 +877,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     if (!profile || !slot || adapted.exercises.length > 0) return undefined;
     const fits = planSlots(state.plan)
       .filter((other) => other.id !== slot.id)
-      .map((other) => ({ name: other.name, sets: adaptWorkout(todayProgram(profile, other, state.history, plainConstraints), plainConstraints, profile.exclusions ?? [], profile.goal).totalSets }))
+      .map((other) => ({ name: other.name, sets: adaptWorkout(todayProgram(profile, other, state.history, plainConstraints), plainConstraints, profile.exclusions ?? [], profile.goal, profile).totalSets }))
       .filter((other) => other.sets > 0);
     const chip = SETUPS[constraints.equipment].chip.toLowerCase();
     return fits.length
@@ -940,6 +952,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         currentState.profile ? defaultConstraints(currentState.profile) : DEFAULT_CONSTRAINTS,
         currentState.profile?.exclusions ?? [],
         currentState.profile?.goal,
+        // (#88) A running session is fitted with the pairs it keeps.
+        currentState.current ? keptPairsOf(currentState.current.exercises) : currentState.profile,
       );
       return {
         ...currentState,
@@ -1198,8 +1212,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       const exercise = session?.exercises[exerciseIndex];
       // A tap rendered against another exercise, or on work the user set aside, records nothing.
       if (!session || exercise?.exerciseId !== exerciseId || exercise.skipped) return currentState;
-      // Rest by the exercise's role in the day, the same seconds the minutes were fitted with (#132).
-      const rest = sessionRests(session.exercises.map((item) => item.exerciseId), currentState.profile?.goal, session.durationMin)[exerciseIndex];
+      // Rest by the exercise's role in the day, the same seconds the minutes were fitted with (#132); in a
+      // superset the 30 s switch to its partner, or the pair's rest once a round is done (#88).
+      const rest = restAfterLog(session, exerciseIndex,
+        sessionRests(session.exercises.map((item) => item.exerciseId), currentState.profile?.goal, session.durationMin),
+        storedPairs(session.exercises));
       // Only an empty load takes the suggestion; logSet then carries it to later empty sets (#182).
       const filled = weight !== undefined && weight > 0 && exercise.performed[setIndex]?.weight === 0
         ? updatePerformedSet(session, exerciseIndex, setIndex, { weight }, stamp) : session;
@@ -1507,6 +1524,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         experience={state.profile?.experience}
         targetNotes={targetNotes}
         rests={current ? sessionRests(current.exercises.map((item) => item.exerciseId), profile?.goal, current.durationMin) : []}
+        pairs={currentPairs}
         goHeavier={goHeavier}
         unit={unit}
         onMinimize={() => {
@@ -1580,7 +1598,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         described={pendingDescribed}
         // Before is what Today shows now; after is the change; both by the timer's model (#203).
         before={todayDay}
-        after={todayGlance(pendingAdapted, null, false, profile?.goal)}
+        after={todayGlance(pendingAdapted, null, false, profile?.goal, fitPairing)}
         notices={pendingNotices}
         unit={unit}
         loads={profile?.loads}
@@ -1789,7 +1807,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
       {sheet.kind === 'length' && profile && (
         <DurationSheet
-          options={lengthOptions(defaultProgram, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35, (minutes) => programFor({ ...constraints, minutes }), profile.goal)}
+          options={lengthOptions(defaultProgram, constraints, profile.exclusions ?? [], profile.sessionMinutes ?? 35, (minutes) => programFor({ ...constraints, minutes }), profile.goal, fitPairing)}
           current={constraints.minutes}
           onClose={closeSheet}
           onPick={pickLength}
@@ -1798,7 +1816,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
       {sheet.kind === 'gym' && profile && (
         <GymSheet
-          options={setupOptions(program, constraints, profile.exclusions ?? [], profile.goal, (choice) => (choice === 'home' && !constraints.focus ? homeProgram : programFor({ ...constraints, equipment: choice })))}
+          options={setupOptions(program, constraints, profile.exclusions ?? [], profile.goal, (choice) => (choice === 'home' && !constraints.focus ? homeProgram : programFor({ ...constraints, equipment: choice })), fitPairing)}
           current={constraints.equipment}
           dayName={program.name}
           savedGear={isGymKit(profile) ? 'full gym' : [...profile.equipment, ...profile.support].join(', ') || 'none'}
@@ -2018,6 +2036,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           minutes={todayDay.minutes}
           approx={todayDay.approx}
           exercises={todayExercises}
+          pairs={current ? storedPairs(current.exercises) : sessionPairs(todayExercises, profile, adapted.minutes)}
           unit={unit}
           history={state.history}
           loads={profile?.loads}

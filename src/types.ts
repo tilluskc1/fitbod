@@ -123,6 +123,12 @@ export interface Profile {
   sessionMinutes?: number;
   /** Per-variant "more often" / "less often". Absent key = neutral. Optional so older data still loads. */
   preferences?: Record<string, ExercisePreference>;
+  /**
+   * "Pair exercises to save time" (#88). Absent means On: supersets for Intermediate and Advanced on
+   * days of 45 min or less. False keeps every day in straight sets. Read when a session starts: a
+   * running session keeps the pairs it stored. Optional so older data still loads.
+   */
+  pairExercises?: boolean;
 }
 
 export type ExercisePreference = 'more' | 'less';
@@ -167,6 +173,12 @@ export interface WorkoutExercise {
    * leaves done sets on one setup and pending sets on another within one exercise.
    */
   setup?: SetupChoice;
+  /**
+   * Superset (#88): the two entries holding the same number run back to back, set by set. Written once,
+   * when the session starts; absent means straight sets, so older records read straight. A swap or skip
+   * of one half clears it on both halves; nothing re-derives it after the start.
+   */
+  pair?: number;
 }
 
 /**

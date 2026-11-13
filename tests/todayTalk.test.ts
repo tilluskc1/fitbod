@@ -280,7 +280,7 @@ function build(text: string, profile = gym, slot = lower) {
   const talk = talkFromText(text, baseTalk({ equipment: 'home', minutes: 60 }, slot.focus));
   const constraints = talkConstraints(talk, undefined, slot.focus);
   const program = todayProgram(profile, slot, [], constraints);
-  const adapted = adaptWorkout(program, constraints, [], profile.goal);
+  const adapted = adaptWorkout(program, constraints, [], profile.goal, profile); // the app passes the profile as pairing (#88)
   const live = liveAdapted(adapted, profile, []);
   return { talk, constraints, program, adapted, live, preview: customDayPreview(talk, program, live, profile, slot.focus) };
 }
@@ -299,7 +299,7 @@ test('#193: "Full gym, legs sore, chest and abs, 45 min" builds Chest + Core wit
   assert.ok(adapted.exercises.some((e) => primaryOf(e.exerciseId) === 'Chest'));
   assert.ok(adapted.exercises.some((e) => primaryOf(e.exerciseId) === 'Core'));
   // #203 removed promisedMinutes: todayGlance is the one minutes figure, the preview's included.
-  const promised = todayGlance(adapted, null, false, gym.goal).minutes;
+  const promised = todayGlance(adapted, null, false, gym.goal, gym).minutes;
   assert.ok(promised <= 45, `promised ${promised}`);
   assert.equal(preview.minutes, promised);
   assert.equal(preview.status, program.feasibility?.status === 'limited' ? 'limited' : 'ready');
@@ -387,7 +387,7 @@ test('#211: sweep — every muscle of an asked area is trained or named, no skip
           const constraints = talkConstraints(talk, undefined, lower.focus);
           if (!constraints.focus) continue;
           const program = todayProgram(gym, lower, [], constraints);
-          const live = liveAdapted(adaptWorkout(program, constraints, [], gym.goal), gym, []);
+          const live = liveAdapted(adaptWorkout(program, constraints, [], gym.goal, gym), gym, []);
           const preview = customDayPreview(talk, program, live, gym, lower.focus);
           const at = `${setup} ${minutes} ${train}/${skip}: ${live.exercises.map((e) => e.exerciseId)}`;
           const skipped = musclesOf(skip);
@@ -444,7 +444,7 @@ test('#216: an Arms day with Chest skipped at the travel gym builds curls and ex
     const talk: TalkState = { equipment: 'hotel', minutes, train: ['Arms'], skip: ['Chest'], sore: [], pain: false, notices: [] };
     const constraints = talkConstraints(talk, undefined, lower.focus);
     const program = todayProgram(gym, lower, [], constraints);
-    const live = liveAdapted(adaptWorkout(program, constraints, [], gym.goal), gym, []);
+    const live = liveAdapted(adaptWorkout(program, constraints, [], gym.goal, gym), gym, []);
     const preview = customDayPreview(talk, program, live, gym, lower.focus);
     const ids = live.exercises.map((e) => e.exerciseId);
     const at = `${minutes} min: ${ids.join()}`;
@@ -465,7 +465,7 @@ test('#216: an empty described day never blames time or the cap', () => {
   const talk: TalkState = { equipment: 'hotel', minutes: 60, train: ['Arms'], skip: ['Chest'], sore: [], pain: false, notices: [] };
   const constraints = talkConstraints(talk, undefined, lower.focus);
   const program = todayProgram(gym, lower, [], constraints);
-  const adapted = adaptWorkout(program, constraints, [], gym.goal);
+  const adapted = adaptWorkout(program, constraints, [], gym.goal, gym);
   const empty = { ...adapted, exercises: [], totalSets: 0 };
   const preview = customDayPreview(talk, { ...program, exercises: [] }, empty, gym, lower.focus);
   assert.equal(preview.status, 'none');
@@ -505,7 +505,7 @@ test('#211: a muscle whose only move repeats one in the day says so', () => {
   const talk: TalkState = { equipment: 'bodyweight', minutes: 45, train: ['Chest', 'Arms'], skip: [], sore: [], pain: false, notices: [] };
   const constraints = talkConstraints(talk, undefined, lower.focus);
   const program = todayProgram(gym, lower, [], constraints);
-  const preview = customDayPreview(talk, program, adaptWorkout(program, constraints, [], gym.goal), gym, lower.focus);
+  const preview = customDayPreview(talk, program, adaptWorkout(program, constraints, [], gym.goal, gym), gym, lower.focus);
   assert.deepEqual(preview.exercises.map((e) => e.exerciseId), ['push-up']);
   assert.deepEqual(preview.gaps.find((gap) => gap.muscle === 'Triceps'),
     { area: 'Arms', muscle: 'Triceps', cause: 'twin', repeats: { exercise: 'Diamond Push-Up', of: 'Push-Up' } });
@@ -515,13 +515,13 @@ test('#211: a muscle whose only move repeats one in the day says so', () => {
 
 test('#193: an asked area with no exercise reads Limited and names the cause', () => {
   const upper = planSlots(plan)[0];
-  // Time: three areas at 45 minutes.
+  // Time: three areas in a short day (supersets fit more since #88, so the search starts at 15).
   const timed = (() => {
-    for (const minutes of [30, 45]) {
+    for (const minutes of [15, 20, 30, 45]) {
       const talk: TalkState = { equipment: 'home', minutes, train: ['Chest', 'Shoulders', 'Legs'], skip: [], sore: [], pain: false, notices: [] };
       const constraints = talkConstraints(talk, undefined, upper.focus);
       const program = todayProgram(gym, upper, [], constraints);
-      const preview = customDayPreview(talk, program, adaptWorkout(program, constraints, [], gym.goal), gym, upper.focus);
+      const preview = customDayPreview(talk, program, adaptWorkout(program, constraints, [], gym.goal, gym), gym, upper.focus);
       if (preview.gaps.length) return { preview, minutes };
     }
     return null;

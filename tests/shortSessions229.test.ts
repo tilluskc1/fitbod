@@ -32,8 +32,9 @@ function* days(kits: (keyof typeof KITS)[], sessionMinutes: number) {
 function today(profile: Profile, slot: ReturnType<typeof planSlots>[number], minutes: number) {
   const constraints = { ...defaultConstraints(profile), minutes };
   const program = todayProgram(profile, slot, [], minutes === profile.sessionMinutes ? {} : { minutes });
-  const adapted = adaptWorkout(program, constraints, profile.exclusions, profile.goal);
-  return { program, adapted, glance: todayGlance(adapted, null, false, profile.goal) };
+  // The app passes the profile as pairing (#88).
+  const adapted = adaptWorkout(program, constraints, profile.exclusions, profile.goal, profile);
+  return { program, adapted, glance: todayGlance(adapted, null, false, profile.goal, profile) };
 }
 
 test('a 30-minute session rests at the short end; 45 minutes keeps full rests', () => {
@@ -116,12 +117,15 @@ test('45 and 60 minutes are unchanged: saved 45, saved 60, and 60 shortened to 4
   const fingerprint = (saved: number, minutes: number) => {
     const lines: string[] = [];
     for (const { profile, slot } of days(['gym', 'home', 'bodyweight'], saved)) {
+      // #88: Intermediate and Advanced days of 45 min pair accessories by design; the rest stays pinned
+      // (every Beginner and over-45 day is also pinned in tests/supersets88Off.test.ts).
+      if (minutes <= 45 && profile.experience !== 'Beginner') continue;
       const { program, adapted, glance } = today(profile, slot, minutes);
       lines.push(`${adapted.exercises.map((exercise) => `${exercise.exerciseId}x${exercise.sets}`).join(' ')}|${glance.minutes}|${program.feasibility?.status}`);
     }
     return `${lines.length} ${createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 16)}`;
   };
-  assert.equal(fingerprint(45, 45), '720 0a32976338351765');
+  assert.equal(fingerprint(45, 45), '240 a6714e4d0db6ad85'); // Beginners only (#88), recomputed on 460970b
   assert.equal(fingerprint(60, 60), '720 9e4652a30bc81703');
-  assert.equal(fingerprint(60, 45), '720 2fe9cffcf719b9ea');
+  assert.equal(fingerprint(60, 45), '240 e5820b14fa6deee4'); // Beginners only (#88), recomputed on 460970b
 });
