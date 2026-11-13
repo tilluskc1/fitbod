@@ -656,9 +656,13 @@ textarea:focus-visible {
 /* View and Resume keep a 44px target without growing the line. */
 .plan-row__view { margin: -13px -10px -13px 0; border-radius: 12px; }
 .plan-row .t7-today-only {
-  margin-top: 8px;
+  /* Inside the card the bar has 40px less room: it bleeds into the card's padding and drops its
+     icon, so "Today only: Travel gym · 45 min" stays whole at 360 (#298: one line, never cut). */
+  margin: 8px -10px 0;
+  padding-left: 12px;
   background: var(--surface-container-high);
 }
+.plan-row .t7-today-only > .ms { display: none; }
 .plan-chip {
   flex: none;
   padding: 3px 10px;

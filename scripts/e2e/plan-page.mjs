@@ -115,6 +115,17 @@ const barText = async (page) => {
   return squash(`${await bar.locator('.t7-today-only__l').innerText()} ${await bar.locator('.t7-today-only__undo').innerText()}`);
 };
 
+/** (#298) The bar on Plan is one line, its label never cut, Undo at least 44x44. */
+async function barWhole(page, where) {
+  const fit = await page.locator('.plan-row--today .t7-today-only').evaluate((bar) => {
+    const label = bar.querySelector('.t7-today-only__l');
+    const undo = bar.querySelector('.t7-today-only__undo').getBoundingClientRect();
+    return { height: Math.round(bar.getBoundingClientRect().height), cut: label.scrollWidth > label.clientWidth, undoW: undo.width, undoH: undo.height };
+  });
+  check(fit.height <= 48 && !fit.cut, `${where}: the bar wraps or cuts its label (${JSON.stringify(fit)})`);
+  check(fit.undoW >= 44 && fit.undoH >= 44, `${where}: Undo is under 44px (${fit.undoW}x${fit.undoH})`);
+}
+
 /** Today's row matches View session: minutes, exercises and sets (one helper, lesson 24). */
 async function matchesView(page, where) {
   const [today] = await rows(page);
@@ -189,6 +200,7 @@ try {
     const changed = await rows(page);
     const bar = await barText(page);
     check(bar === 'Today only: Travel gym · 30 min Undo', `${where}: Today's bar reads "${bar}"`);
+    await barWhole(page, `${where} today only`);
     check(await page.locator('.t7-today-only').count() === 1, `${where}: the bar shows outside Today's row`);
     check(squash(await page.locator('.plan-usual').innerText()) === 'Your usual: Gym · 45 min · 3 days a week Edit', `${where}: the header moved with today's change`);
     check(changed[1].stats === plain[1].stats && changed[2].stats === plain[2].stats, `${where}: Next/Then changed with today's change (${changed[1].stats}, ${changed[2].stats})`);
@@ -232,6 +244,7 @@ try {
     const dbar = await barText(page);
     check(described[0].title === 'Chest + Back', `${where}: described Today row titled "${described[0].title}"`);
     check(dbar === 'Today only: Chest + Back (you chose) Undo', `${where}: described bar reads "${dbar}"`);
+    await barWhole(page, `${where} described`);
     await shape(page, `${where} described`, fold);
     await matchesView(page, `${where} described`);
     await shot(page, `described-${where}`);
