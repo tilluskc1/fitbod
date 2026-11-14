@@ -28,13 +28,16 @@ async function loadPlaywright() {
 
 // The exercise left without a clip: Today's second row for the onboarding below.
 const NO_VIDEO = 'overhead-press';
+const STORAGE = 'https://firebasestorage.googleapis.com/v0/b/home-strength.firebasestorage.app';
+const CLIPS = /firebasestorage\.googleapis\.com\/.*video-1\.webm/;
 const clipPlugin = {
   name: 'e2e-clips',
   enforce: 'pre',
   transform(code, id) {
     if (!id.endsWith('/src/data/media.json')) return null;
     const media = JSON.parse(code);
-    for (const [key, entry] of Object.entries(media)) if (key !== NO_VIDEO) entry.video = `/e2e-clip/${key}.webm`;
+    // Shaped like #360's additions (`mediaUrl`): cross-origin Firebase Storage, which the worker passes through.
+    for (const [key, entry] of Object.entries(media)) if (key !== NO_VIDEO) entry.video = `${STORAGE}/o/${encodeURIComponent(`catalog/${key}/video-1.webm`)}?alt=media`;
     return { code: JSON.stringify(media), map: null };
   },
 };
@@ -90,7 +93,7 @@ async function recordClip() {
   return Buffer.from(bytes);
 }
 const clip = await recordClip();
-const serveClips = (context) => context.route('**/e2e-clip/**', (route) =>
+const serveClips = (context) => context.route(CLIPS, (route) =>
   route.fulfill({ status: 200, contentType: 'video/webm', body: clip }));
 
 async function onboard(page) {
@@ -261,7 +264,7 @@ try {
 
   // F. Offline, clip never cached: "Video needs a connection" over the cached photo loop.
   const off = await browser.newContext({ viewport: { width: 390, height: 844 } });
-  await off.route('**/e2e-clip/**', (route) => route.abort());
+  await off.route(CLIPS, (route) => route.abort());
   const op = await off.newPage();
   // Online: Today's photos load (and are kept); the clips are blocked, so none is ever cached.
   await onboard(op);
