@@ -101,7 +101,8 @@ test('#302 review 1: every drawn point of a region sits in its own area\'s targe
   for (const view of VIEWS) {
     for (const region of REGIONS[view]) {
       const numbers = [...region.d.matchAll(/-?\d+(\.\d+)?/g)].map((match) => Number(match[0]));
-      // An oval: its four extremes. A path (absolute M, L, Q only): every point it names.
+      // An oval: its four extremes. A path (absolute M, L, C, Q only): every point it names,
+      // control points included, so the whole curve sits inside (#366).
       const points = region.d.includes('a')
         ? [[numbers[0], numbers[1]], [numbers[0] + 2 * numbers[2], numbers[1]], [numbers[0] + numbers[2], numbers[1] - numbers[3]], [numbers[0] + numbers[2], numbers[1] + numbers[3]]]
         : numbers.reduce<number[][]>((pairs, n, i) => (i % 2 ? pairs : [...pairs, [n, numbers[i + 1]]]), []);

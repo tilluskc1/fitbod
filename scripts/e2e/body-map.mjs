@@ -1,4 +1,4 @@
-// Body map (#302): front and back line drawing above the body-part chips in Switch workout and in
+// Body map (#302, art #366): front and back figure above the body-part chips in Switch workout and in
 // Plan today with me. Checks: Chest + Arms lights chest, biceps and triceps (back: triceps) only; a
 // Legs day yesterday shades the legs and shows the legend, no history shows neither; a region tap
 // toggles the same chip; targets 44px+, figures 140px+ side by side, no sideways scroll; no animation;
@@ -85,6 +85,8 @@ const toPlanTrain = async (page) => {
   await settle(page);
 };
 
+const window390 = (page) => page.viewportSize().width >= 390;
+
 /** Every target 44px or more, each figure at least 140px wide, nothing scrolls sideways. */
 async function sizes(page, where, label) {
   const boxes = await page.locator('.bm-zone').evaluateAll((els) => els.map((el) => {
@@ -95,6 +97,10 @@ async function sizes(page, where, label) {
   for (const box of boxes) check(box.w >= 44 && box.h >= 44, `${where} ${label}: ${box.area} target is ${box.w.toFixed(1)}x${box.h.toFixed(1)}px`);
   const figs = await page.locator('.bm-svg').evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
   check(figs.length === 2 && figs.every((fig) => fig.width >= 140), `${where} ${label}: figures ${figs.map((fig) => fig.width).join(', ')}px wide`);
+  // (#366) The map never pushes the list further down: 220px tall at most at 390 wide, 200px at 360.
+  const tallest = Math.max(...figs.map((fig) => fig.height));
+  const cap = window390(page) ? 220 : 200.5;
+  check(tallest <= cap, `${where} ${label}: figure ${tallest.toFixed(1)}px tall, cap ${cap}px`);
   check(figs.length === 2 && Math.abs(figs[0].top - figs[1].top) < 1, `${where} ${label}: front and back are not side by side`);
   // The page, and the map inside its card (the planner card's own bar already overhangs by 2px on main).
   const wide = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth

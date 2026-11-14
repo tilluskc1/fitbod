@@ -4759,25 +4759,40 @@ button.aw-exercise__name-btn {
 }
 .sw-plan b { color: var(--accent-text); font-weight: 600; }
 
-/* ---------- Body map (#302) ----------
-   Front and back line drawing above the body-part chips. Lime only as a fill with a dark outline;
-   recent training is the outline grey at two strengths. No transitions, so nothing to reduce. */
-.bm { display: grid; gap: 6px; }
+/* ---------- Body map (#302, art #366) ----------
+   Front and back figure above the body-part chips. Body in surface-container-highest with an outline
+   edge; lime only as a fill with an on-primary hairline; recent training is a deeper teal-grey of the
+   body, darker for today or yesterday. No transitions, so nothing to reduce. */
+.bm {
+  --bm-earlier: #bdd6d1; /* surface-container-highest deepened toward teal: trained 2 to 3 days ago */
+  --bm-recent: #8fb8b0;  /* the same, deeper: trained today or yesterday */
+  display: grid;
+  gap: 6px;
+}
 .bm-figs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(140px, 168px));
+  /* 140px keeps every target 44px+; 153px caps a figure at 219px tall (#366: 220 at 390, 200 at 360). */
+  grid-template-columns: repeat(2, minmax(140px, 153px));
   justify-content: center;
   /* 2 x 140 + 4 fits the planner card's 284px at 360 wide. */
   gap: 4px;
 }
 .bm-fig { margin: 0; display: grid; justify-items: center; gap: 2px; }
 .bm-svg { display: block; width: 100%; height: auto; overflow: visible; }
-.bm-body path { fill: var(--card); stroke: var(--outline); stroke-width: 0.8; stroke-linejoin: round; }
-.bm-r path { fill: var(--surface-container-high); stroke: var(--outline); stroke-width: 0.6; }
-.bm-r--earlier path { fill: var(--outline); fill-opacity: 0.35; }
-.bm-r--recent path { fill: var(--outline); fill-opacity: 0.8; }
-.bm-r--on path { fill: var(--primary); fill-opacity: 1; stroke: var(--on-primary); stroke-width: 1.1; }
-.bm-detail { fill: none; stroke: var(--outline); stroke-width: 0.5; pointer-events: none; }
+.bm-body path {
+  fill: var(--surface-container-highest);
+  stroke: var(--outline);
+  stroke-width: 0.45;
+  stroke-linejoin: round;
+}
+.bm-r path { fill: var(--surface-container-highest); stroke: var(--outline); stroke-width: 0.3; stroke-linejoin: round; }
+.bm-r .bm-line { fill: none; stroke-width: 0.25; stroke-linecap: round; }
+.bm-r--earlier path { fill: var(--bm-earlier); }
+.bm-r--recent path { fill: var(--bm-recent); }
+.bm-r .bm-line { fill: none; }
+.bm-r--on path { fill: var(--primary); stroke: var(--on-primary); stroke-width: 0.3; }
+.bm-r--on .bm-line { fill: none; stroke: var(--on-primary); }
+.bm-detail path { fill: none; stroke: var(--outline); stroke-width: 0.25; stroke-linecap: round; pointer-events: none; }
 .bm-zone { fill: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .bm-cap { font-size: 12px; color: var(--muted); }
 .bm-legend { margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: var(--muted); }
@@ -4785,8 +4800,8 @@ button.aw-exercise__name-btn {
   width: 12px;
   height: 12px;
   border-radius: 3px;
-  background: var(--outline);
-  opacity: 0.8;
+  background: var(--bm-recent);
+  border: 1px solid var(--outline);
 }
 
 /* ---------- Logger quick actions (#151) ---------- */
