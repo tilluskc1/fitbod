@@ -52,6 +52,7 @@ import {
 import { sessionRests } from './lib/sessionTime';
 import { keptPairsOf, pairedPendingIndex, restAfterLog, sessionPairs, startPairs, storedPairs, type PairSource } from './lib/supersets';
 import { removeTodayNotice } from './lib/exerciseActions';
+import { cleanNote, noSetsNotice, setExerciseNote, swapDropsNote, swapNotice } from './lib/notes';
 import { leadCompoundId, leadSlotIds, savedSetup } from './lib/progression';
 import { areasOf } from './lib/areas';
 import
@@ -1269,6 +1270,20 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       first ? { startKg: first.weight, kg: value.weight } : undefined);
   };
 
+  /** (#372) This session's note on one exercise; blank removes it. Only this session changes. */
+  const saveNote = (exerciseIndex: number, exerciseId: string, text: string) => {
+    const before = state.current?.exercises[exerciseIndex];
+    if (!before || before.exerciseId !== exerciseId) return;
+    const after = cleanNote(text);
+    if (after === before.note) return;
+    setState((currentState) => {
+      if (!currentState.current) return currentState;
+      const next = setExerciseNote(currentState.current, exerciseIndex, exerciseId, text);
+      return next === currentState.current ? currentState : { ...currentState, current: next };
+    });
+    setNotice(done(after === undefined ? 'Note removed.' : 'Note saved for next time.'));
+  };
+
   const undoLastCarry = () => {
     const undo = liveCarry;
     if (!undo) return;
@@ -1338,7 +1353,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       setSheet({ kind: 'none' });
       setView('tabs');
       setTab('today');
-      setNotice(done('No sets logged, so nothing was saved.'));
+      setNotice(done(noSetsNotice(current.exercises.some((exercise) => exercise.note))));
       return;
     }
     const early = progress.done < progress.total;
@@ -1495,13 +1510,14 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const swapped = state.current?.exercises[exerciseIndex]?.exerciseId;
     const lead = state.current !== null && swapped !== undefined && leadSlotIds(state.current.exercises).includes(swapped);
     const candidate = swapCandidateFor(target, profile, state.history, state.current, lead, state.current?.exercises[exerciseIndex]?.setup);
+    const noteDropped = swapDropsNote(state.current?.exercises[exerciseIndex]);
     setState((currentState) =>
       currentState.current
         ? { ...currentState, current: swapPendingExercise(currentState.current, exerciseIndex, candidate) }
         : currentState,
     );
     setSheet({ kind: 'none' });
-    setNotice(done(`${target.name} swapped in. Logged sets stay put.`));
+    setNotice(done(swapNotice(target.name, noteDropped)));
   };
 
   const skipCurrentExercise = (exerciseIndex: number) => {
@@ -2144,6 +2160,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               }}
               remaining={exercise.performed.find((set) => !set.done)}
               onSetAll={(value) => setAllRemaining(sheet.exerciseIndex, sheet.exerciseId, value)}
+              note={exercise.note}
+              onSaveNote={(text) => saveNote(sheet.exerciseIndex, sheet.exerciseId, text)}
               onClose={closeSheet}
             />
           );

@@ -3,6 +3,7 @@ import { useWakeLock } from '../lib/wakeLock';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
+import { lastNote } from '../lib/notes';
 import { canMoveLater, pairRound, pairedPendingIndex, partnerOf, restAfterLog } from '../lib/supersets';
 import './supersets.css';
 import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
@@ -431,6 +432,8 @@ export default function TrainScreen({
     : hint ?? (firstTime && mode !== 'none'
       ? `First time on this one. Pick a weight you could lift for ${exercise.planned[0]?.reps ?? 10} reps with 2–3 to spare.`
       : targetNotes?.[exercise.exerciseId]);
+  // (#372) The lifter's own note from the last finished session with one on this exact exercise.
+  const noteLast = lastNote(history, exercise.exerciseId);
   const unitWord = `${unit === 'kg' ? 'kilograms' : 'pounds'}${perSide}`;
 
   /**
@@ -684,6 +687,8 @@ export default function TrainScreen({
         </div>
 
         {coach && <p className="lg-coach">{coach}</p>}
+        {/* (#372) Its own line under any coach text, so a heads-up is never hidden; wraps to at most 3 lines. */}
+        {noteLast && <p className="lg-coach lg-coach--note">Last time: {noteLast}</p>}
 
         <table className="lg-table" aria-label={`Sets for ${exercise.name}`}>
           <thead>

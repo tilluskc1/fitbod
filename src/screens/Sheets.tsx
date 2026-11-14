@@ -30,6 +30,7 @@ import {
   type ParsedConstraints,
 } from '../lib/constraints';
 import { exerciseActions, exerciseHistory, type ExerciseActionId } from '../lib/exerciseActions';
+import { MAX_NOTE } from '../lib/notes';
 import { PREF_LABEL, conflictChanges, exclusionChange, preferenceChange, type ProfileChange } from '../lib/preferences';
 import Sheet from '../components/ui/Sheet';
 import Demo from '../components/ui/Demo';
@@ -312,7 +313,7 @@ export function WhySheet({
 
 /* ---------------- Exercise actions ---------------- */
 
-type ActionMode = 'menu' | 'instructions' | 'history' | 'remove' | 'set-all';
+type ActionMode = 'menu' | 'instructions' | 'history' | 'remove' | 'set-all' | 'note';
 
 /** Preview body for a profile change; nothing is saved unless Confirm is pressed. */
 export function ConfirmChange({
@@ -364,6 +365,8 @@ export function ExerciseActionsSheet({
   onClose,
   remaining,
   onSetAll,
+  note,
+  onSaveNote,
   initialMode = 'menu',
 }: {
   exerciseId: string;
@@ -390,10 +393,13 @@ export function ExerciseActionsSheet({
   /** The first set not yet logged: what "Set all remaining sets to…" opens with (#306). */
   remaining?: { weight: number; reps: number };
   onSetAll?: (value: { weight: number; reps: number }) => void;
+  /** (#372) This session's note on this exercise, if any; saving a blank one removes it. */
+  note?: string;
+  onSaveNote?: (text: string) => void;
 }) {
   const [mode, setMode] = useState<ActionMode>(initialMode);
   const meta = exerciseById(exerciseId);
-  const actions = exerciseActions(pending, done, inSession, skipped);
+  const actions = exerciseActions(pending, done, inSession, skipped, Boolean(note));
   const blockedReason = actions.find((action) => action.blockedReason)?.blockedReason;
   const entries = mode === 'history' ? exerciseHistory(history, exerciseId) : [];
   const back = () => setMode('menu');
@@ -422,6 +428,7 @@ export function ExerciseActionsSheet({
         exclusionChange(current, exercise, !current.exclusions.includes(exerciseId)));
     if (id === 'remove-today') setMode('remove');
     if (id === 'set-all') setMode('set-all');
+    if (id === 'note') setMode('note');
     if (id === 'return') onReturn();
   };
 
@@ -554,6 +561,11 @@ export function ExerciseActionsSheet({
           onApply={(value) => { onClose(); onSetAll?.(value); }} onBack={back} />
       )}
 
+      {mode === 'note' && (
+        <NoteForm exerciseName={exerciseName} start={note ?? ''}
+          onSave={(text) => { onClose(); onSaveNote?.(text); }} onBack={back} />
+      )}
+
       {mode === 'remove' && (
         <>
           <p className="sheet-copy">
@@ -573,6 +585,37 @@ export function ExerciseActionsSheet({
         </>
       )}
     </Sheet>
+  );
+}
+
+/** (#372) One line of plain text for next time. Blank removes the note. */
+function NoteForm({ exerciseName, start, onSave, onBack }: {
+  exerciseName: string;
+  start: string;
+  onSave: (text: string) => void;
+  onBack: () => void;
+}) {
+  const [text, setText] = useState(start);
+  return (
+    <div className="note-form" role="group" aria-label="Note for next time">
+      <p className="sheet-copy">
+        A short note for next time, like a seat or pin setting. It shows under {exerciseName} the next time you do it.
+      </p>
+      <div className="aw-field">
+        <label className="aw-field__label" htmlFor="exercise-note">Note</label>
+        <input id="exercise-note" type="text" value={text} maxLength={MAX_NOTE} autoComplete="off" enterKeyHint="done"
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) onSave(text); }} />
+      </div>
+      <div className="sheet-actions">
+        <button className="primary" onClick={() => onSave(text)}>
+          {text.trim() === '' && start !== '' ? 'Remove note' : 'Save note'}
+        </button>
+        <button className="secondary" onClick={onBack}>
+          Back to actions
+        </button>
+      </div>
+    </div>
   );
 }
 

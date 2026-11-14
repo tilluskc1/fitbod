@@ -220,6 +220,12 @@ export interface WorkoutExercise {
    * of one half clears it on both halves; nothing re-derives it after the start.
    */
   pair?: number;
+  /**
+   * (#372) The lifter's own short note on this exercise (1 to 120 characters, plain text), shown the next
+   * time the same exerciseId comes up. Stays on the entry it was written on; a swap never moves it.
+   * Optional so older records load unchanged; the app never reads it for advice.
+   */
+  note?: string;
 }
 
 /**

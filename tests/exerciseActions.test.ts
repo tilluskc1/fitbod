@@ -64,7 +64,7 @@ test('pending work unlocks replace and removal, and every promised capability ha
   const actions = exerciseActions(3, 0, true, false);
   assert.deepEqual(
     actions.map((action) => action.id),
-    ['instructions', 'history', 'set-all', 'replace', 'more', 'less', 'dont-recommend', 'remove-today'],
+    ['instructions', 'history', 'note', 'set-all', 'replace', 'more', 'less', 'dont-recommend', 'remove-today'],
   );
   // With pending work nothing is blocked: no placeholder row is left.
   assert.deepEqual(actions.filter((action) => action.blockedReason), []);
@@ -251,12 +251,13 @@ test('a completed exercise states its one reason once and keeps reading actions 
 
 test('before Start, replace and remove are stated as unavailable instead of doing nothing', async () => {
   const actions = exerciseActions(3, 0, false, false);
-  for (const id of ['set-all', 'replace', 'remove-today'] as const)
+  // (#372) Add note needs a session too, and shares the one stated reason.
+  for (const id of ['note', 'set-all', 'replace', 'remove-today'] as const)
     assert.equal(actions.find((action) => action.id === id)?.blockedReason, "Start the workout to change today's sets.");
   await withSheets(({ ExerciseActionsSheet }) => {
     const html = renderToStaticMarkup(createElement(ExerciseActionsSheet, { ...sheetProps({}), inSession: false }));
     assert.match(plain(html), /Start the workout to change today(?:'|&#x27;)s sets/);
-    assert.equal(html.match(/disabled=""/g)?.length, 3);
+    assert.equal(html.match(/disabled=""/g)?.length, 4);
   });
 });
 
