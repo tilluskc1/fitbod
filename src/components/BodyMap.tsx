@@ -17,7 +17,7 @@ interface Props {
 const MIRROR = `translate(${VIEW_W} 0) scale(-1 1)`;
 
 /**
- * (#302) Front and back line drawing above the body-part chips. The picture is hidden from screen
+ * (#302) Front and back figure above the body-part chips (art: #366, `src/lib/bodyMap.ts`). The picture is hidden from screen
  * readers (the chips are the control) and summed up in one sentence instead. No animation.
  */
 export default function BodyMap({ selected, shade, areas, onToggle }: Props) {
@@ -41,10 +41,17 @@ export default function BodyMap({ selected, shade, areas, onToggle }: Props) {
                   <g key={region.muscle} className={`bm-r ${tone}`} data-muscle={region.muscle} data-on={on || undefined}>
                     <path d={region.d} />
                     {region.mirror && <path d={region.d} transform={MIRROR} />}
+                    {region.lines && <path className="bm-line" d={region.lines} />}
+                    {region.lines && region.mirror && <path className="bm-line" d={region.lines} transform={MIRROR} />}
                   </g>
                 );
               })}
-              {DETAIL[view].map((d) => <path key={d} className="bm-detail" d={d} />)}
+              {DETAIL[view].map((d) => (
+                <g key={d} className="bm-detail">
+                  <path d={d} />
+                  <path d={d} transform={MIRROR} />
+                </g>
+              ))}
               {ZONES[view].filter((zone) => areas.includes(zone.area)).map((zone) => (
                 <rect
                   key={`${zone.area}-${zone.x}`}

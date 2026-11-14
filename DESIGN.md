@@ -144,6 +144,8 @@ Use tabular numerals (`font-variant-numeric: tabular-nums`) anywhere numbers upd
 
 **Quick-action pills.** Under an item header: How-to, History, Replace as 44px white pills with a 16px muted icon, 14px/500 label.
 
+**Body map (#302, #366).** Front and back figure of an athletic adult male above the body-part chips: flat-shaded vector, no panel lines or mannequin joints. Body and muscles `--surface-container-highest` with an `--outline` edge; a selected muscle `--primary` with an `--on-primary` hairline; trained recently a deeper teal-grey of the body (`#bdd6d1` two to three days ago, `#8fb8b0` today or yesterday, set on `.bm`), with the legend. At most 220px tall at 390 wide and 200px at 360.
+
 **Empty state.** Dashed 1px border card, centred muted text that says what is missing and the one action that fixes it.
 
 ---

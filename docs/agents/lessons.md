@@ -277,6 +277,15 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    appears, and the e2e checks the opening state (planned default) and the "every chip" state. Check:
    "review 1" tests in `tests/bodyMap302.test.ts` and steps in `scripts/e2e/body-map.mjs` (they fail at 1b4b254).
 
+39. **A figure of a person is judged at phone size, as a lifter sees it.** #302 shipped a blocky line drawing
+   (boxes for muscles, rectangles for limbs) that passed review on mapping and tap sizes; the owner called it
+   "a shitty robot" (#366). The tap rule had shaped the art: zones 32 units square on a 100-wide figure
+   pushed the body into blocks. Rule: draw the figure first in real proportions (8 heads tall, elbow at the
+   navel, wrist at the crotch, knee at about 28% from the floor) and fit the rectangles around it; shapes are
+   curves, never ellipses or boxes; look at the 390x844 shot at 1x and ask "would a lifter call this a fit
+   body?" before any review. Check: `tests/bodyMap302.test.ts` (every control point of every muscle inside
+   its own target) and the height cap in `scripts/e2e/body-map.mjs`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

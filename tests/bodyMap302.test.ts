@@ -100,11 +100,10 @@ test('#302 review 1: every drawn point of a region sits in its own area\'s targe
   const areaOf = (muscle: string) => AREAS.find((area) => (AREA_MUSCLES[area] as string[]).includes(muscle))!;
   for (const view of VIEWS) {
     for (const region of REGIONS[view]) {
-      const numbers = [...region.d.matchAll(/-?\d+(\.\d+)?/g)].map((match) => Number(match[0]));
-      // An oval: its four extremes. A path (absolute M, L, Q only): every point it names.
-      const points = region.d.includes('a')
-        ? [[numbers[0], numbers[1]], [numbers[0] + 2 * numbers[2], numbers[1]], [numbers[0] + numbers[2], numbers[1] - numbers[3]], [numbers[0] + numbers[2], numbers[1] + numbers[3]]]
-        : numbers.reduce<number[][]>((pairs, n, i) => (i % 2 ? pairs : [...pairs, [n, numbers[i + 1]]]), []);
+      // Shapes and inner lines are absolute M, C and Z paths (#366): every point they name, control points
+      // included, so the whole curve sits inside.
+      const numbers = [...`${region.d} ${region.lines ?? ''}`.matchAll(/-?\d+(\.\d+)?/g)].map((match) => Number(match[0]));
+      const points = numbers.reduce<number[][]>((pairs, n, i) => (i % 2 ? pairs : [...pairs, [n, numbers[i + 1]]]), []);
       for (const [x, y] of points) {
         for (const px of region.mirror ? [x, VIEW_W - x] : [x]) {
           const hit = zoneAt(view, px, y);
