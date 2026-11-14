@@ -307,17 +307,16 @@ export default function TrainScreen({
   /**
    * (#380 review 1) While rest runs the dock sits over the bottom of the screen: its height is published as
    * --lg-dock, so the card's fields and Log button scroll clear of it (the keyboard, when up, covers it).
+   * Measured when rest starts or ends; a later mount measures again, so no cleanup is needed.
    */
   const dockRef = useRef<HTMLDivElement>(null);
-  const dockHeight = useRef(-1);
+  const resting = rest > 0;
   useLayoutEffect(() => {
-    const height = dockRef.current?.offsetHeight ?? 0;
-    if (height === dockHeight.current) return;
-    dockHeight.current = height;
-    document.documentElement.style.setProperty('--lg-dock', `${height}px`);
+    const root = document.documentElement.style;
+    root.setProperty('--lg-dock', `${dockRef.current?.offsetHeight ?? 0}px`);
     // A standing toast places itself above the dock on resize: the dock coming or going moves that floor.
     window.dispatchEvent(new Event('resize'));
-  });
+  }, [resting]);
 
   const header = (
     <header className="flow-header lg-header">
@@ -597,12 +596,13 @@ export default function TrainScreen({
   const card = (
     <section className="lg-focus" aria-label={letter ? `${letter}${n}, set ${n} of ${exercise.performed.length}` : `Set ${n} of ${exercise.performed.length}`}
       key={`${exerciseKey}:card`} style={{ '--lg-tail': `${tail}px` } as CSSProperties}
-      // (#380 review 1) A field the phone already shows is not scrolled on focus, so bring the card's
-      // button into view too: above the rest dock (or the keyboard), never under it.
+      // (#380) A field the phone already shows is not scrolled on focus, so reveal it again with its scroll
+      // margins: under the sticky top (--lg-top, measured now), and Log (--lg-tail below it) clear of the dock
+      // or keyboard. When field and Log do not both fit, the field wins (fix 2: it is the one being typed).
       onFocus={(event) => {
-        if (!(event.target instanceof HTMLInputElement)) return;
-        const section = event.currentTarget;
-        requestAnimationFrame(() => section.querySelector('.lg-log')?.scrollIntoView({ block: 'nearest' }));
+        const field = event.target;
+        document.documentElement.style.setProperty('--lg-top', `${document.querySelector('.lg-header')?.clientHeight}px`);
+        requestAnimationFrame(() => field.scrollIntoView({ block: 'nearest' }));
       }}>
       <div className="lg-focus__head">
         <h3 className="lg-focus__set">

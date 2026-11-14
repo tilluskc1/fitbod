@@ -4126,7 +4126,7 @@ button.aw-exercise__name-btn {
 }
 
 .lg-note--held .notice-card {
-  scroll-margin-top: calc(116px + var(--vv-top, 0px));
+  scroll-margin-top: calc(var(--lg-top, 104px) + 12px + var(--vv-top, 0px));
   scroll-margin-bottom: calc(16px + max(var(--kb, 0px), var(--lg-dock, 0px)));
 }
 
@@ -4143,7 +4143,7 @@ button.aw-exercise__name-btn {
   /* Focus scrolling keeps the field clear of the header (with its tick bar), and the card's Log button
      (--lg-tail below the field) clear of the keyboard (lesson 16) or, with no keyboard up, of the rest
      dock (--lg-dock, its measured height while rest runs; the keyboard covers it when up). */
-  scroll-margin-top: calc(116px + var(--vv-top, 0px));
+  scroll-margin-top: calc(var(--lg-top, 104px) + 12px + var(--vv-top, 0px));
   scroll-margin-bottom: calc(var(--lg-tail, 132px) + max(var(--kb, 0px), var(--lg-dock, 0px)));
 }
 
@@ -4346,7 +4346,7 @@ button.aw-exercise__name-btn {
   color: var(--on-btn);
   font-size: 16px;
   font-weight: 700;
-  scroll-margin-top: calc(116px + var(--vv-top, 0px));
+  scroll-margin-top: calc(var(--lg-top, 104px) + 12px + var(--vv-top, 0px));
   scroll-margin-bottom: calc(16px + max(var(--kb, 0px), var(--lg-dock, 0px)));
 }
 
