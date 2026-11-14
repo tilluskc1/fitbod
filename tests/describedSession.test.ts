@@ -52,7 +52,7 @@ test('#220: a described session is the one with no slot link, never judged by na
 });
 
 test('#220: a running described session\'s status is its own exercises judged against what was asked', () => {
-  assert.equal(live.name, 'Legs');
+  assert.equal(live.name, 'Lower', '#296: Legs alone is the Lower preset, named so on every screen');
   assert.ok(nordic >= 0);
   assert.equal(session.exercises.filter((exercise) => exercise.exerciseId === 'nordic-curl').length, 1);
   const before = describedSessionStatus(session, override(TODAY), gym);
@@ -97,10 +97,10 @@ test('#220: Today names a running described session, "Today only", and its statu
 
     const running = render(session, describedSessionStatus(session, override(TODAY), gym));
     const hero = heroOf(running);
-    assert.match(plain(hero), /Legs in progress/);
+    assert.match(plain(hero), /Lower in progress/);
     assert.match(plain(hero), /Today only/);
     assert.doesNotMatch(hero, /Slot/);
-    assert.match(hero, /aria-label="Legs, /);
+    assert.match(hero, /aria-label="Lower, /);
     // (#260) Running, the chip counts sets; its tone is still the session's status.
     assert.deepEqual([chipOf(running)?.[1], chipOf(running)?.[2].trim()], ['ready', `In progress · 0 of ${total(session)} sets`]);
 
@@ -116,7 +116,7 @@ test('#220: Today names a running described session, "Today only", and its statu
     assert.deepEqual([chipOf(rolled)?.[1], chipOf(rolled)?.[2].trim()], ['ready', `In progress · 0 of ${total(session)} sets`]);
     assert.doesNotMatch(rolled, /role="note"/);
     assert.doesNotMatch(plain(heroOf(rolled)), /Limited|Slot/);
-    assert.match(plain(heroOf(rolled)), /Legs in progress.*Today only/);
+    assert.match(plain(heroOf(rolled)), /Lower in progress.*Today only/);
   });
 });
 

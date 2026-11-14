@@ -9,7 +9,7 @@ interface Props {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
-  variant?: 'default' | 'adjust' | 'settings' | 'feedback';
+  variant?: 'default' | 'adjust' | 'settings' | 'feedback' | 'switch';
   headingId?: string;
 }
 

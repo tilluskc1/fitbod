@@ -209,11 +209,10 @@ try {
     check(amber === 'rgb(138, 83, 0)', `${where}: Heads-up title is ${amber}, not --amber`);
     const white = await page.locator('.install-note').evaluate((n) => getComputedStyle(n).backgroundColor).catch(() => '');
     check(white === 'rgb(255, 255, 255)', `${where}: Heads-up card is ${white}, not white`);
-    // (#333) On Today the toast sits at the top, over the greeting row, and covers no card text.
+    // (#333) On Today the toast sits at the top and covers no card text; (#296 r2, owner) it sits
+    // under the greeting row, never on it.
     if (await toast.count()) {
-      const pill = await page.locator(`${TOAST} .done-toast__pill`).boundingBox();
-      const greeting = await page.locator('.today__greeting').boundingBox();
-      check(pill && greeting && pill.y < greeting.y + greeting.height && pill.y + pill.height > greeting.y, `${where}: the Today toast is not over the greeting row`);
+      await clearOf(page, page.locator('.today__greeting'), 'the greeting row', where);
       await clearOf(page, page.locator('.install-note'), 'the install card', where);
       await clearOf(page, page.locator('.t7-hero'), "today's workout card", where);
       await tapLands(page, page.getByRole('button', { name: 'Open profile and settings' }), 'the avatar', where);

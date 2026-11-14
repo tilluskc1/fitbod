@@ -27,9 +27,30 @@ export function areasOf(muscles: MuscleGroup[]): Area[] {
   return AREAS.filter((area) => AREA_MUSCLES[area].some((muscle) => muscles.includes(muscle)));
 }
 
-/** A today-only day is named after what it trains: "Chest + Core". */
+/** (#296) Switch's presets, each the coach's call and matching the split day it is named after. */
+export type Preset = 'Upper' | 'Lower' | 'Push' | 'Pull' | 'Full body';
+export const PRESETS: Preset[] = ['Upper', 'Lower', 'Push', 'Pull', 'Full body'];
+export const PRESET_MUSCLES: Record<Preset, MuscleGroup[]> = {
+  Upper: ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps'],
+  Lower: ['Quads', 'Hamstrings', 'Glutes', 'Calves'],
+  Push: ['Chest', 'Shoulders', 'Triceps'],
+  Pull: ['Back', 'Biceps'],
+  'Full body': ['Chest', 'Back', 'Quads', 'Hamstrings', 'Shoulders', 'Core'],
+};
+
+/** The preset these muscles are exactly, in any order, or null. */
+export function presetOf(focus: MuscleGroup[]): Preset | null {
+  return PRESETS.find((preset) => PRESET_MUSCLES[preset].length === focus.length
+    && PRESET_MUSCLES[preset].every((muscle) => focus.includes(muscle))) ?? null;
+}
+
+/**
+ * A today-only day is named after what it trains: "Chest + Core", or the preset it is exactly
+ * (#296): Switch's Upper reads "Upper" on Today too, and so does the same day built in Plan today
+ * with me (Legs alone is "Lower"), so one day has one name on every screen.
+ */
 export function customDayName(focus: MuscleGroup[]): string {
-  return areasOf(focus).join(' + ') || 'Today';
+  return presetOf(focus) ?? (areasOf(focus).join(' + ') || 'Today');
 }
 
 const ARM_MUSCLES: MuscleGroup[] = ['Biceps', 'Triceps'];

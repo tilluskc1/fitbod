@@ -233,6 +233,7 @@ test('#203: rendered, the app\'s Today, Plan\'s later list, the switch sheet and
     const state = { ...EMPTY_STATE, profile, plan, planRevision: 1, programCursor: { revision: 1, seq: 0 } } as unknown as AppState;
     const switchText = plain(renderToStaticMarkup(createElement(SwitchSheet, {
       options: switchOptions(profile, state, [], defaultConstraints(profile)), onPick() {}, onClose() {},
+      preview: () => null, recovery: {}, onBuild() {}, onPlanToday() {}, onChangeGear() {},
     })));
     assert.match(switchText, new RegExp(`Lower A Ready · \\d+ sets · ${minutes} min · skips Upper A`));
 

@@ -233,6 +233,22 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    model; pin the old output only where the feature is off by design (Beginner, over 45, switch Off), and
    say so in the test. Check: `grep -rn "pairExercises" tests` lists only the supersets tests.
 
+35. **A calendar-day e2e pins its clock.** #296 review 2: the switch-picks e2e seeded sessions "26 h" and
+   "40 h" ago and asserted "trained yesterday" and "trained 2 days ago"; at some hours (and in some time
+   zones) those land on another calendar day, so the suite failed by time of day. Review 1 had also failed
+   on a cut label that only the longest text ("trained 2 days ago") showed, which the first e2e never seeded.
+   Rule: an e2e that asserts a calendar-day word fixes the page clock (`page.clock.setFixedTime(local noon)`)
+   and seeds the longest label it can show. Check: `scripts/e2e/switch-picks.mjs` passes under
+   `TZ=Europe/Moscow` and `TZ=Asia/Tokyo`; its 5f58f9c version fails under Moscow.
+
+36. **A change to what today is changes every place that names it.** #296's owner review: after Switch built
+   Pull, the hero said "Your Pull Day" while the planner card still said "Planned today · Push", and the
+   change's own toast sat on the greeting. Both screens passed review because each e2e looked at the part
+   it changed. Rule: a story that changes today's day (or raises a Today toast) asserts every label that
+   names the day reads from the same value after the change and after Undo, and that the toast's box meets
+   no other text box. Check: `scripts/e2e/switch-picks.mjs` compares hero and badge and the toast's box with
+   the greeting at all three sizes; its 9be8b4e version fails those steps.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

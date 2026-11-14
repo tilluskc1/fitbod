@@ -149,6 +149,8 @@ import SwitchSheet from './components/SwitchSheet';
 import { skipForward, switchOptions, upcomingDays } from './lib/switchDay';
 import type { SwitchOption } from './lib/switchDay';
 import { keepKey, todayFresher } from './lib/recovery';
+import { pickConstraints, pickPreview, recoveryLabels } from './lib/switchPick';
+import type { Picks } from './lib/switchPick';
 import { opensOnSplash, splashAfterAdopt } from './lib/firstScreen';
 import { done, headsUp, problem, toastShows, claimsSave, dropSaveClaim, TOAST_MS, type Notice } from './lib/notices';
 import { DoneToast, MessageCard, NoticeCard } from './components/ui/Notices';
@@ -948,6 +950,61 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setNotice(done(`${option.name} is up. Skipped ${option.skips.join(', ')}; a skip earns no progression.`));
   };
 
+  /**
+   * (#296) Switch's "Or train something else": today's gear and time with the picked focus, through
+   * the path Plan today with me runs (`talkConstraints` → `programFor` → `adaptFor`, lesson 9).
+   */
+  const switchPickFor = (picks: Picks) =>
+    (profile && slot ? pickConstraints(picks, plainConstraints, slot.focus, profile.sessionMinutes ?? 35) : null);
+  const previewPick = (picks: Picks) => {
+    const next = switchPickFor(picks);
+    if (!profile || !next) return null;
+    return pickPreview(picks, next, programFor(next), liveAdapted(adaptFor(next, profile), profile, state.history), profile, slot?.name);
+  };
+
+  /**
+   * (#296) Build the picked day: today's override carries its focus (no new keys), the plan cursor
+   * stays (#220), and Today shows the day to Start. Picks equal to the planned day are the planned day.
+   */
+  const buildPick = (picks: Picks) => {
+    const next = switchPickFor(picks);
+    if (!profile || !next) return;
+    if (current) {
+      setNotice(headsUp('Finish or discard the open session before switching days.'));
+      return;
+    }
+    const choice: EquipmentChoice = next.equipment;
+    const plain = !next.focus && (choice === 'home' || choice === savedSetup(profile)) && next.minutes === (profile.sessionMinutes ?? 35);
+    if (plain) {
+      restoreOriginal('Back to your program.');
+      return;
+    }
+    setState((currentState) => ({
+      ...currentState,
+      todayOverride: {
+        date: dayKey(new Date()),
+        minutes: next.minutes,
+        equipment: choice === 'home' || choice === 'hotel' ? ['Dumbbell'] : [],
+        support: [],
+        appliedAt: new Date().toISOString(),
+        choice,
+        ...(next.focus ? { focus: next.focus } : {}),
+      },
+    }));
+    proposalRevisionRef.current += 1;
+    appliedProposalRef.current = null;
+    setPending(null);
+    setPendingNotices([]);
+    setSheet({ kind: 'none' });
+    setNotice(done(CHANGED_FOR_TODAY));
+  };
+  /** (#296) "Sore or hurt? Plan today with me": Switch closes and the planner opens at its first question. */
+  const [planTodayAsk, setPlanTodayAsk] = useState(0);
+  const openPlanToday = () => {
+    setSheet({ kind: 'none' });
+    setPlanTodayAsk((count) => count + 1);
+  };
+
   /** A described session (#193) has no planned work to restore into; it is finished or discarded instead. */
   const describedSession = Boolean(current && isDescribedSession(current));
   /** (#297) Plan's Edit: Settings, scrolled to its Training group. */
@@ -1657,6 +1714,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               <TodayTalk
                 profile={profile}
                 plannedName={slot.name}
+                todayName={override ? program.name : undefined}
                 plannedAreas={areasOf(slot.focus)}
                 savedGear={savedSetup(profile)}
                 savedMinutes={profile.sessionMinutes ?? 35}
@@ -1664,6 +1722,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
                 preview={talkPreview}
                 onStart={startTalk}
                 onActive={setComposing}
+                openAsk={planTodayAsk}
               />
             ) : undefined}
             composing={composing}
@@ -1850,6 +1909,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           options={switchOptions(profile, state, state.history, plainConstraints)}
           onPick={pickDay}
           onClose={closeSheet}
+          preview={previewPick}
+          recovery={recoveryLabels(state.history, today)}
+          onBuild={buildPick}
+          onPlanToday={openPlanToday}
+          onChangeGear={() => setSheet({ kind: 'gym' })}
         />
       )}
 

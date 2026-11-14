@@ -70,6 +70,9 @@ const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> 
   ['done', 'CHANGED_FOR_TODAY'],
   ['headsUp', "'Finish or discard the open session before switching days.'"],
   ['done', '`${option.name} is up.'],
+  // #296: a picked day from Switch, and Switch's "Or train something else" while a session runs.
+  ['headsUp', "'Finish or discard the open session before switching days.'"],
+  ['done', 'CHANGED_FOR_TODAY'],
   ['done', 'message'],
   ['headsUp', 'text'],
   ['done', 'text'],
