@@ -75,13 +75,16 @@ const known = (id: GymItemId) => GYM_ITEMS.find((item) => item.id === id);
  * What saving the list writes (#357): the list itself, and the families and support it implies, so the
  * chips are the truth for free weights too (no barbell ticked, no barbell work).
  */
-export function gymPatch(ids: Iterable<GymItemId>, saved?: Pick<Profile, 'equipment'>): Pick<Profile, 'gymItems' | 'equipment' | 'support'> {
+export function gymPatch(ids: Iterable<GymItemId>, saved?: Pick<Profile, 'gymItems' | 'equipment' | 'support'>): Pick<Profile, 'gymItems' | 'equipment' | 'support'> {
   const gymItems = orderedItems(ids);
   const items = gymItems.flatMap((id) => known(id) ?? []);
-  // (#360) An addition this phone doesn't know can't name its family, so the saved families stay.
-  const keep = items.length < gymItems.length ? saved?.equipment ?? [] : [];
+  // (#360) An addition this phone doesn't know can't name its family, so a saved family stays, unless the
+  // lifter changed a chip of that family: then the chips decide it, as for every list (review 2).
+  const before = items.length < gymItems.length && saved ? initialTicks(saved) : [];
+  const kept = (family: Equipment) => saved?.equipment.includes(family)
+    && !GYM_ITEMS.some((item) => item.equipment === family && before.includes(item.id) !== gymItems.includes(item.id));
   const equipment = (['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'] as const)
-    .filter((family) => keep.includes(family) || items.some((item) => item.equipment === family));
+    .filter((family) => (before.length && kept(family)) || items.some((item) => item.equipment === family));
   const support = (['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'] as const)
     .filter((name) => items.some((item) => item.support === name));
   return { gymItems, equipment: [...equipment], support: [...support] };

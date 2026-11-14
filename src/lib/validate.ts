@@ -131,7 +131,8 @@ const SETUPS = ['home', 'hotel', 'bodyweight', 'bands'] as const;
 
 /** (#357) A "My gym" list: known item ids only, each once, in list order. */
 function validateGymItems(value: unknown, path: string): GymItemId[] {
-  const items = array(value, path, GYM_ITEM_IDS.length * 2);
+  // (#360) A fixed cap: the known list grows with the catalog, and a phone without it must not refuse.
+  const items = array(value, path, 200);
   const out: GymItemId[] = [];
   for (let i = 0; i < items.length; i += 1) {
     // (#360) An equipment addition this phone doesn't know yet is kept as stored (lesson 37); readers skip it.

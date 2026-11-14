@@ -67,8 +67,8 @@ test('#360 a valid exercise row passes; every drift is dropped, never thrown', (
     { ...LANDMINE, source: undefined },
     { ...LANDMINE, photo: 'https://evil.example/x.jpg' },
     { ...LANDMINE, photo: 'catalog/add-other/photo-1.jpg' },
-    { ...LANDMINE, photo: 'catalog/add-landmine-press/photo-1.gif' },
-    { ...LANDMINE, video: 'catalog/add-landmine-press/video-1.mov' },
+    { ...LANDMINE, photo: 'catalog/add-landmine-press/video-1.mp4' },
+    { ...LANDMINE, video: 'catalog/add-landmine-press/photo-1.jpg' },
     { ...LANDMINE, name: 'X' },
     { ...BELT, family: 'Bodyweight' },
     { ...BELT, group: 'Stations' },
@@ -219,6 +219,26 @@ test('#360 review 1: a gym item or preference for an addition this phone does no
   // Built-in ids keep the strict check; a removed built-in preference is still dropped.
   assert.ok(!validateState({ ...EMPTY_STATE, profile: profileOf({ gymItems: ['treadmill'] as never }) }).ok);
   assert.deepEqual(load(profileOf({ preferences: { 'old-move': 'more' } as never })).preferences, {});
+});
+
+test('#360 review 2: with an addition this phone does not know, an untick still wins for its own family', () => {
+  const saved = profileOf({ equipment: ['Barbell', 'Machine'], support: ['Rack'], gymItems: ['barbell', 'squat-rack', 'leg-press', 'add-belt-squat'] as never });
+  const save = (taps: Record<string, boolean>) => gymPatch(gymTicks(initialTicks(saved), [], taps as never), saved);
+  // Untick Barbell: Barbell goes; Machine (untouched, maybe the unknown item's) stays.
+  const noBar = save({ barbell: false });
+  assert.deepEqual(noBar.equipment, ['Machine']);
+  assert.deepEqual(noBar.gymItems, ['leg-press', 'squat-rack', 'add-belt-squat']);
+  assert.ok(!initialTicks({ ...saved, ...noBar }).includes('barbell'), 'reopening shows Barbell unticked');
+  // Nothing touched: every saved family stays.
+  assert.deepEqual(save({}).equipment, ['Barbell', 'Machine']);
+  // A Machine chip changed: the chips decide Machine (the unknown item can't name its family).
+  assert.deepEqual(save({ 'leg-press': false }).equipment, ['Barbell']);
+  assert.deepEqual(save({ 'leg-press': false, 'hack-squat': true }).equipment, ['Barbell', 'Machine']);
+  // A family never saved is never added by the unknown item.
+  assert.deepEqual(gymPatch(['add-belt-squat' as never, 'dumbbells'], profileOf({ equipment: ['Dumbbell'], support: [], gymItems: ['add-belt-squat'] as never })).equipment, ['Dumbbell']);
+  // A long list of additions never fails the profile on a phone without them.
+  const many = Array.from({ length: 60 }, (_, i) => `add-item-${i}`);
+  assert.ok(validateState({ ...EMPTY_STATE, profile: profileOf({ gymItems: many as never }) }).ok);
 });
 
 test('#360 review 1: unpublishing an exercise keeps the lifter\'s more/less for it', () => {

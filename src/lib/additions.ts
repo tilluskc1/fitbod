@@ -53,9 +53,13 @@ export type Row = ExerciseRow | EquipmentRow;
 const text = (value: unknown, min: number, max: number): value is string =>
   typeof value === 'string' && value.trim().length >= min && value.length <= max;
 
-/** A Storage path the admin writes: `catalog/<id>/photo-<n>.jpg` (png, webp) or `catalog/<id>/video-<n>.mp4`. */
+/**
+ * A Storage path in the row's own folder: `catalog/<id>/photo-...` or `catalog/<id>/video-...`. The exact
+ * name (`photo-<n>.jpg|png|webp`, `video-<n>.mp4`) is the Firestore rules' to enforce on write; the phone
+ * only keeps a row from pointing outside its folder. The URL encodes the path whole.
+ */
 export const mediaPath = (id: string, value: unknown, kind: 'photo' | 'video'): boolean =>
-  typeof value === 'string' && new RegExp(`^catalog/${id}/${kind}-\\d{1,15}\\.(${kind === 'photo' ? 'jpg|png|webp' : 'mp4'})$`).test(value);
+  typeof value === 'string' && value.startsWith(`catalog/${id}/${kind}-`);
 
 /**
  * A plain row (Firestore fields already decoded) or null. Rejects anything off-shape: unknown kind, a
