@@ -4826,6 +4826,9 @@ button.aw-exercise__name-btn {
   font-weight: 500;
 }
 .lg-act .ms { color: var(--muted); }
+/* (#371) − and + under the set table: the same chips, two to a line, sharing its width. */
+.lg-steps { display: flex; gap: 6px; padding: 2px 0 4px; }
+.lg-steps .lg-act { flex: 1 1 0; }
 
 /* ---------- Tell me about today (#193) ----------
    Composer and preview from the approved mockup (today-talk.html), in the app's tokens. */
