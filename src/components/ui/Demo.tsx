@@ -7,6 +7,8 @@ interface Props {
   name: string;
   className?: string;
   eager?: boolean;
+  /** Photos only, even when a clip exists: the player's fallback (#379). */
+  still?: boolean;
 }
 
 /**
@@ -16,10 +18,12 @@ interface Props {
  * through CSS (first frame only; no JS branch, so the server and client agree).
  * The loop pauses while the demo is off screen; a closed sheet unmounts it.
  */
-export default function Demo({ exerciseId, name, className = '', eager = false }: Props) {
+export default function Demo({ exerciseId, name, className = '', eager = false, still = false }: Props) {
   const [failed, setFailed] = useState(false);
+  // (#379) iOS refuses play() in Low Power Mode; the photos loop instead of a frozen poster.
+  const [refused, setRefused] = useState(still);
   const frames = exerciseFrames(exerciseId);
-  const video = exerciseVideo(exerciseId);
+  const video = refused ? null : exerciseVideo(exerciseId);
   const [first, second] = frames;
   const ref = useRef<HTMLSpanElement>(null);
   const [onScreen, setOnScreen] = useState(true);
@@ -33,7 +37,7 @@ export default function Demo({ exerciseId, name, className = '', eager = false }
   useEffect(() => {
     const clip = ref.current?.querySelector('video');
     if (!clip) return;
-    if (onScreen) void clip.play().catch(() => {});
+    if (onScreen) void clip.play().catch((error: Error) => setRefused(error.name === 'NotAllowedError'));
     else clip.pause();
   }, [onScreen, video]);
 
@@ -77,7 +81,8 @@ export default function Demo({ exerciseId, name, className = '', eager = false }
               alt=""
               className="demo-frame demo-frame-alt"
               loading={eager ? 'eager' : 'lazy'}
-              onError={() => setFailed(true)}
+              // A clip's poster is cached offline but its end frame may never have loaded: keep the start frame.
+              onError={(event) => { event.currentTarget.hidden = true; }}
             />
           )}
         </>
