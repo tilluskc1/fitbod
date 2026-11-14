@@ -474,8 +474,8 @@ export default function TrainScreen({
   const stepSet = activeSet >= 0 && mode !== 'none' && !holdUnit && equipment !== 'Bodyweight' ? exercise.performed[activeSet] : undefined;
   const stepFrom = !stepSet ? 0 : stepSet.weight > 0 ? stepSet.weight
     : prefill !== null && !cleared.includes(`${calibrationKey}:${activeSet}`) ? prefill : raising ? floor : 0;
-  const steps = stepSet ? weightSteps({ kg: stepFrom, equipment, available: equipment === 'Dumbbell' ? ownDumbbells : rack, unit }) : null;
-  const stepText = steps ? `${steps.step} ${unitLabel(unit)}` : '';
+  // A dumbbell steps the rack today's gear offers (a Travel gym's hotel rack), as the ramp rows do (#371 review 1).
+  const steps = stepSet ? weightSteps({ kg: stepFrom, equipment, available: equipment === 'Dumbbell' ? rampLoads : rack, unit }) : null;
   const stepTo = (kg: number | null) => {
     if (kg === null) return;
     setRefusal(null);
@@ -701,10 +701,10 @@ export default function TrainScreen({
         {steps && steps.step > 0 && (
           <div className="lg-steps" role="group" aria-label={`Weight steps for set ${activeSet + 1}`}>
             <button type="button" className="lg-act" disabled={steps.down === null} onClick={() => stepTo(steps.down)}>
-              {'\u2212'} {stepText}
+              {'\u2212'} {steps.downBy} {unitLabel(unit)}
             </button>
             <button type="button" className="lg-act" disabled={steps.up === null} onClick={() => stepTo(steps.up)}>
-              + {stepText}
+              + {steps.upBy} {unitLabel(unit)}
             </button>
           </div>
         )}

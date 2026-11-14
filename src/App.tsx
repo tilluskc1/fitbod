@@ -308,6 +308,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     followers: number[];
     edited?: CarryResult['previous'][number];
     origin?: CarryResult['previous'][number];
+    /** (#371 review 1) The held burst came from − or + taps: Apply to all's Undo puts the tapped set back too. */
+    stepped?: boolean;
   } | null>(null);
   const jumpWarned = useRef(new Map<string, string>());
   const jumpBase = useRef(new Map<string, number>());
@@ -1184,7 +1186,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         previous, followers, mark: burstMark(heldSession, exerciseIndex), edited, origin, stepped: Boolean(open?.stepped) || step,
       });
       const text = heldMessage({ kg: typedKg, percent: jump.percent, setIndex, unit, mode: loadModeOf(exerciseId) });
-      setHeld({ text, sessionId: session.id, exerciseIndex, exerciseId, setIndex, kg: typedKg, followers: followers.weight, edited, origin });
+      setHeld({ text, sessionId: session.id, exerciseIndex, exerciseId, setIndex, kg: typedKg, followers: followers.weight, edited, origin,
+        stepped: Boolean(open?.stepped) || step });
       setNotice(headsUp(text));
       return;
     }
@@ -1240,7 +1243,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setCarryUndo({
       key: burstKey(session, h.exerciseIndex, `${h.setIndex}:weight`), message: text, sessionId: session.id,
       exerciseIndex: h.exerciseIndex, exerciseId: h.exerciseId, previous, followers: { weight: h.followers, reps: [] },
-      mark: burstMark(result.session, h.exerciseIndex), edited: h.edited, origin: h.origin,
+      mark: burstMark(result.session, h.exerciseIndex), edited: h.edited, origin: h.origin, stepped: h.stepped,
     });
     setNotice(done(text));
   };

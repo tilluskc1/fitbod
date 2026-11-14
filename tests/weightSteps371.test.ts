@@ -21,9 +21,12 @@ test('a barbell never steps below the empty bar: − is disabled at 45 lb and 20
   close(weightSteps({ kg: lb(50), equipment: 'Barbell', available: [], unit: 'lb' }).down, lb(45));
   assert.equal(weightSteps({ kg: 20, equipment: 'Barbell', available: [], unit: 'kg' }).down, null);
   close(weightSteps({ kg: 22.5, equipment: 'Barbell', available: [], unit: 'kg' }).down, 20);
-  // Below the bar (a lighter typed load): nothing lower, and + goes back up the grid.
+  // Below the bar (a lighter typed load, or an empty set with no suggestion): nothing lower, + goes to the bar.
   assert.equal(weightSteps({ kg: 15, equipment: 'Barbell', available: [], unit: 'kg' }).down, null);
-  close(weightSteps({ kg: 15, equipment: 'Barbell', available: [], unit: 'kg' }).up, 17.5);
+  close(weightSteps({ kg: 15, equipment: 'Barbell', available: [], unit: 'kg' }).up, 20);
+  close(weightSteps({ kg: 0, equipment: 'Barbell', available: [], unit: 'kg' }).up, 20);
+  close(weightSteps({ kg: 0, equipment: 'Barbell', available: [], unit: 'lb' }).up, lb(45));
+  close(weightSteps({ kg: lb(40), equipment: 'Barbell', available: [], unit: 'lb' }).up, lb(45));
 });
 
 test('a kilogram barbell steps incrementFor (2.5 kg): 60 → 62.5 and 57.5', () => {
@@ -99,5 +102,49 @@ test('owned dumbbells in pounds: 25 → 30 and 20, a 5 lb step', () => {
 });
 
 test('bodyweight has no step', () => {
-  assert.deepEqual(weightSteps({ kg: 0, equipment: 'Bodyweight', available: [], unit: 'kg' }), { step: 0, down: null, up: null });
+  assert.deepEqual(weightSteps({ kg: 0, equipment: 'Bodyweight', available: [], unit: 'kg' }), { step: 0, down: null, up: null, downBy: 0, upBy: 0 });
+});
+
+// Review 1 of #371.
+const HOTEL = [10, 15, 18, 22, 25];
+
+test('review 1: a Travel gym rack steps owned hotel loads, 18 → 22 and 15, never past 25', () => {
+  const steps = weightSteps({ kg: 18, equipment: 'Dumbbell', available: HOTEL, unit: 'kg' });
+  close(steps.up, 22);
+  close(steps.down, 15);
+  assert.equal(weightSteps({ kg: 25, equipment: 'Dumbbell', available: HOTEL, unit: 'kg' }).up, null);
+});
+
+test('review 1: each button reads its own real difference on an uneven rack', () => {
+  const steps = weightSteps({ kg: 18, equipment: 'Dumbbell', available: HOTEL, unit: 'kg' });
+  assert.equal(steps.upBy, 4);
+  assert.equal(steps.downBy, 3);
+  const ten = weightSteps({ kg: 10, equipment: 'Dumbbell', available: [10, 15, 18], unit: 'kg' });
+  close(ten.up, 15);
+  assert.equal(ten.upBy, 5, 'a jump 10 → 15 reads + 5, not the rack\'s smallest gap of 3');
+  // Disabled: the nominal step.
+  assert.equal(ten.down, null);
+  assert.equal(ten.downBy, ten.step);
+  // On the grid both read the step; off it, the real distance to the grid point.
+  const grid = weightSteps({ kg: 61, equipment: 'Barbell', available: [], unit: 'kg' });
+  assert.equal(grid.upBy, 1.5);
+  assert.equal(grid.downBy, 1);
+  const pounds = weightSteps({ kg: lb(45), equipment: 'Barbell', available: [], unit: 'lb' });
+  assert.equal(pounds.upBy, 5);
+  assert.equal(pounds.downBy, 5, 'disabled at the bar: the nominal 5 lb');
+});
+
+test('review 1: a load under the lightest owned one steps up to it, and − is disabled', () => {
+  const steps = weightSteps({ kg: 9.5, equipment: 'Dumbbell', available: [10, 15], unit: 'kg' });
+  close(steps.up, 10);
+  assert.equal(steps.down, null);
+  close(weightSteps({ kg: 6, equipment: 'Dumbbell', available: HOTEL, unit: 'kg' }).up, 10);
+});
+
+test('review 1: pound steps come from the warm-up plate table (kettlebell 5 lb, machine 10 lb)', () => {
+  assert.equal(weightSteps({ kg: lb(35), equipment: 'Kettlebell', available: [], unit: 'lb' }).step, 5);
+  close(weightSteps({ kg: lb(35), equipment: 'Kettlebell', available: [], unit: 'lb' }).up, lb(40));
+  assert.equal(weightSteps({ kg: lb(100), equipment: 'Machine', available: [], unit: 'lb' }).step, 10);
+  assert.equal(weightSteps({ kg: lb(50), equipment: 'Cable', available: [], unit: 'lb' }).step, 5);
+  assert.equal(weightSteps({ kg: 16, equipment: 'Kettlebell', available: [], unit: 'kg' }).step, 4);
 });
