@@ -151,6 +151,8 @@ try {
         await onboard(page);
         const started = Date.now();
         const seen = await train(page);
+        // (#360) The last send can still be in flight when training ends (slow CI): wait for it, as step A does.
+        if (!blocked) await page.waitForFunction((key) => (localStorage.getItem(key) ?? '[]') === '[]', OUTBOX, { timeout: 8000 }).catch(() => undefined);
         runs.push({ seen, ms: Date.now() - started, left: (await outbox(page)).length, errors, errorLine: await errorLine(page) });
         await context.close();
       }

@@ -13,6 +13,7 @@ import {
 } from '../lib/adminData';
 import type { UsageEvent } from '../lib/events';
 import { DAY_TYPES } from '../lib/eventSchema';
+import CatalogPage from './CatalogPage';
 import { AdminError, readEvents, readFeedback, setDone, signInWithGoogle, type Failure } from './api';
 
 /**
@@ -52,7 +53,7 @@ function loadGoogle(): Promise<GoogleId> {
 }
 
 type Phase = 'starting' | 'signed-out' | 'signing-in' | 'loading' | 'ready' | 'google-failed' | Failure;
-type Tab = 'feedback' | 'testers' | 'usage';
+type Tab = 'feedback' | 'testers' | 'usage' | 'exercises' | 'equipment';
 
 const SCREENS: Record<string, string> = { settings: 'Settings', recap: 'Workout recap' };
 
@@ -202,6 +203,8 @@ export default function AdminApp() {
           ['feedback', `Feedback${open ? ` (${open})` : ''}`],
           ['testers', 'Testers'],
           ['usage', "What's used"],
+          ['exercises', 'Exercises'],
+          ['equipment', 'Equipment'],
         ] as const).map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
             {label}
@@ -271,6 +274,10 @@ export default function AdminApp() {
           <CountCard title="Taps" rows={TAPS.map((tap, index) => [tap.label, usage.taps[index]])} />
           {events.length === 0 && <p className="adm-empty">No usage yet in the last 8 weeks.</p>}
         </section>
+      )}
+
+      {(tab === 'exercises' || tab === 'equipment') && token && (
+        <CatalogPage key={tab} kind={tab === 'exercises' ? 'exercise' : 'equipment'} token={token} onFail={fail} />
       )}
     </main>
   );

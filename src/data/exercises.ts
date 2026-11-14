@@ -141,6 +141,12 @@ export function areIncompatible(a: string, b: string): boolean {
   return a !== b && INCOMPATIBLE_GROUPS.some((group) => group.includes(a) && group.includes(b));
 }
 
+/**
+ * (#360) Additions unpublished since this phone cached them: readable by id so history keeps their name,
+ * photo and units, but never in `EXERCISES`, so planning, Switch and Replace never offer them.
+ */
+export const RETIRED_EXERCISES = new Map<string, Exercise>();
+
 export function exerciseById(id: string): Exercise | undefined {
-  return EXERCISES.find((e) => e.id === id);
+  return EXERCISES.find((e) => e.id === id) ?? RETIRED_EXERCISES.get(id);
 }

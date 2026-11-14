@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Sheet from '../components/ui/Sheet';
+import { additionCredits } from '../lib/additions';
 import { CheckIcon } from '../components/ui/Icons';
 import {
   ABOUT_CREDITS,
@@ -55,8 +56,8 @@ export default function AboutSheet({ onFeedback, onClose }: Props) {
       title: 'Credits',
       body: (
         <ul className="about__credits">
-          {ABOUT_CREDITS.map((line) => (
-            <li key={line}>{line}</li>
+          {[...ABOUT_CREDITS, ...additionCredits()].map((line, index) => (
+            <li key={index}>{line}</li>
           ))}
         </ul>
       ),

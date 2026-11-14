@@ -1,5 +1,6 @@
 import { EXERCISES } from '../data/exercises.ts';
 import { GYM_ITEM_IDS, orderedItems } from '../data/gymItems.ts';
+import { isAdditionId } from './additionId.ts';
 import { readNote } from './notes.ts';
 import type {
   AppState,
@@ -131,10 +132,12 @@ const SETUPS = ['home', 'hotel', 'bodyweight', 'bands'] as const;
 
 /** (#357) A "My gym" list: known item ids only, each once, in list order. */
 function validateGymItems(value: unknown, path: string): GymItemId[] {
-  const items = array(value, path, GYM_ITEM_IDS.length * 2);
+  // (#360) A fixed cap: the known list grows with the catalog, and a phone without it must not refuse.
+  const items = array(value, path, 200);
   const out: GymItemId[] = [];
   for (let i = 0; i < items.length; i += 1) {
-    const item = oneOf(items[i], `${path}[${i}]`, GYM_ITEM_IDS);
+    // (#360) An equipment addition this phone doesn't know yet is kept as stored (lesson 37); readers skip it.
+    const item = isAdditionId(items[i]) ? (items[i] as GymItemId) : oneOf(items[i], `${path}[${i}]`, GYM_ITEM_IDS);
     if (!out.includes(item)) out.push(item);
   }
   return orderedItems(out);
@@ -179,7 +182,8 @@ function validateProfile(value: unknown, path: string): Profile {
     preferences = {};
     for (const key of keys) {
       // Dropped, not rejected: a variant removed from the catalog must not lock the user out.
-      if (!EXERCISES.some((exercise) => exercise.id === key)) continue;
+      // (#360) An addition's is kept even when this phone doesn't know it (yet, or since it was unpublished).
+      if (!isAdditionId(key) && !EXERCISES.some((exercise) => exercise.id === key)) continue;
       preferences[key] = oneOf(prefsRaw[key], `${path}.preferences.${key}`, PREFERENCES);
     }
   }

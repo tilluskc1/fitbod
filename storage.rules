@@ -1,0 +1,31 @@
+rules_version = '2';
+
+// (#360) Firebase Storage rules for project home-strength: photos and short videos for exercises added
+// from /admin. The owner pastes this file in the Firebase console (Storage > Rules) after replacing
+// ADMIN_EMAIL with the admin Google account. The real address is never committed. Anyone may read (the
+// app shows them like built-in photos); only the admin uploads, under the addition's own folder, with
+// the story's caps: a photo is JPG, PNG or WebP up to 1 MB, a video is MP4 up to 10 MB. The 15-second
+// video cap can't be read here; the admin page checks it before upload.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'ADMIN_EMAIL'
+        && request.auth.token.email_verified == true;
+    }
+
+    match /catalog/{id}/{file} {
+      allow read: if true;
+      allow create, update: if isAdmin()
+        && id.size() <= 48 && id.matches('add-[a-z0-9]+(-[a-z0-9]+)*')
+        && ((file.matches('photo-[0-9]{1,15}[.](jpg|png|webp)')
+            && request.resource.contentType.matches('image/(jpeg|png|webp)')
+            && request.resource.size <= 1024 * 1024)
+          || (file.matches('video-[0-9]{1,15}[.]mp4')
+            && request.resource.contentType == 'video/mp4'
+            && request.resource.size <= 10 * 1024 * 1024));
+      allow delete: if isAdmin();
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { isAdditionId } from '../lib/additionId.ts';
 import { isGymKit } from '../lib/progression.ts';
 import type { Equipment, GymItemId, Profile, SupportEquipment } from '../types';
 
@@ -16,6 +17,8 @@ export interface GymItem {
   /** The family or support item ticking this one turns on. */
   equipment?: Exclude<Equipment, 'Bodyweight'>;
   support?: SupportEquipment;
+  /** (#360) An equipment addition unpublished since this phone cached it: kept readable, never listed. */
+  hidden?: boolean;
 }
 
 export const GYM_GROUPS: GymGroup[] = ['Legs machines', 'Upper machines', 'Cables', 'Free weights', 'Stations'];
@@ -57,21 +60,31 @@ export function isGymItemId(value: unknown): value is GymItemId {
   return typeof value === 'string' && (GYM_ITEM_IDS as string[]).includes(value);
 }
 
-/** Ids in list order, each once. */
+/**
+ * Ids in list order, each once. (#360) An equipment addition this phone doesn't know yet (cache slow,
+ * cleared, another tab, a restore) is kept at the end, never dropped: readers skip it, a save keeps it.
+ */
 export function orderedItems(ids: Iterable<GymItemId>): GymItemId[] {
   const set = new Set(ids);
-  return GYM_ITEM_IDS.filter((id) => set.has(id));
+  return [...GYM_ITEM_IDS.filter((id) => set.has(id)), ...[...set].filter((id) => isAdditionId(id) && !GYM_ITEM_IDS.includes(id))];
 }
+
+const known = (id: GymItemId) => GYM_ITEMS.find((item) => item.id === id);
 
 /**
  * What saving the list writes (#357): the list itself, and the families and support it implies, so the
  * chips are the truth for free weights too (no barbell ticked, no barbell work).
  */
-export function gymPatch(ids: Iterable<GymItemId>): Pick<Profile, 'gymItems' | 'equipment' | 'support'> {
+export function gymPatch(ids: Iterable<GymItemId>, saved?: Pick<Profile, 'gymItems' | 'equipment' | 'support'>): Pick<Profile, 'gymItems' | 'equipment' | 'support'> {
   const gymItems = orderedItems(ids);
-  const items = gymItems.map(gymItem);
+  const items = gymItems.flatMap((id) => known(id) ?? []);
+  // (#360) An addition this phone doesn't know can't name its family, so a saved family stays, unless the
+  // lifter changed a chip of that family: then the chips decide it, as for every list (review 2).
+  const before = items.length < gymItems.length && saved ? initialTicks(saved) : [];
+  const kept = (family: Equipment) => saved?.equipment.includes(family)
+    && !GYM_ITEMS.some((item) => item.equipment === family && before.includes(item.id) !== gymItems.includes(item.id));
   const equipment = (['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'] as const)
-    .filter((family) => items.some((item) => item.equipment === family));
+    .filter((family) => (before.length && kept(family)) || items.some((item) => item.equipment === family));
   const support = (['Bench', 'Rack', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'] as const)
     .filter((name) => items.some((item) => item.support === name));
   return { gymItems, equipment: [...equipment], support: [...support] };
@@ -87,7 +100,7 @@ export function initialTicks(profile: Pick<Profile, 'gymItems' | 'equipment' | '
     item.equipment === 'Machine' || item.equipment === 'Cable'
       ? (profile.gymItems ?? []).includes(item.id)
       : item.equipment ? profile.equipment.includes(item.equipment) : profile.support.includes(item.support!),
-  ).map((item) => item.id));
+  ).map((item) => item.id).concat((profile.gymItems ?? []).filter((id) => !known(id))));
 }
 
 /**

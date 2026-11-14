@@ -292,6 +292,15 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    carry the fact itself), and sweep every name the generator can produce. Check: the area-combination
    sweep in `tests/events359.test.ts`.
 
+41. **Stored data that names optional catalog data keeps the name when the catalog is missing.** #360 review 1:
+   profile validation dropped a saved gym item or a more/less choice for an admin addition whenever the phone
+   did not know that addition at load (cache slow or cleared, another tab, a restore, or the exercise since
+   unpublished), and the next save made the loss permanent. Loading the cache before the first render only
+   narrowed the window. Rule: a stored reference to data that can arrive late or go away (a well-formed
+   `add-` id) is kept as stored and skipped by readers; only a malformed or removed built-in value may drop.
+   Check: the "review 1" tests in `tests/catalog360.test.ts` (no catalog, load, save, catalog back) and the
+   saved-gym step in `scripts/e2e/catalog-additions.mjs`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
