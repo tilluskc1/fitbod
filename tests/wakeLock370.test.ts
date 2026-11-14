@@ -13,7 +13,11 @@ function rig(opts: { missing?: boolean; reject?: boolean; manual?: boolean } = {
     addEventListener: (_: string, fn: () => void) => void listeners.add(fn),
     removeEventListener: (_: string, fn: () => void) => void listeners.delete(fn),
   };
-  const sentinel = () => ({ release: () => { log.releases += 1; return Promise.resolve(); } });
+  const dropped: Array<() => void> = [];
+  const sentinel = () => ({
+    release: () => { log.releases += 1; return Promise.resolve(); },
+    addEventListener: (_: string, fn: () => void) => void dropped.push(fn),
+  });
   const nav = opts.missing
     ? {}
     : {
@@ -28,7 +32,7 @@ function rig(opts: { missing?: boolean; reject?: boolean; manual?: boolean } = {
         },
       };
   const setVisible = (v: 'visible' | 'hidden') => { doc.visibilityState = v; [...listeners].forEach((fn) => fn()); };
-  return { log, doc, nav, pending, sentinel, setVisible, listeners };
+  return { log, doc, nav, pending, sentinel, setVisible, listeners, dropped };
 }
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
@@ -115,4 +119,17 @@ test('#370 start while hidden requests nothing until visible', async () => {
   await tick();
   assert.equal(r.log.requests, 1);
   w.stop();
+});
+
+test('#370 a lock the browser drops itself is requested again on the next visible', async () => {
+  const r = rig();
+  const lock = createWakeLock({ nav: r.nav, doc: r.doc });
+  lock.start();
+  await tick();
+  assert.equal(r.log.requests, 1);
+  r.dropped.forEach((fn) => fn()); // the browser released it without a hidden event
+  r.setVisible('visible');
+  await tick();
+  assert.equal(r.log.requests, 2);
+  lock.stop();
 });

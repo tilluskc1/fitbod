@@ -2,7 +2,10 @@ import { useEffect } from 'react';
 
 // #370 Keep the screen awake while the logger is open. Silent by design: no setting, no copy, no errors.
 
-interface Sentinel { release: () => Promise<void> | void }
+interface Sentinel {
+  release: () => Promise<void> | void;
+  addEventListener?: (type: 'release', fn: () => void) => void;
+}
 interface WakeNav { wakeLock?: { request: (type: 'screen') => Promise<Sentinel> } }
 interface WakeDoc {
   visibilityState: string;
@@ -33,7 +36,11 @@ export function createWakeLock({ nav, doc }: { nav: WakeNav; doc: WakeDoc }) {
         pending = false;
         // Stopped or hidden before it arrived: hand it straight back.
         if (!running || doc.visibilityState !== 'visible') drop(s);
-        else sentinel = s;
+        else {
+          sentinel = s;
+          // The browser can drop the lock on its own (battery saver, iOS): forget it, so the next visible asks again.
+          s.addEventListener?.('release', () => { if (sentinel === s) sentinel = null; });
+        }
       },
       () => { pending = false; },
     );
