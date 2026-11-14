@@ -256,6 +256,10 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Rule: when a story adds a writer of saved gear, grep every reader of that gear (`isGymKit`, `ownedLoads`,
    `savedSetup`, `gearLabel`, `equipmentTitle`) and test each one after the new save. A save never drops
    kit the lifter did not touch. Check: "review 1" tests in `tests/myGym357.test.ts`.
+   Review 2 found the same leak through who may save: the row showed for any kit with cables, so a home
+   kit could save a list, become a gym and stop reading its own rack. Clear had the mirror leak (the list
+   gone, its families kept). Rule: decide who sees a gear writer with the same rule the readers use
+   (`isGymKit`); a control the story does not ask for (Clear) is cut, not patched. Check: "review 2" test.
 
 ## Recurring edge cases (put the relevant ones in every brief)
 

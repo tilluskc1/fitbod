@@ -117,7 +117,7 @@ try {
   for (const [width, height] of [[390, 844], [360, 780]]) {
     const where = `${width}x${height}`;
 
-    // A. Onboarding: "At a gym" offers My gym once; it opens empty; type, check, save, build.
+    // A. Onboarding: "At a gym" offers My gym once; it opens with the kit's free weights; type, check, save, build.
     {
       const context = await browser.newContext({ viewport: { width, height } });
       const page = await context.newPage();
@@ -158,7 +158,7 @@ try {
       await context.close();
     }
 
-    // B. Settings: the row on a gym kit; nothing saves before Save; no-match line; a tap wins; save; clear.
+    // B. Settings: the row on a gym kit; nothing saves before Save; no-match line; a tap wins; save.
     {
       const context = await browser.newContext({ viewport: { width, height } });
       const page = await context.newPage();
@@ -228,26 +228,7 @@ try {
       await context.close();
     }
 
-    // C. Clear: back to "every machine counts"; the field is gone from storage.
-    {
-      const context = await browser.newContext({ viewport: { width, height } });
-      const page = await context.newPage();
-      await toGearStep(page);
-      await page.getByRole('button', { name: 'List my gym' }).click();
-      await page.getByRole('dialog', { name: 'My gym' }).getByLabel('What does your gym have?').fill(TYPED);
-      await page.getByRole('button', { name: SAVE }).click();
-      await build(page);
-      const settings = await openSettings(page);
-      await settings.getByRole('button', { name: 'Edit my gym' }).click();
-      await page.getByRole('dialog', { name: 'My gym' }).getByRole('button', { name: /^Clear my gym list/ }).click();
-      await page.getByRole('dialog', { name: 'Training settings' }).waitFor();
-      const profile = (await stored(page)).profile;
-      check(!('gymItems' in profile), `${where} clear: gymItems still stored`);
-      check((await page.locator('#my-gym-note').innerText()).startsWith('Not set'), `${where} clear: row line not back to Not set`);
-      await context.close();
-    }
-
-    // D. Home profile: no My gym in onboarding or Settings.
+    // C. Home profile: no My gym in onboarding or Settings.
     {
       const context = await browser.newContext({ viewport: { width, height } });
       const page = await context.newPage();
@@ -260,7 +241,7 @@ try {
     }
   }
 
-  // E. 390x650, keyboard open on the text box (lesson 16: the layout keeps its height; a controllable
+  // D. 390x650, keyboard open on the text box (lesson 16: the layout keeps its height; a controllable
   // visualViewport covers the bottom 330px, unshifted and shifted). Save and the box stay in the band.
   {
     const where = '390x650-keyboard';
@@ -339,4 +320,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
-console.log('my-gym: onboarding offer, Settings row, no-match line, taps win, nothing saved before Save, clear, home hides it, plan and Equipment list use only listed kit, 390x844, 360x780 and 390x650 keyboard');
+console.log('my-gym: onboarding offer, Settings row, no-match line, taps win, nothing saved before Save, home hides it, plan and Equipment list use only listed kit, 390x844, 360x780 and 390x650 keyboard');

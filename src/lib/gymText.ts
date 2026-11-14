@@ -73,9 +73,10 @@ const ORDERED = [...PHRASES]
 export function readGymText(text: string): GymItemId[] {
   let rest = normalise(text);
   const found = new Set<GymItemId>();
-  // "no leg press" names a thing the gym lacks: those words tick nothing (#357 review 1).
+  // "no leg press", "we don't have a leg press", "everything but the smith" name what the gym lacks:
+  // those words tick nothing (#357 reviews 1 and 2).
   for (const [phrase] of ORDERED) {
-    for (const not of [' no', ' without', ' not', ' except', ' but no']) {
+    for (const not of [' no', ' without', ' not', ' except', ' but', ' dont have', ' do not have', ' doesnt have', ' lacks']) {
       while (rest.includes(`${not}${phrase}`)) rest = rest.replace(`${not}${phrase}`, ' | ');
     }
   }

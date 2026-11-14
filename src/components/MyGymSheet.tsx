@@ -9,8 +9,6 @@ interface Props {
   /** The saved list and families the sheet opens with. */
   profile: Pick<Profile, 'gymItems' | 'equipment' | 'support'>;
   onSave: (items: GymItemId[]) => void;
-  /** Absent when there is no saved list to clear (onboarding, or none saved yet). */
-  onClear?: () => void;
   onClose: () => void;
 }
 
@@ -19,7 +17,7 @@ interface Props {
  * effort (lesson 3); the chips are the truth and a tap always wins over the text. Nothing is saved until
  * Save my gym.
  */
-export default function MyGymSheet({ profile, onSave, onClear, onClose }: Props) {
+export default function MyGymSheet({ profile, onSave, onClose }: Props) {
   const [start] = useState(() => initialTicks(profile));
   const [text, setText] = useState('');
   const [taps, setTaps] = useState<GymTaps>({});
@@ -80,11 +78,6 @@ export default function MyGymSheet({ profile, onSave, onClear, onClose }: Props)
         <p className="settings-row__note my-gym__note">
           Machines and cables not ticked are never planned or offered as swaps. Bodyweight work is always available.
         </p>
-        {onClear && (
-          <button type="button" className="text-action my-gym__clear" onClick={onClear}>
-            Clear my gym list (every machine counts again)
-          </button>
-        )}
         <div className="sheet-actions">
           <button type="submit" className="primary" disabled={ticks.length === 0}>
             Save my gym{ticks.length > 0 ? ` (${ticks.length})` : ''}

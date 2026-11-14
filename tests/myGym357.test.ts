@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
 import { EXERCISES, exerciseById } from '../src/data/exercises.ts';
-import { GYM_ITEMS, GYM_ITEM_IDS, gymPatch, initialTicks, showsMyGym, withoutGymList } from '../src/data/gymItems.ts';
+import { GYM_ITEMS, GYM_ITEM_IDS, gymPatch, initialTicks, showsMyGym } from '../src/data/gymItems.ts';
 import { adaptWorkout } from '../src/lib/adapt.ts';
 import type { Constraints } from '../src/lib/adapt.ts';
 import { buildPlan, generateWorkout } from '../src/lib/generator.ts';
@@ -70,6 +70,8 @@ const PHRASINGS: [string, GymItemId[]][] = [
   ['leg curl, no leg press', ['leg-curl']],
   ['everything except a smith machine', []],
   ['dumbbells but no barbell', ['dumbbells']],
+  ["we don't have a leg press", []],
+  ['everything but the smith machine', []],
   [
     'leg extension, leg curl, leg press, dumbbells to 30 kg, barbell and squat rack, cable stack, pull-up bar',
     ['leg-press', 'leg-extension', 'leg-curl', 'cable-stack', 'dumbbells', 'barbell', 'squat-rack', 'pull-up-bar'],
@@ -126,7 +128,9 @@ test('#357 the row shows for gym kits and saved lists, not home or bodyweight', 
   assert.equal(showsMyGym(profileOf(KITS.home, 'Beginner', 3, 45)), false);
   assert.equal(showsMyGym(profileOf(KITS.bodyweight, 'Beginner', 3, 45)), false);
   assert.equal(showsMyGym({ ...profileOf(KITS.home, 'Beginner', 3, 45), gymItems: [] }), true);
-  assert.equal('gymItems' in withoutGymList({ ...gym, gymItems: ['leg-press'] }), false);
+  // Review 2: home gear with a cable stack is still home gear; its rack keeps being read.
+  assert.equal(showsMyGym(profileOf(KITS.machines, 'Beginner', 3, 45)), false);
+  assert.equal(showsMyGym({ ...profileOf(KITS.home, 'Beginner', 3, 45), equipment: ['Dumbbell', 'Cable'] }), false);
 });
 
 test('#357 absent field = identical plans, Limited lines and swaps to main eed9fd9 (snapshot)', () => {
@@ -320,4 +324,13 @@ test('#357 review 1: a saved list is a gym kit: labels stay "Your gym" and a sta
   const noList: Profile = { ...saved, gymItems: undefined };
   assert.equal(isGymKit(noList), false);
   assert.deepEqual(ownedLoads(noList), { Dumbbell: [5, 10, 12.5] });
+});
+
+test('#357 review 2: a home kit with cables never sees My gym, so its dumbbell rack is still read', async () => {
+  const { ownedLoads } = await import('../src/lib/progression.ts');
+  const { defaultConstraints } = await import('../src/lib/constraints.ts');
+  const homeCable: Profile = { ...profileOf({ equipment: ['Dumbbell', 'Cable'], support: ['Bench'] }, 'Intermediate', 3, 45), loads: { Dumbbell: [5, 10, 15] } };
+  assert.equal(showsMyGym(homeCable), false, 'no row, so no list can be saved from Settings');
+  assert.deepEqual(ownedLoads(homeCable), { Dumbbell: [5, 10, 15] });
+  assert.deepEqual(defaultConstraints(homeCable).loads, [5, 10, 15]);
 });

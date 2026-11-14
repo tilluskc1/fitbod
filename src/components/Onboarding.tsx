@@ -235,7 +235,7 @@ export default function Onboarding({ onComplete }: Props) {
           )}
           {place === 'gym' && (
             <div className="settings-card onboarding-gym">
-              <div className="settings-row settings-row--stack">
+              <div className="settings-row settings-row--stack my-gym-row">
                 <div className="settings-row__line">
                   <span>My gym · optional</span>
                   <button className="text-action text-action--lime" onClick={() => setGymOpen(true)}>

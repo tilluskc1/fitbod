@@ -1203,10 +1203,6 @@ export function SettingsSheet({
           onChange(gymPatch(items));
           setGymOpen(false);
         }}
-        onClear={profile.gymItems ? () => {
-          onChange({ gymItems: undefined });
-          setGymOpen(false);
-        } : undefined}
         onClose={() => setGymOpen(false)}
       />
     );
@@ -1338,7 +1334,7 @@ export function SettingsSheet({
           </h3>
           <div className="settings-card">
             {showsMyGym(profile) && (
-              <div className="settings-row settings-row--stack">
+              <div className="settings-row settings-row--stack my-gym-row">
                 <div className="settings-row__line">
                   <span id="my-gym-label">My gym</span>
                   <button className="text-action text-action--lime" aria-describedby="my-gym-note" onClick={() => setGymOpen(true)}>

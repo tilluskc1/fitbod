@@ -1,3 +1,4 @@
+import { isGymKit } from '../lib/progression.ts';
 import type { Equipment, GymItemId, Profile, SupportEquipment } from '../types';
 
 /**
@@ -90,16 +91,10 @@ export function initialTicks(profile: Pick<Profile, 'gymItems' | 'equipment' | '
 }
 
 /**
- * (#357) The "My gym" row is for gym kits: shown when the saved kit has machines or cables, or a list
- * exists. Home and bodyweight profiles do not see it.
+ * (#357) The "My gym" row is for gym kits (`isGymKit`, the rule every gear label reads) or a saved list.
+ * Home gear, cables included, never sees it: saving a list there would turn it into a gym and stop
+ * reading its own dumbbell rack (review 2).
  */
 export function showsMyGym(profile: Pick<Profile, 'gymItems' | 'equipment'>): boolean {
-  return profile.gymItems !== undefined || profile.equipment.includes('Machine') || profile.equipment.includes('Cable');
-}
-
-/** The profile without a list: back to "Machine means every machine". */
-export function withoutGymList<T extends Partial<Profile>>(profile: T): T {
-  const { gymItems: _drop, ...rest } = profile;
-  void _drop;
-  return rest as T;
+  return isGymKit(profile);
 }
