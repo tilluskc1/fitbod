@@ -343,7 +343,9 @@ try {
         await page.keyboard.press('8');
         await page.keyboard.press('0');
         await page.waitForTimeout(100);
-        const top = shift;
+        // (#380 fix 2) The band starts under the sticky top (opaque since #380), not at the window's top.
+        const headerBottom = (await page.locator('.flow-header').boundingBox()).height;
+        const top = Math.max(shift, headerBottom);
         const bottom = height - KB + shift;
         const tag = `${where} set ${n} (offsetTop ${shift})`;
         check(await card(page).count() === 1, `${tag}: the Heads-up shows`);
@@ -361,6 +363,55 @@ try {
         await page.evaluate(() => window.__fakeKeyboard(null, 0));
       }
     }
+    // (#380 fix 2) CI failed E by a few pixels: a frame that lands late (slow CI) ran the card's "bring Log
+    // into view" after the heads-up had opened, and card, heads-up and Log are taller than the band, so it
+    // pushed the typed field under the sticky top. Here the keyboard is already up, and frames are held
+    // until the keys are typed, so that order is certain. The field being typed and its heads-up win; Log
+    // comes in only when it fits with them. Run again with the sticky top 10px taller, so a few pixels of
+    // font metrics cannot flip the result.
+    for (const taller of [0, 10]) {
+      for (const shift of [0, 120]) {
+        await seed(page);
+        await page.evaluate((extra) => {
+          document.getElementById('fix2-taller')?.remove();
+          if (!extra) return;
+          const style = document.createElement('style');
+          style.id = 'fix2-taller';
+          style.textContent = `.flow-header.lg-header { padding-bottom: ${extra}px; }`;
+          document.head.append(style);
+        }, taller);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await onCard(page, 3);
+        await page.evaluate(([h, o]) => window.__fakeKeyboard(h, o), [height - KB, shift]);
+        await page.evaluate(() => {
+          window.__held = [];
+          window.__raf = window.requestAnimationFrame;
+          window.requestAnimationFrame = (callback) => window.__held.push(callback);
+        });
+        await weightCell(page, 3).focus();
+        await page.keyboard.press('ControlOrMeta+A');
+        await page.keyboard.press('8');
+        await page.keyboard.press('0');
+        await page.waitForTimeout(50);
+        await page.evaluate(() => {
+          window.requestAnimationFrame = window.__raf;
+          for (const callback of window.__held) callback(performance.now());
+        });
+        await page.waitForTimeout(150);
+        const headerBottom = (await page.locator('.flow-header').boundingBox()).height;
+        const top = Math.max(shift, headerBottom);
+        const bottom = height - KB + shift;
+        const tag = `${where} keyboard already up, set 3 (offsetTop ${shift}, top +${taller}px)`;
+        check(await card(page).count() === 1, `${tag}: the Heads-up shows`);
+        for (const [label, loc] of [['weight cell', weightCell(page, 3)], ['notice', card(page)], ['Apply to all', card(page).getByRole('button', { name: 'Apply to all' })]]) {
+          const seen = await inBand(page, loc, top, bottom);
+          check(seen.ok, `${tag}: ${label} outside the visible band ${top}-${bottom} (${JSON.stringify(seen.box)})`);
+        }
+        await weightCell(page, 3).blur();
+        await page.evaluate(() => window.__fakeKeyboard(null, 0));
+      }
+    }
+    await page.evaluate(() => document.getElementById('fix2-taller')?.remove());
     if (shots) {
       await seed(page);
       await settle(page);
