@@ -4777,6 +4777,10 @@ button.aw-exercise__name-btn {
   /* 2 x 140 + 4 fits the planner card's 284px at 360 wide. */
   gap: 4px;
 }
+/* (#366) Below 390 wide a figure stays at 140px (200px tall), even in the wider Switch sheet. */
+@media (max-width: 389px) {
+  .bm-figs { grid-template-columns: repeat(2, 140px); }
+}
 .bm-fig { margin: 0; display: grid; justify-items: center; gap: 2px; }
 .bm-svg { display: block; width: 100%; height: auto; overflow: visible; }
 .bm-body path {
