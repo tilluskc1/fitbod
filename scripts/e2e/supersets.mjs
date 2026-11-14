@@ -77,13 +77,13 @@ const screen = async (page) => ({
 
 /** Logs the next set of the exercise on screen, typing a load first when its cell is empty. */
 async function logNext(page) {
-  const button = page.locator('.lg-table button.lg-check:not(:disabled)').first();
+  const button = page.locator('.lg-focus button.lg-log:not(.lg-log--back):not(:disabled)').first();
   if (!(await button.count())) {
-    const cell = page.locator('.lg-row--current input.lg-input').first();
+    const cell = page.locator('.lg-focus input.lg-input').first();
     await cell.fill('20');
     await cell.press('Enter');
   }
-  await page.locator('.lg-table button.lg-check:not(:disabled)').first().click();
+  await page.locator('.lg-focus button.lg-log:not(.lg-log--back):not(:disabled)').first().click();
 }
 
 const browser = await chromium.launch();
@@ -127,7 +127,17 @@ try {
       `${where}: lead then row run straight (${order.join(', ')})`);
     check(/Overhead Press/.test(seen.name) && /Round 1 of 3 · with Chin-Up/.test(seen.band), `${where}: OHP opens round 1 (${JSON.stringify(seen)})`);
     check(/Up next · Chin-Up/.test(seen.next), `${where}: Up next is the partner (${seen.next})`);
+    // (#380) The card names the half by its place in the pair; the list runs round by round, and only the
+    // shown exercise's rows are buttons (Q2: the partner's are display-only).
+    const heading = async () => text(page, '.lg-focus__set');
+    check(/^A1 · set 1 of 3$/.test(await heading()), `${where} (#380): the card reads "${await heading()}", not "A1 · set 1 of 3"`);
+    const listOrder = await page.locator('.lg-list .lg-li__n').allInnerTexts();
+    check(listOrder.join(',') === 'A1,B1,A2,B2,A3,B3', `${where} (#380): the list reads ${listOrder.join(',')}, not round by round`);
+    check(await page.locator('.lg-list button.lg-li').count() === 3 && await page.locator('.lg-list .lg-li--partner:not(button)').count() === 3,
+      `${where} (#380): the partner's rows are not display-only`);
     await logNext(page); // A1
+    check(/^B1 · set 1 of 3$/.test(await heading()), `${where} (#380): after A1 the card reads "${await heading()}", not "B1 · set 1 of 3"`);
+    check(/Chin-Up/.test(await text(page, '.lg-ex .aw-exercise__name')), `${where} (#380): after A1 the card is not Chin-Up's`);
     const b1 = await screen(page);
     check(/Chin-Up/.test(b1.name) && /Round 1 of 3/.test(b1.band) && b1.rest === '00:30', `${where}: after A1, Chin-Up with a 30 s switch (${JSON.stringify(b1)})`);
     await logNext(page); // B1

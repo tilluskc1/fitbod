@@ -47,7 +47,7 @@ const messages = (page) => page.locator('.done-toast, .app-alerts .notice-card')
 const showing = async (page, pattern) => (await messages(page)).some((text) => pattern.test(text));
 
 async function logOneSet(page) {
-  await page.locator('button.lg-check:not([disabled])').first().click();
+  await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
 }
 
 const browser = await chromium.launch();

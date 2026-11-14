@@ -45,18 +45,30 @@ async function onboard(page, unit) {
   await page.waitForSelector('.t7-hero');
 }
 
-/** Each set row as { weight, reps }, read from the cells the lifter sees (inputs since #309). */
+/**
+ * (#380) Each working set's values as the lifter reads them: its list row ("Set 2, 135 lb × 8, edit"; "…, now" on the card's set, "…, logged, edit" once logged),
+ * which follows the card's inputs keystroke by keystroke, and its "Set N logged" tick.
+ */
 async function rows(page) {
   const out = [];
-  for (const row of await page.locator('table.lg-table tbody tr:not(.lg-note):not(.lg-row--warm)').all()) {
-    const cells = row.locator('input.lg-cell');
-    out.push({ weight: (await cells.nth(0).inputValue()).trim(), reps: (await cells.nth(1).inputValue()).trim() });
+  for (const row of await page.locator('.lg-list button.lg-li').all()) {
+    const line = (await row.getAttribute('aria-label')).match(/^Set \d+, (.*) × (\d+)s?, (?:logged, edit|now|edit)$/);
+    const weight = line?.[1] === '—' ? '' : (line?.[1] ?? '').replace(/ (lb|kg)$/, '');
+    out.push({ weight, reps: line?.[2] ?? '', logged: (await row.locator('[aria-label$=" logged"]').count()) === 1 });
   }
   return out;
 }
 
+/** (#380) Put set `n` on the focus card (tap its row) unless it is already there. */
+async function onCard(page, n) {
+  const label = (await page.locator('section.lg-focus').getAttribute('aria-label')) ?? '';
+  if (new RegExp(`(^|, )set ${n} of`, 'i').test(label)) return;
+  await page.getByRole('button', { name: new RegExp(`^Set ${n}, .*, edit$`) }).click();
+}
+
 /** Tap a set's weight cell, type one key at a time as a phone keyboard does, then leave the cell. */
 async function typeWeight(page, set, value) {
+  await onCard(page, set);
   const input = page.getByLabel(new RegExp(`^Set ${set} weight`));
   await input.click();
   await input.fill('');
@@ -119,6 +131,7 @@ try {
       `${where}: Undo returns sets 2+ to ${heavy} (${JSON.stringify(r)})`);
 
     // Log set 1, reload: the carried values are still there, and the logged set is untouched.
+    await onCard(page, 1);
     await page.getByRole('button', { name: 'Log set 1' }).click();
     await page.reload();
     const resume = page.getByRole('button', { name: 'Resume workout', exact: true });
@@ -126,10 +139,13 @@ try {
     if (!(await page.locator('.lg-ex').count())) await resume.click();
     await page.waitForSelector('.lg-ex');
     const after = await rows(page);
-    check(JSON.stringify(after) === JSON.stringify(r), `${where}: a reload keeps the carried values (${JSON.stringify(after)} vs ${JSON.stringify(r)})`);
+    // Values only: set 1 is now logged, which the rows also report (#380).
+    const values = (list) => JSON.stringify(list.map(({ weight, reps }) => ({ weight, reps })));
+    check(values(after) === values(r), `${where}: a reload keeps the carried values (${values(after)} vs ${values(r)})`);
+    check(after[0].logged, `${where}: set 1 is logged after the reload`);
 
-    // ⋮ → Set all remaining sets to… heavy × 6: every unlogged set reads it; the logged set 1 stays.
-    await page.getByRole('button', { name: `More actions for ${name}` }).click();
+    // More → Set all remaining sets to… heavy × 6: every unlogged set reads it; the logged set 1 stays.
+    await page.locator('.lg-acts').getByRole('button', { name: 'More', exact: true }).click();
     await page.getByRole('button', { name: /Set all remaining sets to/ }).click();
     await page.getByLabel(/^Weight \(/).fill(heavy);
     const reps = page.locator('[aria-label="Set all remaining sets"] output');
@@ -142,9 +158,28 @@ try {
     check(r.slice(1).every((row) => row.weight === heavy && row.reps === '6'), `${where}: every unlogged set reads ${heavy} × 6 (${JSON.stringify(r)})`);
     // (review 2) Sets 3 and 4 typed by hand, then set 2 edited with backspaces, 135 → 13 → 1 → 10 → 100,
     // passing through set 4's value: the first keystroke follows nobody, so nobody follows for the burst.
+    // (#380) Tap a later set's row (set 3; set 2 is the next to log): the card shows that set, and an edit
+    // typed there one key at a time carries per #306 to the sets after it that held its old load.
+    if (unit === 'lb') {
+      await page.getByRole('button', { name: new RegExp(`^Set 3, ${heavy} lb × 6, edit$`) }).click();
+      const heading = (await page.locator('.lg-focus__set').innerText()).replace(/\s+/g, ' ').trim();
+      check(heading === `Set 3 of ${r.length}`, `${where} (#380): tapping set 3's row puts it on the card (${heading})`);
+      const cardWeight = page.getByRole('textbox', { name: /^Set 3 weight/ });
+      check(await cardWeight.inputValue() === heavy, `${where} (#380): the card shows set 3's ${heavy} (${await cardWeight.inputValue()})`);
+      check(await page.getByRole('button', { name: 'Log set 3', exact: true }).isEnabled(), `${where} (#380): the card offers Log set 3`);
+      await cardWeight.click();
+      await page.keyboard.press('ControlOrMeta+a');
+      for (const key of '145') await page.keyboard.press(key);
+      await cardWeight.blur();
+      r = await rows(page);
+      check(r[2].weight === '145' && r.slice(3).every((row) => row.weight === '145'),
+        `${where} (#380): set 3's 145 carries to sets 4+ (${JSON.stringify(r)})`);
+      check(r[0].weight === heavier && r[1].weight === heavy, `${where} (#380): sets 1 and 2 keep ${heavier} and ${heavy} (${JSON.stringify(r)})`);
+    }
     if (unit === 'lb') {
       await typeWeight(page, 3, '95');
       await typeWeight(page, 4, '10');
+      await onCard(page, 2);
       const input = page.getByLabel(/^Set 2 weight/);
       await input.focus();
       await input.press('End');

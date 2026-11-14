@@ -50,7 +50,7 @@ import {
   goHeavierFloor,
 } from './lib/liveProgression';
 import { sessionRests } from './lib/sessionTime';
-import { keptPairsOf, pairedPendingIndex, restAfterLog, sessionPairs, startPairs, storedPairs, type PairSource } from './lib/supersets';
+import { canMoveLater, keptPairsOf, pairedPendingIndex, restAfterLog, sessionPairs, startPairs, storedPairs, type PairSource } from './lib/supersets';
 import { removeTodayNotice } from './lib/exerciseActions';
 import { cleanNote, noSetsNotice, setExerciseNote, swapDropsNote, swapNotice } from './lib/notes';
 import { leadCompoundId, leadSlotIds, savedSetup } from './lib/progression';
@@ -2165,6 +2165,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               onSetAll={(value) => setAllRemaining(sheet.exerciseIndex, sheet.exerciseId, value)}
               note={exercise.note}
               onSaveNote={(text) => saveNote(sheet.exerciseIndex, sheet.exerciseId, text)}
+              onLater={current && canMoveLater(current, sheet.exerciseIndex) ? () => {
+                const index = sheet.exerciseIndex;
+                closeSheet();
+                laterExercise(index);
+              } : undefined}
               onClose={closeSheet}
             />
           );

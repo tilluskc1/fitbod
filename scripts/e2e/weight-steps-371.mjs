@@ -1,4 +1,4 @@
-// (#371) − and + under the logger's set table move the next set to log by one real step (5 lb plates on
+// (#371) − and + (#380: inside the focus card's weight box) move the card's set by one real step (5 lb plates on
 // a pound barbell), carrying to later unlogged sets exactly as typing does. Three quick taps are one burst
 // with one toast and one Undo, and Undo puts every set back. − is disabled at the empty bar. The two
 // buttons sit on one line, 44px tall, with no sideways scroll. 390x844 and 360x780. Shots only with E2E_SHOTS.
@@ -59,12 +59,12 @@ async function onboard(page, unit = 'lb') {
   await page.waitForSelector('.t7-hero');
 }
 
-/** The weight each set row shows, read from the cells the lifter sees. */
-const weights = (page) => page.locator('table.lg-table tbody tr:not(.lg-note):not(.lg-row--warm) input.lg-cell[aria-label*="weight"]')
-  .evaluateAll((cells) => cells.map((cell) => cell.value.trim()));
-const group = (page) => page.locator('.lg-steps[role="group"][aria-label^="Weight steps for set "]');
+/** The weight each set shows, (#380) read from its list row ("Set 2, 135 lb × 8, edit"). */
+const weights = (page) => page.locator('.lg-list button.lg-li')
+  .evaluateAll((rows) => rows.map((row) => (row.getAttribute('aria-label').match(/^Set \d+, (.*) × /)?.[1] ?? '').replace(/^—$/, '').replace(/ (lb|kg)$/, '')));
+const group = (page) => page.locator('.lg-focus .lg-field--w[role="group"][aria-label^="Weight steps for set "]');
 const stepButton = (page, sign) => group(page).getByRole('button', { name: new RegExp(`^\\${sign} `) });
-const label = async (page, sign) => (await stepButton(page, sign).innerText()).replace(/\s+/g, ' ').trim();
+const label = async (page, sign) => ((await stepButton(page, sign).getAttribute('aria-label')) ?? '').replace(/\s+/g, ' ').trim();
 const minus = (page) => group(page).getByRole('button', { name: '− 5 lb', exact: true });
 const plus = (page) => group(page).getByRole('button', { name: '+ 5 lb', exact: true });
 /** Type a load into a set's weight cell one key at a time, then leave the cell. */
@@ -140,7 +140,7 @@ try {
     // A first-time pound barbell: every set shows the 45 lb empty bar.
     const start = await weights(page);
     check(start.length >= 2 && start.every((value) => value === '45'), `${where}: sets start at ${JSON.stringify(start)}, not the 45 lb bar`);
-    check((await group(page).count()) === 1, `${where}: no − / + row under the set table`);
+    check((await group(page).count()) === 1, `${where}: no − / + in the card's weight box`);
     if ((await group(page).count()) !== 1) { await page.close(); continue; }
     check((await group(page).getAttribute('aria-label')) === 'Weight steps for set 1', `${where}: the step row acts on "${await group(page).getAttribute('aria-label')}", not set 1`);
 
@@ -207,10 +207,13 @@ try {
     await travel.waitForSelector('.t7-today-only');
     await travel.getByRole('button', { name: 'Start workout' }).click();
     await travel.waitForSelector('.lg-ex');
-    for (let guard = 0; guard < 10 && !/kg each/i.test(await travel.locator('table.lg-table thead').innerText()); guard += 1) {
-      await travel.locator('.lg-acts').getByRole('button', { name: 'Later', exact: true }).click();
+    // (#380) The card names the unit under the number; Later is the first row of More's sheet.
+    const unitOf = async () => travel.locator('.lg-focus .lg-field--w small').innerText().catch(() => '');
+    for (let guard = 0; guard < 10 && !/kg each/i.test(await unitOf()); guard += 1) {
+      await travel.locator('.lg-acts').getByRole('button', { name: 'More', exact: true }).click();
+      await travel.getByRole('dialog').locator('.sheet-menu__row').first().click();
     }
-    check(/kg each/i.test(await travel.locator('table.lg-table thead').innerText()), `${where} travel: no dumbbell exercise found`);
+    check(/kg each/i.test(await unitOf()), `${where} travel: no dumbbell exercise found`);
     await typeWeight(travel, 1, 18);
     check((await weights(travel))[0] === '18', `${where} travel: set 1 reads ${(await weights(travel))[0]} after typing 18`);
     check(await label(travel, '+') === '+ 4 kg' && await label(travel, '\u2212') === '\u2212 3 kg',

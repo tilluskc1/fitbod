@@ -190,7 +190,7 @@ try {
       const cueText = (await player.locator('.howto-cues').innerText()).trim();
       check(cueText.includes('Wedge one end') && cueText.includes('Brace your trunk'), `${where}: the player's cues read "${cueText}"`);
       await page.keyboard.press('Escape');
-      await page.locator('button.lg-check:not([disabled])').first().click();
+      await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
       await page.getByRole('button', { name: 'Finish', exact: true }).click();
       await page.getByRole('button', { name: /Save completed work/ }).click();
       await page.getByRole('button', { name: 'Back to Today' }).click();

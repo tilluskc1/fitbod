@@ -88,19 +88,29 @@ async function seedLead(page, { kg, firstTime }) {
   await page.waitForSelector('.lg-ex');
 }
 
-/** The W rows and set 1's row: count, loads and where each sits on screen. */
+/** The W rows and set 1's field: count, loads and where each sits on screen. (#380: the W rows are list
+ * rows under the focus card, each "W  Warm-up 65 lb × 8".) */
 async function layout(page) {
-  const warm = page.locator('tr.lg-row--warm');
-  const loads = (await warm.locator('td:nth-child(3)').allInnerTexts()).map(number);
+  const warm = page.locator('.lg-li--warm');
+  const loads = (await warm.locator('.lg-warm-load').allInnerTexts()).map(number);
   const tops = [];
   for (const row of await warm.all()) tops.push(Math.round((await row.boundingBox()).y));
   const setOne = Math.round((await page.getByRole('textbox', { name: /^Set 1 weight/ }).boundingBox()).y);
-  return { count: loads.length, loads: loads.join('/'), tops: tops.join('/'), setOne, gaps: tops.map((y) => setOne - y).join('/') };
+  // A note on the card (no load yet, a refusal, #327's heads-up) sits above the W rows and moves them.
+  const notes = await page.locator('.lg-focus .lg-note').count();
+  return { count: loads.length, loads: loads.join('/'), tops: tops.join('/'), setOne, notes, gaps: tops.map((y) => setOne - y).join('/') };
 }
 
-/** On screen: nothing moved. `relative`: the W rows kept their place above set 1 (the page itself may scroll). */
+/**
+ * Mid-burst nothing is added, removed or re-read: the W rows keep their count and loads, and nothing moves.
+ * (#380) The W rows sit under the focus card, so a note the card shows (no load yet, a refusal, #327's
+ * heads-up) moves them down without moving set 1: their tops are compared only while neither read has a
+ * note. `relative`: the page itself may scroll (a note, the keyboard), so only the W rows' places above or
+ * below set 1 are compared, again only while there is no note.
+ */
 const same = (a, b, relative = false) => a.count === b.count && a.loads === b.loads
-  && (relative ? a.gaps === b.gaps : a.tops === b.tops && a.setOne === b.setOne);
+  && (a.notes > 0 || b.notes > 0 || (relative ? a.gaps === b.gaps : a.tops === b.tops))
+  && (relative || a.setOne === b.setOne);
 const show = (l) => `${l.count} rows ${l.loads} at ${l.tops}, set 1 at ${l.setOne}`;
 
 const browser = await chromium.launch();
@@ -203,7 +213,7 @@ try {
     await settle(page);
     await page.screenshot({ path: join(SHOTS, name) });
   };
-  const warmLoads = async (page) => (await page.locator('tr.lg-row--warm td:nth-child(3)').allInnerTexts()).map(number);
+  const warmLoads = async (page) => (await page.locator('.lg-li--warm .lg-warm-load').allInnerTexts()).map(number);
   for (const [width, height] of [[390, 844], [360, 780]]) {
     const where = `${width}x${height} first-time`;
     const page = await browser.newPage({ viewport: { width, height } });

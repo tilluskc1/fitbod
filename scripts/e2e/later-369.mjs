@@ -1,7 +1,8 @@
-// (#369) Later: one tap on the logger's chip row moves the exercise to "Skipped today" and the logger
-// shows the next exercise with work left; the toast's Undo brings it back as the current exercise.
-// The four chips (How-to, History, Replace, Later) sit on one line, nothing overflows sideways, and
-// Later hides on the only exercise with work left. 390x844 and 360x780. Shots only with E2E_SHOTS.
+// (#369) Later moves the exercise to "Skipped today" and the logger shows the next exercise with work left;
+// the toast's Undo brings it back as the current exercise. (#380) Later is the first row of the sheet the
+// More chip opens, one tap after More, and it is missing on the only exercise with work left. The chips
+// (History, Replace, More) sit on one line and nothing overflows sideways. 390x844 and 360x780. Shots only
+// with E2E_SHOTS.
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -61,14 +62,25 @@ const skippedNames = async (page) => {
   if ((await section.count()) === 0) return [];
   return (await section.locator('.context-row > span').allInnerTexts()).map((text) => text.split(' · ')[0].trim());
 };
-const later = (page) => page.locator('.lg-acts').getByRole('button', { name: 'Later', exact: true });
+const more = (page) => page.locator('.lg-acts').getByRole('button', { name: 'More', exact: true });
+const sheetRows = (page) => page.getByRole('dialog').locator('.sheet-menu__row');
+/** (#380) More, then the sheet's Later row; null (sheet closed again) when the sheet has no Later. */
+async function later(page) {
+  await more(page).click();
+  const first = sheetRows(page).first();
+  await first.waitFor();
+  if ((await first.locator('span').first().innerText()).trim() === 'Later') return first;
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({ state: 'detached' }).catch(() => {});
+  return null;
+}
 
 /** The chip row: every chip's top, whether any chip or the row scrolls sideways, and the page's width. */
 async function chipRow(page) {
   return page.locator('.lg-acts').evaluate((row) => {
     const chips = [...row.querySelectorAll('.lg-act')].map((chip) => {
       const box = chip.getBoundingClientRect();
-      const icon = chip.querySelector('.ms')?.getBoundingClientRect();
+      const icon = chip.querySelector('.ms, svg')?.getBoundingClientRect();
       return { text: chip.textContent, top: box.top, right: box.right, height: box.height, icon: icon?.width ?? 0 };
     });
     return {
@@ -96,7 +108,7 @@ try {
     const first = await current(page);
     const row = await chipRow(page);
     const labels = row.chips.map((chip) => chip.text.replace(/^[a-z_]+/, ''));
-    check(JSON.stringify(labels) === JSON.stringify(['How-to', 'History', 'Replace', 'Later']), `${where}: chip row reads ${JSON.stringify(labels)}`);
+    check(JSON.stringify(labels) === JSON.stringify(['History', 'Replace', 'More']), `${where}: chip row reads ${JSON.stringify(labels)}`);
     const tops = row.chips.map((chip) => chip.top);
     check(Math.max(...tops) - Math.min(...tops) <= 1, `${where}: chips not on one line (tops ${tops.join(', ')})`);
     check(!row.rowScrolls, `${where}: chip row scrolls sideways`);
@@ -107,10 +119,14 @@ try {
     check(row.chips.every((chip) => chip.icon > 0 && chip.icon <= 20), `${where}: a chip icon did not render as a glyph (${row.chips.map((c) => c.icon).join(', ')})`);
     await shot(page, `${width}-before`);
 
-    // One tap: Later.
-    await later(page).click();
+    // More, then Later: the sheet's first row.
+    const row1 = await later(page);
+    check(row1 !== null, `${where}: Later is not the first row of More's sheet`);
+    await shot(page, `${width}-more-sheet`);
+    await row1?.click();
     const taps = await page.evaluate(() => window.__taps);
-    check(taps === 1, `${where}: Later took ${taps} taps`);
+    check(taps === 2, `${where}: Later took ${taps} taps (More, then Later)`);
+    check(await page.getByRole('dialog').count() === 0, `${where}: the sheet stayed open after Later`);
     await page.waitForFunction((name) => document.querySelector('.aw-exercise__name')?.textContent?.trim() !== name, first, { timeout: 3000 }).catch(() => {});
     const second = await current(page);
     check(second !== first, `${where}: logger still shows ${first} after Later`);
@@ -136,18 +152,22 @@ try {
     }
 
     // Undo is the Later toast's own: another Done toast carries none.
-    await later(page).click();
+    await (await later(page))?.click();
     await page.locator('section[aria-label="Skipped today"]').getByRole('button', { name: 'Return to exercise' }).first().click();
     const returned = (await toast.locator('.done-toast__text').innerText().catch(() => '')).trim();
     check(/is back in today's session\.$/.test(returned), `${where}: Return's toast reads "${returned}"`);
     check((await toast.getByRole('button', { name: 'Undo' }).count()) === 0, `${where}: Return's toast offers the Later Undo`);
 
     // Later hides on the only exercise with work left: move every other one to later.
-    for (let guard = 0; guard < 20 && (await later(page).count()) === 1; guard += 1) await later(page).click();
+    for (let guard = 0; guard < 20; guard += 1) {
+      const row = await later(page);
+      if (!row) break;
+      await row.click();
+    }
     const total = Number((await page.locator('.lg-ex__meta').innerText()).match(/of (\d+)/)?.[1]);
     const left = await skippedNames(page);
     check(left.length === total - 1, `${where}: Later hid with ${left.length} of ${total - 1} others skipped`);
-    check((await later(page).count()) === 0, `${where}: Later shows on the last exercise with work left`);
+    check((await later(page)) === null, `${where}: Later shows on the last exercise with work left`);
     await shot(page, `${width}-last-exercise`);
 
     check(errors.length === 0, `${where}: page errors ${errors.join(' | ')}`);
@@ -162,4 +182,4 @@ if (failures.length) {
   console.error(`later-369: ${failures.length} failure(s)\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('later-369: Later moves on in one tap, Undo brings it back, chips on one line at 390 and 360');
+console.log('later-369: Later is first under More and moves on, Undo brings it back, chips on one line at 390 and 360');

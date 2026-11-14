@@ -84,13 +84,12 @@ async function seed(page, today = 60, reps1 = null) {
   await page.waitForSelector('.lg-ex');
 }
 
-/** The weight each set row shows. */
+/** The weight each set shows: (#380) its list row's "Set N, 80 kg × 8, edit", which follows every keystroke. */
+const rowWeights = () => [...document.querySelectorAll('.lg-list button.lg-li')]
+  .map((row) => (row.getAttribute('aria-label').match(/^Set \d+, (.*) × /)?.[1] ?? '').replace(/^—$/, '').replace(/ (lb|kg)$/, ''))
+  .join(',');
 async function shown(page) {
-  const out = [];
-  for (const row of await page.locator('table.lg-table tbody tr:not(.lg-note):not(.lg-row--warm)').all()) {
-    out.push((await row.locator('input.lg-cell').nth(0).inputValue()).trim());
-  }
-  return out.join(',');
+  return page.evaluate(rowWeights);
 }
 
 /** The lead lift's stored reps. */
@@ -112,6 +111,12 @@ async function stored(page) {
 }
 
 const weightCell = (page, n) => page.getByLabel(new RegExp(`^Set ${n} weight`));
+/** (#380) Put set `n` on the focus card (tap its row) unless it is already there. */
+async function onCard(page, n) {
+  const label = (await page.locator('section.lg-focus').getAttribute('aria-label')) ?? '';
+  if (new RegExp(`(^|, )set ${n} of`, 'i').test(label)) return;
+  await page.getByRole('button', { name: new RegExp(`^Set ${n}, .*, edit$`) }).click();
+}
 const card = (page) => page.locator('.lg-note--held .notice-card--headsUp');
 const toast = (page) => page.locator('.done-toast');
 const text = async (locator) => (await locator.count()) ? (await locator.first().innerText()).replace(/\s+/g, ' ').trim() : '';
@@ -122,8 +127,9 @@ const text = async (locator) => (await locator.count()) ? (await locator.first()
  */
 async function snapshot(page) {
   return page.evaluate((key) => {
-    const rows = [...document.querySelectorAll('table.lg-table tbody tr:not(.lg-note):not(.lg-row--warm)')]
-      .map((row) => row.querySelector('input.lg-cell')?.value.trim() ?? '').join(',');
+    const rows = [...document.querySelectorAll('.lg-list button.lg-li')]
+      .map((row) => (row.getAttribute('aria-label').match(/^Set \d+, (.*) × /)?.[1] ?? '').replace(/^—$/, '').replace(/ (lb|kg)$/, ''))
+      .join(',');
     const { state } = JSON.parse(localStorage.getItem(key));
     const lead = state.current.exercises.find((exercise) => !exercise.skipped);
     return {
@@ -144,6 +150,7 @@ async function tap(locator, message) {
 
 /** Select the cell's value, then type one key at a time, as a phone keyboard does. */
 async function typeKeys(page, n, keys) {
+  await onCard(page, n);
   await weightCell(page, n).click();
   await page.keyboard.press('ControlOrMeta+A');
   for (const key of keys) await page.keyboard.press(key);
@@ -257,12 +264,14 @@ try {
     check(await shown(page) === third, `${where} D: 80 stays on set 3 (${await shown(page)})`);
     check((await text(card(page))).startsWith(HELD(80, 3)), `${where} D: "${HELD(80, 3)}" (${await text(card(page))})`);
     await weightCell(page, 3).blur();
+    await onCard(page, 1);
     await page.getByRole('button', { name: 'Log set 1', exact: true }).click();
     check(await card(page).count() === 1, `${where} D: logging set 1 leaves the Heads-up up`);
     await tap(card(page).getByRole('button', { name: 'Apply to all' }), `${where} D: Apply to all is still offered after logging set 1`);
     check(await shown(page) === [60, 60, 80, ...Array(sets - 3).fill(80)].join(','), `${where} D: Apply to all carries to sets 4+ only (${await shown(page)})`);
     await seed(page);
     await typeKeys(page, 1, ['8', '0']);
+    await onCard(page, 2);
     await page.getByLabel(/^Set 2 reps/).click();
     await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.press('6');
@@ -276,6 +285,7 @@ try {
     const bare = [80, ...Array(sets - 1).fill('')].join(',');
     check(await shown(page) === bare, `${where} F: 80 on set 1, the rest empty (${await shown(page)})`);
     await weightCell(page, 1).blur();
+    await onCard(page, 1);
     await page.getByRole('button', { name: 'Log set 1', exact: true }).click();
     check(await shown(page) === bare, `${where} F: logging the held set carries no load (${await shown(page)})`);
     check(await stored(page) === [80, ...Array(sets - 1).fill(0)].join(','), `${where} F: stored as shown (${await stored(page)})`);
@@ -288,6 +298,7 @@ try {
     await seed(page, 60, 3);
     await typeKeys(page, 1, ['8', '0']);
     await weightCell(page, 1).blur();
+    await onCard(page, 1);
     await page.getByRole('button', { name: 'Log set 1', exact: true }).click();
     const loggedReps = await storedReps(page);
     check(loggedReps === ['80x3d', ...Array(sets - 1).fill('60x3')].join(','), `${where} G: the log carries 3 reps, no load (${loggedReps})`);
@@ -325,13 +336,16 @@ try {
       for (const shift of [0, 120]) {
         await seed(page);
         await page.evaluate(() => window.scrollTo(0, 0));
+        await onCard(page, n);
         await weightCell(page, n).click();
         await page.evaluate(([h, o]) => window.__fakeKeyboard(h, o), [height - KB, shift]);
         await page.keyboard.press('ControlOrMeta+A');
         await page.keyboard.press('8');
         await page.keyboard.press('0');
         await page.waitForTimeout(100);
-        const top = shift;
+        // (#380 fix 2) The band starts under the sticky top (opaque since #380), not at the window's top.
+        const headerBottom = (await page.locator('.flow-header').boundingBox()).height;
+        const top = Math.max(shift, headerBottom);
         const bottom = height - KB + shift;
         const tag = `${where} set ${n} (offsetTop ${shift})`;
         check(await card(page).count() === 1, `${tag}: the Heads-up shows`);
@@ -349,6 +363,55 @@ try {
         await page.evaluate(() => window.__fakeKeyboard(null, 0));
       }
     }
+    // (#380 fix 2) CI failed E by a few pixels: a frame that lands late (slow CI) ran the card's "bring Log
+    // into view" after the heads-up had opened, and card, heads-up and Log are taller than the band, so it
+    // pushed the typed field under the sticky top. Here the keyboard is already up, and frames are held
+    // until the keys are typed, so that order is certain. The field being typed and its heads-up win; Log
+    // comes in only when it fits with them. Run again with the sticky top 10px taller, so a few pixels of
+    // font metrics cannot flip the result.
+    for (const taller of [0, 10]) {
+      for (const shift of [0, 120]) {
+        await seed(page);
+        await page.evaluate((extra) => {
+          document.getElementById('fix2-taller')?.remove();
+          if (!extra) return;
+          const style = document.createElement('style');
+          style.id = 'fix2-taller';
+          style.textContent = `.flow-header.lg-header { padding-bottom: ${extra}px; }`;
+          document.head.append(style);
+        }, taller);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await onCard(page, 3);
+        await page.evaluate(([h, o]) => window.__fakeKeyboard(h, o), [height - KB, shift]);
+        await page.evaluate(() => {
+          window.__held = [];
+          window.__raf = window.requestAnimationFrame;
+          window.requestAnimationFrame = (callback) => window.__held.push(callback);
+        });
+        await weightCell(page, 3).focus();
+        await page.keyboard.press('ControlOrMeta+A');
+        await page.keyboard.press('8');
+        await page.keyboard.press('0');
+        await page.waitForTimeout(50);
+        await page.evaluate(() => {
+          window.requestAnimationFrame = window.__raf;
+          for (const callback of window.__held) callback(performance.now());
+        });
+        await page.waitForTimeout(150);
+        const headerBottom = (await page.locator('.flow-header').boundingBox()).height;
+        const top = Math.max(shift, headerBottom);
+        const bottom = height - KB + shift;
+        const tag = `${where} keyboard already up, set 3 (offsetTop ${shift}, top +${taller}px)`;
+        check(await card(page).count() === 1, `${tag}: the Heads-up shows`);
+        for (const [label, loc] of [['weight cell', weightCell(page, 3)], ['notice', card(page)], ['Apply to all', card(page).getByRole('button', { name: 'Apply to all' })]]) {
+          const seen = await inBand(page, loc, top, bottom);
+          check(seen.ok, `${tag}: ${label} outside the visible band ${top}-${bottom} (${JSON.stringify(seen.box)})`);
+        }
+        await weightCell(page, 3).blur();
+        await page.evaluate(() => window.__fakeKeyboard(null, 0));
+      }
+    }
+    await page.evaluate(() => document.getElementById('fix2-taller')?.remove());
     if (shots) {
       await seed(page);
       await settle(page);

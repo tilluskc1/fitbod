@@ -367,6 +367,7 @@ export function ExerciseActionsSheet({
   onSetAll,
   note,
   onSaveNote,
+  onLater,
   initialMode = 'menu',
 }: {
   exerciseId: string;
@@ -396,6 +397,8 @@ export function ExerciseActionsSheet({
   /** (#372) This session's note on this exercise, if any; saving a blank one removes it. */
   note?: string;
   onSaveNote?: (text: string) => void;
+  /** (#380) The logger's More: Later (#369) is the first row, one tap, when the exercise can move behind others. */
+  onLater?: () => void;
 }) {
   const [mode, setMode] = useState<ActionMode>(initialMode);
   const meta = exerciseById(exerciseId);
@@ -467,6 +470,12 @@ export function ExerciseActionsSheet({
                 </button>
               </div>
             </div>
+          )}
+          {onLater && (
+            <button className="context-row sheet-menu__row" onClick={onLater}>
+              <span>Later</span>
+              <Icon name="schedule" size={18} />
+            </button>
           )}
           {actions.map((action) => {
             const on = action.id === pref;

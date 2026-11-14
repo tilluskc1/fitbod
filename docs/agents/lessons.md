@@ -301,6 +301,22 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Check: the "review 1" tests in `tests/catalog360.test.ts` (no catalog, load, save, catalog back) and the
    saved-gym step in `scripts/e2e/catalog-additions.mjs`.
 
+42. **A check narrowed for a new layout must still cover the flow it guarded.** #380 review 1: the logger
+   redesign made the rest dock appear only while resting, so the 390x500 "clear of the dock" step fell back to
+   the window's bottom when no dock was there; that step ran before any set was logged, so "log a set, then
+   edit the next one during rest" never ran, and the dock covered the card's Log button. Rule: when a layout
+   change makes an e2e check weaker or conditional, add a step that puts the screen into the state the old
+   check relied on (here: rest running) and assert there; never let "element missing" pass silently. Check:
+   the "rest (#380 review 1)" block in `scripts/e2e/inline-sets.mjs` (it fails on 5e42af9).
+
+43. **A local e2e that passes by a few pixels is not a pass.** #380 fix 2: CI failed big-jump with the typed
+   field 30px under the sticky top; locally it cleared by 22px. Two scroll-into-view calls (the card's Log
+   button on focus, the heads-up on typing) fought over a band smaller than the card, and a late frame on CI
+   ran the Log scroll last. Rule: a band check measures from the real sticky edge (its bottom, plus the
+   `elementFromPoint` hit) and the build leaves a margin; when two controls cannot both be visible, decide
+   which one wins (here the field being typed) in the code, not by call order. Check: the "keyboard already
+   up" case in `scripts/e2e/big-jump.mjs` holds frames until the keys are typed and runs with a 10px taller top.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

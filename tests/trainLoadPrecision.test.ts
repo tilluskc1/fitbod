@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { createSession, logSet } from '../src/lib/session.ts';
 import { toKg } from '../src/lib/units.ts';
+import { shownValue } from './loggerView380.ts';
 
 test('calibrated barbell actuals retain fractional kg and lb in the CTA and completed row', async () => {
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
@@ -22,12 +23,13 @@ test('calibrated barbell actuals retain fractional kg and lb in the CTA and comp
         onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {},
         onExtendRest() {}, onReturn() {} };
       const label = `Set 1 weight, ${unit === 'kg' ? 'kilograms' : 'pounds'}`;
-      const weightOf = (html: string) => html.match(new RegExp(`aria-label="${label}"[^>]*value="([^"]*)"`))?.[1];
+      // (#380) Set 1 on the card is its input; once logged, its list row.
+      const weightOf = (html: string) => shownValue(html, label);
       const before = renderToStaticMarkup(createElement(TrainScreen, { ...props, session }));
       assert.equal(weightOf(before), String(entered), 'the row the ✓ logs');
-      assert.match(before, new RegExp(`>${unit} total<`));
+      assert.match(before, new RegExp(`<small>${unit}</small>`));
       const after = renderToStaticMarkup(createElement(TrainScreen, { ...props, session: logSet(session, 0, 0) }));
-      assert.match(after, /<tr class="lg-row--done">/);
+      assert.match(after, /class="lg-li lg-li--done"[^>]*aria-label="Set 1, /);
       assert.equal(weightOf(after), String(entered), 'the completed row');
       assert.equal(session.exercises[0].performed[0].weight, stored);
     }
