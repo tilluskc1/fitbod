@@ -4055,6 +4055,16 @@ button.aw-exercise__name-btn {
   color: var(--on-surface-variant);
 }
 
+/* (#372) "Last time: <note>": wraps to at most 3 lines, so a 120-character note reads in full at 360px. */
+.lg-coach--note {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
 .lg-rest button {
   flex: none;
   min-width: 44px;
@@ -4826,6 +4836,9 @@ button.aw-exercise__name-btn {
   font-weight: 500;
 }
 .lg-act .ms { color: var(--muted); }
+/* (#371) − and + under the set table: the same chips, two to a line, sharing its width. */
+.lg-steps { display: flex; gap: 6px; padding: 2px 0 4px; }
+.lg-steps .lg-act { flex: 1 1 0; }
 
 /* ---------- Tell me about today (#193) ----------
    Composer and preview from the approved mockup (today-talk.html), in the app's tokens. */
@@ -5238,4 +5251,39 @@ button.aw-exercise__name-btn {
 /* (#357) The My gym offer under "At a gym". */
 .onboarding-gym {
   margin-top: 14px;
+}
+
+/* ---------- Installed iPhone app (#378) ---------- */
+
+/* Double-tap never zooms the app; pinch-zoom stays (the viewport meta allows it). */
+#root {
+  touch-action: manipulation;
+}
+
+/* The status-bar band: opaque page colour over anything that scrolls up beneath the clock, and below
+   sheets so their dim covers it. It is 0 tall wherever there is no top inset (a browser tab, the frame). */
+.native-app::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--bg);
+  z-index: 35;
+  pointer-events: none;
+}
+
+/* The tab bar rests on the home-indicator line instead of floating 14px above the whole inset. */
+.tabbar {
+  margin-bottom: max(14px, calc(env(safe-area-inset-bottom, 0px) - 14px));
+}
+
+/* iOS zooms the page when a field under 16px takes focus: every field computes at least 16px. */
+.search,
+.select,
+.constraint-input input,
+.mini-set input,
+.lg-cell--empty.lg-input {
+  font-size: 16px;
 }

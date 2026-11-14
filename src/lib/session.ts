@@ -483,6 +483,8 @@ export function swapPendingExercise(
           name: original.name,
           originalPlannedSets: slotRequirement,
           ...(original.setup ? { setup: original.setup } : {}),
+          // (#372) The note stays with the exercise it was written on; the replacement starts without one.
+          ...(original.note ? { note: original.note } : {}),
           planned: keptIndices.map((setIndex) => original.planned[setIndex]),
           performed: keptIndices.map((setIndex) => original.performed[setIndex]),
         }

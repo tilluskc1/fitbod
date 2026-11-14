@@ -3,6 +3,7 @@ import { useWakeLock } from '../lib/wakeLock';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
+import { lastNote } from '../lib/notes';
 import { canMoveLater, pairRound, pairedPendingIndex, partnerOf, restAfterLog } from '../lib/supersets';
 import './supersets.css';
 import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
@@ -10,6 +11,7 @@ import { exerciseInWorkout, lastPerformance } from '../lib/plan';
 import { firstTimeLoaded, plannedLoad } from '../lib/liveProgression';
 import { nearestLoad, suggestedFirstLoad } from '../lib/firstLoad';
 import { availableLoads } from '../lib/progression';
+import { weightSteps } from '../lib/weightSteps';
 import { calibrationInputValue, loadLimitMessage, loadValue, repsLimitMessage, typedLoad, typedReps, unitLabel } from '../lib/units';
 import { restLabel } from '../lib/sessionTime';
 import { GENERAL_WARM_UP_TEXT, generalWarmUpMinutes, liveRampBurst, rampExerciseIndex, rampSets, rampWorking, setWarmUpChecks, showsGeneralWarmUp, warmUpChecks } from '../lib/warmUp';
@@ -97,6 +99,8 @@ function shortTarget(entry: WorkoutExercise): string {
 export interface SetEdit {
   revert?: 'refused' | 'emptied';
   prefill?: number;
+  /** (#371) A − or + tap: the same burst as typing, but its Undo also puts the tapped set back. */
+  step?: boolean;
 }
 
 /**
@@ -428,6 +432,8 @@ export default function TrainScreen({
     : hint ?? (firstTime && mode !== 'none'
       ? `First time on this one. Pick a weight you could lift for ${exercise.planned[0]?.reps ?? 10} reps with 2–3 to spare.`
       : targetNotes?.[exercise.exerciseId]);
+  // (#372) The lifter's own note from the last finished session with one on this exact exercise.
+  const noteLast = lastNote(history, exercise.exerciseId);
   const unitWord = `${unit === 'kg' ? 'kilograms' : 'pounds'}${perSide}`;
 
   /**
@@ -465,6 +471,18 @@ export default function TrainScreen({
     setRefusal(null);
     onUpdateSet(index, setIndex, { reps: next.reps }, next.reps <= 0 ? { revert: 'emptied' } : {});
     return null;
+  };
+
+  // (#371) − and + move the next set to log by one real step: the same edit (and burst) as typing its weight.
+  const stepSet = activeSet >= 0 && mode !== 'none' && !holdUnit && equipment !== 'Bodyweight' ? exercise.performed[activeSet] : undefined;
+  const stepFrom = !stepSet ? 0 : stepSet.weight > 0 ? stepSet.weight
+    : prefill !== null && !cleared.includes(`${calibrationKey}:${activeSet}`) ? prefill : raising ? floor : 0;
+  // A dumbbell steps the rack today's gear offers (a Travel gym's hotel rack), as the ramp rows do (#371 review 1).
+  const steps = stepSet ? weightSteps({ kg: stepFrom, equipment, available: equipment === 'Dumbbell' ? rampLoads : rack, unit }) : null;
+  const stepTo = (kg: number | null) => {
+    if (kg === null) return;
+    setRefusal(null);
+    onUpdateSet(index, activeSet, { weight: kg }, { prefill: prefill ?? 0, step: true });
   };
 
   // #300/#326: the ramp rows' slot, and the load set 1 shows (its typed load, else the suggested start).
@@ -669,6 +687,8 @@ export default function TrainScreen({
         </div>
 
         {coach && <p className="lg-coach">{coach}</p>}
+        {/* (#372) Its own line under any coach text, so a heads-up is never hidden; wraps to at most 3 lines. */}
+        {noteLast && <p className="lg-coach lg-coach--note">Last time: {noteLast}</p>}
 
         <table className="lg-table" aria-label={`Sets for ${exercise.name}`}>
           <thead>
@@ -682,6 +702,17 @@ export default function TrainScreen({
           </thead>
           <tbody>{rampRows}{rows}</tbody>
         </table>
+
+        {steps && steps.step > 0 && (
+          <div className="lg-steps" role="group" aria-label={`Weight steps for set ${activeSet + 1}`}>
+            <button type="button" className="lg-act" disabled={steps.down === null} onClick={() => stepTo(steps.down)}>
+              {'\u2212'} {steps.downBy} {unitLabel(unit)}
+            </button>
+            <button type="button" className="lg-act" disabled={steps.up === null} onClick={() => stepTo(steps.up)}>
+              + {steps.upBy} {unitLabel(unit)}
+            </button>
+          </div>
+        )}
 
         <div className="sr-only" role="status" aria-live="polite">
           {restOver ? 'Rest over' : ''}

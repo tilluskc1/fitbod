@@ -10,6 +10,7 @@ import type { WorkoutExercise, WorkoutRecord } from '../types';
 export type ExerciseActionId =
   | 'instructions'
   | 'history'
+  | 'note'
   | 'set-all'
   | 'replace'
   | 'more'
@@ -30,7 +31,7 @@ const NOTHING_PENDING_EMPTY = 'This exercise has no sets to change.';
 // Today's preview has no session to edit; acting on it would be a silent no-op.
 const NO_SESSION = "Start the workout to change today's sets.";
 
-export function exerciseActions(pending: number, done: number, inSession: boolean, skipped: boolean): ExerciseAction[] {
+export function exerciseActions(pending: number, done: number, inSession: boolean, skipped: boolean, hasNote = false): ExerciseAction[] {
   const blocked = !inSession
     ? NO_SESSION
     : pending > 0
@@ -49,6 +50,8 @@ export function exerciseActions(pending: number, done: number, inSession: boolea
   return [
     { id: 'instructions', label: 'Instructions and demo' },
     { id: 'history', label: 'History for this exercise' },
+    // (#372) A note for next time; logged or skipped work can still take one, Today's preview cannot.
+    { id: 'note', label: hasNote ? 'Edit note' : 'Add note', blockedReason: inSession ? undefined : NO_SESSION },
     ...today.slice(0, skipped ? 1 : 2),
     { id: 'more', label: 'Recommend more often' },
     { id: 'less', label: 'Recommend less often' },

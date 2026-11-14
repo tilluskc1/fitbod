@@ -52,6 +52,7 @@ import {
 import { sessionRests } from './lib/sessionTime';
 import { keptPairsOf, pairedPendingIndex, restAfterLog, sessionPairs, startPairs, storedPairs, type PairSource } from './lib/supersets';
 import { removeTodayNotice } from './lib/exerciseActions';
+import { cleanNote, noSetsNotice, setExerciseNote, swapDropsNote, swapNotice } from './lib/notes';
 import { leadCompoundId, leadSlotIds, savedSetup } from './lib/progression';
 import { areasOf } from './lib/areas';
 import
@@ -289,6 +290,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     origin?: CarryResult['previous'][number];
     /** The "Big jump" heads-up this toast carries; it outlives the Undo when a set is logged (#309 review 2). */
     note?: string;
+    /** (#371) A − or + tap is in this burst: Undo puts the edited set back to `origin` too. */
+    stepped?: boolean;
   } | null>(null);
   // (#369) The exercise a Later toast's Undo brings back; offered only while that very toast shows.
   const [laterUndo, setLaterUndo] = useState<{ message: string; sessionId: string; exerciseIndex: number } | null>(null);
@@ -309,6 +312,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     followers: number[];
     edited?: CarryResult['previous'][number];
     origin?: CarryResult['previous'][number];
+    /** (#371 review 1) The held burst came from − or + taps: Apply to all's Undo puts the tapped set back too. */
+    stepped?: boolean;
   } | null>(null);
   const jumpWarned = useRef(new Map<string, string>());
   const jumpBase = useRef(new Map<string, number>());
@@ -1068,6 +1073,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     jump?: { startKg: number; kg: number },
     edited?: CarryResult['previous'][number],
     origin?: CarryResult['previous'][number],
+    stepped = false,
   ) => {
     const exercise = session.exercises[exerciseIndex];
     if (!exercise) return;
@@ -1084,6 +1090,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const entry = {
       key, sessionId: session.id, exerciseIndex, exerciseId: exercise.exerciseId, previous, followers,
       mark: burstMark(result.session, exerciseIndex), edited: self, origin: open ? open.origin : origin,
+      stepped: Boolean(open?.stepped) || stepped,
     };
     let text = message(previous.map((p) => p.index));
     // Undo has something to put back only while a set differs from what the burst found (#309 review 2):
@@ -1123,7 +1130,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
    * value it held when the burst began (an emptied set not yet logged stays empty).
    */
   const updateSet = (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>, how: SetEdit = {}) => {
-    const { revert, prefill = 0 } = how;
+    const { revert, prefill = 0, step = false } = how;
     const stamp = stampNow();
     const session = state.current;
     // Typing into one field of one set is a burst whose following sets were fixed at its first keystroke (#306).
@@ -1151,7 +1158,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         );
         const reverted = revertBurst(session, exerciseIndex, exerciseId, setIndex, target, previous, stamp);
         announceCarry(session, exerciseIndex, `${setIndex}:${field}`, { session: reverted, carried: [], previous: [], followers: fixed },
-          () => null, undefined, before.done ? { index: setIndex, weight: before.weight, reps: before.reps } : undefined, origin);
+          () => null, undefined, before.done ? { index: setIndex, weight: before.weight, reps: before.reps } : undefined, origin, step);
         return;
       }
     }
@@ -1180,10 +1187,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       // The burst stays open, silent, so the next keystroke keeps its followers (lesson 26).
       setCarryUndo({
         key: burstKey(session, exerciseIndex, `${setIndex}:weight`), message: '', sessionId: session.id, exerciseIndex, exerciseId,
-        previous, followers, mark: burstMark(heldSession, exerciseIndex), edited, origin,
+        previous, followers, mark: burstMark(heldSession, exerciseIndex), edited, origin, stepped: Boolean(open?.stepped) || step,
       });
       const text = heldMessage({ kg: typedKg, percent: jump.percent, setIndex, unit, mode: loadModeOf(exerciseId) });
-      setHeld({ text, sessionId: session.id, exerciseIndex, exerciseId, setIndex, kg: typedKg, followers: followers.weight, edited, origin });
+      setHeld({ text, sessionId: session.id, exerciseIndex, exerciseId, setIndex, kg: typedKg, followers: followers.weight, edited, origin,
+        stepped: Boolean(open?.stepped) || step });
       setNotice(headsUp(text));
       return;
     }
@@ -1209,7 +1217,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     // The heads-up compares with what set 1 showed when the burst began: its load, or the suggested
     // start an empty cell showed (#306), never a half-typed keystroke (#309 review 2).
     }, moved === 'weight' ? { startKg: (open?.origin ?? before).weight > 0 ? (open?.origin ?? before).weight : prefill, kg: after.weight } : undefined, edited,
-    { index: setIndex, weight: before.weight, reps: before.reps });
+    { index: setIndex, weight: before.weight, reps: before.reps }, step);
   };
 
   /** (#327) "Apply to all" on a held jump: it carries as #309 does, with Undo for every set it moved. */
@@ -1239,7 +1247,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setCarryUndo({
       key: burstKey(session, h.exerciseIndex, `${h.setIndex}:weight`), message: text, sessionId: session.id,
       exerciseIndex: h.exerciseIndex, exerciseId: h.exerciseId, previous, followers: { weight: h.followers, reps: [] },
-      mark: burstMark(result.session, h.exerciseIndex), edited: h.edited, origin: h.origin,
+      mark: burstMark(result.session, h.exerciseIndex), edited: h.edited, origin: h.origin, stepped: h.stepped,
     });
     setNotice(done(text));
   };
@@ -1265,13 +1273,29 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       first ? { startKg: first.weight, kg: value.weight } : undefined);
   };
 
+  /** (#372) This session's note on one exercise; blank removes it. Only this session changes. */
+  const saveNote = (exerciseIndex: number, exerciseId: string, text: string) => {
+    const before = state.current?.exercises[exerciseIndex];
+    if (!before || before.exerciseId !== exerciseId) return;
+    const after = cleanNote(text);
+    if (after === before.note) return;
+    setState((currentState) => {
+      if (!currentState.current) return currentState;
+      const next = setExerciseNote(currentState.current, exerciseIndex, exerciseId, text);
+      return next === currentState.current ? currentState : { ...currentState, current: next };
+    });
+    setNotice(done(after === undefined ? 'Note removed.' : 'Note saved for next time.'));
+  };
+
   const undoLastCarry = () => {
     const undo = liveCarry;
     if (!undo) return;
     const stamp = new Date().toISOString();
+    // (#371) A − or + burst is undone whole: the tapped set (not yet logged) goes back to where it began too.
+    const previous = undo.stepped && undo.origin ? [undo.origin, ...undo.previous] : undo.previous;
     setState((currentState) =>
       currentState.current?.id === undo.sessionId
-        ? { ...currentState, current: undoCarry(currentState.current, undo.exerciseIndex, undo.exerciseId, undo.previous, stamp, undo.edited) }
+        ? { ...currentState, current: undoCarry(currentState.current, undo.exerciseIndex, undo.exerciseId, previous, stamp, undo.edited) }
         : currentState,
     );
     setCarryUndo(null);
@@ -1332,7 +1356,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       setSheet({ kind: 'none' });
       setView('tabs');
       setTab('today');
-      setNotice(done('No sets logged, so nothing was saved.'));
+      setNotice(done(noSetsNotice(current.exercises.some((exercise) => exercise.note))));
       return;
     }
     const early = progress.done < progress.total;
@@ -1489,13 +1513,14 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const swapped = state.current?.exercises[exerciseIndex]?.exerciseId;
     const lead = state.current !== null && swapped !== undefined && leadSlotIds(state.current.exercises).includes(swapped);
     const candidate = swapCandidateFor(target, profile, state.history, state.current, lead, state.current?.exercises[exerciseIndex]?.setup);
+    const noteDropped = swapDropsNote(state.current?.exercises[exerciseIndex]);
     setState((currentState) =>
       currentState.current
         ? { ...currentState, current: swapPendingExercise(currentState.current, exerciseIndex, candidate) }
         : currentState,
     );
     setSheet({ kind: 'none' });
-    setNotice(done(`${target.name} swapped in. Logged sets stay put.`));
+    setNotice(done(swapNotice(target.name, noteDropped)));
   };
 
   const skipCurrentExercise = (exerciseIndex: number) => {
@@ -2138,6 +2163,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               }}
               remaining={exercise.performed.find((set) => !set.done)}
               onSetAll={(value) => setAllRemaining(sheet.exerciseIndex, sheet.exerciseId, value)}
+              note={exercise.note}
+              onSaveNote={(text) => saveNote(sheet.exerciseIndex, sheet.exerciseId, text)}
               onClose={closeSheet}
             />
           );

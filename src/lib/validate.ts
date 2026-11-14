@@ -1,6 +1,7 @@
 import { EXERCISES } from '../data/exercises.ts';
 import { GYM_ITEM_IDS, orderedItems } from '../data/gymItems.ts';
 import { isAdditionId } from './additionId.ts';
+import { readNote } from './notes.ts';
 import type {
   AppState,
   Equipment,
@@ -250,6 +251,8 @@ function validateExercise(value: unknown, path: string): WorkoutExercise {
     ...(raw.setup === undefined ? {} : { setup: oneOf(raw.setup, `${path}.setup`, SETUPS) }),
     // Optional (#88): absent on every record written before supersets, which read as straight sets.
     ...(raw.pair === undefined ? {} : { pair: integer(raw.pair, `${path}.pair`, 1, MAX_EXERCISES) }),
+    // Optional (#372): a note that is not text of 1 to 120 characters is dropped; the record still loads.
+    ...(readNote(raw.note) === undefined ? {} : { note: readNote(raw.note) }),
     planned: plannedRaw.map((item, i) => validatePlannedSet(item, `${path}.planned[${i}]`)),
     performed: performedRaw.map((item, i) => validatePerformedSet(item, `${path}.performed[${i}]`)),
   };
