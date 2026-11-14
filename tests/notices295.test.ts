@@ -96,6 +96,7 @@ const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> 
   ['done', '`Restored ${merged.summary.newWorkouts}'],
   ['done', '`${target.name} swapped in.'],
   ['done', 'removed'],
+  ['done', 'message'],
   ['done', '`${name} is back in today\'s session.`'],
   ['done', '`Restored ${summary.newWorkouts} workouts.`'],
   ['done', "'Started with empty data.'"],

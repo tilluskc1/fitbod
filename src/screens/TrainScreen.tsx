@@ -3,7 +3,7 @@ import { useWakeLock } from '../lib/wakeLock';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
-import { pairRound, pairedPendingIndex, partnerOf, restAfterLog } from '../lib/supersets';
+import { canMoveLater, pairRound, pairedPendingIndex, partnerOf, restAfterLog } from '../lib/supersets';
 import './supersets.css';
 import { isRestMuted, playRestCue, primeRestAudio, restEnded, setRestMuted, shouldCue } from '../lib/restCue';
 import { exerciseInWorkout, lastPerformance } from '../lib/plan';
@@ -60,6 +60,8 @@ interface Props {
   onOpenActions: (exerciseIndex: number, mode?: 'instructions' | 'history') => void;
   /** (#151) Opens Replace for the remaining sets straight from the quick-action row. */
   onReplace?: (exerciseIndex: number) => void;
+  /** (#369) One tap: this exercise moves to Skipped today, the same as Remove today's remaining work. */
+  onLater?: (exerciseIndex: number) => void;
   onReturn: (exerciseIndex: number) => void;
 }
 
@@ -178,6 +180,7 @@ export default function TrainScreen({
   onExtendRest,
   onOpenActions,
   onReplace,
+  onLater,
   onReturn,
 }: Props) {
   useWakeLock();
@@ -655,6 +658,12 @@ export default function TrainScreen({
           {onReplace && (
             <button type="button" className="lg-act" onClick={() => onReplace(index)} aria-haspopup="dialog">
               <Icon name="tune" size={16} />Replace
+            </button>
+          )}
+          {/* (#369) Hidden on the only exercise with work left: there is nothing to move it behind. */}
+          {onLater && canMoveLater(session, index) && (
+            <button type="button" className="lg-act" onClick={() => onLater(index)}>
+              <Icon name="schedule" size={16} />Later
             </button>
           )}
         </div>

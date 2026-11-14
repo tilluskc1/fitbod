@@ -287,6 +287,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     /** The "Big jump" heads-up this toast carries; it outlives the Undo when a set is logged (#309 review 2). */
     note?: string;
   } | null>(null);
+  // (#369) The exercise a Later toast's Undo brings back; offered only while that very toast shows.
+  const [laterUndo, setLaterUndo] = useState<{ message: string; sessionId: string; exerciseIndex: number } | null>(null);
   // A burst whose exercise changed by any other path is over: no Undo, no fixed followers.
   const liveCarry = carryUndo !== null && burstLive(state.current, carryUndo.exerciseIndex, carryUndo.mark) ? carryUndo : null;
   /**
@@ -1503,6 +1505,33 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setNotice(done(removed));
   };
 
+  // (#369) Later: the same skip as Remove today's remaining work, in one tap, with an Undo on its toast.
+  const laterExercise = (exerciseIndex: number) => {
+    const session = state.current;
+    const exercise = session?.exercises[exerciseIndex];
+    if (!session || !exercise) return;
+    const message = `${exercise.name} moved to later.`;
+    setState((currentState) => {
+      if (!currentState.current) return currentState;
+      const skipped = skipExercise(currentState.current, exerciseIndex);
+      return skipped === currentState.current ? currentState : { ...currentState, current: skipped };
+    });
+    setLaterUndo({ message, sessionId: session.id, exerciseIndex });
+    setNotice(done(message));
+  };
+
+  const undoLater = () => {
+    const undo = laterUndo;
+    if (!undo) return;
+    setState((currentState) => {
+      if (currentState.current?.id !== undo.sessionId) return currentState;
+      const restored = unskipExercise(currentState.current, undo.exerciseIndex);
+      return restored === currentState.current ? currentState : { ...currentState, current: restored };
+    });
+    setLaterUndo(null);
+    setNotice(null);
+  };
+
   const returnToExercise = (exerciseIndex: number) => {
     const name = current?.exercises[exerciseIndex]?.name ?? 'That exercise';
     setState((currentState) => {
@@ -1633,6 +1662,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           )
         }
         onReplace={(exerciseIndex) => { track('replace'); setSheet({ kind: 'swap', exerciseIndex }); }}
+        onLater={laterExercise}
         onOpenActions={(exerciseIndex, mode) =>
           setSheet({
             kind: 'actions',
@@ -1892,7 +1922,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           notice={notice}
           screen={screen}
           top={onToday && !problemUp}
-          action={liveCarry !== null && liveCarry.message === notice.text ? { label: 'Undo', onClick: undoLastCarry } : undefined}
+          action={liveCarry !== null && liveCarry.message === notice.text ? { label: 'Undo', onClick: undoLastCarry }
+            : laterUndo !== null && laterUndo.message === notice.text ? { label: 'Undo', onClick: undoLater } : undefined}
         />
       )}
 
