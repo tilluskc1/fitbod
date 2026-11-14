@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { EQUIPMENT_OPTIONS, EXERCISES, SUPPORT_OPTIONS } from '../data/exercises';
 import { isGymKit, type DayGlance } from '../lib/adapt';
 import type { Program } from '../data/flagship';
-import { capabilitiesFor, provides } from '../lib/capabilities';
+import { canPerform, capabilitiesFor } from '../lib/capabilities';
 import { catalogRowMeta } from '../lib/liveProgression';
 import { describedChip, feasibilityChip, plainFocus, usualLine } from '../lib/planPage';
 import { sessionProgress } from '../lib/session';
@@ -83,7 +83,7 @@ export default function PlanScreen({
   const available = useMemo(() => {
     const caps = capabilitiesFor(profile);
     const excluded = new Set(profile.exclusions);
-    return EXERCISES.filter((exercise) => provides(caps, exercise.needs) && !excluded.has(exercise.id));
+    return EXERCISES.filter((exercise) => canPerform(profile, exercise, caps) && !excluded.has(exercise.id));
   }, [profile]);
 
   // A described day is named after what it trains, so it needs no focus words (#193).

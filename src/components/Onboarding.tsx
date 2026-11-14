@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { DEFAULT_SUPPORT, EQUIPMENT_OPTIONS, SUPPORT_OPTIONS } from '../data/exercises';
+import { gymPatch } from '../data/gymItems';
+import { gymSummary } from '../lib/myGym';
+import MyGymSheet from './MyGymSheet';
 import { DATA_ON_PHONE } from '../lib/dataHome';
 import { SAFETY_NOTICE } from '../lib/safety';
 import { loadLimitText, overLoadLimit, parseLoads } from '../lib/units';
-import type { Equipment, Experience, Goal, Profile, SupportEquipment, Unit } from '../types';
+import type { Equipment, Experience, Goal, GymItemId, Profile, SupportEquipment, Unit } from '../types';
 
 interface Props {
   onComplete: (profile: Profile) => void;
@@ -36,8 +39,12 @@ export default function Onboarding({ onComplete }: Props) {
   const [loadsText, setLoadsText] = useState('');
   // Where they train sets the starting gear (#180). It is not stored: the saved gear says it.
   const [place, setPlace] = useState<'gym' | 'home' | null>('gym');
+  // (#357) Offered once, after "At a gym": the gym's own list. Undefined until saved.
+  const [gymItems, setGymItems] = useState<GymItemId[] | undefined>(undefined);
+  const [gymOpen, setGymOpen] = useState(false);
   const choosePlace = (next: 'gym' | 'home') => {
     setPlace(next);
+    setGymItems(undefined);
     if (next === 'gym') {
       // A gym has the full floor; the user unticks anything theirs lacks. No owned-dumbbell list.
       setEquipment([...EQUIPMENT_OPTIONS]);
@@ -79,6 +86,7 @@ export default function Onboarding({ onComplete }: Props) {
       name: name.trim() || 'Athlete',
       unit,
       sessionMinutes: sessionMinutes ?? 35,
+      ...(place === 'gym' && gymItems ? { gymItems } : {}),
     });
   };
 
@@ -221,7 +229,37 @@ export default function Onboarding({ onComplete }: Props) {
           </div>
           {place === null && <p className="data-note" role="status">Pick one to set up your gear.</p>}
           {place === 'gym' && (
-            <p className="muted">Everything a gym has is selected. Untick anything yours is missing.</p>
+            <p className="muted">
+              {gymItems ? 'Set from your gym list. Untick anything else yours is missing.' : 'Everything a gym has is selected. Untick anything yours is missing.'}
+            </p>
+          )}
+          {place === 'gym' && (
+            <div className="settings-card onboarding-gym">
+              <div className="settings-row settings-row--stack my-gym-row">
+                <div className="settings-row__line">
+                  <span>My gym · optional</span>
+                  <button className="text-action text-action--lime" onClick={() => setGymOpen(true)}>
+                    {gymItems ? 'Edit my gym' : 'List my gym'}
+                  </button>
+                </div>
+                <p className="settings-row__note">
+                  {gymItems ? gymSummary({ gymItems }) : 'Say or tick which machines your gym has, and plans use only those.'}
+                </p>
+              </div>
+            </div>
+          )}
+          {gymOpen && (
+            <MyGymSheet
+              profile={{ gymItems, equipment, support }}
+              onSave={(items) => {
+                const patch = gymPatch(items);
+                setGymItems(patch.gymItems);
+                setEquipment(patch.equipment);
+                setSupport(patch.support);
+                setGymOpen(false);
+              }}
+              onClose={() => setGymOpen(false)}
+            />
           )}
           {place === 'home' && (
             <p className="muted">Pick what you have at home. Only gear you pick is used.</p>

@@ -1,4 +1,5 @@
 import { EXERCISES } from '../data/exercises.ts';
+import { gymItem } from '../data/gymItems.ts';
 import type {
   Alternative,
   Capability,
@@ -6,17 +7,21 @@ import type {
   CoverageResult,
   Exercise,
   Feasibility,
+  GymItemId,
   MovementPattern,
   MuscleGroup,
   PlanDay,
   Profile,
 } from '../types';
 import {
+  canPerform,
   capabilitiesFor,
   capabilityLabel,
   equipmentForCapability,
   missingCapabilities,
+  missingStations,
   provides,
+  stationListed,
   supportForCapability,
 } from './capabilities.ts';
 
@@ -177,7 +182,7 @@ function buildAlternatives(
   // 1. Exercises the user excluded that would otherwise be usable.
   for (const exercise of relevant) {
     if (!excluded.has(exercise.id)) continue;
-    if (!provides(caps, exercise.needs)) continue;
+    if (!canPerform(profile, exercise, caps)) continue;
     if (offeredExercises.has(exercise.id)) continue;
     offeredExercises.add(exercise.id);
     const restores = missing.filter((requirement) => matchesRequirement(exercise, requirement));
@@ -189,6 +194,38 @@ function buildAlternatives(
           ? `You excluded this exercise. Allowing it restores ${joinLabels(restores.map((requirement) => requirement.label.toLowerCase()))} coverage.`
           : `You excluded this exercise. Allowing it adds an available ${day.name} exercise.`,
       exerciseId: exercise.id,
+    });
+  }
+
+  // (#357) A gap only the gym list leaves: the first station that hosts it, once per station. Ticking a
+  // machine or cable item also turns on its family, so a missing Machine / Cable family is no obstacle.
+  const forGapOf = (unlocked: Exercise[]) =>
+    missing.length > 0
+      ? unlocked.filter((exercise) => missing.some((requirement) => matchesRequirement(exercise, requirement)))
+      : !countGap && openMuscles.length > 0
+        ? unlocked.filter((exercise) => openMuscles.includes(exercise.muscles[0]))
+        : unlocked;
+  const byStation = new Map<GymItemId, Exercise[]>();
+  for (const exercise of relevant) {
+    const stations = missingStations(profile, exercise);
+    if (excluded.has(exercise.id) || stations.length === 0) continue;
+    const family = gymItem(stations[0]).equipment;
+    const absent = missingCapabilities(caps, exercise.needs).filter((cap) => cap !== family?.toLowerCase());
+    if (absent.length > 0) continue;
+    byStation.set(stations[0], [...(byStation.get(stations[0]) ?? []), exercise]);
+  }
+  for (const [station, unlocked] of byStation) {
+    const forGap = forGapOf(unlocked);
+    if (forGap.length === 0) continue;
+    const example = forGap[0];
+    alternatives.push({
+      kind: 'capability',
+      label: `Add ${gymItem(station).label}`,
+      detail:
+        missing.length > 0
+          ? `Not on your gym list. Adding it unlocks ${forGap.length} ${forGap.length === 1 ? 'exercise' : 'exercises'} for ${joinLabels(missing.map((requirement) => requirement.label.toLowerCase()))} (e.g. ${example.name}).`
+          : `Not on your gym list. Adding it adds ${forGap.length} possible ${day.name} ${forGap.length === 1 ? 'exercise' : 'exercises'} (e.g. ${example.name}).`,
+      gymItem: station,
     });
   }
 
@@ -206,18 +243,11 @@ function buildAlternatives(
     // Only advertise a purchase that actually unlocks something on its own.
     const unlocked = blocked.filter((exercise) => {
       const absent = missingCapabilities(caps, exercise.needs);
-      return absent.length === 1 && absent[0] === cap;
+      return absent.length === 1 && absent[0] === cap && stationListed(profile, exercise);
     });
     // When a specific movement family is missing, only advertise purchases
     // that actually restore that coverage.
-    const forGap =
-      missing.length > 0
-        ? unlocked.filter((exercise) =>
-            missing.some((requirement) => matchesRequirement(exercise, requirement)),
-          )
-        : !countGap && openMuscles.length > 0
-          ? unlocked.filter((exercise) => openMuscles.includes(exercise.muscles[0]))
-          : unlocked;
+    const forGap = forGapOf(unlocked);
     if (forGap.length === 0) continue;
     offeredCaps.add(cap);
     const example = forGap[0];
@@ -262,7 +292,7 @@ export function evaluateFeasibility(
       !EXERCISES.some(
         (exercise) =>
           exercise.muscles[0] === muscle &&
-          provides(caps, exercise.needs) &&
+          canPerform(profile, exercise, caps) &&
           !profile.exclusions.includes(exercise.id),
       ),
   );

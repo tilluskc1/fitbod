@@ -3,7 +3,7 @@ import { isGymKit } from './progression.ts';
 import { savedSetup } from './setup.ts';
 
 /** (#261) Coach > What I know names the kit by the saved setup: a gym kit, home gear, or none. */
-export function equipmentTitle(profile: Pick<Profile, 'equipment' | 'support'>): string {
+export function equipmentTitle(profile: Pick<Profile, 'equipment' | 'support'> & Partial<Pick<Profile, 'gymItems'>>): string {
   if (savedSetup(profile) === 'bodyweight') return 'Bodyweight';
   return isGymKit(profile) ? 'Gym equipment' : 'Home equipment';
 }

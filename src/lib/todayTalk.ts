@@ -1,6 +1,6 @@
 import type { Program } from '../data/flagship.ts';
 import { EXERCISES, areIncompatible, exerciseById } from '../data/exercises.ts';
-import { capabilitiesFor, provides } from './capabilities.ts';
+import { canPerform, capabilitiesFor } from './capabilities.ts';
 import { isDescribedSession, kitProfile } from './sequence.ts';
 import type { Exercise, MuscleGroup, Profile, TodayOverride, WorkoutRecord } from '../types.ts';
 import { isGymKit, setupFor, todayGlance } from './adapt.ts';
@@ -400,7 +400,7 @@ export function describedStatus(
     const area = areasOf([muscle])[0];
     if (adapted.exercises.some((exercise) => primary(exercise.exerciseId) === muscle)) return [];
     const possible = EXERCISES.filter((exercise) => exercise.muscles[0] === muscle
-      && provides(caps, exercise.needs) && !kit.exclusions.includes(exercise.id));
+      && canPerform(kit, exercise, caps) && !kit.exclusions.includes(exercise.id));
     if (possible.length === 0) return [{ area, muscle, cause: 'gear' }];
     const allowed = possible.filter((exercise) => !worksSkipped(exercise, skipMuscles));
     if (allowed.length === 0) return [{ area, muscle, cause: 'skip' }];

@@ -1,6 +1,6 @@
 import { EXERCISES, areIncompatible } from '../data/exercises.ts';
 import type { Exercise, Profile } from '../types.ts';
-import { capabilitiesFor, provides } from './capabilities.ts';
+import { canPerform, capabilitiesFor } from './capabilities.ts';
 import { patternsOf } from './feasibility.ts';
 
 const CORE_PATTERNS = new Set(['core_flexion', 'core_stability']);
@@ -37,7 +37,7 @@ export function rankedReplacements(
     (candidate) =>
       candidate.id !== exercise.id &&
       candidate.muscles[0] === exercise.muscles[0] &&
-      provides(caps, candidate.needs) &&
+      canPerform(profile, candidate, caps) &&
       !excluded.has(candidate.id) &&
       !others.some((item) => item.id === candidate.id || areIncompatible(item.id, candidate.id)) &&
       fitsCap(candidate),

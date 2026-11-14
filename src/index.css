@@ -5059,12 +5059,14 @@ button.aw-exercise__name-btn {
  * and Send stays pinned at the sheet's foot while the rest scrolls. With the keyboard closed both are
  * 0 and the form fits, so nothing moves.
  */
-.sheet--feedback {
+.sheet--feedback,
+.sheet--gym {
   margin-bottom: var(--kb, 0px);
   max-height: min(88%, calc(100% - var(--kb, 0px) - var(--vv-top, 0px) - 12px));
 }
 
-.sheet--feedback .sheet-actions {
+.sheet--feedback .sheet-actions,
+.sheet--gym .sheet-actions {
   position: sticky;
   bottom: calc(-26px - env(safe-area-inset-bottom, 0px));
   z-index: 1;
@@ -5074,7 +5076,8 @@ button.aw-exercise__name-btn {
 }
 
 .sheet--feedback .feedback-form__message,
-.sheet--feedback .feedback-form__name {
+.sheet--feedback .feedback-form__name,
+.sheet--gym .my-gym__text {
   /* The app re-reveals the focused field after the lift; keep it clear of the pinned Send. */
   scroll-margin-bottom: 96px;
   scroll-margin-top: 12px;
@@ -5124,4 +5127,64 @@ button.aw-exercise__name-btn {
   color: #1f6b4f;
   font-size: 14px;
   font-weight: 600;
+}
+
+/* (#357) My gym: the text box, what it read, and the grouped chips. Keyboard rules above (--kb). */
+.my-gym .field-label {
+  margin-top: 4px;
+}
+
+.my-gym__text {
+  min-height: 88px;
+}
+
+.my-gym__read {
+  margin: 8px 0 4px;
+  color: #1f6b4f;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.my-gym__read--none {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.my-gym__group {
+  border: 0;
+  margin: 14px 0 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.my-gym__group .chip-wrap {
+  margin-top: 8px;
+}
+
+.my-gym__group .chip {
+  white-space: normal;
+  text-align: left;
+}
+
+.my-gym__note {
+  margin-top: 16px;
+}
+
+.settings-row--stack.my-gym-row {
+  gap: 2px;
+}
+
+/* With the keyboard up, revealing the box also reveals what it read, above the pinned Save. */
+.sheet--gym .my-gym__text {
+  scroll-margin-bottom: 150px;
+}
+
+.my-gym__group .setup-label {
+  margin-top: 0;
+  padding: 0;
+}
+
+/* (#357) The My gym offer under "At a gym". */
+.onboarding-gym {
+  margin-top: 14px;
 }
