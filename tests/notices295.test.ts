@@ -79,8 +79,11 @@ const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> 
   // #327: a weight more than 10% over last time, held on its set; then Apply to all's carry.
   ['headsUp', 'text'],
   ['done', 'text'],
+  // #372: a note saved or removed from the exercise menu.
+  ['done', "after === undefined ? 'Note removed.'"],
   ['headsUp', 'liveCarry.note'],
-  ['done', "'No sets logged, so nothing was saved.'"],
+  // #372: the no-sets toast says when notes went with the session.
+  ['done', 'noSetsNotice('],
   ['headsUp', 'progress.skipped > 0'],
   ['done', "'Workout saved.'"],
   ['done', '`${slot.name} skipped'],
@@ -94,7 +97,8 @@ const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> 
   ['problem', "'The file could not be read. Nothing changed.'"],
   ['problem', '`Restore rejected: ${parsed.error}`'],
   ['done', '`Restored ${merged.summary.newWorkouts}'],
-  ['done', '`${target.name} swapped in.'],
+  // #372: the swap toast says when the swapped-out exercise's note went with it.
+  ['done', 'swapNotice(target.name'],
   ['done', 'removed'],
   ['done', 'message'],
   ['done', '`${name} is back in today\'s session.`'],

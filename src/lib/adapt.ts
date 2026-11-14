@@ -651,8 +651,20 @@ export function restorePendingWorkout(
   });
   // Completed work stays even when the restored equipment/exclusions no longer prescribe it.
   exercises.push(...completed.filter((exercise) => owner.get(exercise) === -1));
+  // (#372) A rebuilt entry starts without a note. Kept (logged) entries carry their own; an exercise whose
+  // entries all lost theirs gets its note back on its first entry.
+  const notes = new Map<string, string>();
+  session.exercises.forEach((exercise) => {
+    if (exercise.note && !notes.has(exercise.exerciseId)) notes.set(exercise.exerciseId, exercise.note);
+  });
+  const noted = exercises.slice();
+  notes.forEach((note, exerciseId) => {
+    if (noted.some((exercise) => exercise.exerciseId === exerciseId && exercise.note)) return;
+    const first = noted.findIndex((exercise) => exercise.exerciseId === exerciseId);
+    if (first >= 0) noted[first] = { ...noted[first], note };
+  });
   // (#88) Stored pairs survive only where both halves did; nothing new pairs mid-session.
-  return { ...session, durationMin: original.minutes, exercises: keepPairs(session.exercises, exercises) };
+  return { ...session, durationMin: original.minutes, exercises: keepPairs(session.exercises, noted) };
 }
 
 /** Lengths the Today duration sheet offers (#148). */
