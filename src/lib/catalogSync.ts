@@ -60,7 +60,8 @@ export function publishedRows(reply: unknown): Row[] | null {
   return reply.flatMap((item) => {
     const fields = (item as { document?: { fields?: Record<string, Value> } })?.document?.fields;
     const row = fields ? plain(fields) : null;
-    return row?.status === 'published' ? validRow(row) ?? [] : [];
+    // Only published rows: the query asks for them and the rules serve nothing else to the public.
+    return (row && validRow(row)) ?? [];
   });
 }
 

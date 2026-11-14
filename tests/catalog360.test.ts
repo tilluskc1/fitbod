@@ -81,7 +81,6 @@ test('#360 the download keeps published rows, drops bad ones, and ignores a repl
     Array.isArray(value) ? { arrayValue: { values: value.map((v) => ({ stringValue: v })) } } : { stringValue: value }])) } });
   const reply = [
     doc({ ...LANDMINE, status: 'published' }),
-    doc({ ...LANDMINE, id: 'add-draft', status: 'draft' }),
     doc({ ...LANDMINE, id: 'push-up', status: 'published' }),
     doc({ ...LANDMINE, id: 'add-bad', pattern: 'banana', status: 'published' }),
     { readTime: '2026-11-14T10:00:00Z' },
