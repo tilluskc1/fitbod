@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useWakeLock } from '../lib/wakeLock';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
 import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
@@ -179,6 +180,7 @@ export default function TrainScreen({
   onReplace,
   onReturn,
 }: Props) {
+  useWakeLock();
   /**
    * Set cells (`calibrationKey:setIndex`) whose suggested start the lifter cleared: they stay empty for
    * this visit. Nothing is stored (owner, #315 item 12): after a reload the muted suggestion shows again,
