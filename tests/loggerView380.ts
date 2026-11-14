@@ -1,7 +1,8 @@
 /**
  * (#380) What the logger shows for a set, read the way the lifter reads it. The focused set's weight and
  * reps are inputs on the card (read by their accessible name); every other set is a row in the list
- * below it, a button named "Set N, 135 lb × 8, edit". Tests read values here, not markup (lesson 27).
+ * below it, a button named for its state: "Set 1, 135 lb × 8, logged, edit", "Set 2, 135 lb × 8, now" (the card's
+ * set) or "Set 3, 135 lb × 8, edit". Tests read values here, not markup (lesson 27).
  */
 
 const esc = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -9,7 +10,7 @@ const unesc = (text: string) => text.replace(/&amp;/g, '&').replace(/&quot;/g, '
 
 /** The list row's line for set `n`: "135 lb × 8", "— × 8", "BW × 12", "20 lb × 30s". */
 export function rowLine(html: string, n: number): string | undefined {
-  const line = html.match(new RegExp(`aria-label="Set ${n}, ([^"]*), edit"`))?.[1];
+  const line = html.match(new RegExp(`aria-label="Set ${n}, ([^"]*?), (?:logged, edit|now|edit)"`))?.[1];
   return line === undefined ? undefined : unesc(line);
 }
 

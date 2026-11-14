@@ -4127,7 +4127,7 @@ button.aw-exercise__name-btn {
 
 .lg-note--held .notice-card {
   scroll-margin-top: calc(116px + var(--vv-top, 0px));
-  scroll-margin-bottom: calc(16px + var(--kb, 0px));
+  scroll-margin-bottom: calc(16px + max(var(--kb, 0px), var(--lg-dock, 0px)));
 }
 
 /* (#309) The weight and reps cells are the inputs: tap, type, Log. (#380) They sit in the focus card. */
@@ -4141,9 +4141,10 @@ button.aw-exercise__name-btn {
   -webkit-appearance: none;
   appearance: none;
   /* Focus scrolling keeps the field clear of the header (with its tick bar), and the card's Log button
-     (--lg-tail below the field) clear of the keyboard (lesson 16). */
+     (--lg-tail below the field) clear of the keyboard (lesson 16) or, with no keyboard up, of the rest
+     dock (--lg-dock, its measured height while rest runs; the keyboard covers it when up). */
   scroll-margin-top: calc(116px + var(--vv-top, 0px));
-  scroll-margin-bottom: calc(var(--lg-tail, 132px) + var(--kb, 0px));
+  scroll-margin-bottom: calc(var(--lg-tail, 132px) + max(var(--kb, 0px), var(--lg-dock, 0px)));
 }
 
 .lg-input::placeholder {
@@ -4346,7 +4347,7 @@ button.aw-exercise__name-btn {
   font-size: 16px;
   font-weight: 700;
   scroll-margin-top: calc(116px + var(--vv-top, 0px));
-  scroll-margin-bottom: calc(16px + var(--kb, 0px));
+  scroll-margin-bottom: calc(16px + max(var(--kb, 0px), var(--lg-dock, 0px)));
 }
 
 .lg-log:disabled {
@@ -4483,6 +4484,27 @@ button.aw-exercise__name-btn {
   .lg-focus .lg-cell--empty.lg-input {
     font-size: 34px;
   }
+}
+
+/* (#380 review 1) A long load ("102.5", "1000.5") keeps 32px and tightens its letters to fit. */
+.lg-focus .lg-input.lg-input--long,
+.lg-focus .lg-input.lg-input--long:focus {
+  font-size: 32px;
+  letter-spacing: -0.06em;
+}
+
+/* (#380 review 1) The logger's sticky top is opaque: nothing scrolled under it shows through. */
+.flow-header.lg-header {
+  background: var(--surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* (#380 review 1) The rest dock spans the screen at every height (the short-screen dock rule lays
+   docks out in a row, which shrank it to its content). */
+.lg-dock > .lg-rest {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .set-all {

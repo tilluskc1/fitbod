@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useWakeLock } from '../lib/wakeLock';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
@@ -140,7 +140,9 @@ function SetCell({ id, label, shown, inputMode, enterKeyHint, empty, onText, onE
     input.current?.select();
   });
   return (
-    <input ref={input} id={id} className={empty ? 'lg-cell lg-input lg-cell--empty' : 'lg-cell lg-input'} type="text"
+    <input ref={input} id={id} type="text"
+      // (#380 review 1) A load of 5 or more characters ("102.5") takes the tighter style that fits at 360.
+      className={`lg-cell lg-input${empty ? ' lg-cell--empty' : ''}${(text ?? shown).length > 4 ? ' lg-input--long' : ''}`}
       inputMode={inputMode} enterKeyHint={enterKeyHint} autoComplete="off" aria-label={label}
       placeholder="—" value={text ?? shown}
       onFocus={(event) => { setText(shown); event.currentTarget.select(); onFocusChange?.(true); }}
@@ -302,6 +304,20 @@ export default function TrainScreen({
    * on a log, and whenever the exercise on screen, its key or the set itself is no longer there.
    */
   const [focus, setFocus] = useState<{ key: string; setIndex: number } | null>(null);
+  /**
+   * (#380 review 1) While rest runs the dock sits over the bottom of the screen: its height is published as
+   * --lg-dock, so the card's fields and Log button scroll clear of it (the keyboard, when up, covers it).
+   */
+  const dockRef = useRef<HTMLDivElement>(null);
+  const dockHeight = useRef(-1);
+  useLayoutEffect(() => {
+    const height = dockRef.current?.offsetHeight ?? 0;
+    if (height === dockHeight.current) return;
+    dockHeight.current = height;
+    document.documentElement.style.setProperty('--lg-dock', `${height}px`);
+    // A standing toast places itself above the dock on resize: the dock coming or going moves that floor.
+    window.dispatchEvent(new Event('resize'));
+  });
 
   const header = (
     <header className="flow-header lg-header">
@@ -323,7 +339,7 @@ export default function TrainScreen({
       {/* One tick per set, grouped by exercise; a logged set fills lime. */}
       <div className="lg-ticks" aria-hidden="true">
         {session.exercises.map((entry, entryIndex) => (
-          <span className="lg-ticks__group" key={`${entry.exerciseId}-${entryIndex}`}>
+          <span className="lg-ticks__group" key={entryIndex}>
             {entry.performed.map((set, setIndex) => <span key={setIndex} className={set.done ? 'lg-tick lg-tick--done' : 'lg-tick'} />)}
           </span>
         ))}
@@ -438,7 +454,8 @@ export default function TrainScreen({
   const exerciseKey = `${exercise.exerciseId}:${index}`;
   const rowKey = (setIndex: number) => `${exerciseKey}:${setIndex}`;
   // (#380) The card's set: the tapped row while it is still there, else the next set to log.
-  const focusLive = focus !== null && focus.key === exerciseKey && focus.setIndex < exercise.performed.length;
+  const focusKey = `${session.id}:${exerciseKey}`;
+  const focusLive = focus !== null && focus.key === focusKey && focus.setIndex < exercise.performed.length;
   if (focus !== null && !focusLive) setFocus(null);
   const focused = focusLive ? focus.setIndex : activeSet;
   const calibrationKey = `${session.id}:${index}:${exercise.exerciseId}`;
@@ -569,9 +586,24 @@ export default function TrainScreen({
   const letter = letterOf(index);
   const tail = 132 + (reason ? 40 : 0) + (refused ? 40 : 0);
 
+  // (#327) A held jump's Heads-up: on the card while it shows the held set, else under that set's row.
+  const heldNotice = held !== null && (
+    <div className="lg-note lg-note--held" key="held">
+      <NoticeCard kind="headsUp" title={held.text} onDismiss={held.onDismiss}
+        actions={<button type="button" className="notice-card__fix" onPointerDown={(event) => event.preventDefault()} onClick={held.onApply}>Apply to all</button>} />
+    </div>
+  );
+
   const card = (
     <section className="lg-focus" aria-label={letter ? `${letter}${n}, set ${n} of ${exercise.performed.length}` : `Set ${n} of ${exercise.performed.length}`}
-      key={`${exerciseKey}:card`} style={{ '--lg-tail': `${tail}px` } as CSSProperties}>
+      key={`${exerciseKey}:card`} style={{ '--lg-tail': `${tail}px` } as CSSProperties}
+      // (#380 review 1) A field the phone already shows is not scrolled on focus, so bring the card's
+      // button into view too: above the rest dock (or the keyboard), never under it.
+      onFocus={(event) => {
+        if (!(event.target instanceof HTMLInputElement)) return;
+        const section = event.currentTarget;
+        requestAnimationFrame(() => section.querySelector('.lg-log')?.scrollIntoView({ block: 'nearest' }));
+      }}>
       <div className="lg-focus__head">
         <h3 className="lg-focus__set">
           {letter ? <>{letter}{n} <span>· set {n} of {exercise.performed.length}</span></> : <>Set {n} <span>of {exercise.performed.length}</span></>}
@@ -626,12 +658,7 @@ export default function TrainScreen({
       </div>
       {reason && <p className="lg-note" id={reason}>{noLoad ? NEEDS_LOAD_REASON : `Enter ${holdUnit ? 'seconds' : 'reps'} to log this set`}</p>}
       {refused && <p className="lg-note error-text" id={refused} role="alert">{refusal?.text}</p>}
-      {held !== null && held.exerciseIndex === index && (
-        <div className="lg-note lg-note--held">
-          <NoticeCard kind="headsUp" title={held.text} onDismiss={held.onDismiss}
-            actions={<button type="button" className="notice-card__fix" onPointerDown={(event) => event.preventDefault()} onClick={held.onApply}>Apply to all</button>} />
-        </div>
-      )}
+      {held !== null && held.exerciseIndex === index && held.setIndex === focused && heldNotice}
       {set.done ? (
         // Q1 (product default): a logged set's edits save as typed; this returns to the next set to log.
         <button type="button" className="lg-log lg-log--back" onPointerDown={(event) => event.preventDefault()}
@@ -667,15 +694,18 @@ export default function TrainScreen({
     const line = setLine(weightText(row, setIndex), row.reps, mode === 'none', holdUnit);
     const isFocus = setIndex === focused;
     const state = row.done ? 'lg-li--done' : isFocus ? 'lg-li--now' : 'lg-li--later';
-    return (
+    // (#380 review 1) The name carries the state the tick or "Now" shows.
+    const name = `Set ${setIndex + 1}, ${line}, ${row.done ? 'logged, edit' : isFocus ? 'now' : 'edit'}`;
+    const button = (
       <button type="button" key={rowKey(setIndex)} className={`lg-li ${state}${isFocus ? ' lg-li--focus' : ''}`}
-        aria-label={`Set ${setIndex + 1}, ${line}, edit`} aria-current={isFocus ? 'true' : undefined}
-        onClick={() => { setRefusal(null); setFocus(setIndex === activeSet ? null : { key: exerciseKey, setIndex }); }}>
+        aria-label={name} aria-current={isFocus ? 'true' : undefined}
+        onClick={() => { setRefusal(null); setFocus(setIndex === activeSet ? null : { key: focusKey, setIndex }); }}>
         <span className="lg-li__n">{letter}{setIndex + 1}</span>
         <span className="lg-li__v">{line}</span>
         {row.done ? tick(`Set ${setIndex + 1} logged`) : isFocus ? <span className="lg-li__now">Now</span> : <span className="lg-li__ghost" />}
       </button>
     );
+    return held !== null && held.exerciseIndex === index && held.setIndex === setIndex && !isFocus ? [button, heldNotice] : button;
   };
   // Q2 (product default): the partner's rows show round by round, muted and display-only.
   const partnerEntry = pair && partner !== undefined ? session.exercises[partner] : undefined;
@@ -740,19 +770,19 @@ export default function TrainScreen({
   });
 
   // (#151) The photo's hold menu: one-tap shortcuts into the same actions the sheet holds (#379, unchanged).
-  const acts: [string, string, () => void][] = [
-    ['How-to', 'play_arrow', () => setHowTo(exercise)],
-    ['History', 'monitoring', () => onOpenActions(index, 'history')],
-    ...(onReplace ? [['Replace', 'tune', () => onReplace(index)] as [string, string, () => void]] : []),
+  type Act = [string, ReactNode, () => void];
+  const historyAct: Act = ['History', <Icon key="i" name="monitoring" size={16} />, () => onOpenActions(index, 'history')];
+  const replace: Act[] = onReplace ? [['Replace', <Icon key="i" name="tune" size={16} />, () => onReplace(index)]] : [];
+  const acts: Act[] = [
+    ['How-to', null, () => setHowTo(exercise)],
+    historyAct,
+    ...replace,
     // (#369) Hidden on the only exercise with work left: there is nothing to move it behind.
-    ...(onLater && canMoveLater(session, index) ? [['Later', 'schedule', () => onLater(index)] as [string, string, () => void]] : []),
+    ...(onLater && canMoveLater(session, index) ? [['Later', null, () => onLater(index)] as Act] : []),
   ];
   // (#380) The chip row: History, Replace, More (the sheet the name opens; Later is its first row).
-  const chips: [string, ReactNode, () => void][] = [
-    ['History', <Icon key="i" name="monitoring" size={16} />, () => onOpenActions(index, 'history')],
-    ...(onReplace ? [['Replace', <Icon key="i" name="tune" size={16} />, () => onReplace(index)] as [string, ReactNode, () => void]] : []),
-    ['More', <span key="i" className="lg-act__more" aria-hidden="true"><MoreIcon size={16} /></span>, () => onOpenActions(index)],
-  ];
+  const chips: Act[] = [historyAct, ...replace,
+    ['More', <span key="i" className="lg-act__more" aria-hidden="true"><MoreIcon size={16} /></span>, () => onOpenActions(index)]];
 
   return (
     <div className="screen flow-screen">
@@ -882,7 +912,7 @@ export default function TrainScreen({
       </div>
 
       {rest > 0 && (
-        <div className="flow-dock lg-dock">
+        <div className="flow-dock lg-dock" ref={dockRef}>
           <div className="lg-rest" role="timer" aria-label={`Rest, ${rest} seconds remaining`}>
             <span className="lg-rest__time">{restClock(rest)}</span>
             <span className="lg-rest__label">Rest</span>

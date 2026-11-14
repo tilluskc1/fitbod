@@ -76,7 +76,7 @@ test('the logger is one row per set, pre-filled from the prescription; the next 
     assert.doesNotMatch(html, /save-bar/, 'no separate Log button to scroll to');
 
     const logged = render(logSet(pressDay(), 0, 0, at(1)), { now: Date.parse(at(1)) });
-    assert.match(logged, /class="lg-li lg-li--done"[^>]*aria-label="Set 1, 15 kg × 8, edit"/);
+    assert.match(logged, /class="lg-li lg-li--done"[^>]*aria-label="Set 1, 15 kg × 8, logged, edit"/);
     assert.match(logged, /aria-label="Set 1 logged"/);
     assert.equal(focusedSet(logged), 2, 'the card moves to set 2');
     assert.match(logged, /class="lg-li lg-li--now lg-li--focus" aria-label="Set 2, /);

@@ -72,7 +72,10 @@ test('one Log button for the next set; every set is a row button into the card; 
     assert.match(html, /<button type="button" class="lg-log" aria-label="Log set 2">/);
     for (const n of [1, 2, 3, 4]) assert.equal(rowLine(html, n), '135 lb × 5', `set ${n}'s row`);
     assert.ok(isLogged(html, 1) && !isLogged(html, 2));
-    assert.match(html, /aria-label="Set 2, 135 lb × 5, edit" aria-current="true"/, 'the card\'s set is marked');
+    // (#380 review 1) Each row's name carries its state.
+    assert.match(html, /aria-label="Set 2, 135 lb × 5, now" aria-current="true"/, 'the card\'s set is marked');
+    assert.match(html, /aria-label="Set 1, 135 lb × 5, logged, edit"/);
+    assert.match(html, /aria-label="Set 3, 135 lb × 5, edit"/);
     assert.match(plain(html), /Set 2, 135 lb × 5|2 135 lb × 5 Now/);
     const box = html.match(/<div class="lg-field lg-field--w"[\s\S]*?<\/button><\/div>/)?.[0] ?? '';
     assert.match(box, /aria-label="− 5 lb"[\s\S]*aria-label="Set 2 weight, pounds"[\s\S]*aria-label="\+ 5 lb"/, '− input + in one box');
@@ -128,4 +131,29 @@ test('More opens the actions sheet with Later first, only when the exercise can 
     assert.ok(!without.includes('Later'), 'no Later without its handler');
     assert.deepEqual(withLater.slice(1), without, 'the rest of the menu is unchanged');
   } finally { await server.close(); }
+});
+
+test('review 1: the #327 heads-up sits on the card only for its own set; otherwise under that set\'s row', async () => {
+  const session = day([{ exerciseId: 'barbell-bench-press', name: 'Barbell Bench Press', weight: toKg(135, 'lb'), reps: 5, count: 4 }]);
+  const held = (setIndex: number) => ({ exerciseIndex: 0, setIndex, text: 'Big jump held', onApply: noop, onDismiss: noop });
+  await withTrain((render) => {
+    const card = (html: string) => html.match(/<section class="lg-focus"[\s\S]*?<\/section>/)?.[0] ?? '';
+    const list = (html: string) => html.match(/<section class="lg-list"[\s\S]*?<\/section>/)?.[0] ?? '';
+    const own = render(session, { held: held(0) });
+    assert.match(card(own), /Big jump held/, 'on the card that shows set 1');
+    assert.doesNotMatch(list(own), /Big jump held/);
+    const other = render(session, { held: held(2) });
+    assert.doesNotMatch(card(other), /Big jump held/, 'not on set 1\'s card');
+    assert.match(list(other), /aria-label="Set 3, [^"]*"[\s\S]*?<\/button><div class="lg-note lg-note--held"[\s\S]*Big jump held/, 'under set 3\'s row');
+    assert.equal((other.match(/Big jump held/g) ?? []).length, 1);
+  });
+});
+
+test('review 1: a long load keeps 32px in a tighter style; a short one keeps the big number', async () => {
+  await withTrain((render) => {
+    const at = (kg: number, unit: 'kg' | 'lb') => render(day([{ exerciseId: 'barbell-bench-press', name: 'Barbell Bench Press', weight: kg, reps: 5 }]), { unit });
+    assert.match(at(102.5, 'kg'), /class="lg-cell lg-input lg-input--long"[^>]*aria-label="Set 1 weight, kilograms"/);
+    assert.match(at(toKg(1000, 'lb'), 'lb'), /class="lg-cell lg-input"[^>]*aria-label="Set 1 weight, pounds"[^>]*value="1000"/, 'four characters keep the big number');
+    assert.match(at(toKg(135, 'lb'), 'lb'), /class="lg-cell lg-input"[^>]*aria-label="Set 1 weight, pounds"/);
+  });
 });
