@@ -13,6 +13,7 @@ import {
   type FirestoreDoc,
 } from '../src/lib/adminData.ts';
 import { usageEvent, type DayType, type EventName } from '../src/lib/events.ts';
+import { DAY_TYPES, EVENT_NAMES } from '../src/lib/eventSchema.ts';
 
 // #359 admin pages: counts computed in the browser from the documents read. Weeks run Monday to Sunday,
 // local time. Run under several TZ values (see the e2e) and the answers must not move.
@@ -130,4 +131,7 @@ test('#359 rules: placeholder only, create-only events with the same allowlist, 
   assert.doesNotMatch(rules, /allow (delete|write)/);
   assert.match(rules, /affectedKeys\(\)\.hasOnly\(\['done'\]\)/);
   assert.match(rules, /hasOnly\(\['testerId', 'event', 'dayType', 'appVersion', 'date', 'createdAt'\]\)/);
+  const list = (values: readonly string[]) => `[${values.map((value) => `'${value}'`).join(', ')}]`;
+  assert.ok(rules.includes(`request.resource.data.event in ${list(EVENT_NAMES)}`), 'rules list every event name, and only those');
+  assert.ok(rules.includes(`request.resource.data.dayType in ${list(DAY_TYPES)}`), 'rules list every day type, and only those');
 });

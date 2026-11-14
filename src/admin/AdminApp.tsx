@@ -11,7 +11,8 @@ import {
   weeksTo,
   type FeedbackItem,
 } from '../lib/adminData';
-import { DAY_TYPES, type UsageEvent } from '../lib/events';
+import type { UsageEvent } from '../lib/events';
+import { DAY_TYPES } from '../lib/eventSchema';
 import { AdminError, readEvents, readFeedback, setDone, signInWithGoogle, type Failure } from './api';
 
 /**

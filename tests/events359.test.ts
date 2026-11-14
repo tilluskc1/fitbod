@@ -4,9 +4,6 @@ import test from 'node:test';
 import { ABOUT_USAGE, USAGE_SENT } from '../src/lib/about.ts';
 import {
   BATCH_URL,
-  DAY_TYPES,
-  EVENT_FIELDS,
-  EVENT_NAMES,
   OUTBOX_CAP,
   OUTBOX_KEY,
   dayTypeOf,
@@ -18,6 +15,7 @@ import {
   usageEvent,
   type UsageEvent,
 } from '../src/lib/events.ts';
+import { DAY_TYPES, EVENT_FIELDS, EVENT_NAMES } from '../src/lib/eventSchema.ts';
 import { EMPTY_STATE, STORAGE_KEY, serializeExport } from '../src/lib/storage.ts';
 
 // #359 anonymous usage events: an allowlist of six fields, a capped outbox, and a send that never

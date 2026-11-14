@@ -1,5 +1,5 @@
 import type { FeedbackBody } from './sendFeedback.ts';
-import type { EVENT_FIELDS } from './events.ts';
+import type { EVENT_FIELDS } from './eventSchema.ts';
 
 /**
  * (#253) Settings > About. Every line is the product default from the story; the claims must match

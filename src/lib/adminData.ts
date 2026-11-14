@@ -1,4 +1,5 @@
-import { DAY_TYPES, EVENT_NAMES, localDay, type DayType, type EventName, type UsageEvent } from './events.ts';
+import { localDay, type DayType, type EventName, type UsageEvent } from './events.ts';
+import { DAY_TYPES, EVENT_NAMES } from './eventSchema.ts';
 
 /**
  * (#359) What the admin pages show, computed in the browser from the documents Firestore returns.

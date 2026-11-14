@@ -1,6 +1,8 @@
 import { FIREBASE } from './firebase.ts';
 import { appVersion, testerId } from './sendFeedback.ts';
 import { STORAGE_KEY } from './storage.ts';
+// Type-only: the lists live in eventSchema.ts, which only /admin and the tests load.
+import type { DAY_TYPES, EVENT_NAMES } from './eventSchema.ts';
 
 /**
  * (#359) Anonymous usage events. One small record per event, with exactly the fields in
@@ -8,25 +10,8 @@ import { STORAGE_KEY } from './storage.ts';
  * Records wait in one stored queue (OUTBOX_KEY, capped) and go to Firestore in one batchWrite,
  * on open and when the phone comes back online. Nothing here ever throws into training.
  */
-export const EVENT_NAMES = [
-  'workout-started',
-  'workout-finished',
-  'workout-cut-short',
-  'switch',
-  'plan-today',
-  'replace',
-  'supersets-on',
-  'supersets-off',
-  'backup',
-  'feedback',
-] as const;
 export type EventName = (typeof EVENT_NAMES)[number];
-
-export const DAY_TYPES = ['push', 'pull', 'legs', 'upper', 'lower', 'full-body', 'picked'] as const;
 export type DayType = (typeof DAY_TYPES)[number];
-
-/** The only fields an event may carry, in this order. A test fails the build on anything else. */
-export const EVENT_FIELDS = ['testerId', 'event', 'dayType', 'appVersion', 'date', 'createdAt'] as const;
 
 export interface UsageEvent {
   testerId: string;
@@ -83,13 +68,15 @@ type Store = Pick<Storage, 'getItem' | 'setItem'>;
 
 const ID_SHAPE = /^[A-Za-z0-9]{16,40}$/;
 
+/**
+ * Well-formed enough to send: a doc id, string fields and a real time, so one bad entry can never fail
+ * the whole batch. An unknown name or day type is refused by the rules, write by write, and dropped.
+ */
 function isQueued(value: unknown): value is Queued {
-  if (!value || typeof value !== 'object') return false;
-  const { id, event } = value as Queued;
-  return typeof id === 'string' && ID_SHAPE.test(id) && !!event && typeof event === 'object'
-    && EVENT_NAMES.includes(event.event) && typeof event.testerId === 'string' && typeof event.date === 'string'
-    && typeof event.createdAt === 'string' && typeof event.appVersion === 'string'
-    && (event.dayType === null || DAY_TYPES.includes(event.dayType));
+  const { id, event } = (value ?? {}) as Queued;
+  return typeof id === 'string' && ID_SHAPE.test(id) && !!event
+    && ['testerId', 'event', 'appVersion', 'date'].every((key) => typeof event[key as keyof UsageEvent] === 'string')
+    && (event.dayType === null || typeof event.dayType === 'string') && !Number.isNaN(Date.parse(event.createdAt));
 }
 
 /** The queue as stored; anything unreadable or malformed reads as empty, entry by entry. */
