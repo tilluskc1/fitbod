@@ -218,13 +218,14 @@ export function roleTarget(
 }
 
 /**
- * A saved kit with a barbell and machines or cables is a gym, not a home setup (#180). With a saved
- * "My gym" list (#357) any one of barbell, machine or cable is enough: a gym without barbells is still a
- * gym (review 1), but a kit moved back to dumbbells only is home gear again, list or not (review 3).
+ * A saved kit with a barbell and machines or cables is a gym, not a home setup (#180). A saved "My gym"
+ * list (#357) only drops the barbell from that rule: machines or cables are still required. So a gym
+ * without barbells is a gym (review 1), and a kit moved back to home gear (dumbbells, a garage barbell)
+ * is home again, list or not, and reads its own rack (reviews 3 and 4). The list never replaces the kit.
  */
 export function isGymKit(profile: Pick<Profile, 'equipment'> & Partial<Pick<Profile, 'gymItems'>>): boolean {
   const has = (item: Profile['equipment'][number]) => profile.equipment.includes(item);
-  if (profile.gymItems !== undefined) return has('Barbell') || has('Machine') || has('Cable');
+  if (profile.gymItems !== undefined) return has('Machine') || has('Cable');
   return profile.equipment.includes('Barbell')
     && (profile.equipment.includes('Machine') || profile.equipment.includes('Cable'));
 }

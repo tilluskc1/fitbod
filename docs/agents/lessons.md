@@ -263,6 +263,11 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    Review 3: making "has a list" mean "gym" for good then stuck a lifter who moved their chips back to
    home dumbbells. Rule: a new field may widen a reader's rule, never replace the inputs it already reads
    (a list plus barbell, machine or cable). Check: "review 3" test.
+   Review 4: the same rule still let a garage barbell keep a home kit a gym. Four reviews moved one
+   boolean because each fix widened the old rule a different way. Rule: write the new rule as the old one
+   with exactly one input relaxed (here: a list drops the barbell, machines or cables still required),
+   and sweep every saved-kit shape (gym, gym without barbell, garage, home with cables, dumbbells only)
+   through every reader before the first review. Check: "reviews 3 and 4" test.
 
 ## Recurring edge cases (put the relevant ones in every brief)
 
