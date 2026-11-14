@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { EQUIPMENT_OPTIONS, SUPPORT_OPTIONS, exerciseById } from '../data/exercises';
+import { gymPatch, showsMyGym } from '../data/gymItems';
+import MyGymSheet from '../components/MyGymSheet';
+import { gymSummary } from '../lib/myGym';
 import { calibrationInputValue, dumbbellLoadsPatch, formatWeight, loadLimitMessage, loadsInputText, overLoadLimit, parseLoads, toKg, unitLabel, unitOf } from '../lib/units';
 import { MAX_REPS } from '../lib/validate';
 import type { Profile, Unit, WorkoutExercise } from '../types';
@@ -1151,6 +1154,8 @@ export function SettingsSheet({
   const minutes = profile.sessionMinutes ?? 35;
   // (#253) About opens over Settings in place; back from Send feedback it opens again (lib/about).
   const [aboutOpen, setAboutOpen] = useState(returnsToAbout);
+  // (#357) My gym opens over Settings in place, like About; back returns here.
+  const [gymOpen, setGymOpen] = useState(false);
   useEffect(() => clearReturnToAbout(), []);
 
   // The text is in textUnit; on a unit switch, re-read the stored kg instead of converting the typed text.
@@ -1189,6 +1194,23 @@ export function SettingsSheet({
       ))}
     </div>
   );
+
+  if (gymOpen) {
+    return (
+      <MyGymSheet
+        profile={profile}
+        onSave={(items) => {
+          onChange(gymPatch(items));
+          setGymOpen(false);
+        }}
+        onClear={profile.gymItems ? () => {
+          onChange({ gymItems: undefined });
+          setGymOpen(false);
+        } : undefined}
+        onClose={() => setGymOpen(false)}
+      />
+    );
+  }
 
   if (aboutOpen) {
     return (
@@ -1315,6 +1337,17 @@ export function SettingsSheet({
             Equipment
           </h3>
           <div className="settings-card">
+            {showsMyGym(profile) && (
+              <div className="settings-row settings-row--stack">
+                <div className="settings-row__line">
+                  <span id="my-gym-label">My gym</span>
+                  <button className="text-action text-action--lime" aria-describedby="my-gym-note" onClick={() => setGymOpen(true)}>
+                    {profile.gymItems ? 'Edit my gym' : 'Set up my gym'}
+                  </button>
+                </div>
+                <p className="settings-row__note" id="my-gym-note">{gymSummary(profile)}</p>
+              </div>
+            )}
             <div className="settings-row settings-row--stack">
               <span>Primary</span>
               {chips(EQUIPMENT_OPTIONS, profile.equipment, 'equipment', 'Primary equipment')}

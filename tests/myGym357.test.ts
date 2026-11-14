@@ -277,3 +277,16 @@ test('#357 a running session keeps its exercises and pairs when the list changes
     assert.notEqual(exercise.exerciseId, machine, 'the removed exercise is not started');
   }
 });
+
+test('#357 ticks: the text adds, a tap wins over the text in both directions; nothing is guessed', async () => {
+  const { gymTicks, gymSummary } = await import('../src/lib/myGym.ts');
+  const read = readGymText('leg extension, leg curl, dumbbells, cable stack');
+  assert.deepEqual(gymTicks([], read, {}), ['leg-extension', 'leg-curl', 'cable-stack', 'dumbbells']);
+  assert.deepEqual(gymTicks([], read, { 'leg-curl': false, barbell: true }), ['leg-extension', 'cable-stack', 'dumbbells', 'barbell']);
+  // A saved list keeps its ticks when the text names nothing.
+  assert.deepEqual(gymTicks(['leg-press'], readGymText('a sauna'), {}), ['leg-press']);
+  assert.deepEqual(gymTicks(['leg-press'], [], { 'leg-press': false }), []);
+  assert.equal(gymSummary({}), 'Not set: every machine counts. List what your gym has so plans use only that.');
+  assert.equal(gymSummary({ gymItems: ['leg-press'] }), '1 item: Leg press.');
+  assert.equal(gymSummary({ gymItems: ['leg-extension', 'leg-curl', 'cable-stack', 'dumbbells'] }), '4 items: Leg extension, Leg curl, Cable stack (single) and 1 more.');
+});
