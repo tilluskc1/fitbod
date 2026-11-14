@@ -150,6 +150,7 @@ import { skipForward, switchOptions, upcomingDays } from './lib/switchDay';
 import type { SwitchOption } from './lib/switchDay';
 import { keepKey, todayFresher } from './lib/recovery';
 import { pickConstraints, pickPreview, recoveryLabels } from './lib/switchPick';
+import { bodyShade } from './lib/bodyMap';
 import type { Picks } from './lib/switchPick';
 import { opensOnSplash, splashAfterAdopt } from './lib/firstScreen';
 import { done, headsUp, problem, toastShows, claimsSave, dropSaveClaim, TOAST_MS, type Notice } from './lib/notices';
@@ -1716,6 +1717,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
                 plannedName={slot.name}
                 todayName={override ? program.name : undefined}
                 plannedAreas={areasOf(slot.focus)}
+                plannedFocus={slot.focus}
                 savedGear={savedSetup(profile)}
                 savedMinutes={profile.sessionMinutes ?? 35}
                 base={talkBase}
@@ -1723,6 +1725,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
                 onStart={startTalk}
                 onActive={setComposing}
                 openAsk={planTodayAsk}
+                shade={bodyShade(state.history, today)}
               />
             ) : undefined}
             composing={composing}
@@ -1911,6 +1914,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           onClose={closeSheet}
           preview={previewPick}
           recovery={recoveryLabels(state.history, today)}
+          shade={bodyShade(state.history, today)}
           onBuild={buildPick}
           onPlanToday={openPlanToday}
           onChangeGear={() => setSheet({ kind: 'gym' })}

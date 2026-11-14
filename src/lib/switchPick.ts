@@ -53,6 +53,14 @@ export function pickedMuscles(picks: Picks): MuscleGroup[] {
   return preset ? PRESET_MUSCLES[preset] : musclesOf(picks.parts);
 }
 
+/**
+ * (#302 review 1) What the body map lights: the pressed preset's muscles, else the pressed parts'.
+ * All six parts light every part, as the chips read, even though they build Full body.
+ */
+export function mapMuscles(picks: Picks): MuscleGroup[] {
+  return picks.preset ? PRESET_MUSCLES[picks.preset] : musclesOf(picks.parts);
+}
+
 /** "Push", or the parts by their chip names: "Shoulders + Arms". */
 export function pickLabel(picks: Picks): string {
   // Parts that are exactly a preset read as it, as Today names the day (Legs alone is "Lower", review 2).

@@ -269,6 +269,14 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    and sweep every saved-kit shape (gym, gym without barbell, garage, home with cables, dumbbells only)
    through every reader before the first review. Check: "reviews 3 and 4" test.
 
+38. **A picture of a pick reads what each screen's chips read.** #302 review 1: the body map lit
+   `musclesOf(train)` in Plan today, so "My planned day (Push)" lit biceps while Switch's Push lit
+   triceps only; and Switch lit `pickedMuscles`, so all six parts pressed (built as Full body) lit no arm
+   under a pressed Arms chip. Each e2e only checked a pick it made itself, never a screen's opening state.
+   Rule: a display of a selection takes the same value the selection's controls show, on every screen it
+   appears, and the e2e checks the opening state (planned default) and the "every chip" state. Check:
+   "review 1" tests in `tests/bodyMap302.test.ts` and steps in `scripts/e2e/body-map.mjs` (they fail at 1b4b254).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

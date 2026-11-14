@@ -4759,6 +4759,36 @@ button.aw-exercise__name-btn {
 }
 .sw-plan b { color: var(--accent-text); font-weight: 600; }
 
+/* ---------- Body map (#302) ----------
+   Front and back line drawing above the body-part chips. Lime only as a fill with a dark outline;
+   recent training is the outline grey at two strengths. No transitions, so nothing to reduce. */
+.bm { display: grid; gap: 6px; }
+.bm-figs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 168px));
+  justify-content: center;
+  /* 2 x 140 + 4 fits the planner card's 284px at 360 wide. */
+  gap: 4px;
+}
+.bm-fig { margin: 0; display: grid; justify-items: center; gap: 2px; }
+.bm-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.bm-body path { fill: var(--card); stroke: var(--outline); stroke-width: 0.8; stroke-linejoin: round; }
+.bm-r path { fill: var(--surface-container-high); stroke: var(--outline); stroke-width: 0.6; }
+.bm-r--earlier path { fill: var(--outline); fill-opacity: 0.35; }
+.bm-r--recent path { fill: var(--outline); fill-opacity: 0.8; }
+.bm-r--on path { fill: var(--primary); fill-opacity: 1; stroke: var(--on-primary); stroke-width: 1.1; }
+.bm-detail { fill: none; stroke: var(--outline); stroke-width: 0.5; pointer-events: none; }
+.bm-zone { fill: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.bm-cap { font-size: 12px; color: var(--muted); }
+.bm-legend { margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.bm-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--outline);
+  opacity: 0.8;
+}
+
 /* ---------- Logger quick actions (#151) ---------- */
 .lg-acts { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; }
 .lg-acts::-webkit-scrollbar { display: none; }

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { Profile } from '../types';
+import type { MuscleGroup, Profile } from '../types';
 import type { EquipmentChoice } from '../lib/adapt';
 import { AREAS } from '../lib/areas';
 import type { Area } from '../lib/areas';
@@ -14,6 +14,9 @@ import {
 } from '../lib/planToday';
 import type { Question } from '../lib/planToday';
 import Icon from './ui/Icon';
+import BodyMap from './BodyMap';
+import { talkMapMuscles } from '../lib/bodyMap';
+import type { Shade } from '../lib/bodyMap';
 
 interface Props {
   profile: Profile;
@@ -26,6 +29,8 @@ interface Props {
   todayName?: string;
   /** The planned day's areas: what "My planned day" trains. */
   plannedAreas: Area[];
+  /** (#302 review 1) The planned day's own muscles: what the map lights for "My planned day" (Push: triceps, not biceps). */
+  plannedFocus?: MuscleGroup[];
   /** The saved setup and length, pre-selected on Q4 and Q1. */
   savedGear: EquipmentChoice;
   savedMinutes: number;
@@ -38,6 +43,8 @@ interface Props {
   onActive?: (active: boolean) => void;
   /** (#296) Bumped by Switch's "Sore or hurt? Plan today with me": opens at the first question. */
   openAsk?: number;
+  /** (#302) The body map's shading on the Train question: muscles trained in the last 72 h. */
+  shade?: Shade;
 }
 
 const QUESTION_TEXT: Record<Question, string> = {
@@ -54,7 +61,7 @@ const minutesLabel = (minutes: number) => (minutes === 60 ? '1 hr' : `${minutes}
  * same answers from a sentence. Answers are chip taps over the text (`composeTalk`), so every way
  * of answering builds the same day. Voice is the keyboard's own dictation: nothing here listens.
  */
-export default function TodayTalk({ profile, plannedName, todayName, plannedAreas, savedGear, savedMinutes, base, preview, onStart, onActive, openAsk = 0 }: Props) {
+export default function TodayTalk({ profile, plannedName, todayName, plannedAreas, plannedFocus, savedGear, savedMinutes, base, preview, onStart, onActive, openAsk = 0, shade = {} }: Props) {
   const [step, setStep] = useState<Question | 'summary' | null>(null);
   const [text, setText] = useState('');
   // Answers sit on top of the text, so typing more never undoes them (see `tapsAfterEdit`).
@@ -255,6 +262,8 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
 
       {question === 'train' && (
         <>
+          <BodyMap selected={talkMapMuscles(talk.train, planned, plannedFocus)} shade={shade} areas={offered}
+            onToggle={(area) => setTaps(toggleTrain(base, text, taps, area, plannedAreas))} />
           <div className="tt-chips" role="group" aria-label="Train">
             <button type="button" className="tt-chip" aria-pressed={planned}
               onClick={() => setTaps(pickPlanned(base, text, taps, plannedAreas))}>My planned day ({plannedName})</button>

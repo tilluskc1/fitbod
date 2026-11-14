@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import Sheet from './ui/Sheet';
 import Icon from './ui/Icon';
+import BodyMap from './BodyMap';
+import type { Shade } from '../lib/bodyMap';
 import type { SwitchOption } from '../lib/switchDay';
 import { AREAS } from '../lib/areas';
 import type { Area } from '../lib/areas';
-import { NO_PICKS, PART_LABEL, PRESETS, consequenceLine, pickPreset, togglePart } from '../lib/switchPick';
+import { NO_PICKS, PART_LABEL, PRESETS, consequenceLine, mapMuscles, pickPreset, togglePart } from '../lib/switchPick';
 import type { PickPreview, Picks } from '../lib/switchPick';
 
 interface Props {
@@ -15,6 +17,8 @@ interface Props {
   preview: (picks: Picks) => PickPreview | null;
   /** (#296) "trained yesterday" per body part, a label only. */
   recovery: Partial<Record<Area, string>>;
+  /** (#302) The body map's shading: muscles trained in the last 72 h; none without history. */
+  shade?: Shade;
   onBuild: (picks: Picks) => void;
   /** "Sore or hurt? Plan today with me": Switch never asks about pain. */
   onPlanToday: () => void;
@@ -33,7 +37,7 @@ function listOf(names: string[]): string {
  * (#150) Pick any day in the split. A later day skips the ones before it, and says so.
  * (#296) Or train something else: a preset or body parts, built as a today-only described day.
  */
-export default function SwitchSheet({ options, onPick, onClose, preview, recovery, onBuild, onPlanToday, onChangeGear }: Props) {
+export default function SwitchSheet({ options, onPick, onClose, preview, recovery, shade = {}, onBuild, onPlanToday, onChangeGear }: Props) {
   const [picks, setPicks] = useState<Picks>(NO_PICKS);
   const [first] = options;
   const next = options[1];
@@ -97,6 +101,7 @@ export default function SwitchSheet({ options, onPick, onClose, preview, recover
             </button>
           ))}
         </div>
+        <BodyMap selected={mapMuscles(picks)} shade={shade} areas={AREAS} onToggle={(area) => setPicks(togglePart(picks, area))} />
         <div className="sw-chips sw-chips--parts" role="group" aria-label="Body parts">
           {AREAS.map((area) => (
             <button

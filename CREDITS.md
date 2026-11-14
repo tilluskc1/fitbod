@@ -42,6 +42,14 @@ holds no separate licence file for any font.
 | `public/icons/` | Home Screen and install icons (`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`) | Made for this app: "icons drawn from the favicon mark" (#214, commit 49b23c1) | Same as `public/favicon.svg`: not recorded |
 | `public/icons.svg` | Sprite of Bluesky, Discord, documentation, GitHub, social and X symbols | Source not recorded. Added in the initial commit; nothing in the app references it. | Not recorded |
 
+## Drawings in the app's code
+
+Not in `public/`, so `tests/credits254.test.ts` does not list them; recorded here because they are art.
+
+| Path | What | Source | Licence |
+| --- | --- | --- | --- |
+| `src/lib/bodyMap.ts` (drawn by `src/components/BodyMap.tsx`) | Body map: front and back line drawing of a neutral, non-gendered figure, split into the app's muscle groups | Drawn for this app as hand-written SVG paths in #302 (2026-11-14). Not traced from a photo or from any other app's figure. | Same as the app's code |
+
 ## App files
 
 | Path | What | Source | Licence |
