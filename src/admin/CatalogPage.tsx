@@ -192,8 +192,8 @@ function Editor({ start, said, isNew, entries, token, onFail, onSaved, onBack }:
 
   const choose = async (kind: 'photo' | 'video', file: File | undefined) => {
     setMessage(null);
-    if (!file) return;
-    const problem = fileProblem(kind, file, kind === 'video' ? await videoSeconds(file) : undefined);
+    // Nothing chosen (the picker was cleared): the earlier file and its problem go with it.
+    const problem = file ? fileProblem(kind, file, kind === 'video' ? await videoSeconds(file) : undefined) : null;
     setFileErrors((current) => ({ ...current, [kind]: problem ?? undefined }));
     setFiles((current) => ({ ...current, [kind]: problem ? undefined : file }));
   };

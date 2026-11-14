@@ -188,6 +188,9 @@ try {
     check(await publish(page).isDisabled(), `${where}: Publish enabled with a photo over 1 MB`);
     await videoInput.setInputFiles(files.mov);
     await page.locator('.adm-error', { hasText: 'Videos must be MP4.' }).waitFor();
+    // Clearing the picker clears the file and its problem (CI has no ffmpeg to make a good MP4).
+    await videoInput.setInputFiles([]);
+    await page.waitForFunction(() => !document.body.innerText.includes('Videos must be MP4.'));
     if (videos) {
       await videoInput.setInputFiles(files.long);
       await page.locator('.adm-error', { hasText: 'This video is over 15 seconds.' }).waitFor();
