@@ -38,11 +38,12 @@ export function musclesWorked(record: WorkoutRecord): Set<MuscleGroup> {
  * Each muscle trained in the last 48 h, with when it was last trained. Derived from history alone:
  * finished sessions, timed by when they ended (or started, on legacy records or a bad end), a
  * planned or a described day alike. An end a little ahead of this clock (skew, a restore) is now.
+ * (#302) The body map reads the same check over 72 h; everything else keeps 48 h.
  */
-export function recentlyTrained(history: WorkoutRecord[], now: Date): Map<MuscleGroup, Date> {
+export function recentlyTrained(history: WorkoutRecord[], now: Date, hours = RECOVERY_HOURS): Map<MuscleGroup, Date> {
   const recent = new Map<MuscleGroup, Date>();
   for (const record of history) {
-    const at = endedWithin(record, now);
+    const at = endedWithin(record, now, hours);
     if (!at) continue;
     for (const muscle of musclesWorked(record)) {
       const last = recent.get(muscle);
@@ -58,11 +59,11 @@ function endTime(record: WorkoutRecord): number {
   return Number.isNaN(ended) ? Date.parse(record.date) : ended;
 }
 
-/** When a finished session ended, clamped to now; null outside the 48 h window or without a readable time. */
-function endedWithin(record: WorkoutRecord, now: Date): Date | null {
+/** When a finished session ended, clamped to now; null outside the window (48 h) or without a readable time. */
+function endedWithin(record: WorkoutRecord, now: Date, hours = RECOVERY_HOURS): Date | null {
   if (record.status !== 'completed') return null;
   const time = endTime(record);
-  if (Number.isNaN(time) || now.getTime() - time > RECOVERY_HOURS * HOUR_MS) return null;
+  if (Number.isNaN(time) || now.getTime() - time > hours * HOUR_MS) return null;
   return new Date(Math.min(time, now.getTime()));
 }
 
