@@ -53,7 +53,7 @@ async function finishWorkout(page) {
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
   for (let guard = 0; guard < 120; guard += 1) {
-    const log = page.locator('button.lg-check:not([disabled])').first();
+    const log = page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first();
     if (!(await log.count())) break;
     await log.click();
   }
@@ -99,8 +99,9 @@ try {
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     check(await page.getByText(/Suggested start/).count() === 0, `${where}: no suggested start the second time`);
-    const row = (await page.locator('td.lg-prev').first().innerText()).replace(/\s+/g, ' ').trim();
-    const weight = (await page.locator('table input.lg-cell').first().inputValue()).trim();
+    // (#380) The focus card holds set 1: its "Previous" and its weight input.
+    const row = (await page.locator('.lg-focus__prev b').first().innerText()).replace(/\s+/g, ' ').trim();
+    const weight = (await page.locator('.lg-focus input.lg-cell').first().inputValue()).trim();
     if (last) check(row === `${last[2]} × ${last[1]}`, `${where}: previous is last week's ${last[2]} × ${last[1]} (${row})`);
     if (target) check(weight === target[2], `${where}: set 1 is prefilled with the target's ${target[2]} (${weight})`);
     const log = page.getByRole('button', { name: 'Log set 1' }).first();

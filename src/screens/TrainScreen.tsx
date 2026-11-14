@@ -234,9 +234,7 @@ export default function TrainScreen({
   const heldKey = held === null ? null : `${held.exerciseIndex}:${held.setIndex}`;
   useEffect(() => {
     if (heldKey === null) return;
-    // (#380) The card's Log button sits under it: reveal both, so Apply to all and Log stay in the band.
     document.querySelector('.lg-note--held .notice-card')?.scrollIntoView({ block: 'nearest' });
-    document.querySelector('.lg-focus .lg-log')?.scrollIntoView({ block: 'nearest' });
   }, [heldKey]);
 
   // #300: warm-up checks live in memory for the session; nothing reaches the record.
@@ -567,7 +565,7 @@ export default function TrainScreen({
   const weightUnit = `${unitLabel(unit)}${perSide}${onBar ? ' · bar' : ''}`;
   // (#88) In a superset the card names the half by its place in the pair: A is the first, B the second.
   const pair = round && partner !== undefined ? pairs.find(([a, b]) => a === index || b === index) : undefined;
-  const letterOf = (entryIndex: number) => (pair ? (pair[0] === entryIndex ? 'A' : 'B') : '');
+  const letterOf = (entryIndex: number) => (pair ? (entryIndex === Math.min(...pair) ? 'A' : 'B') : '');
   const letter = letterOf(index);
   const tail = 132 + (reason ? 40 : 0) + (refused ? 40 : 0);
 
@@ -703,7 +701,7 @@ export default function TrainScreen({
     ? Array.from({ length: Math.max(exercise.performed.length, partnerEntry.performed.length) }, (_, setIndex) => {
       const own = setIndex < exercise.performed.length ? setRow(setIndex) : null;
       const theirs = setIndex < partnerEntry.performed.length ? partnerRow(setIndex) : null;
-      return pair[0] === index ? [own, theirs] : [theirs, own];
+      return letter === 'A' ? [own, theirs] : [theirs, own];
     }).flat().filter(Boolean)
     : exercise.performed.map((_, setIndex) => setRow(setIndex));
 

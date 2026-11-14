@@ -60,7 +60,7 @@ async function finishWorkout(page, afterFinish) {
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
   for (let guard = 0; guard < 120; guard += 1) {
-    const log = page.locator('button.lg-check:not([disabled])').first();
+    const log = page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first();
     if (!(await log.count())) break;
     await log.click();
   }
@@ -256,7 +256,7 @@ try {
     await onboard(train);
     await train.getByRole('button', { name: 'Start workout' }).click();
     await train.waitForSelector('.lg-ex');
-    await train.locator('button.lg-check:not([disabled])').first().click();
+    await train.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
     // (#279) A running session (no planner entry then): Today's dock shows Resume on one line.
     await train.getByRole('button', { name: 'Minimize workout' }).click();
     await train.waitForSelector('.t7-hero');
@@ -264,7 +264,7 @@ try {
     await shot(train, `${width}x${height}-running`);
     await train.locator('.flow-dock .pill-primary').click();
     await train.waitForSelector('.lg-ex');
-    await train.locator('[aria-label^="More actions for"]').first().click();
+    await train.locator('.lg-acts').getByRole('button', { name: 'More', exact: true }).click();
     await train.getByRole('button', { name: "Remove today's remaining work" }).click();
     await train.getByRole('button', { name: "Remove from today's workout" }).click();
     const where = `${width}x${height}-train-message`;

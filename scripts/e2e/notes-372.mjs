@@ -65,7 +65,7 @@ const noteLine = (page) => page.locator('.lg-coach--note');
 /** Log every set at its prefilled weight (#309), finish, back to Today. */
 async function logAllAndFinish(page) {
   for (let guard = 0; guard < 120; guard += 1) {
-    const log = page.locator('button.lg-check:not([disabled])').first();
+    const log = page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first();
     if (!(await log.count())) break;
     await log.click();
   }
@@ -88,8 +88,8 @@ try {
     const noted = await current(page);
     check((await noteLine(page).count()) === 0, `${where}: a first session shows a "Last time" line`);
 
-    // ⋯ → Add note → type → Save note.
-    await page.getByRole('button', { name: `More actions for ${noted}` }).click();
+    // More → Add note → type → Save note (#380: the More chip opens the sheet the ⋯ button did).
+    await page.locator('.lg-acts').getByRole('button', { name: 'More', exact: true }).click();
     const dialog = page.getByRole('dialog');
     const add = dialog.getByRole('button', { name: 'Add note' });
     if ((await add.count()) !== 1) {
@@ -105,7 +105,7 @@ try {
       await dialog.getByRole('button', { name: 'Save note' }).click();
       const toast = (await page.locator('.done-toast__text').innerText().catch(() => '')).trim();
       check(toast === 'Note saved for next time.', `${where}: save toast reads "${toast}"`);
-      await page.getByRole('button', { name: `More actions for ${noted}` }).click();
+      await page.locator('.lg-acts').getByRole('button', { name: 'More', exact: true }).click();
       check((await dialog.getByRole('button', { name: 'Edit note' }).count()) === 1, `${where}: the menu does not offer Edit note after saving`);
       await dialog.getByRole('button', { name: /close/i }).first().click().catch(() => page.keyboard.press('Escape'));
       await page.waitForSelector('[role="dialog"]', { state: 'detached', timeout: 3000 }).catch(() => {});

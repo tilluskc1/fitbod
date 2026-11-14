@@ -129,21 +129,22 @@ try {
     check(!(await toast.count()), `${where}: the Today toast followed into the logger`);
 
     // In the logger a toast never takes a tap meant for Log or Finish.
-    await page.locator('button.lg-check:not([disabled])').first().click();
-    await page.locator('[aria-label^="More actions for"]').first().click();
+    await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
+    await page.locator('.lg-acts').getByRole('button', { name: 'More', exact: true }).click();
     await page.getByRole('button', { name: "Remove today's remaining work" }).click();
     await page.getByRole('button', { name: "Remove from today's workout" }).click();
     await toast.waitFor({ timeout: 3000 }).catch(() => {});
     check(await toast.count() === 1, `${where}: no toast in the logger`);
     await tapLands(page, page.locator('.finish-btn'), 'Finish', where);
-    await tapLands(page, page.locator('button.lg-check:not([disabled])'), 'Log', where);
-    await clearOf(page, page.locator('.lg-dock'), 'the logger dock', where);
+    await tapLands(page, page.locator('button.lg-log:not(.lg-log--back):not([disabled])'), 'Log', where);
+    // (#380) The dock holds only the rest timer now, so it is there only while rest runs.
+    if (await page.locator('.lg-dock').count()) await clearOf(page, page.locator('.lg-dock'), 'the logger dock', where);
     await shot(page, 'done-logger', where);
 
     // Problem: a failed save is a red card with Retry, and stays until Retry succeeds.
     const toastBefore = await toast.count();
     await page.evaluate(() => { window.__failSaves = true; });
-    await page.locator('button.lg-check:not([disabled])').first().click();
+    await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
     const card = page.locator('.app-alerts .notice-card--problem');
     await card.waitFor({ timeout: 3000 }).catch(() => {});
     check(await card.getByText('Not saved.').isVisible().catch(() => false), `${where}: no Problem card on a failed save`);
@@ -185,8 +186,8 @@ try {
     // A full workout: "Workout saved." is a Done toast on the recap and follows it to Today.
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
-    for (let i = 0; i < 80 && await page.locator('button.lg-check:not([disabled])').count(); i += 1) {
-      await page.locator('button.lg-check:not([disabled])').first().click();
+    for (let i = 0; i < 80 && await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').count(); i += 1) {
+      await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
       await page.waitForTimeout(30);
     }
     await page.locator('.finish-btn').click();
@@ -256,7 +257,9 @@ try {
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     const set1 = page.getByLabel(/^Set 1 weight/);
-    const before = await page.getByLabel(/^Set 2 weight/).inputValue();
+    // (#380) Set 2 is a list row under the card: "Set 2, 135 lb × 8, edit".
+    const set2 = async () => (await page.getByRole('button', { name: /^Set 2, .*, edit$/ }).getAttribute('aria-label')).match(/^Set 2, ([\d.]+)/)?.[1];
+    const before = await set2();
     await set1.click();
     await set1.fill('');
     await set1.pressSequentially(String(Number(before) + 5));
@@ -268,13 +271,13 @@ try {
     if (await undo.count()) {
       await tapLands(page, undo, 'Undo', `${where} (#332)`);
       await undo.click();
-      check(await page.getByLabel(/^Set 2 weight/).inputValue() === before, `${where} (#332): Undo did not put set 2 back to ${before}`);
+      check(await set2() === before, `${where} (#332): Undo did not put set 2 back to ${before}`);
     }
     // (#351) Finishing under a standing save error: no "Workout saved." toast, the Problem card stays
     // and says what happened. Retry then saves with no new message.
     await page.waitForTimeout(4300); // the carry toast has passed
-    for (let i = 0; i < 80 && await page.locator('button.lg-check:not([disabled])').count(); i += 1) {
-      await page.locator('button.lg-check:not([disabled])').first().click();
+    for (let i = 0; i < 80 && await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').count(); i += 1) {
+      await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
       await page.waitForTimeout(30);
     }
     if (await page.locator('.finish-btn').count()) await page.locator('.finish-btn').click();

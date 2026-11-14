@@ -48,18 +48,33 @@ async function onboard(page) {
   await page.waitForSelector('.t7-hero');
 }
 
+/**
+ * (#380) Each working set's values as the lifter reads them: its list row ("Set 2, 135 lb × 8, edit"),
+ * which follows the card's inputs keystroke by keystroke, and its "Set N logged" tick.
+ */
 async function rows(page) {
   const out = [];
-  for (const row of await page.locator('table.lg-table tbody tr:not(.lg-note):not(.lg-row--warm)').all()) {
-    const cells = row.locator('input.lg-cell');
-    out.push({ weight: (await cells.nth(0).inputValue()).trim(), reps: (await cells.nth(1).inputValue()).trim(),
-      logged: (await row.locator('[aria-label$=" logged"]').count()) === 1 });
+  for (const row of await page.locator('.lg-list button.lg-li').all()) {
+    const line = (await row.getAttribute('aria-label')).match(/^Set \d+, (.*) × (\d+)s?, edit$/);
+    const weight = line?.[1] === '—' ? '' : (line?.[1] ?? '').replace(/ (lb|kg)$/, '');
+    out.push({ weight, reps: line?.[2] ?? '', logged: (await row.locator('[aria-label$=" logged"]').count()) === 1 });
   }
   return out;
 }
 
+/** (#380) Put set `n` on the focus card (tap its row) unless it is already there. */
+async function onCard(page, n) {
+  const label = (await page.locator('section.lg-focus').getAttribute('aria-label')) ?? '';
+  if (new RegExp(`(^|, )set ${n} of`, 'i').test(label)) return;
+  await page.getByRole('button', { name: new RegExp(`^Set ${n}, .*, edit$`) }).click();
+}
+
 const weightCell = (page, n) => page.getByLabel(new RegExp(`^Set ${n} weight, pounds`));
 const logButton = (page, n) => page.getByRole('button', { name: `Log set ${n}`, exact: true });
+/** (#380) The same controls, with set `n` brought onto the card first. */
+const cardCell = async (page, n) => { await onCard(page, n); return weightCell(page, n); };
+const cardLog = async (page, n) => { await onCard(page, n); return logButton(page, n); };
+const cardReps = async (page, n) => { await onCard(page, n); return page.getByLabel(`Set ${n} reps`); };
 
 /** Is the element wholly inside the band and the one hit at its centre? */
 async function inBand(page, locator, top, bottom) {
@@ -101,8 +116,9 @@ try {
     const reps = target?.[2];
 
     // No weight field, Skip or Confirm above the table; one hint names the suggested start in set 1.
-    const outside = await page.locator('.lg-body input:not(table.lg-table input)').count();
-    check(outside === 0, `${where}: ${outside} input(s) outside the set table`);
+    // (#380) The only inputs are the focus card's: the set to log's weight and reps.
+    const outside = await page.locator('.lg-body input:not(.lg-focus input)').count();
+    check(outside === 0, `${where}: ${outside} input(s) outside the focus card`);
     const hint = (await page.locator('.lg-coach').innerText()).match(/^Suggested start (\d+(?:\.\d+)?) lb\. Do 5 easy reps with it, then adjust set 1\.$/);
     check(Boolean(hint), `${where}: hint line names the suggested start (${await page.locator('.lg-coach').innerText()})`);
     let r = await rows(page);
@@ -112,43 +128,43 @@ try {
     for (const word of ['Save set', 'Cancel', 'Confirm', 'Skip']) check(!markup.includes(`>${word}<`), `${where}: "${word}" still in the logger`);
     check(!/>Done</.test(markup), `${where}: "Done" still in the logger`);
     check(!/class="stepper"|Increase reps|Decrease reps/.test(markup), `${where}: a reps stepper is still in the logger`);
-    for (const n of [1, 2]) {
-      const box = await weightCell(page, n).boundingBox();
+    for (const n of [1]) {
+      const box = await (await cardCell(page, n)).boundingBox();
       check(box && box.height >= 44, `${where}: set ${n} weight cell is ${box?.height}px tall`);
-      const lines = await weightCell(page, n).evaluate((el) => el.scrollWidth <= el.clientWidth);
+      const lines = await (await cardCell(page, n)).evaluate((el) => el.scrollWidth <= el.clientWidth);
       check(lines, `${where}: set ${n} weight cell overflows`);
     }
-    const head = (await page.locator('.lg-table thead').innerText()).replace(/\s+/g, ' ');
-    check(/LB TOTAL|LB EACH/.test(head), `${where}: the column header names the unit (${head})`);
+    const head = (await page.locator('.lg-focus .lg-field--w small').innerText()).replace(/\s+/g, ' ');
+    check(/^lb( · bar| each)?$/.test(head), `${where}: the card names the unit under the number (${head})`);
     await shot(page, `after-logger-${width}`);
 
     // Tap set 1's weight, type 135, tap ✓: logged at 135 × reps; sets 2+ show 135.
     let taps = 0;
-    await weightCell(page, 1).click(); taps += 1;
+    await (await cardCell(page, 1)).click(); taps += 1;
     await page.keyboard.type('135');
-    await logButton(page, 1).click(); taps += 1;
+    await (await cardLog(page, 1)).click(); taps += 1;
     r = await rows(page);
     check(r[0].logged && r[0].weight === '135' && r[0].reps === reps, `${where}: set 1 logged at 135 × ${reps} (${JSON.stringify(r[0])})`);
     check(r.slice(1).every((row) => row.weight === '135' && !row.logged), `${where}: sets 2+ show 135 (${JSON.stringify(r)})`);
     check(taps === 2, `${where}: ${taps} taps plus typing`);
 
     // Set 2 at its prefill: one tap.
-    await logButton(page, 2).click();
+    await (await cardLog(page, 2)).click();
     r = await rows(page);
     check(r[1].logged && r[1].weight === '135', `${where}: set 2 logs in one tap (${JSON.stringify(r[1])})`);
 
     // An empty load cannot be logged.
-    await weightCell(page, 3).click();
+    await (await cardCell(page, 3)).click();
     await page.keyboard.press('Backspace');
-    check(await logButton(page, 3).isDisabled(), `${where}: an empty load can be logged`);
+    check(await (await cardLog(page, 3)).isDisabled(), `${where}: an empty load can be logged`);
     await page.keyboard.type('135');
-    await weightCell(page, 3).blur();
-    check(!(await logButton(page, 3).isDisabled()), `${where}: a typed load re-enables the ✓`);
+    await (await cardCell(page, 3)).blur();
+    check(!(await (await cardLog(page, 3)).isDisabled()), `${where}: a typed load re-enables the ✓`);
 
     // A logged set edits in place: a toast says so, with Undo; an emptied logged load is not stored.
-    await weightCell(page, 1).click();
+    await (await cardCell(page, 1)).click();
     await page.keyboard.type('140');
-    await weightCell(page, 1).blur();
+    await (await cardCell(page, 1)).blur();
     const toast = page.locator('.done-toast, .app-alerts .notice-card').first();
     const toastText = (await toast.innerText()).replace(/\s+/g, ' ');
     check(/^Set 1 updated/.test(toastText), `${where}: logged-set toast (${toastText})`);
@@ -161,14 +177,14 @@ try {
     r = await rows(page);
     check(r[0].weight === '135' && r[0].logged, `${where}: Undo puts set 1 back to 135 (${JSON.stringify(r[0])})`);
     check(r.slice(2).every((row) => row.weight === '135'), `${where}: Undo puts sets 3+ back to 135 (${JSON.stringify(r)})`);
-    await weightCell(page, 1).click();
+    await (await cardCell(page, 1)).click();
     await page.keyboard.press('Backspace');
-    await weightCell(page, 1).blur();
+    await (await cardCell(page, 1)).blur();
     r = await rows(page);
     check(r[0].weight === '135', `${where}: an emptied logged load is not stored (${r[0].weight})`);
 
     // Next on the keyboard moves weight → reps; a reload keeps the typed value.
-    await weightCell(page, 3).click();
+    await (await cardCell(page, 3)).click();
     await page.keyboard.press('Enter');
     const focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
     check(focused === 'Set 3 reps', `${where}: Next moves to set 3 reps (${focused})`);
@@ -186,13 +202,13 @@ try {
     const headerBottom = (await page.locator('.flow-header').boundingBox()).height;
     for (const shift of [0, 344 - 60, 344]) {
       await page.evaluate(() => window.scrollTo(0, 0));
-      await weightCell(page, last).focus();
+      await (await cardCell(page, last)).focus();
       await page.evaluate(([h, o]) => window.__fakeKeyboard(h, o), [height - 344, shift]);
       await page.waitForTimeout(50);
       const top = Math.max(shift, headerBottom);
       const bottom = height - 344 + shift;
       const tag = `${where} keyboard (offsetTop ${shift})`;
-      for (const [label, loc] of [['weight cell', weightCell(page, last)], ['✓', logButton(page, last)]]) {
+      for (const [label, loc] of [['weight cell', (await cardCell(page, last))], ['✓', (await cardLog(page, last))]]) {
         const seen = await inBand(page, loc, top, bottom);
         check(seen.ok, `${tag}: set ${last} ${label} outside the visible band ${top}-${bottom} (${JSON.stringify(seen.box)})`);
       }
@@ -200,7 +216,7 @@ try {
         // What the lifter sees: the visible band only.
         if (shots) await page.screenshot({ path: `${shots}/309-after-keyboard-${width}.png`, clip: { x: 0, y: 0, width, height: height - 344 } });
       }
-      await weightCell(page, last).blur();
+      await (await cardCell(page, last)).blur();
       await page.evaluate(() => window.__fakeKeyboard(null, 0));
     }
 
@@ -219,12 +235,12 @@ try {
     const hint = (await page.locator('.lg-coach').innerText()).match(/Suggested start (\d+)/)?.[1];
 
     // D4: clearing set 1 empties set 1 only; the others keep the suggestion and their ✓.
-    await weightCell(page, 1).click();
+    await (await cardCell(page, 1)).click();
     await page.keyboard.press('Backspace');
-    await weightCell(page, 1).blur();
+    await (await cardCell(page, 1)).blur();
     let r = await rows(page);
     check(r[0].weight === '' && r.slice(1).every((row) => row.weight === hint), `${where} D4: one cleared cell blanks only itself (${JSON.stringify(r)})`);
-    check(!(await logButton(page, 2).isDisabled()), `${where} D4: set 2 still logs at the suggestion`);
+    check(!(await (await cardLog(page, 2)).isDisabled()), `${where} D4: set 2 still logs at the suggestion`);
 
     // D3: logging set 2 first leaves the empty sets at the suggestion, still one tap. After the reload
     // the cleared set 1 shows the muted suggestion again: nothing stores a cleared cell (owner, #315 item 12).
@@ -234,40 +250,40 @@ try {
     if (!(await page.locator('.lg-ex').count())) await resume.click();
     await page.waitForSelector('.lg-ex');
     r = await rows(page);
-    check(r[0].weight === hint && !(await logButton(page, 1).isDisabled()), `${where} R3: a reload shows the suggestion in a cleared cell again (${JSON.stringify(r)})`);
-    check(await weightCell(page, 1).evaluate((el) => el.classList.contains('lg-cell--empty')), `${where} R3: in the muted style`);
-    await logButton(page, 2).click();
+    check(r[0].weight === hint && !(await (await cardLog(page, 1)).isDisabled()), `${where} R3: a reload shows the suggestion in a cleared cell again (${JSON.stringify(r)})`);
+    check(await (await cardCell(page, 1)).evaluate((el) => el.classList.contains('lg-cell--empty')), `${where} R3: in the muted style`);
+    await (await cardLog(page, 2)).click();
     r = await rows(page);
-    check(r[1].logged && r[2].weight === hint && !(await logButton(page, 3).isDisabled()),
+    check(r[1].logged && r[2].weight === hint && !(await (await cardLog(page, 3)).isDisabled()),
       `${where} D3: set 3 keeps ${hint} and its ✓ after set 2 logs first (${JSON.stringify(r)})`);
 
     // D1: an over-limit key is capped at the cell (review 2): it is never typed, and nothing changes.
-    await weightCell(page, 1).click();
+    await (await cardCell(page, 1)).click();
     await page.keyboard.type('135');
-    await weightCell(page, 1).blur();
-    await weightCell(page, 1).click();
+    await (await cardCell(page, 1)).blur();
+    await (await cardCell(page, 1)).click();
     await page.keyboard.press('End');
     await page.keyboard.type('99'); // 1359, then 13599 lb: over the limit, so the second 9 is not typed
-    check(await weightCell(page, 1).inputValue() === '1359', `${where} D1: the cell keeps 1359 when 13599 is capped`);
+    check(await (await cardCell(page, 1)).inputValue() === '1359', `${where} D1: the cell keeps 1359 when 13599 is capped`);
     const alert = await page.getByRole('alert').innerText().catch(() => '');
     check(/not saved/.test(alert), `${where} D1: the refusal says so (${alert})`);
-    await weightCell(page, 1).blur();
+    await (await cardCell(page, 1)).blur();
     r = await rows(page);
     check(r[0].weight === '1359', `${where} D1: the capped key leaves 1359 stored (${r[0].weight})`);
-    await page.getByLabel('Set 1 reps').click();
+    await (await cardReps(page, 1)).click();
     await page.keyboard.press('End');
     await page.keyboard.type('999'); // 89, 899, then 8999: over the limit, so the last 9 is not typed
-    await page.getByLabel('Set 1 reps').blur();
+    await (await cardReps(page, 1)).blur();
     r = await rows(page);
     check(r[0].reps === '899', `${where} D1: capped reps leave 899 stored (${r[0].reps})`);
 
     // D2: an emptied reps cell cannot be logged.
-    await page.getByLabel('Set 3 reps').click();
+    await (await cardReps(page, 3)).click();
     await page.keyboard.press('Backspace');
-    check(await logButton(page, 3).isDisabled(), `${where} D2: a set with no reps can be logged`);
+    check(await (await cardLog(page, 3)).isDisabled(), `${where} D2: a set with no reps can be logged`);
     await page.keyboard.type('8');
-    await page.getByLabel('Set 3 reps').blur();
-    check(!(await logButton(page, 3).isDisabled()), `${where} D2: typed reps re-enable the ✓`);
+    await (await cardReps(page, 3)).blur();
+    check(!(await (await cardLog(page, 3)).isDisabled()), `${where} D2: typed reps re-enable the ✓`);
     await page.close();
   }
 
@@ -290,7 +306,7 @@ try {
     };
 
     // R0, the blocker: set 1 empty (showing the suggestion); 1, 3, 5, 9 carry 1359 to every set.
-    await weightCell(page, 1).click();
+    await (await cardCell(page, 1)).click();
     await page.keyboard.type('1359');
     let r = await rows(page);
     check(r.every((row) => row.weight === '1359'), `${where} R0: the burst carries 1359 (${JSON.stringify(r)})`);
@@ -306,26 +322,26 @@ try {
     check(!/applied/.test(await toastText()), `${where} R0: no carry toast is left up (${await toastText()})`);
     // Follow-up 2: the restored value is selected, so the next key replaces it rather than appending.
     await page.keyboard.type('2');
-    check(await weightCell(page, 1).inputValue() === '2', `${where} R2: the next key starts a new value (${await weightCell(page, 1).inputValue()})`);
+    check(await (await cardCell(page, 1)).inputValue() === '2', `${where} R2: the next key starts a new value (${await (await cardCell(page, 1)).inputValue()})`);
     // An emptied set 1 puts back every set the burst carried.
     await page.keyboard.press('Backspace');
     r = await rows(page);
     check(r[0].weight === '' && r.slice(1).every((row) => row.weight === hint), `${where} R0: an emptied cell puts the carried sets back (${JSON.stringify(r)})`);
-    await weightCell(page, 1).blur();
+    await (await cardCell(page, 1)).blur();
 
     // Follow-up 1: a refused first keystroke on a logged set says nothing was updated.
-    await logButton(page, 2).click();
-    await page.getByLabel('Set 2 reps').click();
+    await (await cardLog(page, 2)).click();
+    await (await cardReps(page, 2)).click();
     await paste('99999');
     check(!/updated|applied/.test(await toastText()), `${where} R1: a refused keystroke on a logged set shows no update toast (${await toastText()})`);
     // Follow-up 2 with a value in the cell: the 8 it shows again is selected, so 6 replaces it (not 86).
     await page.keyboard.type('6');
-    check(await page.getByLabel('Set 2 reps').inputValue() === '6', `${where} R2: the next key replaces the restored 8 (${await page.getByLabel('Set 2 reps').inputValue()})`);
-    await page.getByLabel('Set 2 reps').blur();
+    check(await (await cardReps(page, 2)).inputValue() === '6', `${where} R2: the next key replaces the restored 8 (${await (await cardReps(page, 2)).inputValue()})`);
+    await (await cardReps(page, 2)).blur();
     // Follow-up 5: a logged set's reps cannot be emptied to 0.
-    await page.getByLabel('Set 2 reps').click();
+    await (await cardReps(page, 2)).click();
     await page.keyboard.press('Backspace');
-    await page.getByLabel('Set 2 reps').blur();
+    await (await cardReps(page, 2)).blur();
     r = await rows(page);
     check(r[1].logged && r[1].reps === '8', `${where} R5: a logged set keeps its reps when emptied (${JSON.stringify(r[1])})`);
     check(!/updated/.test(await toastText()), `${where} R5: and says nothing was updated (${await toastText()})`);
@@ -343,12 +359,12 @@ try {
     await page.waitForSelector('.lg-ex');
     const toast = page.locator('.done-toast, .app-alerts .notice-card').first();
     const toastText = async () => (await toast.count()) ? (await toast.innerText()).replace(/\s+/g, ' ') : '';
-    await weightCell(page, 1).click();
+    await (await cardCell(page, 1)).click();
     await page.keyboard.type('13');
     check(!/Big jump/.test(await toastText()), `${where}: 13 lb from a 45 lb suggestion is no jump (${await toastText()})`);
     await page.keyboard.type('5');
     check(/Big jump/.test(await toastText()), `${where}: 135 lb from a 45 lb suggestion says heads-up (${await toastText()})`);
-    await logButton(page, 1).click();
+    await (await cardLog(page, 1)).click();
     check(/Big jump/.test(await toastText()), `${where}: the heads-up stays after logging (${await toastText()})`);
     check(await toast.getByRole('button', { name: 'Undo' }).count() === 0, `${where}: its Undo is gone`);
     await page.close();
@@ -362,15 +378,64 @@ try {
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     const last = (await rows(page)).length;
-    await weightCell(page, last).click();
+    await (await cardCell(page, last)).click();
     await page.waitForTimeout(50);
-    const dock = await page.locator('.lg-dock').boundingBox();
+    // (#380) The dock shows only while rest runs; without it the band ends at the window's bottom.
+    const dock = (await page.locator('.lg-dock').count()) ? await page.locator('.lg-dock').boundingBox() : { y: 500 };
     const header = await page.locator('.flow-header').boundingBox();
-    for (const [label, loc] of [['weight cell', weightCell(page, last)], ['✓', logButton(page, last)]]) {
+    for (const [label, loc] of [['weight cell', (await cardCell(page, last))], ['✓', (await cardLog(page, last))]]) {
       const seen = await inBand(page, loc, header.y + header.height, dock.y);
       check(seen.ok, `${where}: set ${last} ${label} not visible above the dock (${JSON.stringify(seen.box)}, dock ${dock.y})`);
     }
     await shot(page, 'after-keyboard-390x500');
+    await page.close();
+  }
+
+  // (#380) 390x650 with the keyboard open (lesson 16: the layout keeps its height, the keyboard covers it):
+  // the card's focused weight field and its Log button sit in the visible band, for the next set and for a
+  // later set put on the card by tapping its row.
+  {
+    const width = 390;
+    const height = 650;
+    const KB = 300;
+    const where = `${width}x${height} keyboard (#380)`;
+    const page = await browser.newPage({ viewport: { width, height } });
+    await page.addInitScript(() => {
+      const real = window.visualViewport;
+      const fake = new EventTarget();
+      let covered = null;
+      let shifted = 0;
+      Object.defineProperty(fake, 'height', { get: () => covered ?? window.innerHeight });
+      Object.defineProperty(fake, 'offsetTop', { get: () => shifted });
+      Object.defineProperty(fake, 'width', { get: () => real?.width ?? window.innerWidth });
+      Object.defineProperty(window, 'visualViewport', { get: () => fake });
+      window.__fakeKeyboard = (visible, offsetTop = 0) => { covered = visible; shifted = offsetTop; fake.dispatchEvent(new Event('resize')); };
+    });
+    await onboard(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForSelector('.lg-ex');
+    const header = await page.locator('.flow-header').boundingBox();
+    for (const n of [1, 3]) {
+      for (const shift of [0, 120]) {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await onCard(page, n);
+        const heading = (await page.locator('.lg-focus__set').innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+        check(heading.startsWith(`Set ${n} of`), `${where}: the card does not show set ${n} (${heading})`);
+        await weightCell(page, n).click();
+        await page.evaluate(([h, o]) => window.__fakeKeyboard(h, o), [height - KB, shift]);
+        await page.waitForTimeout(100);
+        const top = Math.max(shift, header.height);
+        const bottom = height - KB + shift;
+        const tag = `${where} set ${n} (offsetTop ${shift})`;
+        for (const [label, loc] of [['weight field', weightCell(page, n)], ['Log button', page.locator('section.lg-focus button.lg-log')]]) {
+          const seen = await inBand(page, loc, top, bottom);
+          check(seen.ok, `${tag}: ${label} outside the visible band ${top}-${bottom} (${JSON.stringify(seen.box)})`);
+        }
+        if (shots && n === 1 && shift === 0) await page.screenshot({ path: `${shots}/380-keyboard-${width}x${height}.png`, clip: { x: 0, y: 0, width, height: height - KB } });
+        await weightCell(page, n).blur();
+        await page.evaluate(() => window.__fakeKeyboard(null, 0));
+      }
+    }
     await page.close();
   }
 } finally {

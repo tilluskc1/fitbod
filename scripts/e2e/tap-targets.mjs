@@ -159,7 +159,7 @@ try {
     await page.getByRole('dialog').getByRole('button', { name: /^Keep / }).click();
 
     // Log one set so Finish offers to save or discard (an empty session offers a skip instead).
-    await page.locator('button.lg-check:not([disabled])').first().click();
+    await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
     await page.getByRole('button', { name: 'Finish', exact: true }).click();
     await target(page, page.getByRole('button', { name: 'Discard this session' }), 'Discard this session', `${where} Finish sheet`);
     await shot(page, 'finish', where);

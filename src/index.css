@@ -4022,7 +4022,7 @@ button.aw-exercise__name-btn {
 
 .lg-ex .aw-exercise__name {
   font-size: 20px;
-  line-height: 26px;
+  line-height: 28px;
   letter-spacing: -0.02em;
 }
 
@@ -4127,7 +4127,7 @@ button.aw-exercise__name-btn {
 
 .lg-note--held .notice-card {
   scroll-margin-top: calc(116px + var(--vv-top, 0px));
-  scroll-margin-bottom: calc(80px + var(--kb, 0px));
+  scroll-margin-bottom: calc(16px + var(--kb, 0px));
 }
 
 /* (#309) The weight and reps cells are the inputs: tap, type, Log. (#380) They sit in the focus card. */

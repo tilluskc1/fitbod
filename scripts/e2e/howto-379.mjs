@@ -189,10 +189,8 @@ try {
     check((await dialog(page).count()) === 0, `${where}: Escape left the player open`);
     check(await thumb(page).evaluate((el) => el === document.activeElement), `${where}: focus did not return to the photo`);
 
-    // The How-to chip opens the same player.
-    await page.locator('.lg-acts').getByRole('button', { name: /How-to$/ }).click();
-    check((await dialog(page).locator('.howto-media video').count()) === 1, `${where}: How-to chip did not open the player`);
-    await close.click();
+    // (#380) The How-to chip is gone: the photo is the way in (and the hold menu below keeps How-to).
+    check((await page.locator('.lg-acts').getByRole('button', { name: /How-to$/ }).count()) === 0, `${where}: a How-to chip is still on the chip row`);
 
     // C. Hold: the menu, not the player; each item does what its chip does.
     await hold(page);
@@ -225,7 +223,7 @@ try {
     await menuItem(page, 'Later').click();
     await page.waitForFunction((name) => document.querySelector('.aw-exercise__name')?.textContent?.trim() !== name, first, { timeout: 3000 }).catch(() => {});
     check((await current(page)) !== first, `${where}: menu Later left ${first} current`);
-    check((await page.locator('.done-toast__text').innerText().catch(() => '')).trim() === `${first} moved to later.`, `${where}: menu Later's toast differs from the chip's`);
+    check((await page.locator('.done-toast__text').innerText().catch(() => '')).trim() === `${first} moved to later.`, `${where}: menu Later's toast differs from Later's (#369)`);
     check((await dialog(page).count()) === 0, `${where}: a dialog stayed open after Later`);
 
     check(errors.length === 0, `${where}: page errors ${errors.join(' | ')}`);

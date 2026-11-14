@@ -255,7 +255,7 @@ try {
     await openTab(page, 'Today');
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
-    await page.locator('button.lg-check:not([disabled])').first().click();
+    await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
     await page.getByRole('button', { name: 'Minimize workout' }).click();
     await openTab(page, 'Plan');
     const running = await rows(page);
