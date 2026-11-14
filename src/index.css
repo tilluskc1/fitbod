@@ -5239,3 +5239,38 @@ button.aw-exercise__name-btn {
 .onboarding-gym {
   margin-top: 14px;
 }
+
+/* ---------- Installed iPhone app (#378) ---------- */
+
+/* Double-tap never zooms the app; pinch-zoom stays (the viewport meta allows it). */
+#root {
+  touch-action: manipulation;
+}
+
+/* The status-bar band: opaque page colour over anything that scrolls up beneath the clock, and below
+   sheets so their dim covers it. It is 0 tall wherever there is no top inset (a browser tab, the frame). */
+.native-app::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--bg);
+  z-index: 35;
+  pointer-events: none;
+}
+
+/* The tab bar rests on the home-indicator line instead of floating 14px above the whole inset. */
+.tabbar {
+  margin-bottom: max(14px, calc(env(safe-area-inset-bottom, 0px) - 14px));
+}
+
+/* iOS zooms the page when a field under 16px takes focus: every field computes at least 16px. */
+.search,
+.select,
+.constraint-input input,
+.mini-set input,
+.lg-cell--empty.lg-input {
+  font-size: 16px;
+}
