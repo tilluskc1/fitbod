@@ -136,6 +136,7 @@ import {
   type FeedbackStatus,
 } from './lib/sendFeedback';
 import { finishedWorkouts } from './lib/progressTotals';
+import { dayTypeOf, track } from './lib/events';
 import
  RecapScreen from './screens/RecapScreen';
 import
@@ -651,6 +652,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   /* ---------- actions ---------- */
 
   const patchProfile = (patch: Partial<Profile>) => {
+    // (#359) Supersets on/off counts a change, not a tap on the side already chosen.
+    if (patch.pairExercises !== undefined && profile && patch.pairExercises !== (profile.pairExercises !== false)) {
+      track(patch.pairExercises ? 'supersets-on' : 'supersets-off');
+    }
     setState((currentState) => updateProfile(currentState, patch));
   };
 
@@ -680,6 +685,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     });
     setState((currentState) => ({ ...currentState, current: session }));
     setView('train');
+    track('workout-started', dayTypeOf(workout.name));
   };
 
   /**
@@ -1002,6 +1008,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   /** (#296) "Sore or hurt? Plan today with me": Switch closes and the planner opens at its first question. */
   const [planTodayAsk, setPlanTodayAsk] = useState(0);
   const openPlanToday = () => {
+    track('plan-today');
     setSheet({ kind: 'none' });
     setPlanTodayAsk((count) => count + 1);
   };
@@ -1325,6 +1332,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     }
     const early = progress.done < progress.total;
     const id = current.id;
+    track(early ? 'workout-cut-short' : 'workout-finished', dayTypeOf(current.name));
     setState((currentState) =>
       applyFinish(currentState, id, { early, now: new Date().toISOString() }),
     );
@@ -1396,7 +1404,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     }));
 
   /** (#225) A file that left the app is a backup: the reminder counts it. */
-  const recordBackup = () => setState((currentState) => ({ ...currentState, lastBackupAt: new Date().toISOString() }));
+  const recordBackup = () => {
+    track('backup');
+    setState((currentState) => ({ ...currentState, lastBackupAt: new Date().toISOString() }));
+  };
 
   const exportData = () => {
     try {
@@ -1513,6 +1524,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   // (#330) Opening the sheet clears a leftover "Sent" or "Not sent" line; a send in flight keeps "Sending…".
   const openFeedback = (from: 'settings' | 'recap') => {
     if (!feedbackSending.current) setFeedbackStatus('idle');
+    track('feedback');
     setSheet({ kind: 'feedback', from });
   };
 
@@ -1620,7 +1632,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               : currentState,
           )
         }
-        onReplace={(exerciseIndex) => setSheet({ kind: 'swap', exerciseIndex })}
+        onReplace={(exerciseIndex) => { track('replace'); setSheet({ kind: 'swap', exerciseIndex }); }}
         onOpenActions={(exerciseIndex, mode) =>
           setSheet({
             kind: 'actions',
@@ -1709,7 +1721,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onAdjust={() => setSheet({ kind: 'adjust' })}
             onOpenLength={() => setSheet({ kind: 'length' })}
             onOpenGym={() => setSheet({ kind: 'gym' })}
-            onOpenSwitch={slot ? () => setSheet({ kind: 'switch' }) : undefined}
+            onOpenSwitch={slot ? () => { track('switch'); setSheet({ kind: 'switch' }); } : undefined}
             alternativeDay={alternativeDay}
             composer={slot && talkBase ? (
               <TodayTalk
@@ -2073,7 +2085,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               profile={profile}
               inSession={Boolean(current)}
               skipped={Boolean(exercise.skipped)}
-              onReplace={() => setSheet({ kind: 'swap', exerciseIndex: sheet.exerciseIndex })}
+              onReplace={() => { track('replace'); setSheet({ kind: 'swap', exerciseIndex: sheet.exerciseIndex }); }}
               onSaveProfile={(patch) => {
                 // Closing first: a saved preference can reorder today's preview under the sheet.
                 closeSheet();

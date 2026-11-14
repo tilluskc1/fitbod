@@ -6,6 +6,7 @@ import {
   ABOUT_HOSTING,
   ABOUT_RECEIVE,
   ABOUT_TITLE,
+  ABOUT_USAGE,
   ABOUT_WHO,
   ABOUT_WORKOUTS,
 } from '../lib/about';
@@ -37,7 +38,16 @@ export default function AboutSheet({ onFeedback, onClose }: Props) {
       ),
     },
     { id: 'about-workouts', title: 'Your workouts', body: <p className="about__text">{ABOUT_WORKOUTS}</p> },
-    { id: 'about-receive', title: 'What we receive', body: <p className="about__text">{ABOUT_RECEIVE}</p> },
+    {
+      id: 'about-receive',
+      title: 'What we receive',
+      body: (
+        <>
+          <p className="about__text">{ABOUT_RECEIVE}</p>
+          <p className="about__text">{ABOUT_USAGE}</p>
+        </>
+      ),
+    },
     { id: 'about-hosting', title: 'Hosting', body: <p className="about__text">{ABOUT_HOSTING}</p> },
     { id: 'about-safety', title: 'Safety', body: <p className="about__text">{SAFETY_NOTICE}</p> },
     {

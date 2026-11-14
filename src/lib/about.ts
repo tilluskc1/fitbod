@@ -1,4 +1,5 @@
 import type { FeedbackBody } from './sendFeedback.ts';
+import type { EVENT_FIELDS } from './events.ts';
 
 /**
  * (#253) Settings > About. Every line is the product default from the story; the claims must match
@@ -25,7 +26,24 @@ export const FEEDBACK_SENT: ReadonlyArray<{ field: keyof FeedbackBody['fields'];
 
 const listed = FEEDBACK_SENT.map((item) => item.says);
 
-export const ABOUT_RECEIVE = `Only what you choose to send. A feedback note sends ${listed.slice(0, -1).join(', ')}, and ${listed.at(-1)}. Your workout details are never sent.`;
+export const ABOUT_RECEIVE = `A feedback note, only when you send one. It sends ${listed.slice(0, -1).join(', ')}, and ${listed.at(-1)}.`;
+
+/**
+ * (#359) What a usage count carries, keyed by every field an event holds (EVENT_FIELDS), so a new
+ * field fails `tests/events359.test.ts` until this text says what it is. Wording needs the owner's yes.
+ */
+export const USAGE_SENT: ReadonlyArray<{ field: (typeof EVENT_FIELDS)[number]; says: string }> = [
+  { field: 'event', says: 'what you did' },
+  { field: 'dayType', says: 'the type of day (like Push or Legs)' },
+  { field: 'date', says: 'the date' },
+  { field: 'createdAt', says: 'the time' },
+  { field: 'appVersion', says: 'the app version' },
+  { field: 'testerId', says: 'the same random ID as your feedback notes' },
+];
+
+const counted = USAGE_SENT.map((item) => item.says);
+
+export const ABOUT_USAGE = `Usage counts, so we can see which features help. The app sends one each time you start, finish or cut short a workout, or tap Switch, Plan today with me, Replace, Supersets or Backup, or open the feedback form. Each holds ${counted.slice(0, -1).join(', ')}, and ${counted.at(-1)}. Never your name, weights, reps, notes, body details or pain answers. Offline, counts wait on this phone and send later.`;
 
 export const ABOUT_HOSTING = 'Like any website, the host keeps basic server logs.';
 

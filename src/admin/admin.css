@@ -1,0 +1,183 @@
+/* (#359) /admin: a plain tool page on the app's tokens and components (DESIGN.md). No new colours. */
+.adm {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 10px 17px 26px;
+  min-height: 100vh;
+  background: var(--surface);
+  color: var(--on-surface);
+}
+
+.adm__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.adm__title {
+  font-size: 22px;
+  padding: 12px 0;
+}
+
+.adm__tabs {
+  margin: 8px 0 14px;
+}
+
+.adm-card {
+  background: var(--card);
+  border-radius: var(--radius-card);
+  padding: 18px;
+}
+
+.adm-card__title {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.adm-muted {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.adm-gate {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.adm-gate__button {
+  min-height: 44px;
+  margin-top: 8px;
+}
+
+.adm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.adm-note__msg {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+}
+
+.adm-note__meta {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.adm-note__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.adm-note--done {
+  background: var(--surface-container-low);
+}
+
+.adm-note--done .adm-note__msg {
+  color: var(--on-surface-muted);
+}
+
+.adm-chip {
+  background: var(--btn);
+  color: var(--on-btn);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+}
+
+.adm-error {
+  color: var(--danger);
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.adm-empty {
+  border: 1px dashed var(--outline);
+  border-radius: var(--radius-card);
+  padding: 18px;
+  text-align: center;
+  color: var(--muted);
+  margin-top: 12px;
+}
+
+.adm-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.adm-tile {
+  display: grid;
+  gap: 4px;
+}
+
+.adm-tile__value {
+  font-size: 32px;
+  font-weight: 300;
+  line-height: 1.1;
+}
+
+.adm-foot {
+  margin-top: 12px;
+}
+
+.adm-week {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.adm-week .pill-quiet {
+  padding: 0;
+  font-size: 20px;
+}
+
+.adm-week__label {
+  text-align: center;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.adm-counts {
+  margin-bottom: 12px;
+}
+
+.adm-counts dl {
+  margin: 0;
+}
+
+.adm-counts__row {
+  display: flex;
+  justify-content: space-between;
+  min-height: 36px;
+  align-items: center;
+  border-top: 1px solid var(--surface-container-highest);
+}
+
+.adm-counts__row:first-child {
+  border-top: 0;
+}
+
+.adm-counts dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 720px) {
+  .adm-tiles {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
