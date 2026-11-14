@@ -256,6 +256,11 @@ const doneOf = (entry: LoggerEntry) => entry.performed.filter((set) => set.done)
 const pendingOf = (entry: LoggerEntry) => entry.performed.length - doneOf(entry);
 const live = (entry: LoggerEntry | undefined) => entry !== undefined && !entry.skipped && pendingOf(entry) > 0;
 
+/** (#369) Later is offered while `index` has work left and another exercise does too. */
+export function canMoveLater(session: { exercises: LoggerEntry[] }, index: number): boolean {
+  return live(session.exercises[index]) && session.exercises.some((entry, other) => other !== index && live(entry));
+}
+
 /** The other half of `index`'s pair, or undefined. */
 export function partnerOf(pairs: [number, number][], index: number): number | undefined {
   const pair = pairs.find(([a, b]) => a === index || b === index);

@@ -4808,17 +4808,20 @@ button.aw-exercise__name-btn {
 }
 
 /* ---------- Logger quick actions (#151) ---------- */
-.lg-acts { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; }
+/* (#369) Four chips share one line at 360 wide: tight padding, and they grow to share the row's spare width. */
+.lg-acts { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; }
 .lg-acts::-webkit-scrollbar { display: none; }
 .lg-act {
-  flex: none;
+  flex: 1 1 auto;
   min-height: 44px;
-  padding: 0 14px;
+  padding: 0 4px;
   border-radius: 999px;
   background: var(--card);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  white-space: nowrap;
+  gap: 4px;
   font-size: 14px;
   font-weight: 500;
 }
