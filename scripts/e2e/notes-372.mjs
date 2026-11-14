@@ -1,6 +1,6 @@
 // (#372) A short note per exercise: write "use pin 6" from the exercise's ⋯ menu, finish the workout, and
-// the next session with that same exercise shows "Last time: use pin 6" under its name, on one line. A
-// reload keeps it. 390x844 and 360x780. Shots only with E2E_SHOTS (372-*.png).
+// the next session with that same exercise shows "Last time: use pin 6" under its name. A reload keeps it.
+// Review 1: a 120-character note wraps (at most 3 lines) and is read in full, never cut. 390x844 and 360x780. Shots only with E2E_SHOTS (372-*.png).
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -26,6 +26,8 @@ const url = server.resolvedUrls.local[0];
 const MONDAY = new Date('2026-11-02T12:00:00');
 const day = (n) => new Date(MONDAY.getTime() + n * 864e5);
 const NOTE = 'use pin 6';
+// 120 characters, the most a note can hold.
+const LONG = 'Seat on 4, back pad on 2, pin 6 felt light, try 7 next time; slow on the way down, left shoulder clicks on the last reps';
 const shots = process.env.E2E_SHOTS;
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -132,7 +134,7 @@ try {
       const text = (await noteLine(page).innerText().catch(() => '')).trim();
       check(text === `Last time: ${NOTE}`, `${where}: next time reads "${text}"`);
       const box = await noteLine(page).evaluate((el) => ({ h: el.clientHeight, lh: parseFloat(getComputedStyle(el).lineHeight) })).catch(() => null);
-      check(box !== null && box.h <= box.lh + 1, `${where}: the note line is not one line (${JSON.stringify(box)})`);
+      check(box !== null && box.h <= box.lh + 1, `${where}: a short note takes more than one line (${JSON.stringify(box)})`);
       check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${where}: the page scrolls sideways`);
       await shot(page, `${width}-last-time`);
 
@@ -143,6 +145,29 @@ try {
       await page.waitForSelector('.lg-ex');
       const after = (await noteLine(page).innerText().catch(() => '')).trim();
       check(after === `Last time: ${NOTE}`, `${where}: after reload reads "${after}"`);
+
+      // Review 1: the longest note (120 characters) is fully readable, wrapping to at most 3 lines.
+      check([...LONG].length === 120, `LONG is ${[...LONG].length} characters`);
+      await page.evaluate((text) => {
+        const saved = JSON.parse(localStorage.getItem('fitbod-clone-v1'));
+        const last = saved.state.history.find((workout) => workout.exercises.some((exercise) => exercise.note));
+        last.exercises.find((exercise) => exercise.note).note = text;
+        localStorage.setItem('fitbod-clone-v1', JSON.stringify(saved));
+      }, LONG);
+      await page.reload();
+      await Promise.race([page.waitForSelector('.lg-ex'), resume.waitFor()]);
+      if (!(await page.locator('.lg-ex').count())) await resume.click();
+      await page.waitForSelector('.lg-ex');
+      const long = await noteLine(page).evaluate((el) => {
+        const lh = parseFloat(getComputedStyle(el).lineHeight);
+        return { text: el.textContent, clipped: el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1,
+          lines: Math.round(el.clientHeight / lh) };
+      }).catch(() => null);
+      check(long?.text === `Last time: ${LONG}`, `${where}: the long note reads "${long?.text}"`);
+      check(long !== null && !long.clipped, `${where}: the 120-character note is cut (${JSON.stringify(long)})`);
+      check(long !== null && long.lines <= 3, `${where}: the 120-character note takes ${long?.lines} lines`);
+      check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${where}: the long note makes the page scroll sideways`);
+      await shot(page, `${width}-long-note`);
     }
 
     check(errors.length === 0, `${where}: page errors ${errors.join(' | ')}`);

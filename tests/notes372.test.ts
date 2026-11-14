@@ -2,12 +2,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { FULL_BODY_A } from '../src/data/flagship.ts';
-import { adaptWorkout, toWorkoutExercises } from '../src/lib/adapt.ts';
+import { adaptWorkout, restorePendingWorkout, toWorkoutExercises } from '../src/lib/adapt.ts';
 import { exerciseActions } from '../src/lib/exerciseActions.ts';
-import { cleanNote, lastNote, MAX_NOTE, setExerciseNote } from '../src/lib/notes.ts';
+import { cleanNote, lastNote, MAX_NOTE, noSetsNotice, readNote, setExerciseNote, swapDropsNote, swapNotice } from '../src/lib/notes.ts';
 import { completeSession, createSession, logSet, swapPendingExercise } from '../src/lib/session.ts';
 import { EMPTY_STATE, serializeExport } from '../src/lib/storage.ts';
 import { parseState, validateState } from '../src/lib/validate.ts';
+import { claimsSave, done } from '../src/lib/notices.ts';
 import type { AppState, WorkoutRecord } from '../src/types.ts';
 
 function open(id = 'w1', now = '2026-11-01T10:00:00.000Z'): WorkoutRecord {
@@ -134,4 +135,53 @@ test('an invalid note on import is dropped, the record is kept', () => {
   const trimmed = validateState(raw);
   assert.ok(trimmed.ok);
   if (trimmed.ok) assert.equal(trimmed.state.history[0].exercises[0].note, 'seat 4');
+});
+
+/* ---------- review 1 ---------- */
+
+test('review 1: a mid-session length change keeps the notes on unstarted exercises', () => {
+  const session = open();
+  const ids = session.exercises.map((exercise) => exercise.exerciseId);
+  const noted = setExerciseNote(setExerciseNote(session, 1, ids[1], 'seat 4'), 0, ids[0], 'use pin 6');
+  const longer = adaptWorkout(FULL_BODY_A, { minutes: 60, equipment: 'home' }, [], undefined);
+  const rebuilt = restorePendingWorkout(noted, longer);
+  for (const [id, note] of [[ids[0], 'use pin 6'], [ids[1], 'seat 4']]) {
+    const first = rebuilt.exercises.find((exercise) => exercise.exerciseId === id);
+    assert.ok(first, `${id} is still in the day`);
+    assert.equal(first?.note, note, `${id} keeps its note`);
+    assert.equal(rebuilt.exercises.filter((exercise) => exercise.note === note).length, 1, 'the note lands once');
+  }
+  assert.equal(rebuilt.exercises.filter((exercise) => exercise.note).length, 2, 'no other exercise gains a note');
+});
+
+test('review 1: a swap before any set is logged says the note was removed', () => {
+  assert.equal(swapNotice('Push-up', false), 'Push-up swapped in. Logged sets stay put.');
+  assert.equal(swapNotice('Push-up', true), 'Push-up swapped in. Logged sets stay put. Its note was removed.');
+  const session = open();
+  const id = session.exercises[0].exerciseId;
+  const noted = setExerciseNote(session, 0, id, 'use pin 6');
+  const swapped = swapPendingExercise(noted, 0, { exerciseId: 'push-up', name: 'Push-up', weight: 0, reps: 10 } as never);
+  assert.equal(swapped.exercises.some((exercise) => exercise.note), false, 'the note never moves to the replacement');
+  assert.equal(swapDropsNote(noted.exercises[0]), true);
+  assert.equal(swapDropsNote(logSet(noted, 0, 0, '2026-11-01T10:05:00.000Z').exercises[0]), false, 'logged sets keep the entry and its note');
+  assert.equal(swapDropsNote(session.exercises[0]), false);
+});
+
+test('review 1: finishing with nothing logged says notes were not kept', () => {
+  assert.equal(noSetsNotice(false), 'No sets logged, so nothing was saved.');
+  assert.equal(noSetsNotice(true), "No sets logged, so nothing was saved. Notes weren't kept either.");
+});
+
+test('review 1: the 120 cap counts characters, so an emoji is never split', () => {
+  const text = 'a'.repeat(119) + '💪💪';
+  const cut = cleanNote(text)!;
+  assert.equal(Array.from(cut).length, 120);
+  assert.equal(cut, 'a'.repeat(119) + '💪');
+  assert.equal(cleanNote('💪'.repeat(120)), '💪'.repeat(120), '120 emoji are 120 characters');
+  assert.equal(readNote('💪'.repeat(120)), '💪'.repeat(120), 'import counts the same way');
+});
+
+test('review 1: "Note saved" is a save claim, so a failed save never shows it (lesson 30, #351)', () => {
+  assert.equal(claimsSave(done('Note saved for next time.')), true);
+  assert.equal(claimsSave(done('Note removed.')), false);
 });

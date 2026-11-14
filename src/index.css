@@ -4055,11 +4055,14 @@ button.aw-exercise__name-btn {
   color: var(--on-surface-variant);
 }
 
-/* (#372) "Last time: <note>": one line, cut with an ellipsis. */
+/* (#372) "Last time: <note>": wraps to at most 3 lines, so a 120-character note reads in full at 360px. */
 .lg-coach--note {
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .lg-rest button {

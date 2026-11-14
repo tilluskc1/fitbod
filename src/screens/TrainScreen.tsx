@@ -687,7 +687,7 @@ export default function TrainScreen({
         </div>
 
         {coach && <p className="lg-coach">{coach}</p>}
-        {/* (#372) Its own line under any coach text, so a heads-up is never hidden; one line, ellipsis. */}
+        {/* (#372) Its own line under any coach text, so a heads-up is never hidden; wraps to at most 3 lines. */}
         {noteLast && <p className="lg-coach lg-coach--note">Last time: {noteLast}</p>}
 
         <table className="lg-table" aria-label={`Sets for ${exercise.name}`}>

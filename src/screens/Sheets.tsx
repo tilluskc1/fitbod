@@ -605,7 +605,7 @@ function NoteForm({ exerciseName, start, onSave, onBack }: {
         <label className="aw-field__label" htmlFor="exercise-note">Note</label>
         <input id="exercise-note" type="text" value={text} maxLength={MAX_NOTE} autoComplete="off" enterKeyHint="done"
           onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => { if (event.key === 'Enter') onSave(text); }} />
+          onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) onSave(text); }} />
       </div>
       <div className="sheet-actions">
         <button className="primary" onClick={() => onSave(text)}>

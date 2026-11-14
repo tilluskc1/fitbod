@@ -52,7 +52,7 @@ import {
 import { sessionRests } from './lib/sessionTime';
 import { keptPairsOf, pairedPendingIndex, restAfterLog, sessionPairs, startPairs, storedPairs, type PairSource } from './lib/supersets';
 import { removeTodayNotice } from './lib/exerciseActions';
-import { cleanNote, setExerciseNote } from './lib/notes';
+import { cleanNote, noSetsNotice, setExerciseNote, swapDropsNote, swapNotice } from './lib/notes';
 import { leadCompoundId, leadSlotIds, savedSetup } from './lib/progression';
 import { areasOf } from './lib/areas';
 import
@@ -1353,7 +1353,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       setSheet({ kind: 'none' });
       setView('tabs');
       setTab('today');
-      setNotice(done('No sets logged, so nothing was saved.'));
+      setNotice(done(noSetsNotice(current.exercises.some((exercise) => exercise.note))));
       return;
     }
     const early = progress.done < progress.total;
@@ -1510,13 +1510,14 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const swapped = state.current?.exercises[exerciseIndex]?.exerciseId;
     const lead = state.current !== null && swapped !== undefined && leadSlotIds(state.current.exercises).includes(swapped);
     const candidate = swapCandidateFor(target, profile, state.history, state.current, lead, state.current?.exercises[exerciseIndex]?.setup);
+    const noteDropped = swapDropsNote(state.current?.exercises[exerciseIndex]);
     setState((currentState) =>
       currentState.current
         ? { ...currentState, current: swapPendingExercise(currentState.current, exerciseIndex, candidate) }
         : currentState,
     );
     setSheet({ kind: 'none' });
-    setNotice(done(`${target.name} swapped in. Logged sets stay put.`));
+    setNotice(done(swapNotice(target.name, noteDropped)));
   };
 
   const skipCurrentExercise = (exerciseIndex: number) => {
