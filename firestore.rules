@@ -46,5 +46,42 @@ service cloud.firestore {
         && request.resource.data.createdAt is timestamp;
       allow read: if isAdmin();
     }
+
+    // (#360) Exercises and equipment added from /admin. Anyone may read a published row (the app's query
+    // asks for exactly those); drafts and unpublished rows only the admin. Only the admin writes, with
+    // exactly these fields and the app's own vocabularies, and a row with a photo or video can't be saved
+    // without its source, licence and credit (#254). The id is `add-` words, so it can't be a built-in id.
+    // Nobody deletes: an unpublished row stays, so phones keep it for history.
+    function catalogRow(id) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['id', 'kind', 'status', 'name', 'muscles', 'pattern', 'item', 'instructions', 'cues', 'photo', 'video', 'source', 'licence', 'credit', 'family', 'group', 'updatedAt'])
+        && d.keys().hasAll(['id', 'kind', 'status', 'name', 'updatedAt'])
+        && d.id == id && id.size() <= 48 && id.matches('add-[a-z0-9]+(-[a-z0-9]+)*')
+        && d.status in ['draft', 'published', 'unpublished']
+        && str(d.name, 2, 60)
+        && d.updatedAt is timestamp
+        && ((d.kind == 'equipment'
+            && d.keys().hasOnly(['id', 'kind', 'status', 'name', 'family', 'group', 'updatedAt'])
+            && d.family in ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell']
+            && d.group in ['Legs machines', 'Upper machines', 'Cables', 'Free weights'])
+          || (d.kind == 'exercise'
+            && d.keys().hasAll(['muscles', 'pattern', 'item', 'instructions', 'cues'])
+            && !d.keys().hasAny(['family', 'group'])
+            && d.muscles is list && d.muscles.size() >= 1 && d.muscles.size() <= 4
+            && d.muscles.hasOnly(['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'])
+            && d.pattern in ['horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull', 'squat', 'lunge', 'hinge', 'hip_extension', 'knee_extension', 'knee_flexion', 'calf_raise', 'elbow_flexion', 'elbow_extension', 'shoulder_abduction', 'shoulder_horizontal_abduction', 'core_flexion', 'core_stability']
+            && str(d.item, 1, 48)
+            && str(d.instructions, 1, 600)
+            && d.cues is list && d.cues.size() <= 5
+            && (!('photo' in d) || (d.photo is string && d.photo.matches('catalog/' + id + '/photo-[0-9]{1,15}[.](jpg|png|webp)')))
+            && (!('video' in d) || (d.video is string && d.video.matches('catalog/' + id + '/video-[0-9]{1,15}[.]mp4')))
+            && (!d.keys().hasAny(['photo', 'video', 'source', 'licence', 'credit'])
+              || (str(d.source, 1, 300) && str(d.credit, 1, 120) && d.licence in ['own-work', 'cc0', 'cc-by', 'public-domain']))));
+    }
+
+    match /catalog/{id} {
+      allow read: if resource.data.status == 'published' || isAdmin();
+      allow create, update: if isAdmin() && catalogRow(id);
+    }
   }
 }

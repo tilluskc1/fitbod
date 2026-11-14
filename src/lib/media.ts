@@ -1,4 +1,4 @@
-import media from '../data/media.json';
+import media from '../data/media.json' with { type: 'json' };
 
 interface MediaEntry {
   frames: string[];

@@ -20,6 +20,14 @@ AI-made media: the owner keeps the ChatGPT conversation (or a dated screenshot w
 the repo, and names the tool that made the video so the line above can say it. Whether the provider's
 terms and copyright law protect AI-made images is the owner's call, tracked on #254.
 
+## Exercises added from /admin (#360)
+
+Photos and videos for exercises the owner adds from `/admin` are not in `public/`: they live in Firebase
+Storage (`catalog/<id>/`), and each one's source, licence and credit live on its Firestore `catalog` row.
+The admin can't publish a photo or video without all three, and only under own work, CC0, CC BY or public
+domain (#254). Settings > About > Credits lists the credit and licence of every published addition the
+phone has; an unpublished one leaves the list.
+
 ## Fonts
 
 Read from each font file's own `name` table (copyright string, ID 0; licence URL, ID 14). The repo
