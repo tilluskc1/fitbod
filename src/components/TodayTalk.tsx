@@ -19,6 +19,11 @@ interface Props {
   profile: Profile;
   /** The planned day's name, for the badge and Q3's "My planned day". */
   plannedName: string;
+  /**
+   * (#296 r2) While a today-only override stands: the day being trained, the same name the hero
+   * shows (App passes the one `program.name`). The badge then reads "Today · Pull".
+   */
+  todayName?: string;
   /** The planned day's areas: what "My planned day" trains. */
   plannedAreas: Area[];
   /** The saved setup and length, pre-selected on Q4 and Q1. */
@@ -49,7 +54,7 @@ const minutesLabel = (minutes: number) => (minutes === 60 ? '1 hr' : `${minutes}
  * same answers from a sentence. Answers are chip taps over the text (`composeTalk`), so every way
  * of answering builds the same day. Voice is the keyboard's own dictation: nothing here listens.
  */
-export default function TodayTalk({ profile, plannedName, plannedAreas, savedGear, savedMinutes, base, preview, onStart, onActive, openAsk = 0 }: Props) {
+export default function TodayTalk({ profile, plannedName, todayName, plannedAreas, savedGear, savedMinutes, base, preview, onStart, onActive, openAsk = 0 }: Props) {
   const [step, setStep] = useState<Question | 'summary' | null>(null);
   const [text, setText] = useState('');
   // Answers sit on top of the text, so typing more never undoes them (see `tapsAfterEdit`).
@@ -116,7 +121,7 @@ export default function TodayTalk({ profile, plannedName, plannedAreas, savedGea
   if (step === null) {
     return (
       <section className="t7-card tt" aria-label="Plan today with me">
-        <span className="tt-badge">Planned today · {plannedName}</span>
+        <span className="tt-badge">{todayName ? `Today · ${todayName}` : `Planned today · ${plannedName}`}</span>
         <button type="button" className="tt-open" onClick={() => go('time')}>
           <span>
             <b>Plan today with me</b>

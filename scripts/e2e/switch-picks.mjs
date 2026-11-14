@@ -2,7 +2,9 @@
 // through Plan today with me's path; the plan's own day stays next. Checks the chips' layout (at most
 // two lines per row, no wrapped label), Build pinned in view at 390x650, "Pick at least one", the
 // recovery label, a Limited pick with its reason and gear fix, the pain link, and Undo back to the
-// planned day. 390x844, 360x780 and 390x650; screenshots only when E2E_SHOTS is set.
+// planned day. Round 2 (owner): the Today toast clears the greeting, the planner card's badge names the
+// day the hero names while a today-only day stands, and the Core chip reads "Core".
+// 390x844, 360x780 and 390x650; screenshots only when E2E_SHOTS is set.
 //
 //   npm run e2e        (builds, then runs every scripts/e2e check against the built app)
 import { execSync } from 'node:child_process';
@@ -64,6 +66,22 @@ const openSwitch = async (page) => {
 const chip = (page, name) => page.locator('.sw-chip', { hasText: new RegExp(`^${name}`) }).first();
 /** The sheet scrolled to its end: chips, the consequence and its note above the pinned Build. */
 const toBottom = (page) => page.locator('.sheet--switch').evaluate((sheet) => { sheet.scrollTop = sheet.scrollHeight; });
+/** The planner card's badge as written (textContent: the stylesheet uppercases it on screen). */
+const badge = async (page) => squash(await page.locator('.tt-badge').first().textContent());
+/** "Your Pull Day Starts Here!" -> "Pull": the day name the hero shows. */
+const heroDay = async (page) => (await heroTitle(page)).match(/^Your (.+) Day Starts Here!$/)?.[1] ?? null;
+/** (#296 r2) The Today toast, fully faded in, shares no pixel with the greeting row nor the hero. */
+async function toastClear(page, where, label) {
+  const pill = page.locator('.done-toast .done-toast__pill');
+  await pill.waitFor({ timeout: 3000 }).catch(() => {});
+  await page.waitForTimeout(300); // past the 200 ms fade-in and its 8px rise
+  const [t, g, h] = [await pill.boundingBox(), await page.locator('.today__greeting').boundingBox(), await page.locator('.t7-hero').boundingBox()];
+  const meets = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  check(t && g, `${where}: no ${label} toast or greeting to compare (${JSON.stringify(t)} / ${JSON.stringify(g)})`);
+  if (!t || !g) return;
+  check(!meets(t, g), `${where}: the ${label} toast covers the greeting (${JSON.stringify(t)} vs ${JSON.stringify(g)})`);
+  check(!h || !meets(t, h), `${where}: the ${label} toast covers the workout card (${JSON.stringify(t)} vs ${JSON.stringify(h)})`);
+}
 const stored = (page) => page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? 'null')?.state ?? null, KEY);
 
 /** Each chip row takes at most two lines and no chip's label wraps or is cut. */
@@ -103,6 +121,8 @@ try {
     await onboard(page);
     const planned = await heroTitle(page);
     check(/Push/.test(planned), `${where}: a 3-day plan does not start on Push ("${planned}")`);
+    // (#296 r2) No override: the badge is unchanged.
+    check(await badge(page) === 'Planned today · Push', `${where}: the badge with no override reads "${await badge(page)}"`);
 
     // A finished chest session yesterday: the Chest chip says so and stays selectable.
     await page.evaluate((key) => {
@@ -147,13 +167,16 @@ try {
     await toBottom(page);
     await shot(page, 'preset', where);
 
-    // Body parts: editing a part clears the preset.
+    // Body parts: editing a part clears the preset. (#296 r2, owner) The core chip reads "Core".
     await chip(page, 'Pull').click(); // off
+    check(await page.locator('.sw-chip', { hasText: /^Abs/ }).count() === 0, `${where}: a chip still reads "Abs"`);
     await chip(page, 'Shoulders').click();
     await chip(page, 'Arms').click();
+    await chip(page, 'Core').click();
+    check(await chip(page, 'Core').getAttribute('aria-pressed') === 'true', `${where}: no "Core" chip to pick`);
     check(await chip(page, 'Pull').getAttribute('aria-pressed') === 'false', `${where}: a preset stays on after editing parts`);
     const partsLine = squash(await page.locator('.sw-line').innerText());
-    check(/^Shoulders \+ Arms · \d+ exercises · \d+ sets · ≈?\d+ min$/.test(partsLine), `${where}: parts line reads "${partsLine}"`);
+    check(/^Shoulders \+ Arms \+ Core · \d+ exercises · \d+ sets · ≈?\d+ min$/.test(partsLine), `${where}: parts line reads "${partsLine}"`);
     await chipsFit(page, where);
     await buildInView(page, where);
     await toBottom(page);
@@ -162,6 +185,7 @@ try {
     // Pull → Build: Today is Pull, nothing stored but the override's focus, the plan stays on Push.
     await chip(page, 'Shoulders').click();
     await chip(page, 'Arms').click();
+    await chip(page, 'Core').click();
     await chip(page, 'Pull').click();
     const before = await stored(page);
     await page.locator('.sw-build').click();
@@ -173,11 +197,31 @@ try {
     check(Object.keys(after).sort().join() === Object.keys(before).sort().join(), `${where}: stored keys changed`);
     const bar = squash(await page.locator('.t7-today-only__l').innerText());
     check(/^Today only: Pull \(you chose\)/.test(bar), `${where}: bar reads "${bar}"`);
+    // (#296 r2) The toast clears the greeting; the badge names the hero's day.
+    await toastClear(page, where, '"Changed for today"');
+    const built = await heroDay(page);
+    check(built === 'Pull' && await badge(page) === `Today · ${built}`, `${where}: hero day "${built}" but the badge reads "${await badge(page)}"`);
     await shot(page, 'built', where);
 
-    // Undo returns to the planned day.
+    // Undo returns to the planned day, and the badge with it.
     await page.locator('.t7-today-only__undo').click();
     check(await heroTitle(page) === planned, `${where}: Undo left "${await heroTitle(page)}"`);
+    check(await badge(page) === 'Planned today · Push', `${where}: after Undo the badge reads "${await badge(page)}"`);
+    await toastClear(page, where, 'Undo');
+
+    // (#296 r2) A described day as Plan today with me stores it (the same override, its own focus):
+    // the badge names the hero's day too.
+    await page.evaluate(([key, override]) => {
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.state.todayOverride = { ...override, focus: ['Shoulders', 'Biceps', 'Triceps'] };
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, [KEY, after.todayOverride]);
+    await page.reload();
+    await page.waitForSelector('.t7-hero');
+    const described = await heroDay(page);
+    check(Boolean(described) && described !== 'Push' && await badge(page) === `Today · ${described}`, `${where}: described day: hero "${described}", badge "${await badge(page)}"`);
+    await page.locator('.t7-today-only__undo').click();
+    check(await badge(page) === 'Planned today · Push', `${where}: after the described day's Undo the badge reads "${await badge(page)}"`);
 
     // Limited: bodyweight today, Arms (no biceps work without gear); the reason and the gear fix show.
     await page.locator('.t7-pill--gym').click();

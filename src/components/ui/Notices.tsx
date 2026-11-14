@@ -64,17 +64,35 @@ function toastBottom(host: HTMLElement): number {
 }
 
 /**
+ * (#296 r2) Where the Today toast sits: just under the greeting row, over the controls row, so it
+ * never covers the greeting (owner) nor a card's text (#333). A greeting scrolled away frees the top.
+ */
+function toastTop(host: HTMLElement): number | null {
+  const header = host.querySelector<HTMLElement>('.today__greeting');
+  if (!header) return null;
+  const frame = host.getBoundingClientRect();
+  const at = header.getBoundingClientRect().bottom - frame.top + TOP_GAP;
+  // Scrolled up past the stylesheet's top (safe area included): the CSS top stands.
+  return at > TOP_MIN ? at : null;
+}
+const TOP_MIN = 28;
+const TOP_GAP = 8;
+
+/**
  * A Done toast: one at a time, 4 s (App's timer), no Dismiss link; taps pass through it except its action.
- * On Today it sits at the top, over the greeting row, so it never covers a card's text (#333).
+ * On Today it sits near the top, under the greeting row, so it never covers a card's text (#333, #296).
  */
 export function DoneToast({ notice, screen, action, top = false }: { notice: Notice; screen: string; action?: { label: string; onClick: () => void }; top?: boolean }) {
   const text = notice.text;
   const ref = useRef<HTMLDivElement>(null);
   const [bottom, setBottom] = useState<number | null>(null);
+  const [topAt, setTopAt] = useState<number | null>(null);
   useLayoutEffect(() => {
     const place = () => {
       const host = ref.current?.offsetParent;
-      if (host instanceof HTMLElement) setBottom(toastBottom(host));
+      if (!(host instanceof HTMLElement)) return;
+      if (top) setTopAt(toastTop(host));
+      else setBottom(toastBottom(host));
     };
     place();
     // Controls settle a frame after a screen change (a sheet closing, the dock lifting for a keyboard).
@@ -90,13 +108,13 @@ export function DoneToast({ notice, screen, action, top = false }: { notice: Not
       window.visualViewport?.removeEventListener('resize', place);
     };
     // A toast carried to the next screen (recap to Today) is placed again against that screen's controls.
-  }, [notice, screen]);
+  }, [notice, screen, top]);
   return (
     <div
       ref={ref}
       className={top ? 'done-toast done-toast--top' : 'done-toast'}
       role="status"
-      style={top ? undefined : bottom === null ? { visibility: 'hidden' } : { bottom }}
+      style={top ? (topAt === null ? undefined : { top: topAt }) : bottom === null ? { visibility: 'hidden' } : { bottom }}
     >
       <div className="done-toast__pill" key={idOf(notice)}>
         <CheckGlyph />

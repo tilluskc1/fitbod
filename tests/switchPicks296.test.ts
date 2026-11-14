@@ -59,7 +59,7 @@ test('#296 a preset fills its parts, editing a part clears the preset, every par
   const edited = togglePart(pickPreset(NO_PICKS, 'Push'), 'Arms');
   assert.deepEqual(edited, { preset: null, parts: ['Chest', 'Shoulders'] });
   assert.equal(pickLabel(parts('Shoulders', 'Arms')), 'Shoulders + Arms');
-  assert.equal(pickLabel(parts('Core')), 'Abs', 'the Core area reads Abs');
+  assert.equal(pickLabel(parts('Core')), 'Core', 'the Core area reads Core, as Today names it');
   // Parts that are exactly a preset read as it, as Today will name the day (review 2).
   assert.equal(pickLabel(parts('Legs')), 'Lower');
   assert.equal(pickLabel(parts('Chest', 'Back', 'Shoulders', 'Arms')), 'Upper');
@@ -150,14 +150,14 @@ test('#296 bodyweight and Back: Not enough equipment with its gear reason, never
   assert.ok(arms.reasons.some((line) => /biceps/.test(line.text)));
 });
 
-test('#296 balance guard: Arms only or Abs only stays at most the saved length and says so', () => {
+test('#296 balance guard: Arms only or Core only stays at most the saved length and says so', () => {
   const longer = { ...defaultConstraints(gym), minutes: 90 };
   const arms = picked(gym, parts('Arms'), longer);
   assert.equal(arms.next.minutes, 45, 'capped at the saved 45');
   assert.match(arms.preview.smallLine ?? '', /^Arms only: \d+ exercises?(, all isolation)?\.$/);
   assert.equal(arms.preview.smallLine?.includes('all isolation'), arms.live.exercises.every((e) => ['elbow_flexion', 'elbow_extension'].includes(exerciseById(e.exerciseId)!.pattern)), 'says "all isolation" only when true');
   assert.equal(picked(gym, parts('Core'), longer).next.minutes, 45);
-  assert.match(picked(gym, parts('Core')).preview.smallLine ?? '', /^Abs only: /);
+  assert.match(picked(gym, parts('Core')).preview.smallLine ?? '', /^Core only: /);
   assert.equal(picked(gym, parts('Chest'), longer).next.minutes, 90, 'a big part keeps today\'s length');
   assert.equal(picked(gym, parts('Arms', 'Shoulders')).preview.smallLine, undefined);
   const shorter = { ...defaultConstraints(gym), minutes: 20 };

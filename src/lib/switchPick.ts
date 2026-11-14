@@ -18,9 +18,9 @@ export type { Preset } from './areas.ts';
  * (`talkConstraints` → `todayProgram` with `focus`, lesson 9); the only stored trace is the
  * existing `TodayOverride.focus`.
  */
-/** The chip label for an area: the Core area reads "Abs" in Switch (#296). */
+/** The chip label for an area: "Core", as Today names a core-only day (#296 r2, owner). */
 export const PART_LABEL: Record<Area, string> = {
-  Chest: 'Chest', Back: 'Back', Shoulders: 'Shoulders', Arms: 'Arms', Legs: 'Legs', Core: 'Abs',
+  Chest: 'Chest', Back: 'Back', Shoulders: 'Shoulders', Arms: 'Arms', Legs: 'Legs', Core: 'Core',
 };
 
 export interface Picks {
@@ -61,7 +61,7 @@ export function pickLabel(picks: Picks): string {
 }
 
 /**
- * (#296 coach rule 2) A single small-muscle pick: Arms only or Abs only. It is built at most at the
+ * (#296 coach rule 2) A single small-muscle pick: Arms only or Core only. It is built at most at the
  * saved length and says so honestly, never padded with work the lifter did not ask for.
  */
 export function smallOnly(picks: Picks): Area | null {
