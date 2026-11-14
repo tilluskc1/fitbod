@@ -86,13 +86,13 @@ async function openSettings(page) {
 /** The sheet's pressed chips, in screen order. */
 const pressed = (sheet) => sheet.locator('.my-gym__group .chip[aria-pressed="true"]').allInnerTexts();
 
-/** Layout checks: no sideways scroll, every chip and button at least 44px tall. */
+/** Layout checks: no sideways scroll, every chip and button at least 44px tall (whole pixels: a 360px row lays out at 43.9999). */
 async function fits(sheet, where) {
   const wide = await sheet.evaluate((el) => [...el.querySelectorAll('*')].filter((node) => node.clientWidth > 0
     && node.scrollWidth > node.clientWidth + 1 && getComputedStyle(node).overflowX !== 'hidden').map((node) => node.className));
   check(wide.length === 0, `${where}: the sheet scrolls sideways (${wide.join(', ')})`);
   const small = await sheet.locator('button').evaluateAll((buttons) => buttons.map((b) => [b.innerText || b.getAttribute('aria-label'), b.getBoundingClientRect().height])
-    .filter(([, h]) => h > 0 && h < 44));
+    .filter(([, h]) => h > 0 && Math.round(h) < 44));
   check(small.length === 0, `${where}: buttons under 44px: ${JSON.stringify(small)}`);
 }
 
