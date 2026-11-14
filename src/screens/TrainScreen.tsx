@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useWakeLock } from '../lib/wakeLock';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
@@ -14,7 +15,7 @@ import { availableLoads } from '../lib/progression';
 import { weightSteps } from '../lib/weightSteps';
 import { calibrationInputValue, loadLimitMessage, loadValue, repsLimitMessage, typedLoad, typedReps, unitLabel } from '../lib/units';
 import { restLabel } from '../lib/sessionTime';
-import { GENERAL_WARM_UP_TEXT, generalWarmUpMinutes, liveRampBurst, rampExerciseIndex, rampSets, rampWorking, setWarmUpChecks, showsGeneralWarmUp, warmUpChecks } from '../lib/warmUp';
+import { BAR, GENERAL_WARM_UP_TEXT, generalWarmUpMinutes, liveRampBurst, rampExerciseIndex, rampSets, rampWorking, setWarmUpChecks, showsGeneralWarmUp, warmUpChecks } from '../lib/warmUp';
 import type { WarmUpChecks } from '../lib/warmUp';
 import type { Experience, PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
@@ -213,15 +214,15 @@ export default function TrainScreen({
    * slot and exercise, so a swap or another session never inherits it. In memory only.
    */
   const [rampBurst, setRampBurst] = useState<{ key: string; kg: number } | null>(null);
-  /** After the focused control unmounts, focus moves here (an element id, or 'log' for the next open ✓) instead of <body>. */
+  /** After the focused control unmounts, focus moves here (an element id, or 'log' for the card's Log button) instead of <body>. */
   const focusNext = useRef<string | null>(null);
   useEffect(() => {
     const target = focusNext.current;
     if (!target) return;
     focusNext.current = null;
-    // The next open ✓; an exercise with no load yet offers its first weight cell. After the last ✓, Finish.
+    // The card's Log button; a set with no load yet offers its weight cell. After the last set, Finish.
     const element = target === 'log'
-      ? document.querySelector<HTMLElement>('button.lg-check:not(:disabled)') ?? document.querySelector<HTMLElement>('input.lg-input')
+      ? document.querySelector<HTMLElement>('button.lg-log:not(:disabled)') ?? document.querySelector<HTMLElement>('.lg-focus input.lg-input')
         ?? document.querySelector<HTMLElement>('.finish-btn')
       : document.getElementById(target);
     (element?.matches('button, input') ? element
@@ -233,7 +234,9 @@ export default function TrainScreen({
   const heldKey = held === null ? null : `${held.exerciseIndex}:${held.setIndex}`;
   useEffect(() => {
     if (heldKey === null) return;
+    // (#380) The card's Log button sits under it: reveal both, so Apply to all and Log stay in the band.
     document.querySelector('.lg-note--held .notice-card')?.scrollIntoView({ block: 'nearest' });
+    document.querySelector('.lg-focus .lg-log')?.scrollIntoView({ block: 'nearest' });
   }, [heldKey]);
 
   // #300: warm-up checks live in memory for the session; nothing reaches the record.
@@ -296,6 +299,12 @@ export default function TrainScreen({
     .map((entry, entryIndex) => ({ entry, entryIndex }))
     .filter(({ entry }) => entry.skipped);
 
+  /**
+   * (#380) The set the card shows: a tapped row's set, in memory only. Null is the next set to log. Cleared
+   * on a log, and whenever the exercise on screen, its key or the set itself is no longer there.
+   */
+  const [focus, setFocus] = useState<{ key: string; setIndex: number } | null>(null);
+
   const header = (
     <header className="flow-header lg-header">
       <div className="flow-header__inner">
@@ -304,11 +313,22 @@ export default function TrainScreen({
         </button>
         <h1 className="flow-title">{session.name}</h1>
         <div className="flow-header__right">
-          <span className="lg-clock">{clock(elapsedMs(session, now))}</span>
           <button className="finish-btn" onClick={onFinish}>
             Finish
           </button>
         </div>
+      </div>
+      <div className="lg-prog">
+        <b className="lg-count">{progress.done} of {progress.total} sets</b>
+        <span className="lg-clock">{clock(elapsedMs(session, now))}</span>
+      </div>
+      {/* One tick per set, grouped by exercise; a logged set fills lime. */}
+      <div className="lg-ticks" aria-hidden="true">
+        {session.exercises.map((entry, entryIndex) => (
+          <span className="lg-ticks__group" key={`${entry.exerciseId}-${entryIndex}`}>
+            {entry.performed.map((set, setIndex) => <span key={setIndex} className={set.done ? 'lg-tick lg-tick--done' : 'lg-tick'} />)}
+          </span>
+        ))}
       </div>
     </header>
   );
@@ -392,6 +412,7 @@ export default function TrainScreen({
     );
   }
 
+
   const activeSet = exercise.performed.findIndex((set) => !set.done);
   const mode = loadModeOf(exercise.exerciseId);
   const equipment = exerciseById(exercise.exerciseId)?.equipment ?? (mode === 'none' ? 'Bodyweight' : 'Dumbbell');
@@ -418,6 +439,10 @@ export default function TrainScreen({
   // skip or swap mounts fresh controls instead of reusing another exercise's.
   const exerciseKey = `${exercise.exerciseId}:${index}`;
   const rowKey = (setIndex: number) => `${exerciseKey}:${setIndex}`;
+  // (#380) The card's set: the tapped row while it is still there, else the next set to log.
+  const focusLive = focus !== null && focus.key === exerciseKey && focus.setIndex < exercise.performed.length;
+  if (focus !== null && !focusLive) setFocus(null);
+  const focused = focusLive ? focus.setIndex : activeSet;
   const calibrationKey = `${session.id}:${index}:${exercise.exerciseId}`;
   // Ready to go heavier (#165): the lifter types the next load up from last time's.
   const floor = goHeavier[exercise.exerciseId];
@@ -484,16 +509,18 @@ export default function TrainScreen({
     return null;
   };
 
-  // (#371) − and + move the next set to log by one real step: the same edit (and burst) as typing its weight.
-  const stepSet = activeSet >= 0 && mode !== 'none' && !holdUnit && equipment !== 'Bodyweight' ? exercise.performed[activeSet] : undefined;
+  // (#371) − and + move the card's set by one real step: the same edit (and burst) as typing its weight.
+  // (#380) The card's set when it is still to log (a logged set is edited by typing only).
+  const stepSet = focused >= 0 && !exercise.performed[focused]?.done && mode !== 'none' && !holdUnit && equipment !== 'Bodyweight'
+    ? exercise.performed[focused] : undefined;
   const stepFrom = !stepSet ? 0 : stepSet.weight > 0 ? stepSet.weight
-    : prefill !== null && !cleared.includes(`${calibrationKey}:${activeSet}`) ? prefill : raising ? floor : 0;
+    : prefill !== null && !cleared.includes(`${calibrationKey}:${focused}`) ? prefill : raising ? floor : 0;
   // A dumbbell steps the rack today's gear offers (a Travel gym's hotel rack), as the ramp rows do (#371 review 1).
   const steps = stepSet ? weightSteps({ kg: stepFrom, equipment, available: equipment === 'Dumbbell' ? rampLoads : rack, unit }) : null;
   const stepTo = (kg: number | null) => {
     if (kg === null) return;
     setRefusal(null);
-    onUpdateSet(index, activeSet, { weight: kg }, { prefill: prefill ?? 0, step: true });
+    onUpdateSet(index, focused, { weight: kg }, { prefill: prefill ?? 0, step: true });
   };
 
   // #300/#326: the ramp rows' slot, and the load set 1 shows (its typed load, else the suggested start).
@@ -508,121 +535,225 @@ export default function TrainScreen({
     suggestedKg: setOne && !setOne.done && prefill !== null && !cleared.includes(`${calibrationKey}:0`) ? prefill : null,
   });
 
-  const rows = exercise.performed.flatMap((set, setIndex) => {
-    const key = rowKey(setIndex);
-    const n = setIndex + 1;
-    const before = previous[setIndex];
-    // The suggested start shows in every empty weight cell still to log; logging writes it to that set.
-    const shownPrefill = !set.done && set.weight <= 0 && prefill !== null && !cleared.includes(`${calibrationKey}:${setIndex}`)
-      ? prefill : null;
-    const noLoad = needsLoad(exercise.exerciseId) && set.weight <= 0 && shownPrefill === null;
-    // An emptied reps (or seconds) cell is never logged as 0 either (#309 review 1).
-    const noReps = set.reps <= 0;
-    const reason = !set.done && (noLoad || noReps) && setIndex === activeSet ? `${key}:reason` : undefined;
-    const refused = refusal?.key === key ? `${key}:refused` : undefined;
-    const rampCell = setIndex === 0 && rampIndex === index;
-    const weightShown = set.weight > 0 ? showPending(set.weight, setIndex)
-      : shownPrefill !== null ? showActual(shownPrefill) : '';
-    const row = (
-      <tr key={key} className={set.done ? 'lg-row--done' : setIndex === activeSet ? 'lg-row--current' : undefined}>
-        <td>{n}</td>
-        <td className="lg-prev">
-          {!before ? '—' : before.weight > 0 ? `${showWeight(before.weight)} × ${before.reps}` : `${before.reps}${holdUnit ? 's' : ''}`}
-        </td>
-        <td>
-          {mode === 'none' ? (
-            <span className="lg-cell lg-cell--bw">BW</span>
-          ) : (
-            <SetCell id={`${key}:weight`} label={`Set ${n} weight, ${unitWord}`} shown={weightShown}
-              empty={set.weight <= 0} inputMode="decimal" enterKeyHint="next"
-              onText={(text, typed) => typeWeight(set, setIndex, key, text, typed)}
-              onEnter={() => document.getElementById(`${key}:reps`)?.focus()}
-              onFocusChange={rampCell
-                ? (focused) => setRampBurst(focused ? { key: calibrationKey, kg: setOneKg } : null)
-                : undefined} />
-          )}
-        </td>
-        <td>
-          <SetCell id={`${key}:reps`} label={`Set ${n} ${holdUnit ? 'seconds' : 'reps'}`}
-            shown={String(set.reps)} empty={false} inputMode="numeric" enterKeyHint="done"
-            onText={(text, typed) => typeReps(set, setIndex, key, text, typed)}
-            onEnter={(input) => input.blur()} />
-        </td>
-        <td>
-          {set.done ? (
-            <span className="lg-check" role="img" aria-label={`Set ${n} logged`}>
-              <Icon name="check" size={20} />
-            </span>
-          ) : (
-            <button type="button" className="lg-check" aria-label={`Log set ${n}`} disabled={noLoad || noReps}
-              aria-describedby={reason}
-              // Keep the keyboard's field focused through the tap, so the row does not jump first.
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => {
-                primeRestAudio();
-                setRefusal(null);
-                focusNext.current = 'log';
-                onLogSet(index, setIndex, exercise.exerciseId, shownPrefill ?? undefined);
-              }}>
-              <Icon name="check" size={20} />
-            </button>
-          )}
-        </td>
-      </tr>
-    );
-    const note = reason && (
-      <tr key={reason} className="lg-note">
-        <td colSpan={5} id={reason}>{noLoad ? NEEDS_LOAD_REASON : `Enter ${holdUnit ? 'seconds' : 'reps'} to log this set`}</td>
-      </tr>
-    );
-    const error = refused && (
-      <tr key={refused} className="lg-note"><td colSpan={5} id={refused} className="error-text" role="alert">{refusal?.text}</td></tr>
-    );
-    const heads = held !== null && held.exerciseIndex === index && held.setIndex === setIndex && (
-      <tr key={`${key}:held`} className="lg-note lg-note--held">
-        <td colSpan={5}>
+
+  // The suggested start shows in every empty weight cell still to log; logging writes it to that set.
+  const prefillOf = (set: PerformedSet, setIndex: number) =>
+    !set.done && set.weight <= 0 && prefill !== null && !cleared.includes(`${calibrationKey}:${setIndex}`) ? prefill : null;
+  /** The load a set shows, as its cell or its list row reads it ('' when it has none yet). */
+  const weightText = (set: PerformedSet, setIndex: number) => {
+    const shownPrefill = prefillOf(set, setIndex);
+    return set.weight > 0 ? showPending(set.weight, setIndex) : shownPrefill !== null ? showActual(shownPrefill) : '';
+  };
+  const repsText = (reps: number, hold: boolean) => (hold ? `${reps}s` : String(reps));
+  /** "135 lb × 5", "BW × 12", "20 lb × 30s": what a list row says about its set. */
+  const setLine = (weight: string, reps: number, bodyweight: boolean, hold: boolean) =>
+    `${bodyweight ? 'BW' : weight ? `${weight} ${unitLabel(unit)}` : '—'} × ${repsText(reps, hold)}`;
+
+  // ---------- The card: the focused set's fields and its one button ----------
+  const set = exercise.performed[focused] ?? exercise.performed[0];
+  const key = rowKey(focused);
+  const n = focused + 1;
+  const before = previous[focused];
+  const shownPrefill = prefillOf(set, focused);
+  const noLoad = needsLoad(exercise.exerciseId) && set.weight <= 0 && shownPrefill === null;
+  // An emptied reps (or seconds) cell is never logged as 0 either (#309 review 1).
+  const noReps = set.reps <= 0;
+  const reason = !set.done && (noLoad || noReps) ? `${key}:reason` : undefined;
+  const refused = refusal?.key === key ? `${key}:refused` : undefined;
+  const rampCell = focused === 0 && rampIndex === index;
+  const weightShown = weightText(set, focused);
+  // "lb · bar": the load on the card is the empty barbell (#380).
+  const onBar = equipment === 'Barbell' && weightShown !== '' && Math.abs(Number(weightShown) - BAR[unit]) < 0.001;
+  const weightUnit = `${unitLabel(unit)}${perSide}${onBar ? ' · bar' : ''}`;
+  // (#88) In a superset the card names the half by its place in the pair: A is the first, B the second.
+  const pair = round && partner !== undefined ? pairs.find(([a, b]) => a === index || b === index) : undefined;
+  const letterOf = (entryIndex: number) => (pair ? (pair[0] === entryIndex ? 'A' : 'B') : '');
+  const letter = letterOf(index);
+  const tail = 132 + (reason ? 40 : 0) + (refused ? 40 : 0);
+
+  const card = (
+    <section className="lg-focus" aria-label={letter ? `${letter}${n}, set ${n} of ${exercise.performed.length}` : `Set ${n} of ${exercise.performed.length}`}
+      key={`${exerciseKey}:card`} style={{ '--lg-tail': `${tail}px` } as CSSProperties}>
+      <div className="lg-focus__head">
+        <h3 className="lg-focus__set">
+          {letter ? <>{letter}{n} <span>· set {n} of {exercise.performed.length}</span></> : <>Set {n} <span>of {exercise.performed.length}</span></>}
+        </h3>
+        {before && (
+          <span className="lg-focus__prev">
+            Previous <b>{before.weight > 0 ? `${showWeight(before.weight)} × ${before.reps}` : repsText(before.reps, holdUnit)}</b>
+          </span>
+        )}
+      </div>
+      <div className="lg-fields">
+        {mode === 'none' ? (
+          <div className="lg-field">
+            <span className="lg-field__num"><span className="lg-cell lg-cell--bw">BW</span><small>bodyweight</small></span>
+          </div>
+        ) : (
+          <div className="lg-field lg-field--w" role={steps && steps.step > 0 ? 'group' : undefined}
+            aria-label={steps && steps.step > 0 ? `Weight steps for set ${n}` : undefined}>
+            {steps && steps.step > 0 && (
+              <button type="button" className="lg-step" disabled={steps.down === null} onClick={() => stepTo(steps.down)}
+                aria-label={`− ${steps.downBy} ${unitLabel(unit)}`}>
+                {'−'}{steps.downBy}
+              </button>
+            )}
+            <label className="lg-field__num">
+              <SetCell key={`${key}:weight`} id={`${key}:weight`} label={`Set ${n} weight, ${unitWord}`} shown={weightShown}
+                empty={set.weight <= 0} inputMode="decimal" enterKeyHint="next"
+                onText={(text, typed) => typeWeight(set, focused, key, text, typed)}
+                onEnter={() => document.getElementById(`${key}:reps`)?.focus()}
+                onFocusChange={rampCell
+                  ? (on) => setRampBurst(on ? { key: calibrationKey, kg: setOneKg } : null)
+                  : undefined} />
+              <small>{weightUnit}</small>
+            </label>
+            {steps && steps.step > 0 && (
+              <button type="button" className="lg-step" disabled={steps.up === null} onClick={() => stepTo(steps.up)}
+                aria-label={`+ ${steps.upBy} ${unitLabel(unit)}`}>
+                +{steps.upBy}
+              </button>
+            )}
+          </div>
+        )}
+        <div className="lg-field">
+          <label className="lg-field__num">
+            <SetCell key={`${key}:reps`} id={`${key}:reps`} label={`Set ${n} ${holdUnit ? 'seconds' : 'reps'}`}
+              shown={String(set.reps)} empty={false} inputMode="numeric" enterKeyHint="done"
+              onText={(text, typed) => typeReps(set, focused, key, text, typed)}
+              onEnter={(input) => input.blur()} />
+            <small>{holdUnit ? 'sec' : 'reps'}</small>
+          </label>
+        </div>
+      </div>
+      {reason && <p className="lg-note" id={reason}>{noLoad ? NEEDS_LOAD_REASON : `Enter ${holdUnit ? 'seconds' : 'reps'} to log this set`}</p>}
+      {refused && <p className="lg-note error-text" id={refused} role="alert">{refusal?.text}</p>}
+      {held !== null && held.exerciseIndex === index && (
+        <div className="lg-note lg-note--held">
           <NoticeCard kind="headsUp" title={held.text} onDismiss={held.onDismiss}
             actions={<button type="button" className="notice-card__fix" onPointerDown={(event) => event.preventDefault()} onClick={held.onApply}>Apply to all</button>} />
-        </td>
-      </tr>
+        </div>
+      )}
+      {set.done ? (
+        // Q1 (product default): a logged set's edits save as typed; this returns to the next set to log.
+        <button type="button" className="lg-log lg-log--back" onPointerDown={(event) => event.preventDefault()}
+          onClick={() => { setRefusal(null); setFocus(null); }}>
+          Back to set {activeSet + 1}
+        </button>
+      ) : (
+        <button type="button" className="lg-log" aria-label={`Log set ${n}`} disabled={noLoad || noReps}
+          aria-describedby={reason}
+          // Keep the keyboard's field focused through the tap, so the card does not jump first.
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => {
+            primeRestAudio();
+            setRefusal(null);
+            setFocus(null);
+            focusNext.current = 'log';
+            onLogSet(index, focused, exercise.exerciseId, shownPrefill ?? undefined);
+          }}>
+          <Icon name="check" size={20} />Log set {n}
+        </button>
+      )}
+    </section>
+  );
+
+  // ---------- The list: ramp rows, then every set; a row of this exercise is a button into the card ----------
+  const tick = (label?: string) => (
+    <span className="lg-tick-mark" role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+      <Icon name="check" size={16} />
+    </span>
+  );
+  const setRow = (setIndex: number) => {
+    const row = exercise.performed[setIndex];
+    const line = setLine(weightText(row, setIndex), row.reps, mode === 'none', holdUnit);
+    const isFocus = setIndex === focused;
+    const state = row.done ? 'lg-li--done' : isFocus ? 'lg-li--now' : 'lg-li--later';
+    return (
+      <button type="button" key={rowKey(setIndex)} className={`lg-li ${state}${isFocus ? ' lg-li--focus' : ''}`}
+        aria-label={`Set ${setIndex + 1}, ${line}, edit`} aria-current={isFocus ? 'true' : undefined}
+        onClick={() => { setRefusal(null); setFocus(setIndex === activeSet ? null : { key: exerciseKey, setIndex }); }}>
+        <span className="lg-li__n">{letter}{setIndex + 1}</span>
+        <span className="lg-li__v">{line}</span>
+        {row.done ? tick(`Set ${setIndex + 1} logged`) : isFocus ? <span className="lg-li__now">Now</span> : <span className="lg-li__ghost" />}
+      </button>
     );
-    return [row, note, error, heads].filter(Boolean);
-  });
+  };
+  // Q2 (product default): the partner's rows show round by round, muted and display-only.
+  const partnerEntry = pair && partner !== undefined ? session.exercises[partner] : undefined;
+  const partnerRow = (setIndex: number) => {
+    if (!partnerEntry || partner === undefined) return null;
+    const row = partnerEntry.performed[setIndex];
+    const partnerMode = loadModeOf(partnerEntry.exerciseId);
+    const partnerHold = setUnit(partnerEntry.exerciseId) === 'seconds';
+    const partnerEquipment = exerciseById(partnerEntry.exerciseId)?.equipment ?? (partnerMode === 'none' ? 'Bodyweight' : 'Dumbbell');
+    const partnerRack = availableLoads({ loads: profileLoads }, partnerEquipment);
+    const partnerPlanned = plannedLoad(profileLoads, history, partnerEntry.exerciseId, unit);
+    const weight = row.weight <= 0 ? ''
+      : Math.abs(row.weight - (partnerEntry.planned[setIndex]?.weight ?? -1)) < 0.001 ? partnerPlanned(row.weight) : loadValue(row.weight, unit, partnerRack);
+    return (
+      <div key={`partner-${partner}-${setIndex}`} className={`lg-li lg-li--partner${row.done ? ' lg-li--done' : ''}`}>
+        <span className="lg-li__n">{letterOf(partner)}{setIndex + 1}</span>
+        <span className="lg-li__v"><span className="lg-li__ex">{partnerEntry.name}</span> {setLine(weight, row.reps, partnerMode === 'none', partnerHold)}</span>
+        {row.done ? tick() : <span className="lg-li__ghost" />}
+      </div>
+    );
+  };
+  const listRows = partnerEntry && pair
+    ? Array.from({ length: Math.max(exercise.performed.length, partnerEntry.performed.length) }, (_, setIndex) => {
+      const own = setIndex < exercise.performed.length ? setRow(setIndex) : null;
+      const theirs = setIndex < partnerEntry.performed.length ? partnerRow(setIndex) : null;
+      return pair[0] === index ? [own, theirs] : [theirs, own];
+    }).flat().filter(Boolean)
+    : exercise.performed.map((_, setIndex) => setRow(setIndex));
 
   // #300: two ramp sets before the lead's working sets, from the load set 1 shows. Not sets: never
   // logged, counted or stored. A dumbbell ramps on the rack the logger's own picker offers (Travel's
-  // hotel rack on a today-only day), else plate steps.
+  // hotel rack on a today-only day), else plate steps. Once every one is ticked they fold to one line.
   const rampRack = equipment === 'Dumbbell' ? rampLoads : rack;
   const ramps = index === rampIndex
     ? rampSets({ equipment, unit, rack: rampRack, working: burst !== null ? burst.kg : setOneKg })
     : [];
-  const rampRows = ramps.map((ramp, rampNumber) => {
-    const key = `${exercise.exerciseId}:${rampNumber}`;
-    const ticked = warm.ramps.includes(key);
+  const rampKey = (rampNumber: number) => `${exercise.exerciseId}:${rampNumber}`;
+  const allRampsTicked = ramps.length > 0 && ramps.every((_, rampNumber) => warm.ramps.includes(rampKey(rampNumber)));
+  const rampRows = allRampsTicked ? [(
+    <div key={`${exerciseKey}:warm`} className="lg-li lg-li--warm lg-li--warm-done">
+      <span className="lg-li__n"><abbr title="Warm-up">W</abbr></span>
+      <span className="lg-li__v">Warm-up sets · {ramps.map((ramp) => `${loadValue(ramp.weight, unit, rampRack)} × ${ramp.reps}`).join(', ')}</span>
+      <button type="button" className="lg-wcheck" aria-pressed="true" aria-label="Warm-up sets, done"
+        onClick={() => updateWarm({ ramps: warm.ramps.filter((item) => !ramps.some((_, rampNumber) => item === rampKey(rampNumber))) })}>
+        <Icon name="check" size={18} />
+      </button>
+    </div>
+  )] : ramps.map((ramp, rampNumber) => {
+    const ticked = warm.ramps.includes(rampKey(rampNumber));
+    const load = loadValue(ramp.weight, unit, rampRack);
     return (
-      <tr key={`${exerciseKey}:warm-${rampNumber}`} className={ticked ? 'lg-row--warm lg-row--warm-done' : 'lg-row--warm'}>
-        <td><abbr title="Warm-up">W</abbr></td>
-        <td className="lg-warm-tag">Warm-up</td>
-        <td><span className="lg-cell lg-cell--warm">{loadValue(ramp.weight, unit, rampRack)}</span></td>
-        <td><span className="lg-cell lg-cell--warm">{ramp.reps}</span></td>
-        <td>
-          <button type="button" className="lg-wcheck" aria-pressed={ticked}
-            aria-label={`Warm-up set ${rampNumber + 1}, ${loadValue(ramp.weight, unit, rampRack)} ${weightLabel} × ${ramp.reps}, done`}
-            onClick={() => updateWarm({ ramps: ticked ? warm.ramps.filter((item) => item !== key) : [...warm.ramps, key] })}>
-            <Icon name="check" size={20} />
-          </button>
-        </td>
-      </tr>
+      <div key={`${exerciseKey}:warm-${rampNumber}`} className={ticked ? 'lg-li lg-li--warm lg-li--warm-done' : 'lg-li lg-li--warm'}>
+        <span className="lg-li__n"><abbr title="Warm-up">W</abbr></span>
+        <span className="lg-li__v"><span className="lg-warm-tag">Warm-up</span> <span className="lg-warm-load">{load} {unitLabel(unit)}</span> × <span className="lg-warm-reps">{ramp.reps}</span></span>
+        <button type="button" className="lg-wcheck" aria-pressed={ticked}
+          aria-label={`Warm-up set ${rampNumber + 1}, ${load} ${weightLabel} × ${ramp.reps}, done`}
+          onClick={() => updateWarm({ ramps: ticked ? warm.ramps.filter((item) => item !== rampKey(rampNumber)) : [...warm.ramps, rampKey(rampNumber)] })}>
+          <Icon name="check" size={18} />
+        </button>
+      </div>
     );
   });
 
-  // (#151) One-tap shortcuts into the same actions the menu holds; the photo's hold menu lists the same.
+  // (#151) The photo's hold menu: one-tap shortcuts into the same actions the sheet holds (#379, unchanged).
   const acts: [string, string, () => void][] = [
     ['How-to', 'play_arrow', () => setHowTo(exercise)],
     ['History', 'monitoring', () => onOpenActions(index, 'history')],
     ...(onReplace ? [['Replace', 'tune', () => onReplace(index)] as [string, string, () => void]] : []),
     // (#369) Hidden on the only exercise with work left: there is nothing to move it behind.
     ...(onLater && canMoveLater(session, index) ? [['Later', 'schedule', () => onLater(index)] as [string, string, () => void]] : []),
+  ];
+  // (#380) The chip row: History, Replace, More (the sheet the name opens; Later is its first row).
+  const chips: [string, ReactNode, () => void][] = [
+    ['History', <Icon key="i" name="monitoring" size={16} />, () => onOpenActions(index, 'history')],
+    ...(onReplace ? [['Replace', <Icon key="i" name="tune" size={16} />, () => onReplace(index)] as [string, ReactNode, () => void]] : []),
+    ['More', <span key="i" className="lg-act__more" aria-hidden="true"><MoreIcon size={16} /></span>, () => onOpenActions(index)],
   ];
 
   return (
@@ -644,25 +775,23 @@ export default function TrainScreen({
       <div className="flow-body lg-body">
         {showsGeneralWarmUp(session) && (
           <section className={warm.general ? 'lg-warm lg-warm--done' : 'lg-warm'} aria-label="Warm-up">
-            <div className="lg-warm__head">
-              <div className="lg-warm__text">
-                <h2 className="lg-warm__title">Warm-up · {warmMinutes} min</h2>
-                {!warm.general && <p className="lg-warm__note">{GENERAL_WARM_UP_TEXT}</p>}
-              </div>
-              <button type="button" className="lg-wcheck" aria-pressed={warm.general}
-                aria-label={`Warm-up, ${warmMinutes} min easy cardio, done`}
-                onClick={() => updateWarm({ general: !warm.general, timerStartedAt: null })}>
-                <Icon name="check" size={20} />
-              </button>
+            <div className="lg-warm__text">
+              <h2 className="lg-warm__title">Warm-up · {warmMinutes} min{warm.general ? <span> · done</span> : null}</h2>
+              {!warm.general && <p className="lg-warm__note">{GENERAL_WARM_UP_TEXT}</p>}
             </div>
             {!warm.general && (
-              <button type="button" className="pill-quiet lg-warm__timer"
+              <button type="button" className="lg-warm__timer"
                 aria-label={warmLeft === null ? `Start ${warmMinutes}-minute warm-up timer` : 'Stop warm-up timer'}
                 onClick={() => updateWarm({ timerStartedAt: warmLeft === null ? Date.now() : null })}>
                 <Icon name="timer" size={16} />
-                {warmLeft === null ? `Start ${warmMinutes}:00 timer` : restClock(warmLeft)}
+                {warmLeft === null ? `${warmMinutes}:00` : restClock(warmLeft)}
               </button>
             )}
+            <button type="button" className="lg-wcheck" aria-pressed={warm.general}
+              aria-label={`Warm-up, ${warmMinutes} min easy cardio, done`}
+              onClick={() => updateWarm({ general: !warm.general, timerStartedAt: null })}>
+              <Icon name="check" size={20} />
+            </button>
           </section>
         )}
 
@@ -697,17 +826,12 @@ export default function TrainScreen({
               {restAfter ? <> · Rest {restLabel(restAfter)}</> : null}
             </p>
           </div>
-          {/* The same menu the row opens: instructions, history, replace, remove for today. */}
-          <button className="lg-more" onClick={() => onOpenActions(index)}
-            aria-label={`More actions for ${exercise.name}`} aria-haspopup="dialog">
-            <MoreIcon size={18} />
-          </button>
         </section>
 
         <div className="lg-acts" role="group" aria-label={`Actions for ${exercise.name}`}>
-          {acts.map(([label, icon, run]) => (
-            <button key={label} type="button" className="lg-act" onClick={run} aria-haspopup={label === 'Later' ? undefined : 'dialog'}>
-              <Icon name={icon} size={16} />{label}
+          {chips.map(([label, icon, run]) => (
+            <button key={label} type="button" className="lg-act" onClick={run} aria-haspopup="dialog">
+              {icon}{label}
             </button>
           ))}
         </div>
@@ -716,29 +840,14 @@ export default function TrainScreen({
         {/* (#372) Its own line under any coach text, so a heads-up is never hidden; wraps to at most 3 lines. */}
         {noteLast && <p className="lg-coach lg-coach--note">Last time: {noteLast}</p>}
 
-        <table className="lg-table" aria-label={`Sets for ${exercise.name}`}>
-          <thead>
-            <tr>
-              <th scope="col">Set</th>
-              <th scope="col">Previous</th>
-              <th scope="col">{mode === 'none' ? 'Load' : weightLabel}</th>
-              <th scope="col">{holdUnit ? 'Secs' : 'Reps'}</th>
-              <th scope="col"><span className="sr-only">Log</span></th>
-            </tr>
-          </thead>
-          <tbody>{rampRows}{rows}</tbody>
-        </table>
+        {card}
 
-        {steps && steps.step > 0 && (
-          <div className="lg-steps" role="group" aria-label={`Weight steps for set ${activeSet + 1}`}>
-            <button type="button" className="lg-act" disabled={steps.down === null} onClick={() => stepTo(steps.down)}>
-              {'\u2212'} {steps.downBy} {unitLabel(unit)}
-            </button>
-            <button type="button" className="lg-act" disabled={steps.up === null} onClick={() => stepTo(steps.up)}>
-              + {steps.upBy} {unitLabel(unit)}
-            </button>
-          </div>
-        )}
+        <section className="lg-list" aria-label={pair ? 'Superset sets' : `Sets for ${exercise.name}`}>
+          {rampRows.length > 0 && !allRampsTicked && <p className="lg-list__label">Warm-up sets</p>}
+          {rampRows}
+          {pair && <p className="lg-list__label">Round by round</p>}
+          {listRows}
+        </section>
 
         <div className="sr-only" role="status" aria-live="polite">
           {restOver ? 'Rest over' : ''}
@@ -758,7 +867,7 @@ export default function TrainScreen({
               <span>Nothing recorded</span>
             </div>
             {skippedToday.map(({ entry, entryIndex }) => {
-              const pendingSets = entry.performed.filter((set) => !set.done).length;
+              const pendingSets = entry.performed.filter((item) => !item.done).length;
               return (
                 <div className="context-row" key={`skipped-${entryIndex}`}>
                   <span>
@@ -774,8 +883,8 @@ export default function TrainScreen({
         )}
       </div>
 
-      <div className="flow-dock lg-dock">
-        {rest > 0 && (
+      {rest > 0 && (
+        <div className="flow-dock lg-dock">
           <div className="lg-rest" role="timer" aria-label={`Rest, ${rest} seconds remaining`}>
             <span className="lg-rest__time">{restClock(rest)}</span>
             <span className="lg-rest__label">Rest</span>
@@ -793,10 +902,8 @@ export default function TrainScreen({
               {muted ? 'Muted' : 'Mute'}
             </button>
           </div>
-        )}
-        {bar}
-        <p className="lg-cap">{progress.done} of {progress.total} sets</p>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

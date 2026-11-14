@@ -5,13 +5,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { createSession, logSet, skipExercise, swapPendingExercise } from '../src/lib/session.ts';
 import type { WorkoutRecord } from '../src/types.ts';
+import { focusedSet, rowLine, shownValue } from './loggerView380.ts';
 
 const RACK = [10, 15, 18];
 const noop = () => {};
 const at = (minute: number) => `2026-11-04T10:${String(minute).padStart(2, '0')}:00.000Z`;
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-/** A set cell's value (#309): the cells are inputs, read by their accessible name. */
-const cell = (html: string, label: string) => html.match(new RegExp(`aria-label="${label}"[^>]*value="([^"]*)"`))?.[1];
+/** A set's value (#309, #380): the card's inputs by accessible name, any other set by its list row. */
+const cell = shownValue;
 
 const sets = (weight: number, reps: number, count = 3) => ({
   planned: Array.from({ length: count }, () => ({ weight, reps })),
@@ -53,27 +54,32 @@ test('a ✓ logs exactly its own set through logSet; a logged set is never re-lo
   assert.equal(logSet(blank, 0, 0, at(1)).exercises[0].performed[1].weight, 15);
 });
 
-test('the logger is one row per set, pre-filled from the prescription, one ✓ each', async () => {
+test('the logger is one row per set, pre-filled from the prescription; the next set logs in one tap', async () => {
   await withTrain((render) => {
     const html = render(pressDay());
     const text = plain(html);
     assert.match(text, /Exercise 1 of 2 · Target 3 × 8/);
     assert.match(html, /<h2 class="aw-exercise__name"><button/, 'the exercise name stays a heading');
     assert.match(html, /aria-label="Dumbbell Floor Press how-to, hold for actions"/);
-    assert.match(text, /Set Previous kg each Reps/);
+    // (#380) The card holds set 1, its unit under the number; every set has its row below.
+    assert.match(text, /Set 1 of 3/);
+    assert.match(html, /<small>kg each<\/small>/);
     for (const n of [1, 2, 3]) {
       assert.equal(cell(html, `Set ${n} weight, kilograms each`), '15', `set ${n} weight`);
       assert.equal(cell(html, `Set ${n} reps`), '8', `set ${n} reps`);
-      assert.match(html, new RegExp(`aria-label="Log set ${n}"`), `one ✓ for set ${n}`);
+      assert.equal(rowLine(html, n), '15 kg × 8', `set ${n}'s row`);
     }
+    assert.match(html, /aria-label="Log set 1"/, 'one Log for the next set');
+    assert.equal(html.match(/aria-label="Log set \d"/g)?.length, 1);
     assert.match(text, /Up next · Goblet Squat 2 × 10/);
     assert.match(text, /0 of 5 sets/);
     assert.doesNotMatch(html, /save-bar/, 'no separate Log button to scroll to');
 
     const logged = render(logSet(pressDay(), 0, 0, at(1)), { now: Date.parse(at(1)) });
-    assert.match(logged, /<tr class="lg-row--done">/);
+    assert.match(logged, /class="lg-li lg-li--done"[^>]*aria-label="Set 1, 15 kg × 8, edit"/);
     assert.match(logged, /aria-label="Set 1 logged"/);
-    assert.match(logged, /<tr class="lg-row--current"><td>2</);
+    assert.equal(focusedSet(logged), 2, 'the card moves to set 2');
+    assert.match(logged, /class="lg-li lg-li--now lg-li--focus" aria-label="Set 2, /);
     assert.match(plain(logged), /1 of 5 sets/);
     assert.match(logged, /role="timer" aria-label="Rest, 75 seconds remaining"/);
     for (const name of ['Add 30 seconds of rest', 'Mute rest cue']) assert.match(logged, new RegExp(`aria-label="${name}"`));
@@ -90,7 +96,7 @@ test('holds show seconds and bodyweight shows BW', async () => {
     const plank = render(day);
     assert.match(plain(plank), /Target 2 × 45s/);
     assert.equal(cell(plank, 'Set 1 seconds'), '45');
-    assert.match(plain(plank), /Set Previous Load Secs/);
+    assert.match(plank, /<small>sec<\/small>/);
     assert.match(plank, /<span class="lg-cell lg-cell--bw">BW</);
     const pushUp = render(skipExercise(day, 0));
     assert.equal(cell(pushUp, 'Set 1 reps'), '10');

@@ -8,12 +8,14 @@ import { firstTimeLoaded, needsCalibration } from '../src/lib/liveProgression.ts
 import { createSession, editSet, logSet, undoCarry, updatePerformedSet } from '../src/lib/session.ts';
 import { toKg } from '../src/lib/units.ts';
 import type { WorkoutRecord } from '../src/types.ts';
+import { rowLine, shownValue } from './loggerView380.ts';
 
 // (#309) The weight and reps cells are the inputs; the separate editor and the first-weight block are gone.
 const noop = () => {};
 const at = (minute: number) => `2026-11-09T10:${String(minute).padStart(2, '0')}:00.000Z`;
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-const cell = (html: string, label: string) => html.match(new RegExp(`aria-label="${label}"[^>]*value="([^"]*)"`))?.[1];
+// (#380) The focused set's value is its card input; any other set's is its list row (lesson 27).
+const cell = shownValue;
 
 function bench(weight = 0): WorkoutRecord {
   return createSession({ id: 'b309', name: 'Upper', dayIndex: 0, now: at(0), exercises: [{
@@ -40,14 +42,17 @@ test('a first-time Bench: no weight field above the table; every set shows the s
     const text = plain(html);
     const hint = text.match(/Suggested start (\d+) lb\. Do 5 easy reps with it, then adjust set 1\./);
     assert.ok(hint, text);
-    const [table] = html.match(/<table[\s\S]*<\/table>/) ?? [''];
-    assert.equal(html.split('<input').length, table.split('<input').length, 'every input is a set cell');
+    // (#380) The only inputs are the focus card's: set 1's weight and reps.
+    const [card] = html.match(/<section class="lg-focus"[\s\S]*?<\/section>/) ?? [''];
+    assert.equal(html.split('<input').length, card.split('<input').length, 'every input is a set cell');
+    assert.equal(card.split('<input').length - 1, 2);
     for (const n of [1, 2, 3, 4]) {
       assert.equal(cell(html, `Set ${n} weight, pounds`), hint[1]);
       assert.equal(cell(html, `Set ${n} reps`), '8');
-      assert.match(html, new RegExp(`aria-label="Log set ${n}">`), `set ${n} is one tap`);
     }
-    assert.match(html, /<th scope="col">lb total<\/th>/, 'the unit is in the column header (uppercased by CSS)');
+    assert.match(html, /aria-label="Log set 1">/, 'the next set is one tap');
+    for (const n of [2, 3, 4]) assert.equal(rowLine(html, n), `${hint[1]} lb × 8`, `set ${n}'s row reads the suggestion`);
+    assert.match(html, /<small>lb(?: · bar)?<\/small>/, 'the unit sits under the number');
     assert.match(html, /inputMode="decimal" enterKeyHint="next"[^>]*aria-label="Set 1 weight, pounds"/);
     assert.match(html, /inputMode="numeric" enterKeyHint="done"[^>]*aria-label="Set 1 reps"/);
   });
@@ -69,10 +74,9 @@ test('an empty weight cannot be logged for a loaded lift, without a suggestion o
   await withTrain((render) => {
     const html = render(bench(), { experience: undefined });
     assert.doesNotMatch(plain(html), /Suggested start/);
-    for (const n of [1, 2, 3, 4]) {
-      assert.equal(cell(html, `Set ${n} weight, pounds`), '');
-      assert.match(html, new RegExp(`aria-label="Log set ${n}" disabled=""`));
-    }
+    for (const n of [1, 2, 3, 4]) assert.equal(cell(html, `Set ${n} weight, pounds`), '');
+    assert.match(html, /aria-label="Log set 1" disabled=""/);
+    for (const n of [2, 3, 4]) assert.equal(rowLine(html, n), '— × 8', `set ${n} shows no load`);
     const typed = render(updatePerformedSet(bench(), 0, 0, { weight: toKg(135, 'lb') }, at(1)), { experience: undefined });
     assert.equal(cell(typed, 'Set 1 weight, pounds'), '135');
     assert.match(typed, /aria-label="Log set 1">/);
@@ -134,23 +138,24 @@ test('review 1: a set with no reps (or seconds) cannot be logged, and says why',
     const html = render(updatePerformedSet(bench(toKg(135, 'lb')), 0, 0, { reps: 0 }, at(1)));
     assert.match(html, /aria-label="Log set 1" disabled=""/);
     assert.match(plain(html), /Enter reps to log this set/);
-    assert.match(html, /aria-label="Log set 2">/, 'the other sets are unaffected');
+    assert.equal(rowLine(html, 2), '135 lb × 8', 'the other sets are unaffected');
+    assert.equal(html.match(/Enter reps to log this set/g)?.length, 1, 'only the card says why');
   });
 });
 
 test('#300 ramp rows sit above the working sets and stay tick-only; only working sets edit in the row', async () => {
   await withTrain((render) => {
     const html = render(bench(toKg(135, 'lb')));
-    const warm = html.match(/<tr[^>]*lg-row--warm[^>]*>[\s\S]*?<\/tr>/g) ?? [];
+    const warm = html.match(/<div class="lg-li lg-li--warm[^"]*">[\s\S]*?<\/button><\/div>/g) ?? [];
     assert.ok(warm.length > 0, 'the lead shows W rows before set 1');
     for (const row of warm) {
       assert.doesNotMatch(row, /<input/, 'a W row has no input');
       assert.match(row, /class="lg-wcheck" aria-pressed="false"/, 'a W row keeps its tick');
     }
-    const body = html.match(/<tbody>([\s\S]*)<\/tbody>/)?.[1] ?? '';
-    assert.ok(body.indexOf('lg-row--warm') < body.indexOf('aria-label="Set 1 weight, pounds"'), 'W rows come first');
-    assert.equal(html.split('<input').length - 1, 8, 'weight and reps inputs for the four working sets only');
+    const body = html.match(/<section class="lg-list"[\s\S]*?<\/section>/)?.[0] ?? '';
+    assert.ok(body.indexOf('lg-li--warm') >= 0 && body.indexOf('lg-li--warm') < body.indexOf('aria-label="Set 1, '), 'W rows come first');
+    assert.equal(html.split('<input').length - 1, 2, 'weight and reps inputs for the working set on the card only');
     for (const n of [1, 2, 3, 4]) assert.equal(cell(html, `Set ${n} weight, pounds`), '135');
-    assert.doesNotMatch(render(logSet(bench(toKg(135, 'lb')), 0, 0, at(1))), /lg-row--warm/, 'W rows leave once set 1 is logged');
+    assert.doesNotMatch(render(logSet(bench(toKg(135, 'lb')), 0, 0, at(1))), /lg-li--warm/, 'W rows leave once set 1 is logged');
   });
 });

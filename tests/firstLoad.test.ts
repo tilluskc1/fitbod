@@ -12,6 +12,7 @@ import { createSession } from '../src/lib/session.ts';
 import { calibrationInputValue } from '../src/lib/units.ts';
 import { MAX_WEIGHT } from '../src/lib/validate.ts';
 import type { Experience, Profile, Unit } from '../src/types.ts';
+import { rowLine, shownValue } from './loggerView380.ts';
 
 const shown = (id: string, experience: Experience, unit: Unit) =>
   calibrationInputValue(suggestedFirstLoad(exerciseById(id)!, experience, unit), unit);
@@ -78,16 +79,16 @@ async function renderTrain(extra: Record<string, unknown>) {
   } finally { await server.close(); }
 }
 
-const cell = (html: string, label: string) => html.match(new RegExp(`aria-label="${label}"[^>]*value="([^"]*)"`))?.[1];
+// (#380) The card's inputs by accessible name; any other set by its list row.
+const cell = shownValue;
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
 test('a first load is prefilled from the profile in every pending set, says why, and the ✓ is ready', async () => {
   const html = await renderTrain({ experience: 'Beginner' });
-  for (const n of [1, 2, 3]) {
-    assert.equal(cell(html, `Set ${n} weight, kilograms each`), '6', `set ${n}: floor press, Beginner, kg: 6 per hand`);
-    assert.match(html, new RegExp(`aria-label="Log set ${n}">`), `set ${n} logs in one tap`);
-    assert.doesNotMatch(html, new RegExp(`aria-label="Log set ${n}"[^>]*disabled`));
-  }
+  for (const n of [1, 2, 3]) assert.equal(cell(html, `Set ${n} weight, kilograms each`), '6', `set ${n}: floor press, Beginner, kg: 6 per hand`);
+  assert.match(html, /aria-label="Log set 1">/, 'set 1 logs in one tap');
+  assert.doesNotMatch(html, /aria-label="Log set 1"[^>]*disabled/);
+  for (const n of [2, 3]) assert.match(rowLine(html, n) ?? '', /^6 kg × /, `set ${n}'s row reads the suggestion`);
   assert.match(plain(html), /Suggested start 6 kg each\. Do 5 easy reps with it, then adjust set 1\./);
   // #309: the "Suggested: …" note, Confirm and Skip are gone; the hint and the prefilled cells replace them.
   assert.doesNotMatch(html, />Confirm<|>Skip<|Suggested: |Enter dumbbell load/);

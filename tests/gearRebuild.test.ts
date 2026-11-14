@@ -13,6 +13,7 @@ import { EMPTY_STATE, serializeExport } from '../src/lib/storage.ts';
 import { parseState, validateState } from '../src/lib/validate.ts';
 import { planSlots, slotProgram, todayProgram } from '../src/lib/sequence.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
+import { shownValue } from './loggerView380.ts';
 
 const gym: Profile = {
   goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 5,
@@ -243,7 +244,9 @@ test('#188: a load under the lightest travel dumbbell keeps the exercise and ask
     assert.match(html, new RegExp(NEEDS_LOAD_REASON));
     assert.match(html, /<button[^>]*aria-label="Log set 1"[^>]*disabled=""|<button[^>]*disabled=""[^>]*aria-label="Log set 1"/);
     // #309: the travel rack is no longer offered as pills; the pick is typed in the (empty) set cells.
-    for (const n of [1, 2, 3]) assert.match(html, new RegExp(`aria-label="Set ${n} weight, kilograms"[^>]*value=""`));
+    // (#380) Set 1's card input is empty, and the other sets' rows show no load.
+    assert.match(html, /aria-label="Set 1 weight, kilograms"[^>]*value=""/);
+    for (const n of [2, 3]) assert.equal(shownValue(html, `Set ${n} weight, kilograms`), '', `set ${n} has no load`);
     assert.doesNotMatch(html, /<button(?![^>]*lg-wcheck)[^>]*aria-pressed|Your dumbbells/);
   } finally {
     await server.close();

@@ -12,9 +12,8 @@ import { prescribeExercise } from '../src/lib/progression.ts';
 import { exerciseById } from '../src/data/exercises.ts';
 import { inputValue, toKg } from '../src/lib/units.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
+import { shownValue } from './loggerView380.ts';
 
-// #300: the lead's ramp rows (W, Warm-up, load, reps) may sit between the logger's header and set 1.
-const WARM_ROWS = String.raw`(?:W Warm-up [\d.]+ \d+ check )*`;
 
 const RACK = [10, 15, 18];
 // The exercise action sheet opens on its history view, where recorded loads are listed.
@@ -49,9 +48,11 @@ function historyAt(weight: number, reps = 10): WorkoutRecord[] {
     { early: true, now: '2026-11-02T10:30:00.000Z' }).history;
 }
 
-/** A set's weight (#309): the cell is an input, read by its accessible name in the user's unit. */
-const weightCell = (html: string, n: number, unit: 'kg' | 'lb') =>
-  html.match(new RegExp(`aria-label="Set ${n} weight, ${unit === 'kg' ? 'kilograms' : 'pounds'}(?: each)?"[^>]*value="([^"]*)"`))?.[1];
+/** A set's weight (#309, #380): the card's input by accessible name, any other set by its list row. */
+const weightCell = (html: string, n: number, unit: 'kg' | 'lb') => {
+  const name = `Set ${n} weight, ${unit === 'kg' ? 'kilograms' : 'pounds'}`;
+  return shownValue(html, `${name} each`) ?? shownValue(html, name);
+};
 const weights = (html: string, unit: 'kg' | 'lb') => [1, 2, 3].map((n) => weightCell(html, n, unit));
 
 test('rack loads read like the target on every surface; typed loads keep their exact value (lb and kg)', async () => {
@@ -84,7 +85,8 @@ test('rack loads read like the target on every surface; typed loads keep their e
       const shown = unit === 'lb' ? '33 lb' : '15 kg';
       const number = shown.split(' ')[0];
       const rack = train(historyAt(15), 18, 18);
-      assert.match(rack, new RegExp(`Set Previous ${unit} each Reps Log ${WARM_ROWS}1 ${number} × 10 `), `${unit} previous`);
+      // (#380) The card shows set 1's Previous.
+      assert.match(rack, new RegExp(`Set 1 of 3 Previous ${number} × 10 `), `${unit} previous`);
       assert.deepEqual(weights(trainHtml(historyAt(15), 15, 15), unit), [number, number, number], `${unit} the rows ✓ logs`);
       assert.deepEqual(weights(trainHtml(historyAt(15), 18, 18), unit), Array(3).fill(unit === 'lb' ? '39.5' : '18'), `${unit} planned rows`);
       assert.doesNotMatch(rack, /39\.68|33\.07/);
@@ -96,7 +98,7 @@ test('rack loads read like the target on every surface; typed loads keep their e
       const exact = `42.3 ${unit}`;
       for (const planned of [18, typed]) {
         const off = trainHtml(historyAt(typed), typed, planned);
-        assert.match(plain(off), new RegExp(`Previous ${unit} each Reps Log ${WARM_ROWS}1 42\\.3 × 10 `), `${unit} typed previous (planned ${planned})`);
+        assert.match(plain(off), new RegExp(`Set 1 of 3 Previous 42\\.3 × 10 `), `${unit} typed previous (planned ${planned})`);
         assert.deepEqual(weights(off, unit), ['42.3', '42.3', '42.3'], `${unit} typed rows (planned ${planned})`);
       }
       for (const [label, text] of sheets(historyAt(typed))) assert.equal(text, exact, `${unit} typed ${label}`);
@@ -126,7 +128,7 @@ test('a held typed load reads as typed on target, header, chip, Today row and re
       const trainHtml = renderToStaticMarkup(createElement(TrainScreen, { now: Date.parse('2026-11-04T10:01:00.000Z'),
         rampLoads: RACK, profileLoads: who.loads, unit, history, session, onMinimize() {}, onFinish() {}, onUpdateSet() {},
         onLogSet() {}, onToggleRestPause() {}, onExtendRest() {}, onReturn() {} }));
-      assert.match(plain(trainHtml), new RegExp(`Previous ${unit} each Reps Log ${WARM_ROWS}1 42\\.3 × 9 `), `${unit} previous`);
+      assert.match(plain(trainHtml), new RegExp(`Set 1 of 3 Previous 42\\.3 × 9 `), `${unit} previous`);
       assert.deepEqual(weights(trainHtml, unit), ['42.3', '42.3', '42.3'], `${unit} target rows`);
       const today = plain(renderToStaticMarkup(createElement(Today, { profile: who, program: FULL_BODY_A,
         adapted: liveAdapted(adapted, who, history), equipment: 'home', adjusted: false, history, current: null,
@@ -205,7 +207,7 @@ test('an app-prescribed barbell step reads the same on target, rows, Log button 
       unit: 'lb', history, session, onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {}, onExtendRest() {},
       onReturn() {} }));
     const text = plain(html);
-    assert.match(text, /Set Previous lb total Reps/, 'target header');
+    assert.match(html, /<small>lb<\/small>/, 'the card names the unit under the number');
     // The rows, the ✓ that logs them and the editor's input all read showPending.
     assert.deepEqual(weights(html, 'lb'), [X, X, X], 'pending rows');
     assert.doesNotMatch(text, /\d\.\d\d/);
@@ -261,7 +263,7 @@ test('a logged load reads like its target when accepted unchanged and as typed o
         live = logSet(updatePerformedSet(live, 0, 0, { weight }), 0, 0, '2026-11-04T10:01:00.000Z');
         const rowHtml = renderToStaticMarkup(createElement(TrainScreen, { ...trainProps, history: first, session: live }));
         const row = plain(rowHtml);
-        assert.match(rowHtml, /<tr class="lg-row--done">/, `${tag} saved row`);
+        assert.match(rowHtml, /class="lg-li lg-li--done"/, `${tag} saved row`);
         assert.equal(weightCell(rowHtml, 1, unit), shown, `${tag} saved row`);
 
         // 8 reps: a rep step, so the recap headline is the new best rather than an earned load.
@@ -285,7 +287,7 @@ test('a logged load reads like its target when accepted unchanged and as typed o
         const next = createSession({ id: 'c', name: 'B', dayIndex: 0, now: '2026-11-06T10:00:00.000Z', exercises: [exercise(weight, weight)] });
         const trainHtml = renderToStaticMarkup(createElement(TrainScreen, { ...trainProps, history, session: next }));
         const train = plain(trainHtml);
-        assert.match(train, new RegExp(`Previous ${unit} total Reps Log ${WARM_ROWS}1 ${re(shown)} × 8 `), `${tag} last session`);
+        assert.match(train, new RegExp(`Set 1 of 3 Previous ${re(shown)} × 8 `), `${tag} last session`);
         assert.equal(weightCell(trainHtml, 1, unit), shown, `${tag} next target`);
         if (unit === 'lb') assert.doesNotMatch(`${row} ${lines[0].performed} ${lines[0].reason} ${progress} ${train}`, /49\.6/, `${tag} no 49.6`);
       }

@@ -18,6 +18,8 @@
   --outline: #8a9896;
   --outline-variant: #dde8e6;
   --primary: #d6f05c;
+  /* (#380) A logged set's tick in the logger's progress bar. */
+  --tick-done: #c5dd3c;
   --on-primary: #1c2406;
 
   /* Text and edges that sit on white or mint must not use the lime fill colour. */
@@ -3958,7 +3960,6 @@ button.aw-exercise__name-btn {
   font: inherit;
 }
 
-
 /* ---------- Fast set logger (#81): one row per set, one ✓ per set ---------- */
 
 .lg-header {
@@ -4020,8 +4021,8 @@ button.aw-exercise__name-btn {
 }
 
 .lg-ex .aw-exercise__name {
-  font-size: 22px;
-  line-height: 28px;
+  font-size: 20px;
+  line-height: 26px;
   letter-spacing: -0.02em;
 }
 
@@ -4035,18 +4036,6 @@ button.aw-exercise__name-btn {
 .lg-ex__meta b {
   color: var(--accent-text);
   font-weight: 600;
-}
-
-.lg-more {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  color: var(--on-surface);
-  background: var(--glass-fill);
-  border: 1px solid var(--glass-edge);
 }
 
 .lg-coach {
@@ -4108,71 +4097,6 @@ button.aw-exercise__name-btn {
   margin-top: 8px;
 }
 
-.lg-table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: separate;
-  border-spacing: 0 6px;
-}
-
-.lg-table th {
-  padding: 0 0 2px;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-align: center;
-  color: var(--on-surface-variant);
-  white-space: nowrap;
-}
-
-.lg-table th:nth-child(1) {
-  width: 40px;
-}
-
-.lg-table th:nth-child(3) {
-  width: 80px;
-}
-
-.lg-table th:nth-child(4) {
-  width: 68px;
-}
-
-.lg-table th:nth-child(5) {
-  width: 56px;
-}
-
-.lg-table th:first-child,
-.lg-table td:first-child {
-  text-align: left;
-}
-
-.lg-table td {
-  height: 56px;
-  padding: 0;
-  text-align: center;
-  background: rgba(20, 26, 26, 0.036);
-  font-variant-numeric: tabular-nums;
-}
-
-.lg-table td:first-child {
-  padding-left: 14px;
-  border-radius: 14px 0 0 14px;
-  color: var(--on-surface-variant);
-}
-
-.lg-table td:last-child {
-  border-radius: 0 14px 14px 0;
-}
-
-.lg-prev {
-  font-size: 13px;
-  color: var(--on-surface-variant);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .lg-cell {
   display: inline-flex;
   align-items: center;
@@ -4201,61 +4125,14 @@ button.aw-exercise__name-btn {
   background: none;
 }
 
-.lg-check {
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  display: inline-grid;
-  place-items: center;
-  vertical-align: middle;
-  border: 1.5px solid rgba(20, 26, 26, 0.198);
-  color: var(--on-surface-variant);
-}
-
-.lg-check:disabled {
-  opacity: 0.4;
-}
-
-.lg-table .lg-note td {
-  height: auto;
-  padding: 0 14px 4px;
-  text-align: right;
-  background: none;
-  border-radius: 0;
-  font-size: 13px;
-  color: var(--on-surface-variant);
-}
-
-/* (#327) A held jump's Heads-up, under the row it was typed in; kept clear of the header, dock and keyboard. */
-.lg-table .lg-note--held td {
-  padding: 4px 0 8px;
-  text-align: left;
-  font-size: inherit;
-  color: inherit;
-}
-
 .lg-note--held .notice-card {
-  scroll-margin-top: calc(72px + var(--vv-top, 0px));
-  scroll-margin-bottom: calc(132px + var(--kb, 0px));
+  scroll-margin-top: calc(116px + var(--vv-top, 0px));
+  scroll-margin-bottom: calc(80px + var(--kb, 0px));
 }
 
-.lg-row--current td {
-  background: rgba(20, 26, 26, 0.063);
-}
-
-.lg-row--done td {
-  background: rgba(214, 240, 92, 0.2);
-}
-
-.lg-row--done .lg-cell {
-  border-color: transparent;
-  background: none;
-}
-
-/* (#309) The weight and reps cells are the inputs: tap, type, tap the check. */
+/* (#309) The weight and reps cells are the inputs: tap, type, Log. (#380) They sit in the focus card. */
 .lg-input {
   width: 100%;
-  max-width: 76px;
   box-sizing: border-box;
   text-align: center;
   font-family: inherit;
@@ -4263,9 +4140,10 @@ button.aw-exercise__name-btn {
   white-space: nowrap;
   -webkit-appearance: none;
   appearance: none;
-  /* Focus scrolling keeps the row clear of the header and of the dock or keyboard below it. */
-  scroll-margin-top: calc(72px + var(--vv-top, 0px));
-  scroll-margin-bottom: calc(132px + var(--kb, 0px));
+  /* Focus scrolling keeps the field clear of the header (with its tick bar), and the card's Log button
+     (--lg-tail below the field) clear of the keyboard (lesson 16). */
+  scroll-margin-top: calc(116px + var(--vv-top, 0px));
+  scroll-margin-bottom: calc(var(--lg-tail, 132px) + var(--kb, 0px));
 }
 
 .lg-input::placeholder {
@@ -4274,18 +4152,337 @@ button.aw-exercise__name-btn {
   opacity: 1;
 }
 
-.lg-input:focus,
-.lg-row--done .lg-input:focus {
+.lg-input:focus {
   outline: none;
   border-color: var(--primary);
   background: var(--surface-container-lowest, #ffffff);
   box-shadow: 0 0 0 2px var(--primary);
 }
 
-.lg-row--done .lg-check {
-  border-color: transparent;
+/* ---------- #380 logger, option B: progress ticks, the focus card, the set list ---------- */
+.lg-prog {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 20px;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+
+.lg-prog b {
+  color: var(--on-surface);
+  font-weight: 600;
+}
+
+/* One tick per set, grouped per exercise; a logged set fills lime. */
+.lg-ticks {
+  display: flex;
+  gap: 4px;
+  height: 8px;
+  padding: 8px 20px 10px;
+  box-sizing: content-box;
+}
+
+.lg-ticks__group {
+  flex: 1 1 0;
+  display: flex;
+  gap: 3px;
+}
+
+.lg-ticks__group:empty {
+  display: none;
+}
+
+.lg-tick {
+  flex: 1;
+  border-radius: 3px;
+  background: var(--surface-container-highest);
+}
+
+.lg-tick--done {
+  background: var(--tick-done);
+}
+
+.lg-focus {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+
+.lg-focus__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lg-focus__set {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.lg-focus__set span,
+.lg-focus__prev {
+  color: var(--on-surface-variant);
+  font-weight: 400;
+}
+
+.lg-focus__prev {
+  font-size: 13px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.lg-focus__prev b {
+  color: var(--on-surface);
+  font-weight: 600;
+}
+
+.lg-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 8px;
+}
+
+.lg-field {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  height: 76px;
+  box-sizing: border-box;
+  border-radius: 18px;
+  background: var(--surface-container-high);
+  border: 1px solid var(--surface-container-highest);
+}
+
+.lg-field:focus-within {
+  background: var(--card);
+  border: 2px solid var(--btn);
+}
+
+.lg-field--w {
+  justify-content: space-between;
+  padding: 0 6px;
+}
+
+.lg-field__num {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  cursor: text;
+}
+
+.lg-field__num small {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+}
+
+/* The number is the field: big and light, no pill of its own; the box around it shows focus. */
+.lg-focus .lg-input,
+.lg-focus .lg-input:focus,
+.lg-focus .lg-cell--empty.lg-input {
+  min-width: 0;
+  min-height: 0;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 40px;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+}
+
+.lg-focus .lg-cell--bw {
+  min-height: 44px;
+  font-size: 32px;
+  font-weight: 300;
+  color: var(--on-surface);
+}
+
+.lg-step {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--card);
+  border: 1px solid var(--surface-container-highest);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-surface);
+}
+
+.lg-step:disabled {
+  color: var(--outline);
+  background: transparent;
+}
+
+.lg-log {
+  min-height: 52px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--btn);
+  color: var(--on-btn);
+  font-size: 16px;
+  font-weight: 700;
+  scroll-margin-top: calc(116px + var(--vv-top, 0px));
+  scroll-margin-bottom: calc(16px + var(--kb, 0px));
+}
+
+.lg-log:disabled {
+  opacity: 0.4;
+}
+
+.lg-log--back {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.lg-focus .lg-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--on-surface-variant);
+}
+
+.lg-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.lg-list__label {
+  padding: 6px 4px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--on-surface-variant);
+}
+
+.lg-li {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 44px;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 0 0 4px;
+  box-sizing: border-box;
+  border: 0;
+  border-bottom: 1px solid var(--surface-container-highest);
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  color: var(--on-surface-variant);
+}
+
+.lg-li:last-child {
+  border-bottom: 0;
+}
+
+.lg-li__n {
+  font-weight: 500;
+}
+
+.lg-li__v {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lg-li--done .lg-li__v,
+.lg-li--now {
+  color: var(--on-surface);
+}
+
+.lg-li--focus .lg-li__n {
+  color: var(--on-surface);
+  font-weight: 700;
+}
+
+.lg-li__now {
+  justify-self: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.lg-li__ghost,
+.lg-tick-mark {
+  justify-self: center;
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  border-radius: 999px;
+}
+
+.lg-li__ghost {
+  border: 1.5px solid var(--surface-container-highest);
+}
+
+.lg-tick-mark {
+  display: grid;
+  place-items: center;
   background: var(--primary);
   color: var(--on-primary);
+}
+
+/* Q2 (#380): a superset partner's rows are shown, not tapped: quieter text, no row affordance. */
+.lg-li--partner,
+.lg-li--partner.lg-li--done .lg-li__v {
+  color: var(--outline);
+}
+
+.lg-li--partner .lg-tick-mark {
+  background: var(--surface-container-highest);
+  color: var(--on-surface-variant);
+}
+
+.lg-li__ex {
+  font-size: 13px;
+}
+
+.lg-li--warm {
+  font-size: 14px;
+}
+
+.lg-li--warm abbr {
+  text-decoration: none;
+}
+
+.lg-li--warm .lg-wcheck {
+  justify-self: center;
+}
+
+/* At 360 wide the number keeps at least 32px with − and + inside its box. */
+@media (max-width: 374px) {
+  .lg-focus .lg-input,
+  .lg-focus .lg-input:focus,
+  .lg-focus .lg-cell--empty.lg-input {
+    font-size: 34px;
+  }
 }
 
 .set-all {
@@ -4376,12 +4573,6 @@ button.aw-exercise__name-btn {
 
 .lg-bar {
   height: 4px;
-}
-
-.lg-cap {
-  font-size: 11px;
-  text-align: center;
-  color: var(--on-surface-variant);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -4818,11 +5009,11 @@ button.aw-exercise__name-btn {
 }
 
 /* ---------- Logger quick actions (#151) ---------- */
-/* (#369) Four chips share one line at 360 wide: tight padding, and they grow to share the row's spare width. */
+/* (#380) History, Replace, More: equal chips on one line at 360 wide. */
 .lg-acts { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; }
 .lg-acts::-webkit-scrollbar { display: none; }
 .lg-act {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 44px;
   padding: 0 4px;
   border-radius: 999px;
@@ -4836,9 +5027,7 @@ button.aw-exercise__name-btn {
   font-weight: 500;
 }
 .lg-act .ms { color: var(--muted); }
-/* (#371) − and + under the set table: the same chips, two to a line, sharing its width. */
-.lg-steps { display: flex; gap: 6px; padding: 2px 0 4px; }
-.lg-steps .lg-act { flex: 1 1 0; }
+.lg-act__more { display: inline-grid; color: var(--muted); transform: rotate(90deg); }
 
 /* ---------- Tell me about today (#193) ----------
    Composer and preview from the approved mockup (today-talk.html), in the app's tokens. */
@@ -4922,21 +5111,16 @@ button.aw-exercise__name-btn {
 .flow-dock[hidden] { display: none; }
 .tt-stop .secondary { margin-top: 10px; min-height: 44px; background: var(--card); }
 
-/* #300: the warm-up block and ramp rows. Muted, labelled Warm-up, never counted as sets. */
+/* #300: the warm-up block and ramp rows. Muted, labelled Warm-up, never counted as sets.
+   (#380) One card while open (title, note, timer, check); one quiet line once done. */
 .lg-warm {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
-  padding: 12px 12px 12px 14px;
-  border-radius: 16px;
-  background: rgba(20, 26, 26, 0.036);
-  border: 1px dashed rgba(20, 26, 26, 0.16);
-}
-
-.lg-warm__head {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  padding: 8px 8px 8px 16px;
+  min-height: 52px;
+  border-radius: 18px;
+  background: var(--card);
 }
 
 .lg-warm__text {
@@ -4945,38 +5129,41 @@ button.aw-exercise__name-btn {
 }
 
 .lg-warm__title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 20px;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
+}
+
+.lg-warm__title span {
+  font-weight: 400;
+  color: var(--on-surface-variant);
 }
 
 .lg-warm__note {
-  margin-top: 2px;
   font-size: 13px;
   line-height: 18px;
   color: var(--on-surface-variant);
 }
 
 .lg-warm--done {
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
-
-.lg-warm--done .lg-warm__head {
-  align-items: center;
-}
-
-.lg-warm--done .lg-warm__title {
-  color: var(--on-surface-variant);
+  min-height: 44px;
+  padding: 0 4px 0 16px;
+  background: transparent;
+  border: 1px solid var(--surface-container-highest);
 }
 
 .lg-warm__timer {
-  align-self: flex-start;
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 44px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--surface-container-high);
+  font-size: 14px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -4995,34 +5182,15 @@ button.aw-exercise__name-btn {
 .lg-wcheck[aria-pressed='true'] {
   border-style: solid;
   border-color: transparent;
-  background: rgba(20, 26, 26, 0.12);
-  color: var(--on-surface);
-}
-
-.lg-table .lg-row--warm td {
-  height: 48px;
-  background: none;
-  box-shadow: inset 0 1px 0 rgba(20, 26, 26, 0.06), inset 0 -1px 0 rgba(20, 26, 26, 0.06);
-  color: var(--on-surface-variant);
-}
-
-.lg-row--warm abbr {
-  text-decoration: none;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 .lg-warm-tag {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-}
-
-.lg-cell--warm {
-  border-color: transparent;
-  background: none;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--on-surface-variant);
 }
 
 /* (#292) The name on Today is a plain-looking button into Settings. */

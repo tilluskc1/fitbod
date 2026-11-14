@@ -61,7 +61,9 @@ test('swap-back segments keep their own accepted targets in Today, details, Why,
     const train = plain(trainHtml);
     assert.match(trainHtml, /<h2 class="aw-exercise__name"><button/, 'the exercise name stays a heading');
     assert.match(train, /Exercise 2 of \d+ · Target 1 × 10/);
-    assert.match(train, /Set Previous kg each Reps/);
+    // (#380) The focus card names the set; the unit sits under the number.
+    assert.match(train, /Set 1 of 1/);
+    assert.match(trainHtml, /<small>kg each<\/small>/);
     assert.match(trainHtml, /aria-label="Set 1 weight, kilograms each"[^>]*value="20"/, "the segment's own 20 kg, not the press-up's");
     assert.match(trainHtml, /aria-label="Set 1 reps"[^>]*value="10"/);
   } finally { await server.close(); }

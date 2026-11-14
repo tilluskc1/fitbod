@@ -12,6 +12,7 @@ import { prescribeExercise } from '../src/lib/progression.ts';
 import { applyCorrection, applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
+import { rowLine, shownValue } from './loggerView380.ts';
 
 const RACK = [10, 15, 18];
 const profile: Profile = {
@@ -21,8 +22,8 @@ const profile: Profile = {
 const adapted = adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home', loads: RACK }, [], undefined);
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const noop = () => {};
-/** A set cell's value (#309): the cells are inputs, read by their accessible name. */
-const cell = (html: string, label: string) => html.match(new RegExp(`aria-label="${label}"[^>]*value="([^"]*)"`))?.[1];
+/** A set's value (#309, #380): the card's inputs by accessible name, any other set by its list row. */
+const cell = shownValue;
 const at = (minute: number) => `2026-11-04T10:${String(minute).padStart(2, '0')}:00.000Z`;
 // The calibration asks for the set's own target reps with headroom (the floor press starts at 8).
 const RULE = /Pick a weight you could lift for 8 reps with 2–3 to spare/;
@@ -110,10 +111,9 @@ test('#309: a first-time lift with no profile level types its weight in set 1; n
     assert.doesNotMatch(text, /Suggested start/, 'no level, no suggestion');
     for (const word of ['Confirm', 'Skip', 'Save set', 'Cancel', 'Done']) assert.doesNotMatch(html, new RegExp(`>${word}<`), word);
     assert.doesNotMatch(html, /<button(?![^>]*lg-wcheck)[^>]*aria-pressed/, 'no load pills');
-    for (const n of [1, 2, 3]) {
-      assert.equal(cell(html, `Set ${n} weight, kilograms each`), '', `set ${n} is empty`);
-      assert.match(html, new RegExp(`aria-label="Log set ${n}" disabled=""`), 'an empty load cannot be logged');
-    }
+    for (const n of [1, 2, 3]) assert.equal(cell(html, `Set ${n} weight, kilograms each`), '', `set ${n} is empty`);
+    assert.match(html, /aria-label="Log set 1" disabled=""/, 'an empty load cannot be logged');
+    for (const n of [2, 3]) assert.equal(rowLine(html, n), '— × 8', `set ${n} shows no load`);
 
     const history = pressHistory();
     assert.doesNotMatch(plain(render(liveSession(history), history)), RULE, 'a variant with history');
@@ -134,10 +134,9 @@ test('#309: with a profile level, every empty weight cell shows the suggested st
     const hint = text.match(/Suggested start (\d+(?:\.\d+)?) kg each\. Do 5 easy reps with it, then adjust set 1\./);
     assert.ok(hint, text);
     assert.ok(RACK.includes(Number(hint[1])), 'the suggestion is one of the lifter\'s own dumbbells');
-    for (const n of [1, 2, 3]) {
-      assert.equal(cell(html, `Set ${n} weight, kilograms each`), hint[1], `set ${n} shows the suggestion`);
-      assert.match(html, new RegExp(`aria-label="Log set ${n}">`), `set ${n} logs in one tap`);
-    }
+    for (const n of [1, 2, 3]) assert.equal(cell(html, `Set ${n} weight, kilograms each`), hint[1], `set ${n} shows the suggestion`);
+    assert.match(html, /aria-label="Log set 1">/, 'set 1 logs in one tap');
+    for (const n of [2, 3]) assert.equal(rowLine(html, n), `${hint[1]} kg × 8`, `set ${n}'s row reads the suggestion`);
     assert.doesNotMatch(text, /First time on this one/, 'one line, not two');
   });
 });
@@ -196,7 +195,8 @@ test('a loaded set with no load cannot be logged at 0; bodyweight and timed sets
 
   await withTrain((render) => {
     const html = render(session, []);
-    for (const n of [1, 2, 3]) assert.match(html, new RegExp(`aria-label="Log set ${n}"[^>]*disabled=""`), `set ${n} waits for a load`);
+    assert.match(html, /aria-label="Log set 1"[^>]*disabled=""/, 'set 1 waits for a load');
+    for (const n of [2, 3]) assert.equal(cell(html, `Set ${n} weight, kilograms each`), '', `set ${n} has no load either`);
     assert.match(plain(html), /Enter a weight to log this set/);
     const ready = render(updatePerformedSet(session, 0, 0, { weight: 15 }, at(1)), []);
     assert.match(ready, /aria-label="Log set 1">/, 'a load enables the ✓');

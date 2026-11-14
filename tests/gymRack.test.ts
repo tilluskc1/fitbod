@@ -12,6 +12,7 @@ import { prescribeExercise } from '../src/lib/progression.ts';
 import { createSession } from '../src/lib/session.ts';
 import { parseLoads } from '../src/lib/units.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
+import { shownValue } from './loggerView380.ts';
 
 // #129: a gym user listed one dumbbell (10 lb) and was stuck at it.
 const lb = (value: number) => parseLoads(String(value), 'lb')[0];
@@ -67,11 +68,10 @@ async function renderTrain(history: WorkoutRecord[]) {
 
 test('with a listed rack, the first-load suggestion is the owned dumbbell, in the set cells, and any weight can be typed', async () => {
   const html = await renderTrain([]);
-  const cell = (label: string) => html.match(new RegExp(`aria-label="${label}"[^>]*value="([^"]*)"`))?.[1];
-  for (const n of [1, 2, 3]) {
-    assert.equal(cell(`Set ${n} weight, pounds each`), '10', `set ${n} starts at the owned 10 lb`);
-    assert.match(html, new RegExp(`aria-label="Log set ${n}">`), 'and the ✓ is ready');
-  }
+  // (#380) The card's inputs by accessible name; any other set by its list row.
+  const cell = (label: string) => shownValue(html, label);
+  for (const n of [1, 2, 3]) assert.equal(cell(`Set ${n} weight, pounds each`), '10', `set ${n} starts at the owned 10 lb`);
+  assert.match(html, /aria-label="Log set 1">/, 'and the Log button is ready');
   assert.match(html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '), /Suggested start 10 lb each\. Do 5 easy reps with it, then adjust set 1\./);
   assert.match(html, /<input[^>]*aria-label="Set 1 weight, pounds each"/, 'any other weight is typed in the cell');
   // #309: the one-tap rack pills and Confirm are gone; the owned dumbbell is the prefilled cell value.
