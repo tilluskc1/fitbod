@@ -286,6 +286,12 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    body?" before any review. Check: `tests/bodyMap302.test.ts` (every control point of every muscle inside
    its own target) and the height cap in `scripts/e2e/body-map.mjs`.
 
+40. **A name prefix is not a type.** #359 review 1: usage events read the day type from the start of the
+   day's name, so a picked "Legs + Core" day (named by `customDayName`) counted as Legs, and the "picked
+   day" count lost it. Rule: when a label must classify, match the whole label against the known set (or
+   carry the fact itself), and sweep every name the generator can produce. Check: the area-combination
+   sweep in `tests/events359.test.ts`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

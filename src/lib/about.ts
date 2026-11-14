@@ -43,7 +43,7 @@ export const USAGE_SENT: ReadonlyArray<{ field: (typeof EVENT_FIELDS)[number]; s
 
 const counted = USAGE_SENT.map((item) => item.says);
 
-export const ABOUT_USAGE = `Usage counts, so we can see which features help. The app sends one each time you start, finish or cut short a workout, or tap Switch, Plan today with me, Replace, Supersets or Backup, or open the feedback form. Each holds ${counted.slice(0, -1).join(', ')}, and ${counted.at(-1)}. Never your name, weights, reps, notes, body details or pain answers. Offline, counts wait on this phone and send later.`;
+export const ABOUT_USAGE = `Usage counts, so we can see which features help. The app sends one each time you start, finish or cut short a workout, tap Switch, Plan today with me, Replace or Supersets, save a backup, or open the feedback form. Each holds ${counted.slice(0, -1).join(', ')}, and ${counted.at(-1)}. Never your name, weights, reps, notes, body details or pain answers. Offline, counts wait on this phone and send later.`;
 
 export const ABOUT_HOSTING = 'Like any website, the host keeps basic server logs.';
 

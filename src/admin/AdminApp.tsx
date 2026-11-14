@@ -24,7 +24,6 @@ import { AdminError, readEvents, readFeedback, setDone, signInWithGoogle, type F
 interface GoogleId {
   initialize(options: { client_id: string; callback: (response: { credential?: string }) => void; auto_select?: boolean }): void;
   renderButton(parent: HTMLElement, options: Record<string, unknown>): void;
-  disableAutoSelect(): void;
 }
 declare global {
   interface Window {
@@ -146,7 +145,6 @@ export default function AdminApp() {
   }, [showButton, phase]);
 
   const signOut = () => {
-    googleRef.current?.disableAutoSelect();
     setToken(null);
     setNotes([]);
     setEvents([]);

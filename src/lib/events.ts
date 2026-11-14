@@ -28,9 +28,12 @@ export interface UsageEvent {
 export const OUTBOX_KEY = `${STORAGE_KEY}:events-outbox`;
 export const OUTBOX_CAP = 500;
 
-/** The day's type, read from its name: a planned split day or a Switch preset; anything else was picked. */
+/**
+ * The day's type, read from its whole name: a planned split day ("Push", "Legs A", "Full Body B") or a
+ * Switch preset ("Full body"). Anything else was picked, including "Legs + Core" (#359 review 1).
+ */
 export function dayTypeOf(name: string): DayType {
-  const match = /^(push|pull|legs|upper|lower|full body)\b/i.exec(name.trim());
+  const match = /^(push|pull|legs|upper|lower|full body)(?: [ab])?$/i.exec(name.trim());
   return match ? (match[1].toLowerCase().replace(' ', '-') as DayType) : 'picked';
 }
 
@@ -67,6 +70,8 @@ export interface Queued {
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 
 const ID_SHAPE = /^[A-Za-z0-9]{16,40}$/;
+/** What toISOString writes; anything else would make Firestore refuse the whole batch. */
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$/;
 
 /**
  * Well-formed enough to send: a doc id, string fields and a real time, so one bad entry can never fail
@@ -76,14 +81,17 @@ function isQueued(value: unknown): value is Queued {
   const { id, event } = (value ?? {}) as Queued;
   return typeof id === 'string' && ID_SHAPE.test(id) && !!event
     && ['testerId', 'event', 'appVersion', 'date'].every((key) => typeof event[key as keyof UsageEvent] === 'string')
-    && (event.dayType === null || typeof event.dayType === 'string') && !Number.isNaN(Date.parse(event.createdAt));
+    && (event.dayType === null || typeof event.dayType === 'string') && ISO_TIME.test(event.createdAt);
 }
 
 /** The queue as stored; anything unreadable or malformed reads as empty, entry by entry. */
 export function readOutbox(store: Store | null): Queued[] {
   try {
     const parsed: unknown = JSON.parse(store?.getItem(OUTBOX_KEY) ?? '[]');
-    return Array.isArray(parsed) ? parsed.filter(isQueued).map(({ id, event }) => ({ id, event: pick(event) })) : [];
+    if (!Array.isArray(parsed)) return [];
+    // One write per document in a batch: a repeated id is kept once.
+    const ids = new Set<string>();
+    return parsed.filter((item) => isQueued(item) && !ids.has(item.id) && Boolean(ids.add(item.id))).map(({ id, event }) => ({ id, event: pick(event) }));
   } catch {
     return [];
   }
@@ -195,10 +203,13 @@ function localStore(): Store | null {
   }
 }
 
-/** Real sends only from a deployed host; local runs and e2e queue but never reach production, unless a test opts in. */
+/** The production host. Previews, LAN and local runs queue but never send, so testing never lands in the counts. */
+export const EVENTS_HOST = 'fitbod-chi.vercel.app';
+
+/** Real sends only from production, unless an e2e opts in (its Firestore is mocked). */
 function mayFlush(): boolean {
   if (typeof location === 'undefined') return false;
-  return !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || (globalThis as { __eventsTest?: boolean }).__eventsTest === true;
+  return location.hostname === EVENTS_HOST || (globalThis as { __eventsTest?: boolean }).__eventsTest === true;
 }
 
 /** The app's one call: queue the event and try to send. Never throws, never waits. */

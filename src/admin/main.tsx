@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import ErrorBoundary from '../components/ErrorBoundary';
 import AdminApp from './AdminApp';
 // Inlined, so the training app's bundle carries no CSS-preload helper for this chunk.
 import css from './admin.css?inline';
@@ -12,7 +13,9 @@ export function mountAdmin(root: HTMLElement): void {
   document.head.appendChild(style);
   createRoot(root).render(
     <StrictMode>
-      <AdminApp />
+      <ErrorBoundary>
+        <AdminApp />
+      </ErrorBoundary>
     </StrictMode>,
   );
 }

@@ -84,7 +84,7 @@ test('#359 day type comes from the day name; anything else is a picked day', () 
   const cases: Array<[string, string]> = [
     ['Push', 'push'], ['Push A', 'push'], ['Pull B', 'pull'], ['Legs', 'legs'], ['Legs A', 'legs'],
     ['Upper A', 'upper'], ['Upper', 'upper'], ['Lower B', 'lower'], ['Full Body A', 'full-body'], ['Full body', 'full-body'],
-    ['Arms + Legs', 'picked'], ['Chest + Back', 'picked'], ['Today', 'picked'], ['Pushover', 'picked'],
+    ['Arms + Legs', 'picked'], ['Legs + Core', 'picked'], ['Upper + Core', 'picked'], ['Push + Legs', 'picked'], ['Legs C', 'picked'], ['Chest + Back', 'picked'], ['Today', 'picked'], ['Pushover', 'picked'],
   ];
   for (const [name, type] of cases) assert.equal(dayTypeOf(name), type, name);
 });
@@ -103,6 +103,12 @@ test('#359 the outbox keeps 500, dropping the oldest; 500 plus one drops exactly
   assert.equal(queue.at(-1)!.id, `id${String(OUTBOX_CAP).padStart(20, '0')}`);
   assert.deepEqual([...store.map.keys()], [OUTBOX_KEY]);
   assert.equal(OUTBOX_KEY, `${STORAGE_KEY}:events-outbox`);
+});
+
+test('#359 review 1: a non-ISO time or a repeated id never reaches the batch (it would fail it whole)', () => {
+  const good = { id: 'a'.repeat(24), event: sample() };
+  const store = memoryStore({ [OUTBOX_KEY]: JSON.stringify([good, good, { id: 'b'.repeat(24), event: { ...sample(), createdAt: '2026-11-01' } }]) });
+  assert.deepEqual(readOutbox(store).map((item) => item.id), ['a'.repeat(24)]);
 });
 
 test('#359 a corrupt or blocked outbox never throws', () => {
@@ -190,4 +196,16 @@ test('#359 About names every field a usage count carries, and what it never hold
   assert.deepEqual(USAGE_SENT.map((item) => item.field).sort(), [...EVENT_FIELDS].sort());
   for (const { says } of USAGE_SENT) assert.ok(ABOUT_USAGE.includes(says), `About names "${says}"`);
   assert.match(ABOUT_USAGE, /Never your name, weights, reps, notes, body details or pain answers\./);
+});
+
+test('#359 review 1: every picked area combination is a picked day unless it is exactly a preset', async () => {
+  const { AREAS, PRESETS, PRESET_MUSCLES, customDayName, musclesOf, presetOf } = await import('../src/lib/areas.ts');
+  for (const preset of PRESETS) assert.notEqual(dayTypeOf(customDayName(PRESET_MUSCLES[preset])), 'picked', preset);
+  for (let mask = 1; mask < 1 << AREAS.length; mask += 1) {
+    const focus = musclesOf(AREAS.filter((_, i) => mask & (1 << i)));
+    const name = customDayName(focus);
+    const expected = presetOf(focus) ? dayTypeOf(presetOf(focus)!) : 'picked';
+    assert.equal(dayTypeOf(name), expected, `${name}`);
+    if (!presetOf(focus)) assert.equal(dayTypeOf(name), 'picked', `${name} is a picked day`);
+  }
 });
