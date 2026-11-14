@@ -46,13 +46,13 @@ async function onboard(page, unit) {
 }
 
 /**
- * (#380) Each working set's values as the lifter reads them: its list row ("Set 2, 135 lb × 8, edit"),
+ * (#380) Each working set's values as the lifter reads them: its list row ("Set 2, 135 lb × 8, edit"; "…, now" on the card's set, "…, logged, edit" once logged),
  * which follows the card's inputs keystroke by keystroke, and its "Set N logged" tick.
  */
 async function rows(page) {
   const out = [];
   for (const row of await page.locator('.lg-list button.lg-li').all()) {
-    const line = (await row.getAttribute('aria-label')).match(/^Set \d+, (.*) × (\d+)s?, edit$/);
+    const line = (await row.getAttribute('aria-label')).match(/^Set \d+, (.*) × (\d+)s?, (?:logged, edit|now|edit)$/);
     const weight = line?.[1] === '—' ? '' : (line?.[1] ?? '').replace(/ (lb|kg)$/, '');
     out.push({ weight, reps: line?.[2] ?? '', logged: (await row.locator('[aria-label$=" logged"]').count()) === 1 });
   }
@@ -156,25 +156,25 @@ try {
     r = await rows(page);
     check(r[0].weight === heavier, `${where}: logged set 1 keeps ${heavier} (${r[0].weight})`);
     check(r.slice(1).every((row) => row.weight === heavy && row.reps === '6'), `${where}: every unlogged set reads ${heavy} × 6 (${JSON.stringify(r)})`);
-    // (review 2) Sets 3 and 4 typed by hand, then set 2 edited with backspaces, 145 (#380: typed on the card above) → 14 → 1 → 10 → 100,
+    // (review 2) Sets 3 and 4 typed by hand, then set 2 edited with backspaces, 135 → 13 → 1 → 10 → 100,
     // passing through set 4's value: the first keystroke follows nobody, so nobody follows for the burst.
-    // (#380) Tap a later set's row: the card shows that set, and an edit typed there one key at a time
-    // carries per #306 to the sets after it that held its old load.
+    // (#380) Tap a later set's row (set 3; set 2 is the next to log): the card shows that set, and an edit
+    // typed there one key at a time carries per #306 to the sets after it that held its old load.
     if (unit === 'lb') {
-      await page.getByRole('button', { name: new RegExp(`^Set 2, ${heavy} lb × 6, edit$`) }).click();
+      await page.getByRole('button', { name: new RegExp(`^Set 3, ${heavy} lb × 6, edit$`) }).click();
       const heading = (await page.locator('.lg-focus__set').innerText()).replace(/\s+/g, ' ').trim();
-      check(heading === `Set 2 of ${r.length}`, `${where} (#380): tapping set 2's row puts it on the card (${heading})`);
-      const cardWeight = page.getByRole('textbox', { name: /^Set 2 weight/ });
-      check(await cardWeight.inputValue() === heavy, `${where} (#380): the card shows set 2's ${heavy} (${await cardWeight.inputValue()})`);
-      check(await page.getByRole('button', { name: 'Log set 2', exact: true }).isEnabled(), `${where} (#380): the card offers Log set 2`);
+      check(heading === `Set 3 of ${r.length}`, `${where} (#380): tapping set 3's row puts it on the card (${heading})`);
+      const cardWeight = page.getByRole('textbox', { name: /^Set 3 weight/ });
+      check(await cardWeight.inputValue() === heavy, `${where} (#380): the card shows set 3's ${heavy} (${await cardWeight.inputValue()})`);
+      check(await page.getByRole('button', { name: 'Log set 3', exact: true }).isEnabled(), `${where} (#380): the card offers Log set 3`);
       await cardWeight.click();
       await page.keyboard.press('ControlOrMeta+a');
       for (const key of '145') await page.keyboard.press(key);
       await cardWeight.blur();
       r = await rows(page);
-      check(r[1].weight === '145' && r.slice(2).every((row) => row.weight === '145'),
-        `${where} (#380): set 2's 145 carries to sets 3+ (${JSON.stringify(r)})`);
-      check(r[0].weight === heavier, `${where} (#380): logged set 1 keeps ${heavier} (${r[0].weight})`);
+      check(r[2].weight === '145' && r.slice(3).every((row) => row.weight === '145'),
+        `${where} (#380): set 3's 145 carries to sets 4+ (${JSON.stringify(r)})`);
+      check(r[0].weight === heavier && r[1].weight === heavy, `${where} (#380): sets 1 and 2 keep ${heavier} and ${heavy} (${JSON.stringify(r)})`);
     }
     if (unit === 'lb') {
       await typeWeight(page, 3, '95');

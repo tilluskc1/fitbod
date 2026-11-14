@@ -137,8 +137,13 @@ try {
     check(await toast.count() === 1, `${where}: no toast in the logger`);
     await tapLands(page, page.locator('.finish-btn'), 'Finish', where);
     await tapLands(page, page.locator('button.lg-log:not(.lg-log--back):not([disabled])'), 'Log', where);
-    // (#380) The dock holds only the rest timer now, so it is there only while rest runs.
-    if (await page.locator('.lg-dock').count()) await clearOf(page, page.locator('.lg-dock'), 'the logger dock', where);
+    // (#380) The dock holds only the rest timer now, and removing the exercise ended the rest: log the next
+    // set so rest runs, then the dock is there, clear of the toast, and the card's next Log still takes a tap.
+    await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
+    await page.locator('.lg-dock').waitFor({ timeout: 3000 }).catch(() => {});
+    check(await page.locator('.lg-dock').count() === 1, `${where}: no rest dock after logging a set`);
+    await clearOf(page, page.locator('.lg-dock'), 'the logger dock', where);
+    await tapLands(page, page.locator('button.lg-log:not(.lg-log--back):not([disabled])'), 'Log during rest', where);
     await shot(page, 'done-logger', where);
 
     // Problem: a failed save is a red card with Retry, and stays until Retry succeeds.

@@ -31,11 +31,11 @@ const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
 const shot = async (page, name) => { if (shots) await page.screenshot({ path: `${shots}/309-${name}.png` }); };
 
-async function onboard(page) {
+async function onboard(page, unit = 'lb') {
   await page.goto(url);
   await page.getByRole('button', { name: 'Get started' }).click();
   await page.getByPlaceholder('Your first name').fill('Sam');
-  await page.getByRole('button', { name: 'lb', exact: true }).click();
+  await page.getByRole('button', { name: unit, exact: true }).click();
   await page.getByRole('button', { name: /Build muscle/i }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: /Beginner/ }).click();
@@ -49,13 +49,13 @@ async function onboard(page) {
 }
 
 /**
- * (#380) Each working set's values as the lifter reads them: its list row ("Set 2, 135 lb × 8, edit"),
+ * (#380) Each working set's values as the lifter reads them: its list row ("Set 2, 135 lb × 8, edit"; "…, now" on the card's set, "…, logged, edit" once logged),
  * which follows the card's inputs keystroke by keystroke, and its "Set N logged" tick.
  */
 async function rows(page) {
   const out = [];
   for (const row of await page.locator('.lg-list button.lg-li').all()) {
-    const line = (await row.getAttribute('aria-label')).match(/^Set \d+, (.*) × (\d+)s?, edit$/);
+    const line = (await row.getAttribute('aria-label')).match(/^Set \d+, (.*) × (\d+)s?, (?:logged, edit|now|edit)$/);
     const weight = line?.[1] === '—' ? '' : (line?.[1] ?? '').replace(/ (lb|kg)$/, '');
     out.push({ weight, reps: line?.[2] ?? '', logged: (await row.locator('[aria-label$=" logged"]').count()) === 1 });
   }
@@ -389,6 +389,73 @@ try {
     }
     await shot(page, 'after-keyboard-390x500');
     await page.close();
+  }
+
+  // (#380 review 1) While rest runs: log set 1, then tap set 2's weight. The field and "Log set 2" sit fully
+  // above the rest dock (R1; it covered Log at 390x500); the dock spans the screen (D1); scrolled to the
+  // bottom, Up next clears the dock (D2); the sticky top is opaque (D3).
+  for (const [width, height] of [[390, 500], [390, 650], [360, 780], [390, 844]]) {
+    const where = `${width}x${height} rest (#380 review 1)`;
+    const page = await browser.newPage({ viewport: { width, height } });
+    await onboard(page);
+    await page.getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForSelector('.lg-ex');
+    await logButton(page, 1).click();
+    const dock = page.locator('.lg-dock');
+    await dock.waitFor({ timeout: 3000 }).catch(() => {});
+    check(await dock.count() === 1, `${where}: no rest dock after logging set 1`);
+    if (await dock.count() === 1) {
+      const rest = await page.locator('.lg-rest').boundingBox();
+      check(rest.width >= width - 26, `${where}: the rest pill is ${Math.round(rest.width)}px of ${width} (D1)`);
+      // The case review 1 found: set 2's field in view, its Log half under the dock. A tap on a field the
+      // screen already shows scrolls nothing by itself, so focus it without Playwright's scroll-into-view.
+      {
+        const dockY = (await dock.boundingBox()).y;
+        const log = await logButton(page, 2).boundingBox();
+        await page.evaluate((dy) => { const screen = document.querySelector('.flow-screen'); if (screen) screen.scrollTop += dy; }, log.y - (dockY - 28));
+        await page.waitForTimeout(50);
+      }
+      await weightCell(page, 2).focus();
+      await page.waitForTimeout(150);
+      const dockTop = (await dock.boundingBox()).y;
+      const headerBottom = (await page.locator('.flow-header').boundingBox()).height;
+      for (const [label, loc] of [['set 2 weight field', weightCell(page, 2)], ['Log set 2', logButton(page, 2)]]) {
+        const seen = await inBand(page, loc, headerBottom, dockTop);
+        check(seen.ok, `${where}: ${label} not fully above the dock at ${dockTop} (${JSON.stringify(seen.box)}) (R1)`);
+      }
+      await weightCell(page, 2).blur();
+      await page.evaluate(() => { document.querySelector('.flow-screen').scrollTop = 1e6; window.scrollTo(0, 1e6); });
+      await page.waitForTimeout(100);
+      const next = await page.locator('.lg-next').boundingBox();
+      const dockAfter = (await dock.boundingBox()).y;
+      check(next && next.y + next.height <= dockAfter + 0.5, `${where}: scrolled to the end, Up next (${next && next.y + next.height}) still under the dock (${dockAfter}) (D2)`);
+      const bg = await page.locator('.flow-header').evaluate((el) => getComputedStyle(el).backgroundColor);
+      check(!/rgba\(.*,\s*0?\.\d+\)$/.test(bg), `${where}: the sticky top is see-through (${bg}) (D3)`);
+    }
+    await page.close();
+  }
+
+  // (#380 review 1, R3) A long load fits the card's weight field at 32px or more: 102.5 kg and 1000 lb.
+  for (const [width, height] of [[360, 780], [390, 844]]) {
+    for (const [unit, value] of [['kg', '102.5'], ['lb', '1000']]) {
+      const where = `${width}x${height} ${value} ${unit} (R3)`;
+      const page = await browser.newPage({ viewport: { width, height } });
+      await onboard(page, unit);
+      await page.getByRole('button', { name: 'Start workout' }).click();
+      await page.waitForSelector('.lg-ex');
+      const cell = page.getByLabel(/^Set 1 weight/);
+      await cell.click();
+      await page.keyboard.press('ControlOrMeta+a');
+      for (const key of value) await page.keyboard.press(key);
+      for (const state of ['typing', 'shown']) {
+        if (state === 'shown') await cell.blur();
+        const fit = await cell.evaluate((el) => ({ fits: el.scrollWidth <= el.clientWidth, size: parseFloat(getComputedStyle(el).fontSize), value: el.value }));
+        check(fit.value === value, `${where} ${state}: the field reads ${fit.value}`);
+        check(fit.fits, `${where} ${state}: ${fit.value} overflows the weight field`);
+        check(fit.size >= 32, `${where} ${state}: the number is ${fit.size}px, under 32`);
+      }
+      await page.close();
+    }
   }
 
   // (#380) 390x650 with the keyboard open (lesson 16: the layout keeps its height, the keyboard covers it):
