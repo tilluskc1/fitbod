@@ -260,6 +260,9 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    kit could save a list, become a gym and stop reading its own rack. Clear had the mirror leak (the list
    gone, its families kept). Rule: decide who sees a gear writer with the same rule the readers use
    (`isGymKit`); a control the story does not ask for (Clear) is cut, not patched. Check: "review 2" test.
+   Review 3: making "has a list" mean "gym" for good then stuck a lifter who moved their chips back to
+   home dumbbells. Rule: a new field may widen a reader's rule, never replace the inputs it already reads
+   (a list plus barbell, machine or cable). Check: "review 3" test.
 
 ## Recurring edge cases (put the relevant ones in every brief)
 

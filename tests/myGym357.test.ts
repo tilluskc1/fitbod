@@ -72,6 +72,13 @@ const PHRASINGS: [string, GymItemId[]][] = [
   ['dumbbells but no barbell', ['dumbbells']],
   ["we don't have a leg press", []],
   ['everything but the smith machine', []],
+  // Review 3: "but" alone joins, it does not negate.
+  ['no barbell but dumbbells', ['dumbbells']],
+  ['small gym but dumbbells to 30', ['dumbbells']],
+  ['mostly machines but cable stack and dumbbells', ['cable-stack', 'dumbbells']],
+  ['not just dumbbells but barbells too', ['dumbbells', 'barbell']],
+  ['leg press, leg curl but a leg extension too', ['leg-press', 'leg-extension', 'leg-curl']],
+  ['leg press but also a smith', ['leg-press', 'smith-machine']],
   [
     'leg extension, leg curl, leg press, dumbbells to 30 kg, barbell and squat rack, cable stack, pull-up bar',
     ['leg-press', 'leg-extension', 'leg-curl', 'cable-stack', 'dumbbells', 'barbell', 'squat-rack', 'pull-up-bar'],
@@ -127,7 +134,9 @@ test('#357 the row shows for gym kits and saved lists, not home or bodyweight', 
   assert.equal(showsMyGym(gym), true);
   assert.equal(showsMyGym(profileOf(KITS.home, 'Beginner', 3, 45)), false);
   assert.equal(showsMyGym(profileOf(KITS.bodyweight, 'Beginner', 3, 45)), false);
-  assert.equal(showsMyGym({ ...profileOf(KITS.home, 'Beginner', 3, 45), gymItems: [] }), true);
+  // Review 3: a list on a kit with no barbell, machine or cable is home gear; the row hides.
+  assert.equal(showsMyGym({ ...profileOf(KITS.home, 'Beginner', 3, 45), gymItems: [] }), false);
+  assert.equal(showsMyGym({ ...profileOf(KITS.machines, 'Beginner', 3, 45), gymItems: [] }), true);
   // Review 2: home gear with a cable stack is still home gear; its rack keeps being read.
   assert.equal(showsMyGym(profileOf(KITS.machines, 'Beginner', 3, 45)), false);
   assert.equal(showsMyGym({ ...profileOf(KITS.home, 'Beginner', 3, 45), equipment: ['Dumbbell', 'Cable'] }), false);
@@ -333,4 +342,24 @@ test('#357 review 2: a home kit with cables never sees My gym, so its dumbbell r
   assert.equal(showsMyGym(homeCable), false, 'no row, so no list can be saved from Settings');
   assert.deepEqual(ownedLoads(homeCable), { Dumbbell: [5, 10, 15] });
   assert.deepEqual(defaultConstraints(homeCable).loads, [5, 10, 15]);
+});
+
+test('#357 review 3: a list does not make a kit a gym for good; dumbbells-only reads its rack again', async () => {
+  const { isGymKit, ownedLoads } = await import('../src/lib/progression.ts');
+  const { defaultConstraints } = await import('../src/lib/constraints.ts');
+  const { equipmentTitle } = await import('../src/lib/coachLabels.ts');
+  // Saved a gym list, then moved Settings' chips to home dumbbells and typed a rack.
+  const moved: Profile = { ...gym, ...gymPatch(['leg-curl', 'dumbbells', 'bench']), equipment: ['Dumbbell'], support: ['Bench'], loads: { Dumbbell: [5, 10, 15] } };
+  assert.equal(isGymKit(moved), false);
+  assert.deepEqual(ownedLoads(moved), { Dumbbell: [5, 10, 15] });
+  assert.deepEqual(defaultConstraints(moved).loads, [5, 10, 15]);
+  assert.equal(equipmentTitle(moved), 'Home equipment');
+  assert.equal(showsMyGym(moved), false);
+  // Any of barbell, machine or cable with a list is still a gym (review 1 stays fixed).
+  for (const family of ['Barbell', 'Machine', 'Cable'] as const) {
+    assert.equal(isGymKit({ equipment: ['Dumbbell', family], gymItems: [] }), true, family);
+  }
+  // Absent field: main's rule exactly.
+  assert.equal(isGymKit({ equipment: ['Dumbbell', 'Machine'] }), false);
+  assert.equal(isGymKit({ equipment: ['Barbell', 'Cable'] }), true);
 });

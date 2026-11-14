@@ -76,7 +76,7 @@ export function readGymText(text: string): GymItemId[] {
   // "no leg press", "we don't have a leg press", "everything but the smith" name what the gym lacks:
   // those words tick nothing (#357 reviews 1 and 2).
   for (const [phrase] of ORDERED) {
-    for (const not of [' no', ' without', ' not', ' except', ' but', ' dont have', ' do not have', ' doesnt have', ' lacks']) {
+    for (const not of [' no', ' without', ' not', ' except', ' everything but', ' all but', ' dont have', ' do not have', ' doesnt have', ' lacks']) {
       while (rest.includes(`${not}${phrase}`)) rest = rest.replace(`${not}${phrase}`, ' | ');
     }
   }
