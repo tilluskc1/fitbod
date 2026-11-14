@@ -16,6 +16,8 @@ export interface GymItem {
   /** The family or support item ticking this one turns on. */
   equipment?: Exclude<Equipment, 'Bodyweight'>;
   support?: SupportEquipment;
+  /** (#360) An equipment addition unpublished since this phone cached it: kept readable, never listed. */
+  hidden?: boolean;
 }
 
 export const GYM_GROUPS: GymGroup[] = ['Legs machines', 'Upper machines', 'Cables', 'Free weights', 'Stations'];

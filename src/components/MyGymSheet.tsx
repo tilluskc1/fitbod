@@ -61,7 +61,7 @@ export default function MyGymSheet({ profile, onSave, onClose }: Props) {
           <fieldset className="my-gym__group" key={group}>
             <legend className="setup-label">{group}</legend>
             <div className="chip-wrap">
-              {GYM_ITEMS.filter((item) => item.group === group).map((item) => (
+              {GYM_ITEMS.filter((item) => item.group === group && !item.hidden).map((item) => (
                 <button
                   key={item.id}
                   type="button"

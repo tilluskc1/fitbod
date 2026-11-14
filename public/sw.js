@@ -31,6 +31,10 @@ const SHELL = [
   '/fonts/plus-jakarta-sans-700.woff2',
 ];
 const NETWORK_TIMEOUT_MS = 4000;
+// (#360) Published additions and their photos. The app writes the list; photos seen online are kept
+// here. Its name does not start with `fitbod-clone-`, so activate never deletes it on a deploy.
+const CATALOG = 'catalog-v1';
+const STORAGE_HOST = 'firebasestorage.googleapis.com';
 
 function offlineResponse() {
   return new Response('', { status: 504, statusText: 'Offline' });
@@ -86,6 +90,20 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+  if (url.hostname === STORAGE_HOST && request.destination === 'image') {
+    event.respondWith(
+      caches.open(CATALOG).then((cache) =>
+        cache.match(request, { ignoreVary: true }).then((cached) => {
+          if (cached) return cached;
+          return fetchWithTimeout(request).then((response) => {
+            if (response.ok || response.type === 'opaque') cache.put(request, response.clone());
+            return response;
+          });
+        }),
+      ),
+    );
+    return;
+  }
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {

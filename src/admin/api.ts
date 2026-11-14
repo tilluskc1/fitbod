@@ -88,3 +88,48 @@ export async function setDone(token: string, name: string, done: boolean): Promi
     body: JSON.stringify({ fields: { done: { booleanValue: done } } }),
   });
 }
+
+/** (#360) Every catalog row, drafts included (the rules let only the admin read those). */
+export async function readCatalog(token: string): Promise<FirestoreDoc[]> {
+  const body = (await call(`${BASE}/${DB}/catalog?pageSize=300`, token)) as { documents?: FirestoreDoc[] };
+  return body.documents ?? [];
+}
+
+/**
+ * (#360) Writes one catalog row whole. A new row must not exist yet (`currentDocument.exists=false`), so
+ * two tabs can't both create the same id; a saved row is replaced, so a removed photo goes too.
+ */
+export async function writeCatalog(token: string, id: string, fields: Record<string, unknown>, isNew: boolean): Promise<void> {
+  await call(`${BASE}/${DB}/catalog/${id}${isNew ? '?currentDocument.exists=false' : ''}`, token, {
+    method: 'PATCH',
+    body: JSON.stringify({ fields }),
+  });
+}
+
+/**
+ * (#360) Uploads one photo or video to Firebase Storage over REST, with the admin's Firebase token. A
+ * multipart upload, as Firebase's own SDK sends it, so the object keeps its content type (the Storage
+ * rules check it; a plain media upload is stored as application/octet-stream).
+ */
+export function uploadBody(path: string, file: Blob, boundary = `hs-${Math.random().toString(36).slice(2)}`): { type: string; body: Blob } {
+  const head = `--${boundary}\r\nContent-Type: application/json; charset=utf-8\r\n\r\n${JSON.stringify({ name: path, contentType: file.type })}\r\n`
+    + `--${boundary}\r\nContent-Type: ${file.type}\r\n\r\n`;
+  return { type: `multipart/related; boundary=${boundary}`, body: new Blob([head, file, `\r\n--${boundary}--`]) };
+}
+
+export async function uploadMedia(token: string, bucket: string, path: string, file: Blob): Promise<void> {
+  const { type, body } = uploadBody(path, file);
+  let response: Response;
+  try {
+    response = await fetch(`https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=${encodeURIComponent(path)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': type, 'X-Goog-Upload-Protocol': 'multipart', Authorization: `Firebase ${token}` },
+      body,
+    });
+  } catch {
+    throw new AdminError('offline');
+  }
+  if (response.status === 401) throw new AdminError('expired');
+  if (response.status === 403) throw new AdminError('not-allowed');
+  if (!response.ok) throw new AdminError('offline');
+}

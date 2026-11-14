@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary.tsx'
 import { currentDevice } from './lib/install.ts'
 import { trackKeyboardInset } from './lib/keyboardInset.ts'
 import { startEventSync } from './lib/events.ts'
+import { loadCatalog, refreshCatalog } from './lib/catalogSync.ts'
 
 const root = document.getElementById('root')!
 
@@ -19,7 +20,8 @@ if (/^\/admin\/?$/.test(location.pathname)) {
     },
   )
 } else {
-  startApp()
+  // (#360) Published additions from the last open join the built-in list before anything reads it.
+  void loadCatalog().then(startApp)
 }
 
 function startApp() {
@@ -37,13 +39,17 @@ function startApp() {
   // (#359) Usage events that waited offline go now, and again whenever the phone is back online.
   startEventSync()
 
+  // (#360) Fetch the published additions for the next open.
+  void refreshCatalog()
+
   // Offline shell: only in production builds. The service worker caches the app
   // shell and any assets that have actually been loaded, so reopening an active
   // workout without a network keeps the UI and its localStorage data available.
   if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      void navigator.serviceWorker.register('/sw.js').catch(() => undefined)
-    })
+    // (#360) startApp now waits for the catalog cache, so the page may have loaded already.
+    const register = () => void navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+    if (document.readyState === 'complete') register()
+    else window.addEventListener('load', register)
   }
 
   // All workout data lives in localStorage. Once the app runs from the home screen, ask the browser

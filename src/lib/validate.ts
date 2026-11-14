@@ -1,5 +1,6 @@
 import { EXERCISES } from '../data/exercises.ts';
 import { GYM_ITEM_IDS, orderedItems } from '../data/gymItems.ts';
+import { isAdditionId } from './additionId.ts';
 import type {
   AppState,
   Equipment,
@@ -133,6 +134,8 @@ function validateGymItems(value: unknown, path: string): GymItemId[] {
   const items = array(value, path, GYM_ITEM_IDS.length * 2);
   const out: GymItemId[] = [];
   for (let i = 0; i < items.length; i += 1) {
+    // (#360) An equipment addition this phone no longer knows (cache cleared) is dropped, not a broken profile.
+    if (isAdditionId(items[i]) && !GYM_ITEM_IDS.includes(items[i] as GymItemId)) continue;
     const item = oneOf(items[i], `${path}[${i}]`, GYM_ITEM_IDS);
     if (!out.includes(item)) out.push(item);
   }

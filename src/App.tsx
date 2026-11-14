@@ -207,7 +207,10 @@ interface SaveUi {
   message?: string;
 }
 
-const INITIAL: LoadedState = loadState();
+// (#360) Read on the first render, not at import: main.tsx applies the cached catalog additions first, so a
+// saved gym item or preference for an addition is known when the profile is validated.
+let INITIAL: LoadedState | undefined;
+const initialState = () => (INITIAL ??= loadState());
 const CORRUPT_BACKUP_KEY = 'fitbod-clone-v1:corrupt-backup';
 
 /** An event's timestamp; only ever called from handlers. */
@@ -243,7 +246,7 @@ function backupRaw(raw: string): boolean {
  * launch reads it, so no in-memory screen, sheet or session survives an erase.
  */
 export default function App() {
-  const [boot, setBoot] = useState({ run: 0, initial: INITIAL });
+  const [boot, setBoot] = useState(() => ({ run: 0, initial: initialState() }));
   return (
     <AppRun
       key={boot.run}
