@@ -6,7 +6,7 @@ import type { Shade } from '../lib/bodyMap';
 import type { SwitchOption } from '../lib/switchDay';
 import { AREAS } from '../lib/areas';
 import type { Area } from '../lib/areas';
-import { NO_PICKS, PART_LABEL, PRESETS, consequenceLine, pickPreset, pickedMuscles, togglePart } from '../lib/switchPick';
+import { NO_PICKS, PART_LABEL, PRESETS, consequenceLine, mapMuscles, pickPreset, togglePart } from '../lib/switchPick';
 import type { PickPreview, Picks } from '../lib/switchPick';
 
 interface Props {
@@ -101,7 +101,7 @@ export default function SwitchSheet({ options, onPick, onClose, preview, recover
             </button>
           ))}
         </div>
-        <BodyMap selected={pickedMuscles(picks)} shade={shade} areas={AREAS} onToggle={(area) => setPicks(togglePart(picks, area))} />
+        <BodyMap selected={mapMuscles(picks)} shade={shade} areas={AREAS} onToggle={(area) => setPicks(togglePart(picks, area))} />
         <div className="sw-chips sw-chips--parts" role="group" aria-label="Body parts">
           {AREAS.map((area) => (
             <button

@@ -1717,6 +1717,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
                 plannedName={slot.name}
                 todayName={override ? program.name : undefined}
                 plannedAreas={areasOf(slot.focus)}
+                plannedFocus={slot.focus}
                 savedGear={savedSetup(profile)}
                 savedMinutes={profile.sessionMinutes ?? 35}
                 base={talkBase}

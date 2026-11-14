@@ -1,5 +1,5 @@
 import type { MuscleGroup, WorkoutRecord } from '../types.ts';
-import { AREAS, areasOf } from './areas.ts';
+import { AREAS, areasOf, musclesOf } from './areas.ts';
 import type { Area } from './areas.ts';
 import { dayLabel, recentlyTrained } from './recovery.ts';
 
@@ -46,18 +46,18 @@ export interface Region {
 export const REGIONS: Record<View, Region[]> = {
   front: [
     { muscle: 'Shoulders', d: oval(20, 38, 6, 8), mirror: true },
-    { muscle: 'Chest', d: 'M49 30L36 30Q29 32 28 40Q30 46 38 47Q46 47 49 44Z', mirror: true },
-    { muscle: 'Biceps', d: oval(21, 56, 4, 9), mirror: true },
-    { muscle: 'Triceps', d: oval(15.9, 55, 1.8, 8), mirror: true },
+    { muscle: 'Chest', d: 'M49 30L37 30Q32.5 31 32.5 38Q33 46 39 47Q46 47 49 44Z', mirror: true },
+    { muscle: 'Biceps', d: oval(21, 57, 4, 8.5), mirror: true },
+    { muscle: 'Triceps', d: oval(15.9, 56.5, 1.8, 7.5), mirror: true },
     { muscle: 'Core', d: 'M40 50L60 50Q62 50 62 53L60 82Q50 86 40 82L38 53Q38 50 40 50Z', mirror: false },
     { muscle: 'Quads', d: 'M33 98Q31 112 34 128Q40 132 46 129Q49 112 48 99Q40 96 33 98Z', mirror: true },
     { muscle: 'Calves', d: oval(38.5, 146, 3.4, 10), mirror: true },
   ],
   back: [
     { muscle: 'Shoulders', d: oval(20, 38, 6, 8), mirror: true },
-    { muscle: 'Back', d: 'M49 27L40 27Q30 29 27 35Q30 50 35 62Q38 78 43 84L49 85Z', mirror: true },
-    { muscle: 'Triceps', d: oval(20, 55, 4.5, 9.5), mirror: true },
-    { muscle: 'Glutes', d: 'M49 92Q40 89 34 93Q32 101 37 106Q44 108 49 104Z', mirror: true },
+    { muscle: 'Back', d: 'M49 27L40 27Q33 28.5 32.5 36L33 62Q37 78 43 84L49 85Z', mirror: true },
+    { muscle: 'Triceps', d: oval(20, 57, 4.5, 8.5), mirror: true },
+    { muscle: 'Glutes', d: 'M49 92Q40 90 34 93Q32 101 37 106Q44 108 49 104Z', mirror: true },
     { muscle: 'Hamstrings', d: 'M34 109Q32 120 35 130Q41 133 46 130Q49 120 48 109Q41 107 34 109Z', mirror: true },
     { muscle: 'Calves', d: oval(40, 146, 5, 11), mirror: true },
   ],
@@ -124,6 +124,15 @@ export function bodyShade(history: WorkoutRecord[], now: Date): Shade {
 /** The highlighted regions of a view: the selected muscles that view draws, in drawing order. */
 export function highlighted(view: View, selected: MuscleGroup[]): MuscleGroup[] {
   return REGIONS[view].map((region) => region.muscle).filter((muscle) => selected.includes(muscle));
+}
+
+/**
+ * (#302 review 1) What Plan today lights: "My planned day" lights the planned day's own muscles
+ * (Push: triceps, not biceps), less any area left out as sore; other picks light their areas.
+ */
+export function talkMapMuscles(train: Area[], planned: boolean, plannedFocus: MuscleGroup[] | undefined): MuscleGroup[] {
+  if (!planned || !plannedFocus) return musclesOf(train);
+  return plannedFocus.filter((muscle) => areasOf([muscle]).every((area) => train.includes(area)));
 }
 
 const names = (areas: Area[]) => areas.map((area) => area.toLowerCase()).join(', ');

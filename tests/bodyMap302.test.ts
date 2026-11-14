@@ -3,11 +3,11 @@ import test from 'node:test';
 import { AREAS, AREA_MUSCLES, musclesOf } from '../src/lib/areas.ts';
 import type { Area } from '../src/lib/areas.ts';
 import {
-  MIN_FIGURE_PX, REGIONS, VIEWS, VIEW_W, ZONES, bodyShade, highlighted, mapSummary, zoneAt,
+  MIN_FIGURE_PX, REGIONS, VIEWS, VIEW_W, ZONES, bodyShade, highlighted, mapSummary, talkMapMuscles, zoneAt,
 } from '../src/lib/bodyMap.ts';
 import { recentlyTrained } from '../src/lib/recovery.ts';
-import { NO_PICKS, pickPreset, pickedMuscles, recoveryLabels, togglePart } from '../src/lib/switchPick.ts';
-import type { WorkoutRecord } from '../src/types.ts';
+import { NO_PICKS, mapMuscles, pickPreset, pickedMuscles, recoveryLabels, togglePart } from '../src/lib/switchPick.ts';
+import type { MuscleGroup, WorkoutRecord } from '../src/types.ts';
 
 const NOW = new Date(2026, 10, 14, 12, 0); // Sat noon local
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000).toISOString();
@@ -96,19 +96,38 @@ test('#302: every target is at least 44px at the narrowest figure, and no two ov
   }
 });
 
-test('#302: each region sits inside its own area\'s target, so a tap on a muscle toggles its chip', () => {
+test('#302 review 1: every drawn point of a region sits in its own area\'s target or off every target', () => {
   const areaOf = (muscle: string) => AREAS.find((area) => (AREA_MUSCLES[area] as string[]).includes(muscle))!;
   for (const view of VIEWS) {
     for (const region of REGIONS[view]) {
       const numbers = [...region.d.matchAll(/-?\d+(\.\d+)?/g)].map((match) => Number(match[0]));
-      // Paths start at an absolute point; ovals at their left edge, centred vertically.
-      const [x, y] = numbers;
-      const point = region.d.includes('a') ? [x + 0.5, y] : [x - 0.5, y + 0.5];
-      if (region.muscle === 'Chest' || region.muscle === 'Back' || region.muscle === 'Core') continue; // centred: checked below
-      assert.equal(zoneAt(view, point[0], point[1]), areaOf(region.muscle), `${view} ${region.muscle}`);
+      // An oval: its four extremes. A path (absolute M, L, Q only): every point it names.
+      const points = region.d.includes('a')
+        ? [[numbers[0], numbers[1]], [numbers[0] + 2 * numbers[2], numbers[1]], [numbers[0] + numbers[2], numbers[1] - numbers[3]], [numbers[0] + numbers[2], numbers[1] + numbers[3]]]
+        : numbers.reduce<number[][]>((pairs, n, i) => (i % 2 ? pairs : [...pairs, [n, numbers[i + 1]]]), []);
+      for (const [x, y] of points) {
+        for (const px of region.mirror ? [x, VIEW_W - x] : [x]) {
+          const hit = zoneAt(view, px, y);
+          assert.ok(hit === null || hit === areaOf(region.muscle), `${view} ${region.muscle} at (${px}, ${y}) toggles ${hit}`);
+        }
+      }
     }
   }
-  assert.equal(zoneAt('front', 42, 38), 'Chest');
-  assert.equal(zoneAt('back', 42, 50), 'Back');
-  assert.equal(zoneAt('front', 50, 70), 'Core');
+});
+
+test('#302 review 1: Switch lights the pressed chips; all six parts light every part, arms included', () => {
+  let picks = NO_PICKS;
+  for (const area of AREAS) picks = togglePart(picks, area);
+  assert.deepEqual(highlighted('front', mapMuscles(picks)), ['Shoulders', 'Chest', 'Biceps', 'Triceps', 'Core', 'Quads', 'Calves']);
+  assert.equal(mapSummary(mapMuscles(picks), {}), 'Selected: chest, back, shoulders, arms, legs, core.');
+  assert.deepEqual(mapMuscles(pickPreset(NO_PICKS, 'Push')), pickedMuscles(pickPreset(NO_PICKS, 'Push')), 'a preset lights what it builds');
+  assert.deepEqual(mapMuscles(pickPreset(NO_PICKS, 'Full body')), pickedMuscles(pickPreset(NO_PICKS, 'Full body')));
+});
+
+test('#302 review 1: Plan today\'s "My planned day" lights the planned muscles, less sore areas', () => {
+  const push: MuscleGroup[] = ['Chest', 'Shoulders', 'Triceps'];
+  const train: Area[] = ['Chest', 'Shoulders', 'Arms'];
+  assert.deepEqual(highlighted('front', talkMapMuscles(train, true, push)), ['Shoulders', 'Chest', 'Triceps'], 'same as Switch\'s Push');
+  assert.deepEqual(talkMapMuscles(['Chest', 'Arms'], true, push), ['Chest', 'Triceps'], 'sore shoulders left out');
+  assert.deepEqual(talkMapMuscles(train, false, push), musclesOf(train), 'own picks light their areas');
 });

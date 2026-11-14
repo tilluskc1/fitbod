@@ -170,6 +170,11 @@ try {
     await zone(page, 'front', 'Legs').click();
     check(await swChip(page, 'Legs').getAttribute('aria-pressed') === 'true', `${where}: tapping the legs did not set the Legs chip`);
     check(JSON.stringify(await lit(page, 'back')) === JSON.stringify(['Back', 'Triceps', 'Glutes', 'Hamstrings', 'Calves']), `${where}: back lights ${JSON.stringify(await lit(page, 'back'))}`);
+    // (#302 review 1) All six parts pressed: every part lit, arms included, as the chips read.
+    await swChip(page, 'Shoulders').click();
+    await swChip(page, 'Core').click();
+    check(JSON.stringify(await lit(page, 'front')) === JSON.stringify(['Shoulders', 'Chest', 'Biceps', 'Triceps', 'Core', 'Quads', 'Calves']), `${where}: all six light ${JSON.stringify(await lit(page, 'front'))}`);
+    check(await summary(page) === 'Selected: chest, back, shoulders, arms, legs, core. Trained recently: legs.', `${where}: all-six summary reads "${await summary(page)}"`);
     const box = await page.locator('.sw-build').boundingBox();
     check(box && box.y + box.height <= height, `${where}: Build is not in view with the map (${JSON.stringify(box)})`);
     // Reduced motion: the map never animates.
@@ -179,6 +184,9 @@ try {
     // Plan today with me: the same map on Train; a tap toggles the Train chip.
     await toPlanTrain(page);
     check(await page.getByText('Darker = trained recently').count() === 1, `${where}: no legend on Plan today after a Legs day`);
+    // (#302 review 1) "My planned day (Push)" lights Push's own muscles, as Switch's Push does: no biceps.
+    check(await page.locator('.tt-chip', { hasText: /^My planned day/ }).getAttribute('aria-pressed') === 'true', `${where}: the planned day is not the Train default`);
+    check(JSON.stringify(await lit(page, 'front')) === JSON.stringify(['Shoulders', 'Chest', 'Triceps']), `${where}: planned Push lights ${JSON.stringify(await lit(page, 'front'))}`);
     check(JSON.stringify(await shaded(page, 'recent')) === JSON.stringify(legs), `${where}: Plan today shaded ${JSON.stringify(await shaded(page, 'recent'))}`);
     await shot(page, 'plan-history', where);
     await zone(page, 'front', 'Core').click();
