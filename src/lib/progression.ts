@@ -217,8 +217,12 @@ export function roleTarget(
   return { sets: compound && !(heavy && dayHasLead) ? 4 : 3, range };
 }
 
-/** A saved kit with a barbell and machines or cables is a gym, not a home setup (#180). */
-export function isGymKit(profile: Pick<Profile, 'equipment'>): boolean {
+/**
+ * A saved kit with a barbell and machines or cables is a gym, not a home setup (#180). A saved "My gym"
+ * list is a gym whatever it holds (#357): a gym without barbells is still not home gear.
+ */
+export function isGymKit(profile: Pick<Profile, 'equipment'> & Partial<Pick<Profile, 'gymItems'>>): boolean {
+  if (profile.gymItems !== undefined) return true;
   return profile.equipment.includes('Barbell')
     && (profile.equipment.includes('Machine') || profile.equipment.includes('Cable'));
 }
@@ -227,7 +231,7 @@ export function isGymKit(profile: Pick<Profile, 'equipment'>): boolean {
  * The loads the user owns: the one place a stored rack is read. A gym kit owns none, so a rack
  * saved before #180 is ignored, never a cap or a pick; the stored value is left as it is (#194).
  */
-export function ownedLoads(profile: Pick<Profile, 'equipment' | 'loads'>): Profile['loads'] {
+export function ownedLoads(profile: Pick<Profile, 'equipment' | 'loads'> & Partial<Pick<Profile, 'gymItems'>>): Profile['loads'] {
   return isGymKit(profile) ? {} : profile.loads;
 }
 

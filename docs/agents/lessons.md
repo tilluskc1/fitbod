@@ -249,6 +249,14 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    no other text box. Check: `scripts/e2e/switch-picks.mjs` compares hero and badge and the toast's box with
    the greeting at all three sizes; its 9be8b4e version fails those steps.
 
+37. **A new way to save gear changes every reader of the saved kit.** #357 review 1: saving a "My gym" list
+   rewrote `equipment` from the ticks, so a gym list without a barbell failed `isGymKit`. The gym then read
+   "Home" on four screens and a dumbbell rack stored before #180 capped its loads again. The sheet also
+   opened with nothing ticked, so a first save quietly dropped the lifter's Barbell, Rack and Bench.
+   Rule: when a story adds a writer of saved gear, grep every reader of that gear (`isGymKit`, `ownedLoads`,
+   `savedSetup`, `gearLabel`, `equipmentTitle`) and test each one after the new save. A save never drops
+   kit the lifter did not touch. Check: "review 1" tests in `tests/myGym357.test.ts`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

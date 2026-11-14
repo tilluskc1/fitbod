@@ -63,6 +63,13 @@ const PHRASINGS: [string, GymItemId[]][] = [
   ['shoulder press machine', ['shoulder-press-machine']],
   ['dumbbells to 30 kg', ['dumbbells']],
   ['adjustable bench', ['bench']],
+  ['calf raises', ['calf-raise-machine']],
+  ['pull-ups and chin-ups', ['pull-up-bar']],
+  ['a dip', ['dip-bars']],
+  ['dumbbell rack', ['dumbbells']],
+  ['leg curl, no leg press', ['leg-curl']],
+  ['everything except a smith machine', []],
+  ['dumbbells but no barbell', ['dumbbells']],
   [
     'leg extension, leg curl, leg press, dumbbells to 30 kg, barbell and squat rack, cable stack, pull-up bar',
     ['leg-press', 'leg-extension', 'leg-curl', 'cable-stack', 'dumbbells', 'barbell', 'squat-rack', 'pull-up-bar'],
@@ -101,8 +108,13 @@ test('#357 saving the list sets the families and support it implies', () => {
   assert.deepEqual(gymPatch(['lat-pulldown', 'squat-rack', 'barbell']).support, ['Rack']);
 });
 
-test('#357 the sheet opens empty without a list, else with the list and the saved families', () => {
-  assert.deepEqual(initialTicks(gym), []);
+test('#357 the sheet opens with the saved free weights and stations, and the list machines (none without one)', () => {
+  // Review 1: a first save must not drop the Barbell, Rack and Bench the lifter already had.
+  assert.deepEqual(initialTicks(gym), ['dumbbells', 'barbell', 'kettlebells', 'squat-rack', 'bench', 'pull-up-bar', 'dip-bars', 'box', 'ab-wheel']);
+  assert.deepEqual(initialTicks(profileOf(KITS.machines, 'Beginner', 3, 45)), ['dumbbells', 'bench']);
+  const typedOnly = gymPatch([...initialTicks(gym), ...readGymText('leg extension, leg curl, dumbbells, cable stack')]);
+  assert.deepEqual(typedOnly.equipment, gym.equipment, 'typing only machines keeps every saved family');
+  assert.deepEqual(typedOnly.support, gym.support);
   const saved = { ...gym, ...gymPatch(['leg-curl', 'dumbbells', 'bench']) };
   assert.deepEqual(initialTicks(saved), ['leg-curl', 'dumbbells', 'bench']);
   // Settings' Dumbbell chip turned off afterwards: the sheet follows the family.
@@ -289,4 +301,23 @@ test('#357 ticks: the text adds, a tap wins over the text in both directions; no
   assert.equal(gymSummary({}), 'Not set: every machine counts. List what your gym has so plans use only that.');
   assert.equal(gymSummary({ gymItems: ['leg-press'] }), '1 item: Leg press.');
   assert.equal(gymSummary({ gymItems: ['leg-extension', 'leg-curl', 'cable-stack', 'dumbbells'] }), '4 items: Leg extension, Leg curl, Cable stack (single) and 1 more.');
+});
+
+test('#357 review 1: a saved list is a gym kit: labels stay "Your gym" and a stale home rack stays unread', async () => {
+  const { isGymKit, ownedLoads } = await import('../src/lib/progression.ts');
+  const { gearLabel } = await import('../src/lib/todayTalk.ts');
+  const { equipmentTitle } = await import('../src/lib/coachLabels.ts');
+  // A gym profile still carrying a dumbbell rack saved before #180, then the story's own list (no barbell).
+  const stale: Profile = { ...gym, loads: { Dumbbell: [5, 10, 12.5] } };
+  assert.equal(isGymKit(stale), true);
+  const saved: Profile = { ...stale, ...gymPatch(['leg-extension', 'leg-curl', 'dumbbells', 'cable-stack']) };
+  assert.deepEqual(saved.equipment, ['Dumbbell', 'Machine', 'Cable']);
+  assert.equal(isGymKit(saved), true);
+  assert.deepEqual(ownedLoads(saved), {}, 'the stale rack never caps a gym list');
+  assert.equal(gearLabel('home', saved), 'Your gym');
+  assert.equal(equipmentTitle(saved), 'Gym equipment');
+  // Absent field: unchanged rules (a dumbbell-and-machine kit without a list is still home gear).
+  const noList: Profile = { ...saved, gymItems: undefined };
+  assert.equal(isGymKit(noList), false);
+  assert.deepEqual(ownedLoads(noList), { Dumbbell: [5, 10, 12.5] });
 });

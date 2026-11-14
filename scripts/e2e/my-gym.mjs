@@ -33,13 +33,17 @@ const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
 const KEY = 'fitbod-clone-v1';
 const TYPED = 'leg extension, leg curl, dumbbells, cable stack';
-const LISTED = ['leg-extension', 'leg-curl', 'cable-stack', 'dumbbells'];
-const LISTED_LABELS = ['Leg extension', 'Leg curl', 'Cable stack (single)', 'Dumbbells'];
-/** Catalog moves the 4-item list cannot host: machines and cables on other stations, and every barbell. */
-const NEVER = ['leg-press', 'standing-calf-raise', 'seated-calf-raise', 'machine-chest-press', 'lat-pulldown', 'cable-fly',
-  'barbell-bench-press', 'deadlift', 'barbell-row', 'overhead-press', 'barbell-curl', 'skull-crusher', 'close-grip-bench',
-  'back-squat', 'front-squat', 'romanian-deadlift', 'good-morning', 'hip-thrust'];
-const NEVER_NAMES = ['Leg Press', 'Machine Chest Press', 'Lat Pulldown', 'Cable Fly', 'Back Squat', 'Barbell Bench Press', 'Standing Calf Raise'];
+/** The gym default kit's free weights and stations: the sheet opens with them ticked (review 1). */
+const KEPT = ['Dumbbells', 'Barbell', 'Kettlebells', 'Squat rack', 'Bench', 'Pull-up bar', 'Dip bars', 'Box', 'Ab wheel'];
+const KEPT_IDS = ['dumbbells', 'barbell', 'kettlebells', 'squat-rack', 'bench', 'pull-up-bar', 'dip-bars', 'box', 'ab-wheel'];
+const LISTED = ['leg-extension', 'leg-curl', 'cable-stack', ...KEPT_IDS];
+const LISTED_LABELS = ['Leg extension', 'Leg curl', 'Cable stack (single)', ...KEPT];
+const SAVE = `Save my gym (${LISTED.length})`;
+const SUMMARY = `${LISTED.length} items: Leg extension, Leg curl, Cable stack (single) and ${LISTED.length - 3} more.`;
+const ALL_FAMILIES = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'];
+/** Catalog machines and cables the list cannot host. */
+const NEVER = ['leg-press', 'standing-calf-raise', 'seated-calf-raise', 'machine-chest-press', 'lat-pulldown', 'cable-fly'];
+const NEVER_NAMES = ['Leg Press', 'Machine Chest Press', 'Lat Pulldown', 'Cable Fly', 'Standing Calf Raise', 'Seated Calf Raise'];
 
 const stored = (page) => page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? 'null')?.state ?? null, KEY);
 
@@ -126,24 +130,23 @@ try {
       await offer.click();
       const sheet = page.getByRole('dialog', { name: 'My gym' });
       await sheet.waitFor();
-      check((await pressed(sheet)).length === 0, `${where} onboarding: the sheet does not open empty`);
-      check(await sheet.getByRole('button', { name: /^Save my gym/ }).isDisabled(), `${where} onboarding: Save is on with nothing ticked`);
+      check(JSON.stringify(await pressed(sheet)) === JSON.stringify(KEPT), `${where} onboarding: the sheet opens with ${JSON.stringify(await pressed(sheet))}`);
       await shot(page, `357-my-gym-empty-onboarding-${where}`);
       await fits(sheet, `${where} onboarding sheet`);
       await sheet.getByLabel('What does your gym have?').fill(TYPED);
       check(JSON.stringify(await pressed(sheet)) === JSON.stringify(LISTED_LABELS), `${where} onboarding: typed list ticked ${JSON.stringify(await pressed(sheet))}`);
       await shot(page, `357-my-gym-typed-onboarding-${where}`);
-      await sheet.getByRole('button', { name: 'Save my gym (4)' }).click();
+      await sheet.getByRole('button', { name: SAVE }).click();
       await sheet.waitFor({ state: 'detached' });
       const summary = (await page.locator('.onboarding-gym').innerText()).replace(/\s+/g, ' ');
-      check(summary.includes('4 items: Leg extension, Leg curl, Cable stack (single) and 1 more.'), `${where} onboarding: summary reads "${summary}"`);
+      check(summary.includes(SUMMARY), `${where} onboarding: summary reads "${summary}"`);
       const primary = await page.locator('.onboarding-step .chip-wrap').nth(1).locator('.chip[aria-pressed="true"]').allInnerTexts();
-      check(JSON.stringify(primary) === JSON.stringify(['Dumbbell', 'Machine', 'Cable']), `${where} onboarding: Equipment chips after save ${JSON.stringify(primary)}`);
+      check(JSON.stringify(primary) === JSON.stringify(ALL_FAMILIES), `${where} onboarding: Equipment chips after save ${JSON.stringify(primary)}`);
       await shot(page, `357-onboarding-saved-${where}`);
       await build(page);
       const profile = (await stored(page)).profile;
       check(JSON.stringify(profile.gymItems) === JSON.stringify(LISTED), `${where} onboarding: stored gymItems ${JSON.stringify(profile.gymItems)}`);
-      check(JSON.stringify(profile.support) === '[]', `${where} onboarding: stored support ${JSON.stringify(profile.support)}`);
+      check(profile.support.length === 6, `${where} onboarding: stored support ${JSON.stringify(profile.support)}`);
       // The plan the planner hands out uses only listed kit: the started session and the whole kit list.
       const listText = await planEquipment(page);
       for (const name of NEVER_NAMES) check(!listText.includes(name), `${where} onboarding: Plan's Equipment list offers ${name}`);
@@ -178,12 +181,12 @@ try {
       check((await sheet.locator('.my-gym__group .chip').count()) === 24, `${where} settings: the full list is not shown`);
       await shot(page, `357-my-gym-no-match-${where}`);
       await box.fill(TYPED);
-      // A tap wins over the text: Leg curl off stays off while the text still names it; Barbell on.
+      // A tap wins over the text: Leg curl off stays off while the text still names it; Barbell off.
       await sheet.getByRole('button', { name: 'Leg curl', exact: true }).click();
       await sheet.getByRole('button', { name: 'Barbell', exact: true }).click();
       await box.fill(`${TYPED}, smith`);
       const ticks = await pressed(sheet);
-      check(JSON.stringify(ticks) === JSON.stringify(['Leg extension', 'Smith machine', 'Cable stack (single)', 'Dumbbells', 'Barbell']), `${where} settings: ticks after taps ${JSON.stringify(ticks)}`);
+      check(JSON.stringify(ticks) === JSON.stringify(['Leg extension', 'Smith machine', 'Cable stack (single)', ...KEPT.filter((label) => label !== 'Barbell')]), `${where} settings: ticks after taps ${JSON.stringify(ticks)}`);
       // Close without saving: nothing stored.
       await sheet.getByRole('button', { name: 'Close' }).click();
       settings = page.getByRole('dialog', { name: 'Training settings' });
@@ -192,18 +195,20 @@ try {
       await settings.getByRole('button', { name: 'Set up my gym' }).click();
       sheet = page.getByRole('dialog', { name: 'My gym' });
       await sheet.waitFor();
-      check((await pressed(sheet)).length === 0, `${where} settings: reopened sheet kept unsaved ticks`);
+      check(JSON.stringify(await pressed(sheet)) === JSON.stringify(KEPT), `${where} settings: reopened sheet kept unsaved ticks`);
       await sheet.getByLabel('What does your gym have?').fill(TYPED);
       await shot(page, `357-my-gym-typed-${where}`);
-      await sheet.getByRole('button', { name: 'Save my gym (4)' }).click();
+      await sheet.getByRole('button', { name: SAVE }).click();
       settings = page.getByRole('dialog', { name: 'Training settings' });
       await settings.waitFor();
       const profile = (await stored(page)).profile;
       check(JSON.stringify(profile.gymItems) === JSON.stringify(LISTED), `${where} settings: stored gymItems ${JSON.stringify(profile.gymItems)}`);
-      check(JSON.stringify(profile.equipment) === JSON.stringify(['Dumbbell', 'Machine', 'Cable']), `${where} settings: stored equipment ${JSON.stringify(profile.equipment)}`);
+      check(JSON.stringify(profile.equipment) === JSON.stringify(ALL_FAMILIES), `${where} settings: stored equipment ${JSON.stringify(profile.equipment)}`);
+      // Review 1: a saved list keeps the gym a gym (never "Home").
+      check(!(await settings.innerText()).includes('Home equipment'), `${where} settings: reads Home after saving a list`);
       const edit = settings.getByRole('button', { name: 'Edit my gym' });
       await edit.scrollIntoViewIfNeeded();
-      check((await settings.locator('#my-gym-note').innerText()) === '4 items: Leg extension, Leg curl, Cable stack (single) and 1 more.', `${where} settings: saved line`);
+      check((await settings.locator('#my-gym-note').innerText()) === SUMMARY, `${where} settings: saved line`);
       await shot(page, `357-settings-equipment-after-saved-${where}`);
       // The saved sheet opens with the list.
       await edit.click();
@@ -230,7 +235,7 @@ try {
       await toGearStep(page);
       await page.getByRole('button', { name: 'List my gym' }).click();
       await page.getByRole('dialog', { name: 'My gym' }).getByLabel('What does your gym have?').fill(TYPED);
-      await page.getByRole('button', { name: 'Save my gym (4)' }).click();
+      await page.getByRole('button', { name: SAVE }).click();
       await build(page);
       const settings = await openSettings(page);
       await settings.getByRole('button', { name: 'Edit my gym' }).click();

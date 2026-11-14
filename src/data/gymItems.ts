@@ -77,14 +77,14 @@ export function gymPatch(ids: Iterable<GymItemId>): Pick<Profile, 'gymItems' | '
 }
 
 /**
- * The ticks the sheet opens with. A saved list shows its machines and cables; free weights and stations
- * follow the saved families, which Settings' chips may have changed since. No list opens empty.
+ * The ticks the sheet opens with. Machines and cables: the saved list's (none without a list). Free
+ * weights and stations follow the saved families, which Settings' chips may have changed since, so a
+ * first save never drops a barbell or rack the lifter already had (#357 review 1).
  */
 export function initialTicks(profile: Pick<Profile, 'gymItems' | 'equipment' | 'support'>): GymItemId[] {
-  if (!profile.gymItems) return [];
   return orderedItems(GYM_ITEMS.filter((item) =>
     item.equipment === 'Machine' || item.equipment === 'Cable'
-      ? profile.gymItems!.includes(item.id)
+      ? (profile.gymItems ?? []).includes(item.id)
       : item.equipment ? profile.equipment.includes(item.equipment) : profile.support.includes(item.support!),
   ).map((item) => item.id));
 }
