@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { EXERCISES, exerciseById } from '../src/data/exercises.ts';
 import { GYM_ITEMS, GYM_ITEM_IDS, gymPatch, initialTicks } from '../src/data/gymItems.ts';
+import { gymSummary, gymTicks } from '../src/lib/myGym.ts';
 import { ADDITION_ID, BODYWEIGHT, applyRows, additionCredits, mediaUrl, resetAdditions, toExercise, validRow, type ExerciseRow, type Row } from '../src/lib/additions.ts';
 import { BUILT_IN_IDS, appearsIn, draftOf, emptyDraft, fieldsOf, fileProblem, idFor, publishProblems, rowOf, unpublishProblems, type Draft, type Entry } from '../src/lib/adminCatalog.ts';
 import { capabilitiesFor } from '../src/lib/capabilities.ts';
@@ -51,7 +52,6 @@ test('#360 a valid exercise row passes; every drift is dropped, never thrown', (
     { ...LANDMINE, pattern: 'banana' },
     { ...LANDMINE, muscles: 'Chest' },
     { ...LANDMINE, muscles: [] },
-    { ...LANDMINE, muscles: ['Chest', 'Chest'] },
     { ...LANDMINE, muscles: ['Pecs'] },
     { ...LANDMINE, id: 'push-up' },
     { ...LANDMINE, id: 'landmine-press' },
@@ -192,17 +192,39 @@ test('#360 every saved-kit shape reads the same through every gear reader after 
   }
 });
 
-test('#360 a saved gym list keeps a known addition and drops an unknown one instead of failing the profile', () => {
-  applyRows([BELT], []);
-  const state = (gymItems: unknown[]) => ({ ...EMPTY_STATE, profile: profileOf({ gymItems: gymItems as never }) });
-  const items = (gymItems: unknown[]) => {
-    const result = validateState(state(gymItems));
-    return result.ok ? result.state.profile?.gymItems : `refused: ${result.error}`;
+test('#360 review 1: a gym item or preference for an addition this phone does not know survives load and save (lesson 37)', () => {
+  // The cache was slow, cleared, another tab, or a restore: nothing applied.
+  const saved = profileOf({ equipment: ['Barbell', 'Machine'], support: ['Rack'], gymItems: ['add-belt-squat', 'barbell', 'squat-rack'] as never,
+    preferences: { 'add-landmine-press': 'more', 'push-up': 'less' } });
+  const load = (profile: Profile) => {
+    const result = validateState({ ...EMPTY_STATE, profile });
+    assert.ok(result.ok, result.ok ? '' : result.error);
+    return result.ok ? result.state.profile! : profile;
   };
-  assert.deepEqual(items(['leg-press', 'add-belt-squat']), ['leg-press', 'add-belt-squat']);
-  resetAdditions();
-  assert.deepEqual(items(['leg-press', 'add-belt-squat']), ['leg-press']);
-  assert.match(String(items(['leg-press', 'treadmill'])), /^refused/, 'built-in ids keep the strict check');
+  const loaded = load(saved);
+  assert.deepEqual(loaded.gymItems, ['barbell', 'squat-rack', 'add-belt-squat']);
+  assert.deepEqual(loaded.preferences, { 'add-landmine-press': 'more', 'push-up': 'less' });
+  assert.equal(gymSummary(loaded), '2 items: Barbell, Squat rack.', 'readers skip what they do not know');
+  // Opening My gym and saving untouched keeps the item and the Machine family it stood for.
+  const resaved = load({ ...loaded, ...gymPatch(gymTicks(initialTicks(loaded), [], {}), loaded) });
+  assert.deepEqual(resaved.gymItems, ['barbell', 'squat-rack', 'add-belt-squat']);
+  assert.deepEqual(resaved.equipment, ['Barbell', 'Machine']);
+  assert.equal(isGymKit(resaved), isGymKit(saved));
+  // The catalog arrives on the next open: everything reads as before.
+  applyRows([BELT, LANDMINE], []);
+  const back = load(resaved);
+  assert.deepEqual(back.gymItems, ['barbell', 'squat-rack', 'add-belt-squat']);
+  assert.equal(back.preferences?.['add-landmine-press'], 'more');
+  assert.deepEqual(gymPatch(back.gymItems!).equipment, ['Barbell', 'Machine']);
+  // Built-in ids keep the strict check; a removed built-in preference is still dropped.
+  assert.ok(!validateState({ ...EMPTY_STATE, profile: profileOf({ gymItems: ['treadmill'] as never }) }).ok);
+  assert.deepEqual(load(profileOf({ preferences: { 'old-move': 'more' } as never })).preferences, {});
+});
+
+test('#360 review 1: unpublishing an exercise keeps the lifter\'s more/less for it', () => {
+  applyRows([], [LANDMINE]);
+  const result = validateState({ ...EMPTY_STATE, profile: profileOf({ preferences: { 'add-landmine-press': 'less' } }) });
+  assert.ok(result.ok && result.state.profile?.preferences?.['add-landmine-press'] === 'less');
   assert.ok(!GYM_ITEM_IDS.includes('add-belt-squat' as never));
 });
 

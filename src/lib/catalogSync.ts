@@ -31,7 +31,7 @@ async function readCopy(): Promise<CatalogCopy | null> {
 
 /** Before the first render: apply the cached copy. Never throws, never waits more than a second. */
 export async function loadCatalog(): Promise<void> {
-  const copy = await Promise.race([readCopy(), new Promise<null>((done) => setTimeout(() => done(null), 1000))]);
+  const copy = await Promise.race([readCopy(), new Promise<undefined>((done) => setTimeout(done, 1000))]);
   if (copy) applyRows(copy.published, copy.retired);
 }
 
@@ -49,10 +49,8 @@ export function plain(fields: Record<string, Value> = {}): Record<string, unknow
  */
 export function nextCopy(previous: CatalogCopy | null, published: Row[]): CatalogCopy {
   const live = new Set(published.map((row) => row.id));
-  const seen = new Set<string>();
-  const retired = [...(previous?.published ?? []), ...(previous?.retired ?? [])]
-    .filter((row) => !live.has(row.id) && !seen.has(row.id) && seen.add(row.id))
-    .slice(0, 300);
+  // A row is in one list or the other, never both; the retired list grows by one per unpublish.
+  const retired = [...(previous?.published ?? []), ...(previous?.retired ?? [])].filter((row) => !live.has(row.id));
   return { published, retired };
 }
 
@@ -73,8 +71,8 @@ export async function refreshCatalog(): Promise<void> {
     const response = await fetch(
       `https://firestore.googleapis.com/v1/projects/${FIREBASE.projectId}/databases/(default)/documents:runQuery?key=${FIREBASE.apiKey}`,
       {
+        // No JSON content type: Firestore parses the body anyway, and a plain POST skips the CORS preflight.
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ structuredQuery: {
           from: [{ collectionId: 'catalog' }],
           where: { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'published' } } },
@@ -84,7 +82,7 @@ export async function refreshCatalog(): Promise<void> {
     const published = response.ok ? publishedRows(await response.json()) : null;
     if (!published) return;
     const copy = nextCopy(await readCopy(), published);
-    await (await caches.open(CATALOG_CACHE)).put(KEY, new Response(JSON.stringify(copy), { headers: { 'Content-Type': 'application/json' } }));
+    await (await caches.open(CATALOG_CACHE)).put(KEY, new Response(JSON.stringify(copy)));
   } catch {
     // Offline or refused: the last good copy stays.
   }

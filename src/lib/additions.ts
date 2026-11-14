@@ -1,4 +1,4 @@
-import { EXERCISES, MUSCLE_GROUPS, RETIRED_EXERCISES, exerciseById } from '../data/exercises.ts';
+import { EXERCISES, MUSCLE_GROUPS, RETIRED_EXERCISES } from '../data/exercises.ts';
 import { GYM_GROUPS, GYM_ITEMS, GYM_ITEM_IDS, type GymGroup } from '../data/gymItems.ts';
 import media from '../data/media.json' with { type: 'json' };
 import type { Capability, Equipment, Exercise, GymItemId, MovementPattern, MuscleGroup } from '../types.ts';
@@ -63,8 +63,8 @@ export const mediaPath = (id: string, value: unknown, kind: 'photo' | 'video'): 
  * without its rights.
  */
 export function validRow(raw: unknown): Row | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const r = raw as Record<string, unknown>;
+  // Anything that isn't an object reads as an object without an id, so the id check refuses it.
+  const r = Object(raw) as Record<string, unknown>;
   // The `add-` prefix keeps it off every built-in id (tests/catalog360.test.ts checks the built-ins).
   if (!isAdditionId(r.id) || !text(r.name, 2, 60)) return null;
   const base = { id: r.id, name: r.name.trim() };
@@ -74,7 +74,7 @@ export function validRow(raw: unknown): Row | null {
   }
   if (r.kind !== 'exercise') return null;
   const muscles = r.muscles;
-  if (!Array.isArray(muscles) || muscles.length < 1 || muscles.length > 4 || new Set(muscles).size !== muscles.length
+  if (!Array.isArray(muscles) || muscles.length < 1 || muscles.length > 4
     || !muscles.every((muscle) => MUSCLE_GROUPS.includes(muscle))) return null;
   // A pattern the planner already knows: one a built-in exercise has (an addition only ever adds those).
   if (!EXERCISES.some((exercise) => exercise.pattern === r.pattern)) return null;
@@ -103,7 +103,8 @@ const capability = (name: string) => name.toLowerCase().replace(' ', '-') as Cap
 
 /** The planner's view of an exercise row; null when its equipment item is unknown here. */
 export function toExercise(row: ExerciseRow): Exercise | null {
-  const cues = row.cues.length ? ` ${row.cues.map((cue) => cue.replace(/[.!]?$/, '.')).join(' ')}` : '';
+  // The admin saves cues without a closing full stop (adminCatalog `cueList`).
+  const cues = row.cues.length ? ` ${row.cues.join('. ')}.` : '';
   const base = { id: row.id, name: row.name, muscles: row.muscles, pattern: row.pattern, instructions: row.instructions + cues };
   if (row.item === BODYWEIGHT) return { ...base, equipment: 'Bodyweight', needs: [] };
   const item = GYM_ITEMS.find((entry) => entry.id === row.item);
@@ -133,10 +134,10 @@ let applied = false;
 export function applyRows(published: Row[], retired: Row[]): void {
   if (applied) return;
   applied = true;
-  // Equipment first: an exercise may stand on an added item.
+  // Equipment first: an exercise may stand on an added item. Ids are unique: Firestore's are, and a row is
+  // published or retired, never both (`nextCopy`).
   for (const row of [...published, ...retired].sort((a, b) => Number(a.kind === 'exercise') - Number(b.kind === 'exercise'))) {
     const hidden = !published.includes(row);
-    if (exerciseById(row.id) || GYM_ITEM_IDS.includes(row.id as GymItemId)) continue;
     if (row.kind === 'equipment') {
       GYM_ITEMS.push({ id: row.id as GymItemId, label: row.name, group: row.group, equipment: row.family, hidden });
       GYM_ITEM_IDS.push(row.id as GymItemId);

@@ -73,7 +73,8 @@ export const idFor = (name: string) => {
   return slug ? `add-${slug}` : '';
 };
 
-const cueList = (cues: string) => cues.split('\n').map((cue) => cue.trim()).filter(Boolean);
+/** One cue per line, without a closing full stop: the app joins them into sentences after the instructions. */
+const cueList = (cues: string) => cues.split('\n').map((cue) => cue.trim().replace(/[.!]+$/, '')).filter(Boolean);
 
 /** The plain row the draft would publish (validated by `validRow`, like the phone does). */
 export function rowOf(draft: Draft): Record<string, unknown> {

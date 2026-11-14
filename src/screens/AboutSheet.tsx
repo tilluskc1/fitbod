@@ -56,8 +56,8 @@ export default function AboutSheet({ onFeedback, onClose }: Props) {
       title: 'Credits',
       body: (
         <ul className="about__credits">
-          {[...ABOUT_CREDITS, ...additionCredits()].map((line) => (
-            <li key={line}>{line}</li>
+          {[...ABOUT_CREDITS, ...additionCredits()].map((line, index) => (
+            <li key={index}>{line}</li>
           ))}
         </ul>
       ),

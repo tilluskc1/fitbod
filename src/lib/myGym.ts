@@ -1,4 +1,4 @@
-import { gymItem, orderedItems } from '../data/gymItems.ts';
+import { gymItem, isGymItemId, orderedItems } from '../data/gymItems.ts';
 import type { GymItemId, Profile } from '../types';
 
 /** (#357) Chips the lifter tapped: true on, false off. A tap wins over the text, whatever it says later. */
@@ -19,7 +19,7 @@ export function gymSummary(profile: Pick<Profile, 'gymItems'>): string {
   const items = profile.gymItems;
   if (!items) return 'Not set: every machine counts. List what your gym has so plans use only that.';
   if (items.length === 0) return 'Nothing listed: no machines or cables are planned.';
-  const names = items.map((id) => gymItem(id).label);
+  const names = items.flatMap((id) => (isGymItemId(id) ? gymItem(id).label : []));
   const shown = names.slice(0, 3).join(', ');
   return names.length > 3 ? `${names.length} items: ${shown} and ${names.length - 3} more.` : `${names.length} ${names.length === 1 ? 'item' : 'items'}: ${shown}.`;
 }

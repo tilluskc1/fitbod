@@ -134,9 +134,8 @@ function validateGymItems(value: unknown, path: string): GymItemId[] {
   const items = array(value, path, GYM_ITEM_IDS.length * 2);
   const out: GymItemId[] = [];
   for (let i = 0; i < items.length; i += 1) {
-    // (#360) An equipment addition this phone no longer knows (cache cleared) is dropped, not a broken profile.
-    if (isAdditionId(items[i]) && !GYM_ITEM_IDS.includes(items[i] as GymItemId)) continue;
-    const item = oneOf(items[i], `${path}[${i}]`, GYM_ITEM_IDS);
+    // (#360) An equipment addition this phone doesn't know yet is kept as stored (lesson 37); readers skip it.
+    const item = isAdditionId(items[i]) ? (items[i] as GymItemId) : oneOf(items[i], `${path}[${i}]`, GYM_ITEM_IDS);
     if (!out.includes(item)) out.push(item);
   }
   return orderedItems(out);
@@ -181,7 +180,8 @@ function validateProfile(value: unknown, path: string): Profile {
     preferences = {};
     for (const key of keys) {
       // Dropped, not rejected: a variant removed from the catalog must not lock the user out.
-      if (!EXERCISES.some((exercise) => exercise.id === key)) continue;
+      // (#360) An addition's is kept even when this phone doesn't know it (yet, or since it was unpublished).
+      if (!isAdditionId(key) && !EXERCISES.some((exercise) => exercise.id === key)) continue;
       preferences[key] = oneOf(prefsRaw[key], `${path}.preferences.${key}`, PREFERENCES);
     }
   }

@@ -46,10 +46,9 @@ function startApp() {
   // shell and any assets that have actually been loaded, so reopening an active
   // workout without a network keeps the UI and its localStorage data available.
   if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-    // (#360) startApp now waits for the catalog cache, so the page may have loaded already.
-    const register = () => void navigator.serviceWorker.register('/sw.js').catch(() => undefined)
-    if (document.readyState === 'complete') register()
-    else window.addEventListener('load', register)
+    // (#360) startApp runs after an await (the catalog cache read), so `load` may already have fired:
+    // register now, so one online visit still precaches the app (lesson 13).
+    void navigator.serviceWorker.register('/sw.js').catch(() => undefined)
   }
 
   // All workout data lives in localStorage. Once the app runs from the home screen, ask the browser

@@ -252,7 +252,7 @@ export default function Onboarding({ onComplete }: Props) {
             <MyGymSheet
               profile={{ gymItems, equipment, support }}
               onSave={(items) => {
-                const patch = gymPatch(items);
+                const patch = gymPatch(items, { equipment });
                 setGymItems(patch.gymItems);
                 setEquipment(patch.equipment);
                 setSupport(patch.support);

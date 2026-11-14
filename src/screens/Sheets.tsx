@@ -1200,7 +1200,7 @@ export function SettingsSheet({
       <MyGymSheet
         profile={profile}
         onSave={(items) => {
-          onChange(gymPatch(items));
+          onChange(gymPatch(items, profile));
           setGymOpen(false);
         }}
         onClose={() => setGymOpen(false)}
