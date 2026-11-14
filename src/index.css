@@ -4793,7 +4793,6 @@ button.aw-exercise__name-btn {
 .bm-r .bm-line { fill: none; stroke-width: 0.25; stroke-linecap: round; }
 .bm-r--earlier path { fill: var(--bm-earlier); }
 .bm-r--recent path { fill: var(--bm-recent); }
-.bm-r .bm-line { fill: none; }
 .bm-r--on path { fill: var(--primary); stroke: var(--on-primary); stroke-width: 0.3; }
 .bm-r--on .bm-line { fill: none; stroke: var(--on-primary); }
 .bm-detail path { fill: none; stroke: var(--outline); stroke-width: 0.25; stroke-linecap: round; pointer-events: none; }

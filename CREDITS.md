@@ -48,7 +48,7 @@ Not in `public/`, so `tests/credits254.test.ts` does not list them; recorded her
 
 | Path | What | Source | Licence |
 | --- | --- | --- | --- |
-| `src/lib/bodyMap.ts` (drawn by `src/components/BodyMap.tsx`) | Body map: front and back figure of an athletic adult male, its anatomical muscles grouped into the app's muscle groups | Redrawn for this app as hand-written SVG paths in #366 (2026-11-14), replacing #302's line drawing. Not traced from a photo, a stock vector or any other app's or library's figure. No open-licensed source was used: the MIT candidates found (react-native-body-highlighter, and MuscleMap, which repeats its paths) carry no record of where their art came from, and the Apache-2.0 one is outside the allowed licences (#366). | Same as the app's code |
+| `src/lib/bodyMap.ts` (drawn by `src/components/BodyMap.tsx`) | Body map: front and back figure of an athletic adult male, its anatomical muscles grouped into the app's muscle groups | Redrawn for this app as hand-written SVG paths in #366 (2026-11-14), replacing #302's line drawing. Not traced from a photo, a stock vector or any other app's or library's figure. No open-licensed source was used: for the MIT candidates found (react-native-body-highlighter, and MuscleMap, which repeats its paths) we found no record of where their art came from, and the Apache-2.0 one (body-muscles) is outside the licences #366 allows. | Same as the app's code |
 
 ## App files
 
