@@ -18,6 +18,8 @@ import { GENERAL_WARM_UP_TEXT, generalWarmUpMinutes, liveRampBurst, rampExercise
 import type { WarmUpChecks } from '../lib/warmUp';
 import type { Experience, PerformedSet, Profile, Unit, WorkoutExercise, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
+import HowTo from '../components/ui/HowTo';
+import Sheet from '../components/ui/Sheet';
 import Icon from '../components/ui/Icon';
 import { NoticeCard } from '../components/ui/Notices';
 import { MoreIcon } from '../components/ui/Icons';
@@ -188,6 +190,15 @@ export default function TrainScreen({
   onReturn,
 }: Props) {
   useWakeLock();
+  // (#379) The photo: a tap opens the how-to player, a 0.5 s hold the chips' menu (and not the tap).
+  const [howTo, setHowTo] = useState<WorkoutExercise | null>(null);
+  const [hold, setHold] = useState(false);
+  const holdTimer = useRef(0);
+  const holding = useRef(false);
+  const release = () => clearTimeout(holdTimer.current);
+  useEffect(() => () => clearTimeout(holdTimer.current), []);
+  // The hold's release lands on the menu, not the photo: closing the menu ends the hold (review 1).
+  const closeHold = () => { holding.current = false; setHold(false); };
   /**
    * Set cells (`calibrationKey:setIndex`) whose suggested start the lifter cleared: they stay empty for
    * this visit. Nothing is stored (owner, #315 item 12): after a reload the muted suggestion shows again,
@@ -605,9 +616,30 @@ export default function TrainScreen({
     );
   });
 
+  // (#151) One-tap shortcuts into the same actions the menu holds; the photo's hold menu lists the same.
+  const acts: [string, string, () => void][] = [
+    ['How-to', 'play_arrow', () => setHowTo(exercise)],
+    ['History', 'monitoring', () => onOpenActions(index, 'history')],
+    ...(onReplace ? [['Replace', 'tune', () => onReplace(index)] as [string, string, () => void]] : []),
+    // (#369) Hidden on the only exercise with work left: there is nothing to move it behind.
+    ...(onLater && canMoveLater(session, index) ? [['Later', 'schedule', () => onLater(index)] as [string, string, () => void]] : []),
+  ];
+
   return (
     <div className="screen flow-screen">
       {header}
+      {howTo && <HowTo exerciseId={howTo.exerciseId} name={howTo.name} onClose={() => setHowTo(null)} />}
+      {hold && (
+        <Sheet title={exercise.name} onClose={closeHold} headingId="hold-title">
+          <div className="sheet-menu">
+            {acts.map(([label, , run]) => (
+              <button key={label} type="button" className="context-row sheet-menu__row" onClick={() => { closeHold(); run(); }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
 
       <div className="flow-body lg-body">
         {showsGeneralWarmUp(session) && (
@@ -642,8 +674,15 @@ export default function TrainScreen({
         )}
 
         <section className="lg-ex" aria-label={exercise.name}>
-          <button type="button" className="lg-thumb" onClick={() => onOpenActions(index, 'instructions')}
-            aria-label={`${exercise.name} demo and instructions`} aria-haspopup="dialog">
+          <button type="button" className="lg-thumb" aria-label={`${exercise.name} how-to, hold for actions`} aria-haspopup="dialog"
+            onPointerDown={() => {
+              holding.current = false;
+              release();
+              holdTimer.current = window.setTimeout(() => { holding.current = true; setHold(true); }, 500);
+            }}
+            onPointerUp={release} onPointerLeave={release} onPointerCancel={release}
+            onContextMenu={(event) => event.preventDefault()}
+            onClick={() => { if (holding.current) holding.current = false; else setHowTo(exercise); }}>
             <Demo exerciseId={exercise.exerciseId} name={exercise.name} eager />
             <span className="lg-thumb__play" aria-hidden="true"><Icon name="play_arrow" size={12} /></span>
           </button>
@@ -665,25 +704,12 @@ export default function TrainScreen({
           </button>
         </section>
 
-        {/* (#151) One-tap shortcuts into the same actions the menu holds. */}
         <div className="lg-acts" role="group" aria-label={`Actions for ${exercise.name}`}>
-          <button type="button" className="lg-act" onClick={() => onOpenActions(index, 'instructions')} aria-haspopup="dialog">
-            <Icon name="play_arrow" size={16} />How-to
-          </button>
-          <button type="button" className="lg-act" onClick={() => onOpenActions(index, 'history')} aria-haspopup="dialog">
-            <Icon name="monitoring" size={16} />History
-          </button>
-          {onReplace && (
-            <button type="button" className="lg-act" onClick={() => onReplace(index)} aria-haspopup="dialog">
-              <Icon name="tune" size={16} />Replace
+          {acts.map(([label, icon, run]) => (
+            <button key={label} type="button" className="lg-act" onClick={run} aria-haspopup={label === 'Later' ? undefined : 'dialog'}>
+              <Icon name={icon} size={16} />{label}
             </button>
-          )}
-          {/* (#369) Hidden on the only exercise with work left: there is nothing to move it behind. */}
-          {onLater && canMoveLater(session, index) && (
-            <button type="button" className="lg-act" onClick={() => onLater(index)}>
-              <Icon name="schedule" size={16} />Later
-            </button>
-          )}
+          ))}
         </div>
 
         {coach && <p className="lg-coach">{coach}</p>}

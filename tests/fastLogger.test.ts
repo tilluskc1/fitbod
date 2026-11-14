@@ -59,7 +59,7 @@ test('the logger is one row per set, pre-filled from the prescription, one ✓ e
     const text = plain(html);
     assert.match(text, /Exercise 1 of 2 · Target 3 × 8/);
     assert.match(html, /<h2 class="aw-exercise__name"><button/, 'the exercise name stays a heading');
-    assert.match(html, /aria-label="Dumbbell Floor Press demo and instructions"/);
+    assert.match(html, /aria-label="Dumbbell Floor Press how-to, hold for actions"/);
     assert.match(text, /Set Previous kg each Reps/);
     for (const n of [1, 2, 3]) {
       assert.equal(cell(html, `Set ${n} weight, kilograms each`), '15', `set ${n} weight`);

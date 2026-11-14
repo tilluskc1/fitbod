@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import type { MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { INSTALL_NOTE } from '../lib/install';
 import type { ReactNode } from 'react';
 import type { Profile, Unit, WorkoutRecord } from '../types';
@@ -14,6 +16,7 @@ import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
 import { isDescribedSession } from '../lib/sequence';
 import Demo from '../components/ui/Demo';
+import HowTo from '../components/ui/HowTo';
 import FeasibilityNote, { DescribedNote } from '../components/ui/FeasibilityNote';
 import { missingFamilies } from '../lib/feasibility';
 import type { ProfileChange } from '../lib/preferences';
@@ -191,6 +194,29 @@ function WeekCard({ progress, total, week, targetDays }: { progress: number; tot
         <span>{range === 'today' ? 'sets today' : 'sessions'}</span>
       </p>
     </section>
+  );
+}
+
+const stop = (event: MouseEvent) => event.stopPropagation();
+
+/**
+ * (#379) A workout row's photo: a tap opens the how-to player instead of the row's sheet. The player is
+ * portalled out of the row's button, and its clicks stop at the portal so they never reach the row.
+ */
+function RowPhoto({ exerciseId, name }: { exerciseId: string; name: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <span className="tap-contents" onClick={(event) => { stop(event); setOpen(true); }}>
+        <Demo exerciseId={exerciseId} name={name} className="workout-row__photo" />
+      </span>
+      {open && createPortal(
+        <span className="tap-contents" onClick={stop}>
+          <HowTo exerciseId={exerciseId} name={name} onClose={() => setOpen(false)} />
+        </span>,
+        document.querySelector('.native-app') ?? document.body,
+      )}
+    </>
   );
 }
 
@@ -475,11 +501,7 @@ export default function TodayScreen({
                 onClick={() => onOpenExercise(exercise.exerciseId, index)}
               >
                 <span className="workout-row__main">
-                  <Demo
-                    exerciseId={exercise.exerciseId}
-                    name={exercise.name}
-                    className="workout-row__photo"
-                  />
+                  <RowPhoto exerciseId={exercise.exerciseId} name={exercise.name} />
                   <span className="workout-row__text">
                     <span className="workout-row__name">{exercise.name}</span>
                     <span className="workout-row__meta">

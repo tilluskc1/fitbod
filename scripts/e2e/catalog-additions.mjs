@@ -182,6 +182,14 @@ try {
         await settle(page);
         await page.screenshot({ path: join(shots, `360-app-logger-${where}.png`) });
       }
+      // (#379) Its photo opens the how-to player: the Storage photo, no clip yet, its own cues.
+      await page.locator('.lg-thumb').click();
+      const player = page.getByRole('dialog');
+      check(await player.locator('.howto-media img[src*="firebasestorage.googleapis.com"]').count() >= 1, `${where}: the player shows Landmine Press's Storage photo`);
+      check(await player.getByText('No video yet').count() === 1, `${where}: the player does not say "No video yet" for Landmine Press`);
+      const cueText = (await player.locator('.howto-cues').innerText()).trim();
+      check(cueText.includes('Wedge one end') && cueText.includes('Brace your trunk'), `${where}: the player's cues read "${cueText}"`);
+      await page.keyboard.press('Escape');
       await page.locator('button.lg-check:not([disabled])').first().click();
       await page.getByRole('button', { name: 'Finish', exact: true }).click();
       await page.getByRole('button', { name: /Save completed work/ }).click();

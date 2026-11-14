@@ -5287,3 +5287,79 @@ button.aw-exercise__name-btn {
 .lg-cell--empty.lg-input {
   font-size: 16px;
 }
+
+/* (#379) How-to player: full screen, the clip fills the width, a big close, name and cues below. */
+.sheet--player {
+  max-height: 100%;
+  height: 100%;
+  border-radius: 0;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+}
+
+.sheet--player .sheet-handle,
+.sheet--player .sheet-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.sheet--player .sheet-head {
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.sheet--player .sheet-close {
+  width: 56px;
+  height: 56px;
+}
+
+.howto-media {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--surface-container-high);
+}
+
+.howto-media .demo {
+  position: absolute;
+  inset: 0;
+}
+
+.howto-media .demo-video {
+  object-fit: contain;
+}
+
+.howto-note {
+  margin-top: 12px;
+  color: var(--secondary);
+  text-align: center;
+}
+
+.howto-name {
+  margin-top: 18px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.howto-cues {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.tap-contents {
+  display: contents;
+}
+
+.lg-thumb {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
