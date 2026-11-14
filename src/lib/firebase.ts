@@ -6,4 +6,6 @@
 export const FIREBASE = {
   projectId: 'home-strength',
   apiKey: 'AIzaSyA2efM2HsT1n1GpIiTrk4eFCkwREdFhUvo',
+  /** (#359) The project's Google sign-in web client (public, as Firebase's own createAuthUri returns it). */
+  googleClientId: '9260936720-e1n79bki64nf6u313nki5egebtisp6on.apps.googleusercontent.com',
 } as const;

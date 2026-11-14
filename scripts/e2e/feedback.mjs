@@ -71,7 +71,7 @@ async function finishToRecap(page) {
 /** Lets the sheet's rise animation settle before a screenshot. */
 const settle = (page) => page.waitForTimeout(450);
 
-const ABOUT_RECEIVE = 'Only what you choose to send. A feedback note sends your message, your name if you add one, the screen you were on, your phone type, the app version, how many workouts you have logged, and a random ID that is the same for every note from this phone. Your workout details are never sent.';
+const ABOUT_RECEIVE = 'A feedback note, only when you send one. It sends your message, your name if you add one, the screen you were on, your phone type, the app version, how many workouts you have logged, and a random ID that is the same for every note from this phone.';
 const SAFETY = 'Strength training carries risk. Start light. Stop if something hurts, and check with a doctor first if you have an injury or a health condition.';
 
 /** Waits for the open sheet's rise to finish (lesson 29), then one more frame. */

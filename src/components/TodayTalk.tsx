@@ -17,6 +17,7 @@ import Icon from './ui/Icon';
 import BodyMap from './BodyMap';
 import { talkMapMuscles } from '../lib/bodyMap';
 import type { Shade } from '../lib/bodyMap';
+import { track } from '../lib/events';
 
 interface Props {
   profile: Profile;
@@ -129,7 +130,7 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
     return (
       <section className="t7-card tt" aria-label="Plan today with me">
         <span className="tt-badge">{todayName ? `Today · ${todayName}` : `Planned today · ${plannedName}`}</span>
-        <button type="button" className="tt-open" onClick={() => go('time')}>
+        <button type="button" className="tt-open" onClick={() => { track('plan-today'); go('time'); }}>
           <span>
             <b>Plan today with me</b>
             <small>How long, what's sore, what to train. I'll build it from your answers.</small>

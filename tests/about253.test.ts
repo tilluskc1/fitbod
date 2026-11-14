@@ -33,7 +33,7 @@ test('#253 the About copy is the product default, word for word', () => {
   );
   assert.equal(
     ABOUT_RECEIVE,
-    'Only what you choose to send. A feedback note sends your message, your name if you add one, the screen you were on, your phone type, the app version, how many workouts you have logged, and a random ID that is the same for every note from this phone. Your workout details are never sent.',
+    'A feedback note, only when you send one. It sends your message, your name if you add one, the screen you were on, your phone type, the app version, how many workouts you have logged, and a random ID that is the same for every note from this phone.',
   );
   assert.equal(ABOUT_HOSTING, 'Like any website, the host keeps basic server logs.');
   assert.deepEqual(ABOUT_CREDITS, [

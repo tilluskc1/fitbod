@@ -29,3 +29,8 @@
   color: var(--on-surface);
   overflow-wrap: anywhere;
 }
+
+/* (#359) "What we receive" holds two paragraphs: a feedback note, then usage counts. */
+.about__text + .about__text {
+  margin-top: 10px;
+}

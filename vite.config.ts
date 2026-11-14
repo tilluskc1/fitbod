@@ -43,8 +43,15 @@ export function swBuildManifest(): Plugin {
       publicDir = config.publicDir
     },
     writeBundle(_options, bundle) {
+      // (#359) The /admin chunk and its CSS are the owner's alone: never precached on a lifter's phone.
+      const adminOnly = new Set<string>()
+      for (const [file, out] of Object.entries(bundle)) {
+        if (out.type !== 'chunk' || !out.isDynamicEntry || !out.facadeModuleId?.replace(/\\/g, '/').includes('/src/admin/')) continue
+        adminOnly.add(file)
+        for (const css of out.viteMetadata?.importedCss ?? []) adminOnly.add(css)
+      }
       const assets = Object.keys(bundle)
-        .filter((file) => /\.(js|css)$/.test(file))
+        .filter((file) => /\.(js|css)$/.test(file) && !adminOnly.has(file))
         .sort()
         .map((file) => `/${file}`)
       const hash = createHash('sha256').update(assets.join('\n'))
@@ -77,4 +84,7 @@ export default defineConfig({
   plugins: [react(), swBuildManifest()],
   cacheDir: testCacheDir,
   define: { __APP_VERSION__: JSON.stringify(appVersion()) },
+  // (#359) No modulepreload links are emitted and the one dynamic import (/admin) needs no preload
+  // helper, so the polyfill and helper stay out of the training app's bundle.
+  build: { modulePreload: false },
 })
