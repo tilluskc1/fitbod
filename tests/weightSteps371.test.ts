@@ -44,13 +44,33 @@ test('a machine stack steps 5 kg, or 10 lb', () => {
   close(steps.down, lb(90));
 });
 
-test('an off-grid load moves to the next grid point, not past it', () => {
+test('an off-grid load moves to the grid point at least half a step away (the nextLoad rule)', () => {
   const steps = weightSteps({ kg: 61, equipment: 'Barbell', available: [], unit: 'kg' });
   close(steps.up, 62.5);
-  close(steps.down, 60);
+  close(steps.down, 57.5);
   const pounds = weightSteps({ kg: lb(97), equipment: 'Barbell', available: [], unit: 'lb' });
   close(pounds.up, lb(100));
-  close(pounds.down, lb(95));
+  close(pounds.down, lb(90));
+});
+
+test('review 2: planned 22.5 kg in pounds (49.6 lb) steps to 55 and 45, never a fraction', () => {
+  const steps = weightSteps({ kg: 22.5, equipment: 'Barbell', available: [], unit: 'lb' });
+  close(steps.up, lb(55));
+  close(steps.down, lb(45));
+  assert.equal(steps.upBy, 5.4);
+  assert.equal(steps.downBy, 4.6);
+  // The same rule in kg: 62.4 is a hair under 62.5, so + goes to 65 and − to 60.
+  const kg = weightSteps({ kg: 62.4, equipment: 'Barbell', available: [], unit: 'kg' });
+  close(kg.up, 65);
+  close(kg.down, 60);
+});
+
+test('review 2: an on-grid load still steps exactly one step each way', () => {
+  for (const [kg, unit, step] of [[lb(135), 'lb', 5], [60, 'kg', 2.5], [lb(100), 'lb', 5]] as const) {
+    const steps = weightSteps({ kg, equipment: 'Barbell', available: [], unit });
+    assert.equal(steps.upBy, step, `${kg} ${unit} up`);
+    assert.equal(steps.downBy, step, `${kg} ${unit} down`);
+  }
 });
 
 test('three steps up from 45 lb read 60 lb, each one a real step', () => {
@@ -128,7 +148,7 @@ test('review 1: each button reads its own real difference on an uneven rack', ()
   // On the grid both read the step; off it, the real distance to the grid point.
   const grid = weightSteps({ kg: 61, equipment: 'Barbell', available: [], unit: 'kg' });
   assert.equal(grid.upBy, 1.5);
-  assert.equal(grid.downBy, 1);
+  assert.equal(grid.downBy, 3.5);
   const pounds = weightSteps({ kg: lb(45), equipment: 'Barbell', available: [], unit: 'lb' });
   assert.equal(pounds.upBy, 5);
   assert.equal(pounds.downBy, 5, 'disabled at the bar: the nominal 5 lb');

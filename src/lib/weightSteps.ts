@@ -23,9 +23,9 @@ export interface WeightSteps {
  * (#371) The logger's − and + steps from `kg`, the load the next set shows. With owned loads (`available`:
  * the rack today's gear offers) a step goes to the next or previous owned load (`nextLoad`, at least half a
  * rack step away; a load under the lightest steps up to it). Without, it moves to the next point of the step
- * grid in the lifter's unit: `incrementFor`'s kg step, or the warm-up's pound plate steps. Never 0 or below,
- * a barbell never below the empty bar (+ from under it goes to the bar), never past the loader's limit or
- * the heaviest owned load.
+ * grid in the lifter's unit (a grid point at least half a step away): `incrementFor`'s kg step, or the
+ * warm-up's pound plate steps. Never 0 or below, a barbell never below the empty bar (+ from under it goes to
+ * the bar), never past the loader's limit or the heaviest owned load.
  */
 export function weightSteps(args: { kg: number; equipment: Equipment; available: number[]; unit: Unit }): WeightSteps {
   const { equipment, unit } = args;
@@ -47,7 +47,8 @@ export function weightSteps(args: { kg: number; equipment: Equipment; available:
   const step = unit === 'lb' ? STEPS.lb[equipment] ?? 5 : increment;
   const grid = (count: number) => toKg(Math.round(count * step * 1000) / 1000, unit);
   const lightest = equipment === 'Barbell' ? BAR[unit] : step;
-  const up = shown < lightest - EPS ? toKg(lightest, unit) : grid(Math.floor((shown + EPS) / step) + 1);
-  const downCount = Math.ceil((shown - EPS) / step) - 1;
+  // As `nextLoad` on a rack: the grid point at least half a step away, so 49.6 lb steps to 55 and 45, not 50 (review 2).
+  const up = shown < lightest - EPS ? toKg(lightest, unit) : grid(Math.ceil((shown + step / 2 - EPS) / step));
+  const downCount = Math.floor((shown - step / 2 + EPS) / step);
   return result(step, downCount * step >= lightest - EPS ? grid(downCount) : null, up <= MAX_WEIGHT ? up : null);
 }
