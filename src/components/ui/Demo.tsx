@@ -77,6 +77,7 @@ export default function Demo({ exerciseId, name, className = '', eager = false, 
           />
           {second && (
             <img
+              key={second}
               src={second}
               alt=""
               className="demo-frame demo-frame-alt"

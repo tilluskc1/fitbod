@@ -196,6 +196,9 @@ export default function TrainScreen({
   const holdTimer = useRef(0);
   const holding = useRef(false);
   const release = () => clearTimeout(holdTimer.current);
+  useEffect(() => () => clearTimeout(holdTimer.current), []);
+  // The hold's release lands on the menu, not the photo: closing the menu ends the hold (review 1).
+  const closeHold = () => { holding.current = false; setHold(false); };
   /**
    * Set cells (`calibrationKey:setIndex`) whose suggested start the lifter cleared: they stay empty for
    * this visit. Nothing is stored (owner, #315 item 12): after a reload the muted suggestion shows again,
@@ -627,10 +630,10 @@ export default function TrainScreen({
       {header}
       {howTo && <HowTo exerciseId={howTo.exerciseId} name={howTo.name} onClose={() => setHowTo(null)} />}
       {hold && (
-        <Sheet title={exercise.name} onClose={() => setHold(false)} headingId="hold-title">
+        <Sheet title={exercise.name} onClose={closeHold} headingId="hold-title">
           <div className="sheet-menu">
             {acts.map(([label, , run]) => (
-              <button key={label} type="button" className="context-row sheet-menu__row" onClick={() => { setHold(false); run(); }}>
+              <button key={label} type="button" className="context-row sheet-menu__row" onClick={() => { closeHold(); run(); }}>
                 {label}
               </button>
             ))}

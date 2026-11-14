@@ -196,6 +196,15 @@ try {
     check((await dialog(page).count()) === 1, `${where}: hold opened ${await dialog(page).count()} dialogs`);
     check((await dialog(page).locator('.howto-media').count()) === 0, `${where}: hold also fired the tap (player open)`);
     const items = await dialog(page).locator('.sheet-menu__row').allInnerTexts();
+    // Review 1: a hold closed with Escape must not swallow the next keyboard press on the photo.
+    if (items.length) {
+      await page.keyboard.press('Escape');
+      await thumb(page).focus();
+      await page.keyboard.press('Enter');
+      check((await dialog(page).locator('.howto-media').count()) === 1, `${where}: Enter after a dismissed hold did not open the player`);
+      await page.keyboard.press('Escape');
+      await hold(page);
+    }
     check(JSON.stringify(items) === JSON.stringify(['How-to', 'History', 'Replace', 'Later']), `${where}: hold menu reads ${JSON.stringify(items)}`);
     await shot(page, `${width}-hold-menu`);
     await menuItem(page, 'How-to').click();

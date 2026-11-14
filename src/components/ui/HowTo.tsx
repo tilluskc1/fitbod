@@ -33,7 +33,7 @@ export default function HowTo({ exerciseId, name, onClose }: { exerciseId: strin
         {video && (
           <video ref={ref} className="demo-video" src={video} poster={exerciseFrames(exerciseId)[0]}
             muted loop playsInline preload="auto" hidden={playing === false}
-            onPlaying={() => setPlaying(true)} onError={stop} />
+            onPlaying={() => setPlaying(true)} onError={() => setPlaying(false)} />
         )}
         {playing === false && <Demo exerciseId={exerciseId} name={name} still eager />}
       </span>
