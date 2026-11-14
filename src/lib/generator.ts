@@ -8,7 +8,7 @@ import type {
   WorkoutExercise,
   WorkoutRecord,
 } from '../types.ts';
-import { capabilitiesFor, provides } from './capabilities.ts';
+import { canPerform, capabilitiesFor } from './capabilities.ts';
 import {
   evaluateFeasibility,
   isRelevantToDay,
@@ -156,7 +156,7 @@ function selectExercises(profile: Profile, day: DayRequest, dayIndex: number, ta
 
   const eligible = EXERCISES.filter(
     (exercise) =>
-      provides(caps, exercise.needs) &&
+      canPerform(profile, exercise, caps) &&
       !exclusions.has(exercise.id) &&
       // A 'more' is the user asking for it, so it may go off the day's pattern (#120).
       (isRelevantToDay(exercise, day) ||

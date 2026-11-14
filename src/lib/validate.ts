@@ -1,10 +1,12 @@
 import { EXERCISES } from '../data/exercises.ts';
+import { GYM_ITEM_IDS, orderedItems } from '../data/gymItems.ts';
 import type {
   AppState,
   Equipment,
   ExercisePreference,
   Experience,
   Goal,
+  GymItemId,
   MuscleGroup,
   PerformedSet,
   PlanDay,
@@ -126,6 +128,17 @@ function uniqueStrings(value: unknown, path: string, max: number): string[] {
 
 const SETUPS = ['home', 'hotel', 'bodyweight', 'bands'] as const;
 
+/** (#357) A "My gym" list: known item ids only, each once, in list order. */
+function validateGymItems(value: unknown, path: string): GymItemId[] {
+  const items = array(value, path, GYM_ITEM_IDS.length * 2);
+  const out: GymItemId[] = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const item = oneOf(items[i], `${path}[${i}]`, GYM_ITEM_IDS);
+    if (!out.includes(item)) out.push(item);
+  }
+  return orderedItems(out);
+}
+
 function validateProfile(value: unknown, path: string): Profile {
   const raw = record(value, path);
   const daysPerWeek = integer(raw.daysPerWeek, `${path}.daysPerWeek`, 2, 6);
@@ -187,6 +200,8 @@ function validateProfile(value: unknown, path: string): Profile {
     preferences,
     // (#88) Absent stays absent: an older backup restores as On, the default.
     ...(raw.pairExercises === undefined ? {} : { pairExercises: boolean(raw.pairExercises, `${path}.pairExercises`) }),
+    // (#357) Absent stays absent: no list means every machine counts, as before.
+    ...(raw.gymItems === undefined ? {} : { gymItems: validateGymItems(raw.gymItems, `${path}.gymItems`) }),
   };
 }
 

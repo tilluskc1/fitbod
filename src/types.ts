@@ -74,6 +74,36 @@ export type MovementPattern =
   | 'core_flexion'
   | 'core_stability';
 
+/**
+ * (#357) One station or piece of kit on the "My gym" list (`src/data/gymItems.ts`). Machine and cable
+ * exercises name the items that can host them; free weights and stations map to a family above.
+ */
+export type GymItemId =
+  | 'leg-press'
+  | 'leg-extension'
+  | 'leg-curl'
+  | 'hip-thrust-machine'
+  | 'calf-raise-machine'
+  | 'hack-squat'
+  | 'smith-machine'
+  | 'chest-press'
+  | 'pec-deck'
+  | 'shoulder-press-machine'
+  | 'lat-pulldown'
+  | 'seated-row'
+  | 'assisted-pull-up'
+  | 'cable-stack'
+  | 'cable-crossover'
+  | 'dumbbells'
+  | 'barbell'
+  | 'kettlebells'
+  | 'squat-rack'
+  | 'bench'
+  | 'pull-up-bar'
+  | 'dip-bars'
+  | 'box'
+  | 'ab-wheel';
+
 export interface CoverageRequirement {
   id: string;
   label: string;
@@ -91,6 +121,11 @@ export interface Exercise {
   secondaryPatterns?: MovementPattern[];
   /** Every capability required to perform the exercise. */
   needs: Capability[];
+  /**
+   * (#357) Machine and cable work: the gym items that can host it, any one of them. Read only when the
+   * profile saved a "My gym" list; without one, `needs` alone decides (Machine means every machine).
+   */
+  stations?: GymItemId[];
   instructions: string;
 }
 
@@ -129,6 +164,12 @@ export interface Profile {
    * running session keeps the pairs it stored. Optional so older data still loads.
    */
   pairExercises?: boolean;
+  /**
+   * (#357) "My gym": the stations and kit the lifter's gym has. Absent means today's behaviour (Machine
+   * means every machine). When present, a machine or cable exercise is planned only if one of its
+   * `stations` is listed. Optional so older data still loads.
+   */
+  gymItems?: GymItemId[];
 }
 
 export type ExercisePreference = 'more' | 'less';
@@ -313,6 +354,8 @@ export interface Alternative {
   equipment?: Equipment;
   support?: SupportEquipment;
   exerciseId?: string;
+  /** (#357) A "My gym" item that would unlock the gap; added in Settings > Equipment. */
+  gymItem?: GymItemId;
 }
 
 export interface Feasibility {

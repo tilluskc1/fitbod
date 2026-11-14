@@ -1,4 +1,4 @@
-import type { Capability, Equipment, Profile, SupportEquipment } from '../types';
+import type { Capability, Equipment, Exercise, GymItemId, Profile, SupportEquipment } from '../types';
 
 const EQUIPMENT_CAPABILITY: Record<Equipment, Capability | null> = {
   Barbell: 'barbell',
@@ -80,4 +80,29 @@ export function provides(caps: Set<Capability>, needs: Capability[]): boolean {
 
 export function missingCapabilities(caps: Set<Capability>, needs: Capability[]): Capability[] {
   return needs.filter((need) => !caps.has(need));
+}
+
+/**
+ * (#357) Whether the lifter's gym hosts this exercise. Without a "My gym" list every machine counts, as
+ * before; with one, a machine or cable exercise needs one of its stations on the list.
+ */
+export function stationListed(profile: Pick<Profile, 'gymItems'>, exercise: Pick<Exercise, 'stations'>): boolean {
+  return !profile.gymItems || !exercise.stations || exercise.stations.some((item) => profile.gymItems!.includes(item));
+}
+
+/** The gym items that would host this exercise but are not on the list (empty when it is hosted). */
+export function missingStations(profile: Pick<Profile, 'gymItems'>, exercise: Pick<Exercise, 'stations'>): GymItemId[] {
+  return stationListed(profile, exercise) ? [] : [...exercise.stations!];
+}
+
+/**
+ * The one check every planner, swap list and status reads (#357, lesson 9): the profile's families and
+ * support provide every need, and its gym list (when it has one) hosts the exercise.
+ */
+export function canPerform(
+  profile: Pick<Profile, 'gymItems'>,
+  exercise: Pick<Exercise, 'needs' | 'stations'>,
+  caps: Set<Capability>,
+): boolean {
+  return provides(caps, exercise.needs) && stationListed(profile, exercise);
 }
