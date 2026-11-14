@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#380 Option B: focused set</title>
+<link rel="stylesheet" href="mocks.css">
+<link rel="stylesheet" href="option-b.css">
+</head>
+<body>
+<!-- (a) First set of exercise 1, new lifter, no history -->
+<div class="screen state state--a">
+  <header class="top">
+    <div class="top__row">
+      <button class="back" aria-label="Minimize workout"><svg class="i"><use href="#back"/></svg></button>
+      <h1 class="title">Push</h1>
+      <button class="finish">Finish</button>
+    </div>
+    <div class="prog num"><b>0 of 22 sets</b><span style="flex:1"></span><span>00:42</span></div>
+    <div class="ticks" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span></div>
+  </header>
+  <main class="body">
+    <section class="warm">
+      <div class="warm__text"><b>Warm-up · 5 min</b><br>Easy cardio, enough to break a sweat.</div>
+      <button class="warm__timer num"><svg class="i"><use href="#timer"/></svg>5:00</button>
+      <button class="wcheck" aria-label="Warm-up done"><svg class="i"><use href="#check"/></svg></button>
+    </section>
+    <section class="ex ex--b">
+      <div class="thumb"><img src="../../../../public/exercises/barbell-bench-press/0.jpg" alt=""><span class="thumb__play"><svg class="i fill"><use href="#play"/></svg></span></div>
+      <div class="ex__text"><h2 class="ex__name">Barbell Bench Press</h2><p class="ex__meta num">Exercise 1 of 6 · <b>5 × 5</b> · Rest 3:00</p></div>
+    </section>
+    <div class="acts">
+      <button class="act"><svg class="i"><use href="#history"/></svg>History</button>
+      <button class="act"><svg class="i"><use href="#replace"/></svg>Replace</button>
+      <button class="act"><svg class="i"><use href="#dotsh"/></svg>More</button>
+    </div>
+    <p class="coach">Suggested start <b>45 lb, the empty bar</b>. Do 5 easy reps with it, then adjust set 1.</p>
+    <section class="focus" data-focus-block aria-label="Current set">
+      <div class="focus__head"><span class="focus__set">Set 1 <span>of 5</span></span></div>
+      <div class="fields">
+        <div class="field field--w">
+          <button class="stepbtn num" aria-label="5 lb lighter" disabled>−5</button>
+          <span class="field__num num"><strong>45</strong><small>lb · bar</small></span>
+          <button class="stepbtn num" aria-label="5 lb heavier">+5</button>
+        </div>
+        <div class="field"><span class="field__num num"><strong>5</strong><small>reps</small></span></div>
+      </div>
+      <button class="logbtn"><svg class="i"><use href="#check"/></svg>Log set 1</button>
+    </section>
+    <section class="list" aria-label="Sets">
+      <div class="li li--later"><span class="li__n">2</span><span class="li__v num">45 lb <small>bar</small></span><span class="li__v num">× 5</span><span class="ghost"></span></div>
+      <div class="li li--later"><span class="li__n">3</span><span class="li__v num">45 lb <small>bar</small></span><span class="li__v num">× 5</span><span class="ghost"></span></div>
+      <div class="li li--later"><span class="li__n">4</span><span class="li__v num">45 lb <small>bar</small></span><span class="li__v num">× 5</span><span class="ghost"></span></div>
+      <div class="li li--later"><span class="li__n">5</span><span class="li__v num">45 lb <small>bar</small></span><span class="li__v num">× 5</span><span class="ghost"></span></div>
+    </section>
+    <div class="next"><span>Up next · <b>Overhead Press</b></span><span class="num">4 × 8</span></div>
+  </main>
+</div>
+<!-- (b) Mid-exercise: sets 1-2 done, history present, rest running -->
+<div class="screen state state--b">
+  <header class="top">
+    <div class="top__row">
+      <button class="back" aria-label="Minimize workout"><svg class="i"><use href="#back"/></svg></button>
+      <h1 class="title">Push</h1>
+      <button class="finish">Finish</button>
+    </div>
+    <div class="prog num"><b>2 of 22 sets</b><span style="flex:1"></span><span>14:05</span></div>
+    <div class="ticks" aria-hidden="true"><span class="d"></span><span class="d"></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span></div>
+  </header>
+  <main class="body">
+    <section class="warm warm--done">
+      <div class="warm__text"><b>Warm-up · 5 min</b> · done</div>
+      <button class="wcheck on" aria-label="Warm-up done"><svg class="i"><use href="#check"/></svg></button>
+    </section>
+    <section class="ex ex--b">
+      <div class="thumb"><img src="../../../../public/exercises/barbell-bench-press/0.jpg" alt=""><span class="thumb__play"><svg class="i fill"><use href="#play"/></svg></span></div>
+      <div class="ex__text"><h2 class="ex__name">Barbell Bench Press</h2><p class="ex__meta num">Exercise 1 of 6 · <b>5 × 5</b> · Rest 3:00</p></div>
+    </section>
+    <div class="acts">
+      <button class="act"><svg class="i"><use href="#history"/></svg>History</button>
+      <button class="act"><svg class="i"><use href="#replace"/></svg>Replace</button>
+      <button class="act"><svg class="i"><use href="#dotsh"/></svg>More</button>
+    </div>
+    <p class="note">Last time: left shoulder a bit tight on set 5.</p>
+    <section class="focus" data-focus-block aria-label="Current set">
+      <div class="focus__head"><span class="focus__set">Set 3 <span>of 5</span></span><span class="focus__prev num">Previous <b>130 × 5</b></span></div>
+      <div class="fields">
+        <div class="field field--w">
+          <button class="stepbtn num" aria-label="5 lb lighter">−5</button>
+          <span class="field__num num"><strong>135</strong><small>lb</small></span>
+          <button class="stepbtn num" aria-label="5 lb heavier">+5</button>
+        </div>
+        <div class="field"><span class="field__num num"><strong>5</strong><small>reps</small></span></div>
+      </div>
+      <button class="logbtn"><svg class="i"><use href="#check"/></svg>Log set 3</button>
+    </section>
+    <section class="list" aria-label="Sets">
+      <div class="li li--ramp"><span class="li__n">W</span><span class="li__v num" style="grid-column:2/4">Warm-up sets · 45 × 10, 95 × 5</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="li li--done"><span class="li__n">1</span><span class="li__v num">135 lb</span><span class="li__v num">× 5</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="li li--done"><span class="li__n">2</span><span class="li__v num">135 lb</span><span class="li__v num">× 5</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="li li--now"><span class="li__n">3</span><span class="li__v num">135 lb</span><span class="li__v num">× 5</span><span class="now">Now</span></div>
+      <div class="li li--later"><span class="li__n">4</span><span class="li__v num">135 lb</span><span class="li__v num">× 5</span><span class="ghost"></span></div>
+      <div class="li li--later"><span class="li__n">5</span><span class="li__v num">135 lb</span><span class="li__v num">× 5</span><span class="ghost"></span></div>
+    </section>
+    <div class="next"><span>Up next · <b>Overhead Press</b></span><span class="num">4 × 8</span></div>
+  </main>
+  <div class="dock">
+    <div class="rest num"><span class="rest__time">2:14</span><span class="rest__label">Rest</span><button>+30s</button><button>Pause</button><button>Mute</button></div>
+  </div>
+
+</div>
+<!-- (c) Superset pair, round 2: the list shows both halves in the order they are done -->
+<div class="screen state state--c">
+  <header class="top">
+    <div class="top__row">
+      <button class="back" aria-label="Minimize workout"><svg class="i"><use href="#back"/></svg></button>
+      <h1 class="title">Upper</h1>
+      <button class="finish">Finish</button>
+    </div>
+    <div class="prog num"><b>10 of 22 sets</b><span style="flex:1"></span><span>31:10</span></div>
+    <div class="ticks" aria-hidden="true"><span class="d"></span><span class="d"></span><span class="d"></span><span class="d"></span><span class="gap"></span><span class="d"></span><span class="d"></span><span class="d"></span><span class="d"></span><span class="gap"></span><span class="d"></span><span></span><span></span><span class="gap"></span><span class="d"></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span></span></div>
+  </header>
+  <main class="body">
+    <p class="ss"><span class="ss__tag">Superset</span><span>Round 2 of 3 · with Incline Dumbbell Press</span></p>
+    <section class="ex ex--b">
+      <div class="thumb"><img src="../../../../public/exercises/dumbbell-row/0.jpg" alt=""><span class="thumb__play"><svg class="i fill"><use href="#play"/></svg></span></div>
+      <div class="ex__text"><h2 class="ex__name">Dumbbell Row</h2><p class="ex__meta num">Exercise 3 of 6 · <b>3 × 10</b> · Rest 0:30</p></div>
+    </section>
+    <div class="acts">
+      <button class="act"><svg class="i"><use href="#history"/></svg>History</button>
+      <button class="act"><svg class="i"><use href="#replace"/></svg>Replace</button>
+      <button class="act"><svg class="i"><use href="#dotsh"/></svg>More</button>
+    </div>
+    <section class="focus" data-focus-block aria-label="Current set">
+      <div class="focus__head"><span class="focus__set">A2 <span>· set 2 of 3</span></span><span class="focus__prev num">Previous <b>45 × 10</b></span></div>
+      <div class="fields">
+        <div class="field field--w">
+          <button class="stepbtn num" aria-label="5 lb lighter">−5</button>
+          <span class="field__num num"><strong>50</strong><small>lb each</small></span>
+          <button class="stepbtn num" aria-label="5 lb heavier">+5</button>
+        </div>
+        <div class="field"><span class="field__num num"><strong>10</strong><small>reps</small></span></div>
+      </div>
+      <button class="logbtn"><svg class="i"><use href="#check"/></svg>Log set 2</button>
+    </section>
+    <section class="list" aria-label="Superset sets">
+      <p class="list__label">Round by round</p>
+      <div class="li li--ss li--done"><span class="li__n">A1</span><span class="li__ex">Dumbbell Row</span><span class="li__v num">50 × 10</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="li li--ss li--done"><span class="li__n">B1</span><span class="li__ex">Incline DB Press</span><span class="li__v num">40 × 10</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="li li--ss li--now"><span class="li__n">A2</span><span class="li__ex">Dumbbell Row</span><span class="li__v num">50 × 10</span><span class="now">Now</span></div>
+      <div class="li li--ss li--later"><span class="li__n">B2</span><span class="li__ex">Incline DB Press</span><span class="li__v num">40 × 10</span><span class="ghost"></span></div>
+      <div class="li li--ss li--later"><span class="li__n">A3</span><span class="li__ex">Dumbbell Row</span><span class="li__v num">50 × 10</span><span class="ghost"></span></div>
+      <div class="li li--ss li--later"><span class="li__n">B3</span><span class="li__ex">Incline DB Press</span><span class="li__v num">40 × 10</span><span class="ghost"></span></div>
+    </section>
+  </main>
+  <div class="dock">
+    <div class="rest num"><span class="rest__time">0:48</span><span class="rest__label">Rest</span><button>+30s</button><button>Pause</button><button>Mute</button></div>
+  </div>
+</div>
+<!-- (d) Keyboard open on set 3's weight: the layout keeps its height, the keyboard covers it -->
+<div class="screen state state--d">
+  <header class="top">
+    <div class="top__row">
+      <button class="back" aria-label="Minimize workout"><svg class="i"><use href="#back"/></svg></button>
+      <h1 class="title">Push</h1>
+      <button class="finish">Finish</button>
+    </div>
+    <div class="prog num"><b>2 of 22 sets</b><span style="flex:1"></span><span>14:31</span></div>
+    <div class="ticks" aria-hidden="true"><span class="d"></span><span class="d"></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span><span class="gap"></span><span></span><span></span><span></span></div>
+  </header>
+  <main class="body">
+    <section class="warm warm--done">
+      <div class="warm__text"><b>Warm-up · 5 min</b> · done</div>
+      <button class="wcheck on" aria-label="Warm-up done"><svg class="i"><use href="#check"/></svg></button>
+    </section>
+    <section class="ex ex--b">
+      <div class="thumb"><img src="../../../../public/exercises/barbell-bench-press/0.jpg" alt=""><span class="thumb__play"><svg class="i fill"><use href="#play"/></svg></span></div>
+      <div class="ex__text"><h2 class="ex__name">Barbell Bench Press</h2><p class="ex__meta num">Exercise 1 of 6 · <b>5 × 5</b> · Rest 3:00</p></div>
+    </section>
+    <div class="acts">
+      <button class="act"><svg class="i"><use href="#history"/></svg>History</button>
+      <button class="act"><svg class="i"><use href="#replace"/></svg>Replace</button>
+      <button class="act"><svg class="i"><use href="#dotsh"/></svg>More</button>
+    </div>
+    <p class="note">Last time: left shoulder a bit tight on set 5.</p>
+    <section class="focus" data-focus-block aria-label="Current set">
+      <div class="focus__head"><span class="focus__set">Set 3 <span>of 5</span></span><span class="focus__prev num">Previous <b>130 × 5</b></span></div>
+      <div class="fields">
+        <div class="field field--w field--focus">
+          <button class="stepbtn num" aria-label="5 lb lighter">−5</button>
+          <span class="field__num num"><strong><span class="caret">140</span></strong><small>lb</small></span>
+          <button class="stepbtn num" aria-label="5 lb heavier">+5</button>
+        </div>
+        <div class="field"><span class="field__num num"><strong>5</strong><small>reps</small></span></div>
+      </div>
+      <button class="logbtn"><svg class="i"><use href="#check"/></svg>Log set 3</button>
+    </section>
+    <section class="list" aria-label="Sets">
+      <div class="li li--ramp"><span class="li__n">W</span><span class="li__v num" style="grid-column:2/4">Warm-up sets · 45 × 10, 95 × 5</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="li li--done"><span class="li__n">1</span><span class="li__v num">135 lb</span><span class="li__v num">× 5</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="li li--done"><span class="li__n">2</span><span class="li__v num">135 lb</span><span class="li__v num">× 5</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="li li--now"><span class="li__n">3</span><span class="li__v num">140 lb</span><span class="li__v num">× 5</span><span class="now">Now</span></div>
+      <div class="li li--later"><span class="li__n">4</span><span class="li__v num">140 lb</span><span class="li__v num">× 5</span><span class="ghost"></span></div>
+      <div class="li li--later"><span class="li__n">5</span><span class="li__v num">140 lb</span><span class="li__v num">× 5</span><span class="ghost"></span></div>
+    </section>
+    <div class="next"><span>Up next · <b>Overhead Press</b></span><span class="num">4 × 8</span></div>
+  </main>
+  <div class="dock">
+    <div class="rest num"><span class="rest__time">1:48</span><span class="rest__label">Rest</span><button>+30s</button><button>Pause</button><button>Mute</button></div>
+  </div>
+  <div class="kb"><div class="kb__bar">Next</div><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span class="k-plain">.</span><span>0</span><span class="k-plain">⌫</span></div>
+</div>
+<script src="mock.js"></script>
+</body>
+</html>

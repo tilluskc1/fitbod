@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#380 Option A: evolutionary</title>
+<link rel="stylesheet" href="mocks.css">
+<link rel="stylesheet" href="option-a.css">
+</head>
+<body>
+
+<!-- (a) First set of exercise 1, new lifter, no history -->
+<div class="screen state state--a">
+  <header class="top">
+    <div class="top__row">
+      <button class="back" aria-label="Minimize workout"><svg class="i"><use href="#back"/></svg></button>
+      <h1 class="title">Push</h1>
+      <button class="finish">Finish</button>
+    </div>
+    <div class="prog num"><b>0 of 22 sets</b><div class="prog__track"><div class="prog__fill" style="width:0"></div></div><span>00:42</span></div>
+  </header>
+  <main class="body">
+    <section class="warm">
+      <div class="warm__text"><b>Warm-up · 5 min</b><br>Easy cardio, enough to break a sweat.</div>
+      <button class="warm__timer num"><svg class="i"><use href="#timer"/></svg>5:00</button>
+      <button class="wcheck" aria-label="Warm-up done"><svg class="i"><use href="#check"/></svg></button>
+    </section>
+    <section class="ex">
+      <div class="thumb"><img src="../../../../public/exercises/barbell-bench-press/0.jpg" alt=""><span class="thumb__play"><svg class="i fill"><use href="#play"/></svg></span></div>
+      <div class="ex__text">
+        <h2 class="ex__name">Barbell Bench Press</h2>
+        <p class="ex__meta num">Exercise 1 of 6 · <b>5 × 5</b> · Rest 3:00</p>
+      </div>
+      <button class="more" aria-label="More actions"><svg class="i"><use href="#dots"/></svg></button>
+    </section>
+    <div class="acts">
+      <button class="act"><svg class="i"><use href="#play"/></svg>How-to</button>
+      <button class="act"><svg class="i"><use href="#history"/></svg>History</button>
+      <button class="act"><svg class="i"><use href="#replace"/></svg>Replace</button>
+      <button class="act"><svg class="i"><use href="#later"/></svg>Later</button>
+    </div>
+    <p class="coach">Suggested start <b>45 lb, the empty bar</b>. Do 5 easy reps with it, then adjust set 1.</p>
+    <section class="sets">
+      <div class="sets__head cols"><span>Set</span><span class="c">lb</span><span class="c">Reps</span><span></span></div>
+      <div class="cur">
+        <div class="row cols">
+          <span class="row__n">1</span>
+          <span class="cell num">45<small>bar</small></span>
+          <span class="cell num">5</span>
+          <button class="log" aria-label="Log set 1"><svg class="i"><use href="#check"/></svg></button>
+        </div>
+        <div class="steps"><button class="step" style="color:var(--outline)" disabled>− 5 lb</button><button class="step">+ 5 lb</button></div>
+      </div>
+      <div class="row row--later cols"><span class="row__n">2</span><span class="row__val num">45 <small class="row__unit" style="display:inline">bar</small></span><span class="row__val num">5</span><span class="ghost"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="row row--later cols"><span class="row__n">3</span><span class="row__val num">45 <small class="row__unit" style="display:inline">bar</small></span><span class="row__val num">5</span><span class="ghost"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="row row--later cols"><span class="row__n">4</span><span class="row__val num">45 <small class="row__unit" style="display:inline">bar</small></span><span class="row__val num">5</span><span class="ghost"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="row row--later cols"><span class="row__n">5</span><span class="row__val num">45 <small class="row__unit" style="display:inline">bar</small></span><span class="row__val num">5</span><span class="ghost"><svg class="i"><use href="#check"/></svg></span></div>
+    </section>
+    <div class="next"><span>Up next · <b>Overhead Press</b></span><span class="num">4 × 8</span></div>
+  </main>
+</div>
+
+<!-- (b) Mid-exercise: sets 1-2 done, history present, rest running -->
+<div class="screen state state--b state--d-base">
+  <header class="top">
+    <div class="top__row">
+      <button class="back" aria-label="Minimize workout"><svg class="i"><use href="#back"/></svg></button>
+      <h1 class="title">Push</h1>
+      <button class="finish">Finish</button>
+    </div>
+    <div class="prog num"><b>2 of 22 sets</b><div class="prog__track"><div class="prog__fill" style="width:9%"></div></div><span>14:05</span></div>
+  </header>
+  <main class="body">
+    <section class="warm warm--done">
+      <div class="warm__text"><b>Warm-up · 5 min</b> · done</div>
+      <button class="wcheck on" aria-label="Warm-up done"><svg class="i"><use href="#check"/></svg></button>
+    </section>
+    <section class="ex">
+      <div class="thumb"><img src="../../../../public/exercises/barbell-bench-press/0.jpg" alt=""><span class="thumb__play"><svg class="i fill"><use href="#play"/></svg></span></div>
+      <div class="ex__text">
+        <h2 class="ex__name">Barbell Bench Press</h2>
+        <p class="ex__meta num">Exercise 1 of 6 · <b>5 × 5</b> · Rest 3:00</p>
+      </div>
+      <button class="more" aria-label="More actions"><svg class="i"><use href="#dots"/></svg></button>
+    </section>
+    <div class="acts">
+      <button class="act"><svg class="i"><use href="#play"/></svg>How-to</button>
+      <button class="act"><svg class="i"><use href="#history"/></svg>History</button>
+      <button class="act"><svg class="i"><use href="#replace"/></svg>Replace</button>
+      <button class="act"><svg class="i"><use href="#later"/></svg>Later</button>
+    </div>
+    <p class="note">Last time: left shoulder a bit tight on set 5.</p>
+    <section class="sets">
+      <div class="rampsum num"><span><b>Warm-up sets</b> · 45 × 10, 95 × 5</span><span class="wcheck on" style="width:30px;height:30px;flex:none"><svg class="i" style="width:16px;height:16px"><use href="#check"/></svg></span></div>
+      <div class="sets__head cols--prev"><span>Set</span><span>Previous</span><span class="c">lb</span><span class="c">Reps</span><span></span></div>
+      <div class="row row--done cols--prev"><span class="row__n">1</span><span class="row__prev num">130 × 5</span><span class="donesum num" style="grid-column:3/5;text-align:center">135 × 5</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="row row--done cols--prev"><span class="row__n">2</span><span class="row__prev num">130 × 5</span><span class="donesum num" style="grid-column:3/5;text-align:center">135 × 5</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="cur" data-focus-block>
+        <div class="row cols--prev">
+          <span class="row__n">3</span>
+          <span class="row__prev num">130 × 5</span>
+          <span class="cell num">135</span>
+          <span class="cell num">5</span>
+          <button class="log" aria-label="Log set 3"><svg class="i"><use href="#check"/></svg></button>
+        </div>
+        <div class="steps" style="padding-left:110px"><button class="step">− 5 lb</button><button class="step">+ 5 lb</button></div>
+      </div>
+      <div class="row row--later cols--prev"><span class="row__n">4</span><span class="row__prev num">130 × 5</span><span class="row__val num">135</span><span class="row__val num">5</span><span class="ghost"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="row row--later cols--prev"><span class="row__n">5</span><span class="row__prev num">130 × 5</span><span class="row__val num">135</span><span class="row__val num">5</span><span class="ghost"><svg class="i"><use href="#check"/></svg></span></div>
+    </section>
+    <div class="next"><span>Up next · <b>Overhead Press</b></span><span class="num">4 × 8</span></div>
+  </main>
+  <div class="dock">
+    <div class="rest num"><span class="rest__time">2:14</span><span class="rest__label">Rest</span><button>+30s</button><button>Pause</button><button>Mute</button></div>
+  </div>
+</div>
+
+<!-- (c) Superset pair: Dumbbell Row (A) with Incline Dumbbell Press (B), round 2 -->
+<div class="screen state state--c">
+  <header class="top">
+    <div class="top__row">
+      <button class="back" aria-label="Minimize workout"><svg class="i"><use href="#back"/></svg></button>
+      <h1 class="title">Upper</h1>
+      <button class="finish">Finish</button>
+    </div>
+    <div class="prog num"><b>10 of 22 sets</b><div class="prog__track"><div class="prog__fill" style="width:45%"></div></div><span>31:10</span></div>
+  </header>
+  <main class="body">
+    <p class="ss"><span class="ss__tag">Superset</span><span>Round 2 of 3 · with Incline Dumbbell Press</span></p>
+    <section class="ex">
+      <div class="thumb"><img src="../../../../public/exercises/dumbbell-row/0.jpg" alt=""><span class="thumb__play"><svg class="i fill"><use href="#play"/></svg></span></div>
+      <div class="ex__text">
+        <h2 class="ex__name">Dumbbell Row</h2>
+        <p class="ex__meta num">Exercise 3 of 6 · <b>3 × 10</b> · Rest 0:30</p>
+      </div>
+      <button class="more" aria-label="More actions"><svg class="i"><use href="#dots"/></svg></button>
+    </section>
+    <div class="acts">
+      <button class="act"><svg class="i"><use href="#play"/></svg>How-to</button>
+      <button class="act"><svg class="i"><use href="#history"/></svg>History</button>
+      <button class="act"><svg class="i"><use href="#replace"/></svg>Replace</button>
+      <button class="act"><svg class="i"><use href="#later"/></svg>Later</button>
+    </div>
+    <section class="sets">
+      <div class="sets__head cols--prev"><span>Set</span><span>Previous</span><span class="c">lb each</span><span class="c">Reps</span><span></span></div>
+      <div class="row row--done cols--prev"><span class="row__n">1</span><span class="row__prev num">45 × 10</span><span class="donesum num" style="grid-column:3/5;text-align:center">50 × 10</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="cur">
+        <div class="row cols--prev">
+          <span class="row__n">2</span>
+          <span class="row__prev num">45 × 10</span>
+          <span class="cell num">50<small>each</small></span>
+          <span class="cell num">10</span>
+          <button class="log" aria-label="Log set 2"><svg class="i"><use href="#check"/></svg></button>
+        </div>
+        <div class="steps" style="padding-left:110px"><button class="step">− 5 lb</button><button class="step">+ 5 lb</button></div>
+      </div>
+      <div class="row row--later cols--prev"><span class="row__n">3</span><span class="row__prev num">45 × 10</span><span class="row__val num">50</span><span class="row__val num">10</span><span class="ghost"><svg class="i"><use href="#check"/></svg></span></div>
+    </section>
+    <div class="next"><span>Then · <b>Incline Dumbbell Press</b> set 2</span><span class="num">3 × 10</span></div>
+  </main>
+  <div class="dock">
+    <div class="rest num"><span class="rest__time">0:48</span><span class="rest__label">Rest</span><button>+30s</button><button>Pause</button><button>Mute</button></div>
+  </div>
+</div>
+
+<!-- (d) Keyboard open on set 3's weight: the layout keeps its height, the keyboard covers it -->
+<div class="screen state state--d">
+  <header class="top">
+    <div class="top__row">
+      <button class="back" aria-label="Minimize workout"><svg class="i"><use href="#back"/></svg></button>
+      <h1 class="title">Push</h1>
+      <button class="finish">Finish</button>
+    </div>
+    <div class="prog num"><b>2 of 22 sets</b><div class="prog__track"><div class="prog__fill" style="width:9%"></div></div><span>14:31</span></div>
+  </header>
+  <main class="body">
+    <section class="warm warm--done">
+      <div class="warm__text"><b>Warm-up · 5 min</b> · done</div>
+      <button class="wcheck on" aria-label="Warm-up done"><svg class="i"><use href="#check"/></svg></button>
+    </section>
+    <section class="ex">
+      <div class="thumb"><img src="../../../../public/exercises/barbell-bench-press/0.jpg" alt=""><span class="thumb__play"><svg class="i fill"><use href="#play"/></svg></span></div>
+      <div class="ex__text">
+        <h2 class="ex__name">Barbell Bench Press</h2>
+        <p class="ex__meta num">Exercise 1 of 6 · <b>5 × 5</b> · Rest 3:00</p>
+      </div>
+      <button class="more" aria-label="More actions"><svg class="i"><use href="#dots"/></svg></button>
+    </section>
+    <div class="acts">
+      <button class="act"><svg class="i"><use href="#play"/></svg>How-to</button>
+      <button class="act"><svg class="i"><use href="#history"/></svg>History</button>
+      <button class="act"><svg class="i"><use href="#replace"/></svg>Replace</button>
+      <button class="act"><svg class="i"><use href="#later"/></svg>Later</button>
+    </div>
+    <p class="note">Last time: left shoulder a bit tight on set 5.</p>
+    <section class="sets">
+      <div class="rampsum num"><span><b>Warm-up sets</b> · 45 × 10, 95 × 5</span><span class="wcheck on" style="width:30px;height:30px;flex:none"><svg class="i" style="width:16px;height:16px"><use href="#check"/></svg></span></div>
+      <div class="sets__head cols--prev"><span>Set</span><span>Previous</span><span class="c">lb</span><span class="c">Reps</span><span></span></div>
+      <div class="row row--done cols--prev"><span class="row__n">1</span><span class="row__prev num">130 × 5</span><span class="donesum num" style="grid-column:3/5;text-align:center">135 × 5</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="row row--done cols--prev"><span class="row__n">2</span><span class="row__prev num">130 × 5</span><span class="donesum num" style="grid-column:3/5;text-align:center">135 × 5</span><span class="tick"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="cur" data-focus-block>
+        <div class="row cols--prev">
+          <span class="row__n">3</span>
+          <span class="row__prev num">130 × 5</span>
+          <span class="cell cell--focus num"><span class="caret">140</span></span>
+          <span class="cell num">5</span>
+          <button class="log" aria-label="Log set 3"><svg class="i"><use href="#check"/></svg></button>
+        </div>
+        <div class="steps" style="padding-left:110px"><button class="step">− 5 lb</button><button class="step">+ 5 lb</button></div>
+      </div>
+      <div class="row row--later cols--prev"><span class="row__n">4</span><span class="row__prev num">130 × 5</span><span class="row__val num">140</span><span class="row__val num">5</span><span class="ghost"><svg class="i"><use href="#check"/></svg></span></div>
+      <div class="row row--later cols--prev"><span class="row__n">5</span><span class="row__prev num">130 × 5</span><span class="row__val num">140</span><span class="row__val num">5</span><span class="ghost"><svg class="i"><use href="#check"/></svg></span></div>
+    </section>
+    <div class="next"><span>Up next · <b>Overhead Press</b></span><span class="num">4 × 8</span></div>
+  </main>
+  <div class="dock">
+    <div class="rest num"><span class="rest__time">1:48</span><span class="rest__label">Rest</span><button>+30s</button><button>Pause</button><button>Mute</button></div>
+  </div>
+  <div class="kb"><div class="kb__bar">Next</div><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span class="k-plain">.</span><span>0</span><span class="k-plain">⌫</span></div>
+</div>
+
+<script src="mock.js"></script>
+</body>
+</html>

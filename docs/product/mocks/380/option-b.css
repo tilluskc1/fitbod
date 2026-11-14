@@ -1,0 +1,44 @@
+/* Option B: bolder. One focused set card, the rest of the sets as a quiet list below it. */
+.ex--b .thumb { width: 56px; height: 56px; border-radius: 14px; }
+.ex--b .ex__name { font-size: 20px; }
+
+.acts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.act { min-height: 44px; border-radius: 999px; background: var(--card); display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 500; white-space: nowrap; }
+.act svg.i { width: 16px; height: 16px; color: var(--muted); }
+
+.focus { background: var(--card); border-radius: var(--radius-card); padding: 16px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+.focus__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.focus__set { font-size: 15px; font-weight: 600; }
+.focus__set span { color: var(--muted); font-weight: 400; }
+.focus__prev { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.focus__prev b { color: var(--on-surface); font-weight: 600; }
+.fields { display: grid; grid-template-columns: 1fr 88px; gap: 8px; }
+.field { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px; height: 76px; border-radius: 18px; background: var(--surface-container-high); border: 1px solid var(--surface-container-highest); }
+.field--w { justify-content: space-between; padding: 0 6px; }
+.field__num { display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.field__num strong { font-size: 40px; font-weight: 300; letter-spacing: -0.03em; }
+.field__num small { margin-top: 4px; font-size: 12px; color: var(--muted); }
+.field--focus { background: var(--card); border: 2px solid var(--btn); }
+.stepbtn { width: 44px; height: 44px; border-radius: 50%; background: var(--card); border: 1px solid var(--surface-container-highest); font-size: 14px; font-weight: 600; display: grid; place-items: center; }
+.stepbtn:disabled { color: var(--outline); background: transparent; }
+.logbtn { min-height: 52px; border-radius: 999px; background: var(--btn); color: var(--on-btn); font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.logbtn svg.i { width: 20px; height: 20px; stroke-width: 2.6; }
+
+.list { display: flex; flex-direction: column; }
+.li { display: grid; grid-template-columns: 36px 1fr 1fr 44px; align-items: center; min-height: 44px; padding: 0 0 0 4px; font-size: 15px; border-bottom: 1px solid var(--surface-container-highest); }
+.li:last-child { border-bottom: 0; }
+.li__n { color: var(--muted); font-weight: 500; }
+.li__v { color: var(--on-surface-muted); }
+.li__v small { font-size: 12px; color: var(--muted); }
+.li__ex { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.li .tick { justify-self: center; width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; }
+.li .tick svg.i { width: 15px; height: 15px; stroke-width: 2.6; }
+.li--done .li__v { color: var(--on-surface); }
+.li--now { color: var(--on-surface); }
+.li--now .li__n { color: var(--on-surface); font-weight: 700; }
+.li--now .now { justify-self: center; font-size: 12px; font-weight: 600; color: var(--accent-text); }
+.li--later .li__v { color: var(--muted); }
+.li .ghost { justify-self: center; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--surface-container-highest); }
+.li--ss { grid-template-columns: 36px 1fr 78px 44px; }
+.list__label { padding: 2px 4px 4px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.li--ramp { color: var(--muted); font-size: 14px; }

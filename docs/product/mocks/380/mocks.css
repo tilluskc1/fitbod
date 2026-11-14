@@ -1,0 +1,125 @@
+/* #380 logger mocks: static screens only, not wired to the app. Tokens copied from DESIGN.md section 12. */
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 200 700;
+  src: url('../../../../public/fonts/outfit-latin-var.woff2') format('woff2');
+}
+
+:root {
+  --surface: #e6f2f1;
+  --card: #ffffff;
+  --surface-container-low: #f6fbfa;
+  --surface-container-high: #eef7f6;
+  --surface-container-highest: #dde8e6;
+  --on-surface: #141a1a;
+  --on-surface-muted: #3d4847;
+  --muted: #56615f;
+  --outline: #8a9896;
+  --primary: #d6f05c;
+  --on-primary: #1c2406;
+  --accent-text: #4f5d0c;
+  --accent-edge: #a3b83a;
+  --btn: #121515;
+  --on-btn: #ffffff;
+  --sky: #a3d1e5;
+  --on-sky: #0f2f3c;
+  --amber: #8a5300;
+  --danger: #a03224;
+  --radius-card: 26px;
+  --tap: 44px;
+  --tap-primary: 52px;
+  --tick-empty: #e6eeec;
+  --tick-done: #c5dd3c;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--surface);
+  color: var(--on-surface);
+  font: 400 16px/1.45 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+h1, h2, h3 { font-weight: 500; line-height: 1.12; letter-spacing: -0.035em; margin: 0; }
+p { margin: 0; }
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.fill { fill: currentColor; stroke: none; }
+.num { font-variant-numeric: tabular-nums; }
+
+.state { display: none; }
+body[data-s='a'] .state--a, body[data-s='b'] .state--b, body[data-s='c'] .state--c, body[data-s='d'] .state--d { display: flex; }
+
+.screen { position: relative; height: 100vh; flex-direction: column; }
+.body { flex: 1; min-height: 0; overflow: hidden; padding: 0 17px 16px; display: flex; flex-direction: column; gap: 12px; }
+
+/* ---------- Top: back, title, Finish; then progress (both options) ---------- */
+.top { padding: 10px 17px 10px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); }
+.top__row { display: flex; align-items: center; gap: 6px; min-height: 44px; }
+.back { width: 44px; height: 44px; display: grid; place-items: center; margin-left: -10px; }
+.back svg.i { width: 22px; height: 22px; }
+.title { flex: 1; min-width: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.finish { min-height: 44px; padding: 0 16px; border-radius: 999px; background: var(--card); font-size: 15px; font-weight: 600; }
+.prog { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.prog b { color: var(--on-surface); font-weight: 600; }
+.prog__track { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-container-highest); overflow: hidden; }
+.prog__fill { height: 100%; background: var(--tick-done); border-radius: 3px; }
+.ticks { display: flex; gap: 3px; height: 8px; }
+.ticks span { flex: 1; border-radius: 3px; background: var(--surface-container-highest); }
+.ticks span.d { background: var(--tick-done); }
+.ticks span.gap { flex: 0 0 4px; background: none; }
+
+/* ---------- Warm-up: one line once started or skipped ---------- */
+.warm { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 16px; min-height: 52px; border-radius: 18px; background: var(--card); }
+.warm__text { flex: 1; min-width: 0; font-size: 14px; color: var(--muted); }
+.warm__text b { color: var(--on-surface); font-weight: 600; }
+.warm__timer { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: 999px; background: var(--surface-container-high); font-size: 14px; font-weight: 600; }
+.warm__timer svg.i { width: 16px; height: 16px; }
+.wcheck { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; border: 1.5px dashed var(--outline); color: var(--muted); flex: none; }
+.wcheck.on { border: 0; background: var(--primary); color: var(--on-primary); }
+.warm--done { min-height: 44px; padding: 2px 4px 2px 16px; background: transparent; border: 1px solid var(--surface-container-highest); }
+.warm--done .wcheck { width: 36px; height: 36px; }
+
+/* ---------- Superset band (#88), unchanged colours ---------- */
+.ss { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 14px; background: var(--sky); color: var(--on-sky); font-size: 13px; line-height: 18px; }
+.ss__tag { flex: none; padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.55); font-size: 12px; font-weight: 600; }
+
+/* ---------- Exercise header ---------- */
+.ex { display: flex; align-items: center; gap: 12px; }
+.thumb { position: relative; flex: none; width: 64px; height: 64px; border-radius: 16px; overflow: hidden; background: var(--surface-container-highest); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb__play { position: absolute; right: 4px; bottom: 4px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: rgba(18, 21, 21, 0.72); color: #fff; }
+.thumb__play svg.i { width: 10px; height: 10px; }
+.ex__text { flex: 1; min-width: 0; }
+.ex__name { font-size: 22px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; }
+.ex__meta { margin-top: 3px; font-size: 13px; color: var(--muted); }
+.ex__meta b { color: var(--on-surface); font-weight: 600; }
+.more { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--card); display: grid; place-items: center; }
+
+/* ---------- Coach and note lines ---------- */
+.coach { font-size: 14px; line-height: 1.4; color: var(--on-surface-muted); }
+.coach b { font-weight: 600; color: var(--on-surface); }
+.note { font-size: 14px; line-height: 1.4; color: var(--on-surface-muted); padding-left: 10px; border-left: 3px solid var(--surface-container-highest); }
+
+/* ---------- Up next, skipped ---------- */
+.next { display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 0 16px; border-radius: 14px; background: var(--surface-container-high); font-size: 14px; color: var(--muted); }
+.next b { color: var(--on-surface); font-weight: 600; }
+
+/* ---------- Dock: rest timer ---------- */
+.dock { padding: 8px 12px 14px; }
+.rest { display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 16px; border-radius: 999px; background: var(--card); box-shadow: 0 10px 30px -12px rgba(20, 40, 40, 0.35); }
+.rest__time { font-size: 22px; font-weight: 700; color: var(--accent-text); }
+.rest__label { flex: 1; font-size: 13px; color: var(--muted); }
+.rest button { min-height: 44px; padding: 0 11px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--surface-container-high); }
+
+/* ---------- Fake keyboard (state d): layout keeps its height, the keyboard covers it (lesson 16) ---------- */
+.kb { position: absolute; left: 0; right: 0; bottom: 0; height: 300px; background: #d2d5db; padding: 8px 6px 40px; display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr; gap: 7px; z-index: 5; }
+.kb__bar { position: absolute; left: 0; right: 0; top: -44px; height: 44px; background: #f1f2f4; border-top: 1px solid #c7cad0; display: flex; align-items: center; justify-content: flex-end; padding: 0 16px; font-size: 16px; font-weight: 600; color: #0a64d6; }
+.kb span { background: #fff; border-radius: 6px; display: grid; place-items: center; font-size: 24px; box-shadow: 0 1px 0 #898a8d; }
+.kb span.k-plain { background: none; box-shadow: none; }
+.kb-edge { position: absolute; left: 0; right: 0; height: 0; border-top: 2px dashed rgba(160, 50, 36, 0.0); }
+@media (max-height: 800px) { .kb { height: 290px; } }
+.caret::after { content: ''; display: inline-block; width: 2px; height: 0.9em; margin-left: 2px; vertical-align: -0.08em; background: #0a64d6; }
+.body > * { flex: none; }

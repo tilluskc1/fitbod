@@ -1,0 +1,48 @@
+/* Option A: evolutionary. Same order as today, fixed hierarchy. */
+.acts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.acts--3 { grid-template-columns: repeat(3, 1fr); }
+.act { min-height: 44px; border-radius: 999px; background: var(--card); display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 14px; font-weight: 500; white-space: nowrap; padding: 0 6px; }
+.act svg.i { width: 16px; height: 16px; color: var(--muted); }
+@media (max-width: 370px) { .act { font-size: 13px; gap: 4px; } .act svg.i { width: 15px; height: 15px; } }
+
+.sets { display: flex; flex-direction: column; gap: 4px; }
+.sets__head { display: grid; align-items: end; padding: 0 4px 2px 12px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.cols { grid-template-columns: 28px 1fr 1fr 52px; column-gap: 8px; }
+.cols--prev { grid-template-columns: 26px 1fr 78px 60px 52px; column-gap: 6px; }
+.sets__head .c { text-align: center; }
+
+.row { display: grid; align-items: center; min-height: 44px; padding: 0 4px 0 12px; border-radius: 14px; font-size: 15px; }
+.row__n { font-weight: 500; color: var(--muted); }
+.row__prev { font-size: 13px; color: var(--muted); }
+.row__val { text-align: center; }
+.row__unit { display: block; font-size: 11px; color: var(--muted); line-height: 1; margin-top: 1px; }
+
+/* Done: one compact line with a lime tick. */
+.row--done { min-height: 40px; background: rgba(214, 240, 92, 0.22); }
+.row--done .row__val { font-size: 15px; color: var(--on-surface-muted); }
+.row--done .tick { justify-self: center; width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; }
+.row--done .tick svg.i { width: 16px; height: 16px; stroke-width: 2.6; }
+.donesum { grid-column: 2 / 5; font-size: 15px; color: var(--on-surface-muted); }
+.donesum small { font-size: 13px; color: var(--muted); }
+
+/* Current: the big target. */
+.cur { background: var(--card); border-radius: 20px; border: 2px solid var(--btn); padding: 8px 2px 8px 8px; display: flex; flex-direction: column; gap: 8px; }
+.cur .row { padding: 0 0 0 2px; min-height: 60px; }
+.cur .row__n { color: var(--on-surface); font-weight: 700; font-size: 17px; }
+.cell { height: 56px; border-radius: 14px; background: var(--surface-container-high); border: 1px solid var(--surface-container-highest); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 24px; font-weight: 500; line-height: 1; }
+.cell small { font-size: 11px; font-weight: 500; color: var(--muted); margin-top: 3px; }
+.cell--focus { border: 2px solid var(--btn); background: var(--card); }
+.log { justify-self: end; width: 52px; height: 52px; border-radius: 50%; background: var(--btn); color: var(--on-btn); display: grid; place-items: center; }
+.log svg.i { width: 24px; height: 24px; stroke-width: 2.6; }
+.steps { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding-left: 36px; padding-right: 58px; }
+.step { min-height: 44px; border-radius: 999px; background: var(--surface-container-high); font-size: 15px; font-weight: 600; }
+
+/* Later: quieter, still editable in place. */
+.row--later { color: var(--muted); }
+.row--later .row__val { font-size: 15px; color: var(--on-surface-muted); border-bottom: 1px dashed var(--surface-container-highest); padding: 10px 0 8px; }
+.row--later .ghost { justify-self: center; width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--surface-container-highest); display: grid; place-items: center; color: var(--outline); }
+.row--later .ghost svg.i { width: 18px; height: 18px; }
+
+.rampsum { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 4px 0 12px; border-radius: 14px; background: var(--surface-container-high); font-size: 14px; color: var(--muted); }
+.rampsum b { font-weight: 600; color: var(--on-surface); }
+.rampsum span { flex: 1; }
