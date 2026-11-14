@@ -17,7 +17,7 @@ export const NAME_MAX = 80;
 const TESTER_ID_MAX = 64;
 const VERSION_MAX = 40;
 
-/** The one local key this story adds: a random ID per phone, sent only inside a note. */
+/** The one local key #255 added: a random ID per phone, sent inside a note and (#359) inside each usage event. */
 export const TESTER_ID_KEY = `${STORAGE_KEY}:tester-id`;
 
 export type FeedbackScreen = 'settings' | 'recap';
