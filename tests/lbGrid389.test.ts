@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { gunzipSync } from 'node:zlib';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createServer } from 'vite';
+import { createSession } from '../src/lib/session.ts';
 import { exerciseById } from '../src/data/exercises.ts';
 import { coachLine, describePrescription, prescribeExercise } from '../src/lib/progression.ts';
 import { toKg } from '../src/lib/units.ts';
@@ -160,4 +164,28 @@ test('#389: a kg rack shown in pounds rounds each entry to 2.5 lb before the gap
   // The same rack for a kg lifter: unchanged.
   const kg = weightSteps({ kg: 12.5, equipment: 'Dumbbell', available: rack, unit: 'kg' });
   assert.deepEqual([kg.step, kg.downBy, kg.upBy], [2.5, 2.5, 2.5]);
+});
+
+test('#389: the logger reads − 5 lb / + 5 lb on a 55 lb bench planned at 25 kg; a kg lifter reads 2.5', async () => {
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
+    const at = '2026-11-14T10:00:00.000Z';
+    const session = createSession({ id: 's389', name: 'Push', dayIndex: 0, now: at, exercises: [{
+      exerciseId: 'barbell-bench-press', name: 'Barbell Bench Press',
+      planned: [0, 1, 2].map(() => ({ weight: 25, reps: 8 })),
+      performed: [0, 1, 2].map(() => ({ weight: 25, reps: 8, done: false, completedAt: null })),
+    }] });
+    const noop = () => {};
+    const render = (unit: Unit) => renderToStaticMarkup(createElement(Train, { session, history: [], now: Date.parse(at) + 60000,
+      rampLoads: [], calibrationLoads: [], unit, onMinimize: noop, onFinish: noop, onUpdateSet: noop, onLogSet: noop,
+      onToggleRestPause: noop, onExtendRest: noop, onOpenActions: noop, onReturn: noop }));
+    const pounds = render('lb');
+    assert.match(pounds, /aria-label="− 5 lb"/);
+    assert.match(pounds, /aria-label="\+ 5 lb"/);
+    assert.doesNotMatch(pounds, /5\.1|4\.9/);
+    const kg = render('kg');
+    assert.match(kg, /aria-label="− 2.5 kg"/);
+    assert.match(kg, /aria-label="\+ 2.5 kg"/);
+  } finally { await server.close(); }
 });
