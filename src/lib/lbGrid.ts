@@ -30,13 +30,28 @@ export function lbGridKg(count: number, step: number = LB_STEP): number {
  */
 export function shownLb(kg: number): number {
   const raw = toDisplay(kg, 'lb');
-  const exact = Math.round(raw * 100) / 100;
-  return Math.abs(toKg(exact, 'lb') - kg) < 1e-6 ? exact : Math.round(raw * 2) / 2;
+  return isPoundValue(kg) ? Math.round(raw * 100) / 100 : Math.round(raw * 2) / 2;
 }
 
-/** An owned load as a pound rack entry, to the nearest 2.5 lb: a kg rack's 2.5 kg gap reads 5 lb, not 5.5. */
-export function rackLb(kg: number): number {
-  return Math.round(toDisplay(kg, 'lb') / 2.5) * 2.5;
+/**
+ * True when kg holds a value typed in pounds (to 0.01 lb): 55 lb is 24.948 kg, 25 kg is not. A whole or
+ * half kilogram is a kg value even when it happens to round-trip (17.5 kg reads back from 38.58 lb).
+ */
+export function isPoundValue(kg: number): boolean {
+  if (Number.isInteger(Math.round(kg * 1000) / 500)) return false;
+  const exact = Math.round(toDisplay(kg, 'lb') * 100) / 100;
+  return Math.abs(toKg(exact, 'lb') - kg) < 1e-6;
+}
+
+/**
+ * A step between a kg-stored rack entry and another load, in pounds: the gap snapped once to the nearest
+ * 2.5 lb, so a 2.5 kg step reads 5 lb, never 5.5 or 5.1 (#389 decision 4). Snapping the gap, not each
+ * entry, keeps every step of a rack the same (entries rounded one by one drift to 7.5). Under 1.25 lb the
+ * real gap stands.
+ */
+export function rackGapLb(gap: number): number {
+  const snapped = Math.round(gap / 2.5) * 2.5;
+  return snapped > 0 ? snapped : gap;
 }
 
 /** The next load at least one step up, rounded up onto the grid (137 → 145), as kg. At the loader limit it holds. */

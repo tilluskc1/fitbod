@@ -530,7 +530,10 @@ export default function TrainScreen({
   const stepFrom = !stepSet ? 0 : stepSet.weight > 0 ? stepSet.weight
     : prefill !== null && !cleared.includes(`${calibrationKey}:${focused}`) ? prefill : raising ? floor : 0;
   // A dumbbell steps the rack today's gear offers (a Travel gym's hotel rack), as the ramp rows do (#371 review 1).
-  const steps = stepSet ? weightSteps({ kg: stepFrom, equipment, available: equipment === 'Dumbbell' ? rampLoads : rack, unit }) : null;
+  // (#389) The steps measure from the cell's own readout, and a stepped-to load reads as an edited set does.
+  const cellFrom = !stepSet ? 0 : Number(stepSet.weight > 0 ? showPending(stepSet.weight, focused) : showActual(stepFrom)) || 0;
+  const steps = stepSet ? weightSteps({ kg: stepFrom, equipment, available: equipment === 'Dumbbell' ? rampLoads : rack, unit,
+    cell: { from: cellFrom, to: (kg) => Number(showActual(kg)) } }) : null;
   const stepTo = (kg: number | null) => {
     if (kg === null) return;
     setRefusal(null);

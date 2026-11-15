@@ -1,5 +1,5 @@
 import type { Equipment, Unit } from '../types.ts';
-import { LB_EPS, lbGridKg, lbStep, rackLb, shownLb } from './lbGrid.ts';
+import { isPoundValue, LB_EPS, lbGridKg, lbStep, rackGapLb, shownLb } from './lbGrid.ts';
 import { incrementFor, nextLoad } from './progression.ts';
 import { toDisplay, toKg } from './units.ts';
 import { MAX_WEIGHT } from './validate.ts';
@@ -27,27 +27,44 @@ export interface WeightSteps {
  * grid in the lifter's unit (a grid point at least half a step away): `incrementFor`'s kg step, or the
  * pound grid (`lbGrid.ts`, 5 lb). Never 0 or below, a barbell never below the empty bar (+ from under it goes
  * to the bar), never past the loader's limit or the heaviest owned load.
- * (#389) In pounds every step measures from the load as the logger shows it (25 kg reads 55, so −5 / +5, not
- * −5.1 / +4.9), and a rack entry reads to the nearest 2.5 lb (a 2.5 kg rack steps 5 lb, not 5.5). Kilograms
- * are unchanged.
+ * (#389) In pounds every step measures from the load as the logger cell shows it (`cell`: its value now and
+ * what a target will read; without it, `shownLb`), so 25 kg planned reads 55 and steps −5 / +5, not −5.1 /
+ * +4.9. A step to or from a kg-stored rack entry snaps to 2.5 lb once (a 2.5 kg rack steps 5 lb, not 5.5);
+ * a rack typed in pounds keeps its own gaps. Kilograms are unchanged.
  */
-export function weightSteps(args: { kg: number; equipment: Equipment; available: number[]; unit: Unit }): WeightSteps {
-  const { equipment, unit } = args;
+export function weightSteps(args: {
+  kg: number;
+  equipment: Equipment;
+  available: number[];
+  unit: Unit;
+  /** The cell's readout in the display unit: `from` for this load, `to` for what a stepped-to load reads. */
+  cell?: { from: number; to: (kg: number) => number };
+}): WeightSteps {
+  const { equipment, unit, cell } = args;
   const kg = Math.max(0, args.kg);
   const available = args.available.filter((load) => Number.isFinite(load) && load > 0).sort((a, b) => a - b);
   const increment = incrementFor(equipment, available);
   if (increment <= 0) return { step: 0, down: null, up: null, downBy: 0, upBy: 0 };
   const pounds = unit === 'lb';
-  const onRack = (load: number) => available.some((owned) => Math.abs(owned - load) < 0.001);
-  /** A load as shown, for step maths: in pounds a rack entry to 2.5 lb, anything else as the cell reads it. */
-  const show = (load: number) => (!pounds ? load : onRack(load) ? rackLb(load) : shownLb(load));
-  const shown = show(kg);
-  const by = (target: number | null, nominal: number) =>
-    target === null ? nominal : Math.round(Math.abs(show(target) - shown) * 10) / 10;
+  const kgEntry = (load: number) => available.some((owned) => Math.abs(owned - load) < 0.001) && !isPoundValue(load);
+  /** The pound gap between two loads as shown; snapped once when either end is a kg-stored rack entry. */
+  const gapLb = (from: number, fromShown: number, to: number, toShown: number) => {
+    const gap = Math.abs(toShown - fromShown);
+    return kgEntry(from) || kgEntry(to) ? rackGapLb(gap) : gap;
+  };
+  const shown = pounds ? cell?.from ?? shownLb(kg) : toDisplay(kg, unit);
+  const by = (target: number | null, nominal: number) => {
+    if (target === null) return nominal;
+    const gap = pounds ? gapLb(kg, shown, target, cell?.to(target) ?? shownLb(target)) : Math.abs(toDisplay(target, unit) - shown);
+    return Math.round(gap * 10) / 10;
+  };
   const result = (step: number, down: number | null, up: number | null): WeightSteps =>
     ({ step, down, up, downBy: by(down, step), upBy: by(up, step) });
   if (available.length > 0) {
-    const step = pounds ? rackStepLb(available) ?? lbStep(equipment) : Math.round(toDisplay(increment, unit) * 2) / 2;
+    const gaps = available.slice(1).map((load, index) => gapLb(available[index], shownLb(available[index]), load, shownLb(load)))
+      .filter((gap) => gap > 0.001);
+    const step = pounds ? (gaps.length ? Math.round(Math.min(...gaps) * 10) / 10 : lbStep(equipment))
+      : Math.round(toDisplay(increment, unit) * 2) / 2;
     const next = kg < available[0] - 1e-9 ? available[0] : nextLoad(kg, increment, available);
     const down = [...available].reverse().find((load) => load <= kg - increment / 2) ?? null;
     return result(step, down, next > kg + 1e-9 ? next : null);
@@ -59,11 +76,4 @@ export function weightSteps(args: { kg: number; equipment: Equipment; available:
   const up = shown < lightest - EPS ? toKg(lightest, unit) : grid(Math.ceil((shown + step / 2 - EPS) / step));
   const downCount = Math.floor((shown - step / 2 + EPS) / step);
   return result(step, downCount * step >= lightest - EPS ? grid(downCount) : null, up <= MAX_WEIGHT ? up : null);
-}
-
-/** (#389) The smallest gap between owned loads read as pound rack entries; undefined when they collapse to one. */
-function rackStepLb(available: number[]): number | undefined {
-  const shown = [...new Set(available.map(rackLb))].sort((a, b) => a - b);
-  const gaps = shown.slice(1).map((value, index) => value - shown[index]);
-  return gaps.length ? Math.min(...gaps) : undefined;
 }

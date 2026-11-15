@@ -189,3 +189,44 @@ test('#389: the logger reads − 5 lb / + 5 lb on a 55 lb bench planned at 25 kg
     assert.match(kg, /aria-label="\+ 2.5 kg"/);
   } finally { await server.close(); }
 });
+
+// Review 1 of #396: rack sweeps in pounds, each label equal to one snapped gap, never drifting per entry.
+const steps = (kg: number, available: number[], equipment: 'Dumbbell' | 'Kettlebell' = 'Dumbbell') =>
+  weightSteps({ kg, equipment, available, unit: 'lb' });
+
+test('review 1: every step of a 2.5 kg rack shown in pounds reads 5 lb (no 7.5 from per-entry rounding)', () => {
+  const rack = Array.from({ length: 20 }, (_, index) => (index + 1) * 2.5);
+  for (const kg of rack.slice(1, -1)) {
+    const s = steps(kg, rack);
+    assert.deepEqual([s.step, s.downBy, s.upBy], [5, 5, 5], `${kg} kg`);
+  }
+  // A 2 kg rack (4.4 lb gaps) reads 5 on every step too.
+  const two = Array.from({ length: 12 }, (_, index) => (index + 1) * 2);
+  for (const kg of two.slice(1, -1)) assert.deepEqual([steps(kg, two).downBy, steps(kg, two).upBy], [5, 5], `${kg} kg`);
+});
+
+test('review 1: a rack typed in pounds keeps its own gaps, even off the 2.5 lb grid', () => {
+  const s = steps(lb(12), [8, 12, 16, 20, 24].map(lb));
+  assert.deepEqual([s.step, s.downBy, s.upBy], [4, 4, 4]);
+  const bells = steps(lb(26), [18, 26, 35, 44, 53].map(lb), 'Kettlebell');
+  assert.deepEqual([bells.step, bells.downBy, bells.upBy], [8, 8, 9]);
+  const threes = steps(lb(6), [3, 6, 9, 12, 15].map(lb));
+  assert.deepEqual([threes.downBy, threes.upBy], [3, 3]);
+});
+
+test('review 1: the travel rack in pounds snaps each real gap once (39.5 → 48.5 reads 10, → 33 reads 7.5)', () => {
+  const s = steps(18, [10, 15, 18, 22, 25]);
+  assert.deepEqual([s.downBy, s.upBy], [7.5, 10]);
+});
+
+test('review 1: with the cell readout, steps measure from what the cell shows (a typed-legacy 60 kg reads 132.28)', () => {
+  const read = (kg: number) => Math.round(kg / 0.45359237 * 100) / 100;
+  const s = weightSteps({ kg: 60, equipment: 'Barbell', available: [], unit: 'lb', cell: { from: 132.28, to: read } });
+  // The grid point at least half a step away, as on main: 132.28 → 135 up and 125 down.
+  close(s.down, lb(125));
+  close(s.up, lb(135));
+  assert.deepEqual([s.downBy, s.upBy], [7.3, 2.7]);
+  // A kg lifter ignores nothing it did before: the cell is not read in kg.
+  const kg = weightSteps({ kg: 60, equipment: 'Barbell', available: [], unit: 'kg', cell: { from: 999, to: () => 999 } });
+  assert.deepEqual([kg.downBy, kg.upBy], [2.5, 2.5]);
+});
