@@ -52,6 +52,10 @@ const MAX_LOAD_ENTRIES = 200;
 export const MAX_WEIGHT = 2000;
 /** The most reps (or seconds held) the loader accepts; every reps entry refuses above it (#109). */
 export const MAX_REPS = 1000;
+/** (#390) The most paused time one clock can hold: 24 h. Writers clamp to it; the loader drops anything else. */
+export const MAX_PAUSE_MS = 86_400_000;
+/** The longest rest countdown the loader accepts, in seconds. */
+const MAX_REST_SECONDS = 900;
 
 class Invalid extends Error {}
 
@@ -89,6 +93,18 @@ function finiteNumber(value: unknown, path: string, max: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) fail(path, 'expected a finite number');
   if (value < 0 || value > max) fail(path, `must be between 0 and ${max}`);
   return value;
+}
+
+/**
+ * (#390) A timer field is a convenience, never the lifter's data: a wrong type or out-of-range value
+ * reads as absent, the way a bad note does, so it can never lock a whole record out.
+ */
+function timerMs(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= MAX_PAUSE_MS ? value : undefined;
+}
+
+function restSecondsOf(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_REST_SECONDS ? value : undefined;
 }
 
 function integer(value: unknown, path: string, min: number, max: number): number {
@@ -282,25 +298,19 @@ function validateWorkout(value: unknown, path: string): WorkoutRecord {
       raw.durationMin === undefined
         ? undefined
         : integer(raw.durationMin, `${path}.durationMin`, 0, 600),
-    pausedMs:
-      raw.pausedMs === undefined ? undefined : finiteNumber(raw.pausedMs, `${path}.pausedMs`, 86_400_000),
+    // (#390) Forgiving: a bad pausedMs, restSeconds or restPausedMs is dropped, never fails the record.
+    pausedMs: timerMs(raw.pausedMs),
     pausedAt: raw.pausedAt === undefined ? undefined : isoDateOrNull(raw.pausedAt, `${path}.pausedAt`),
     restStartedAt:
       raw.restStartedAt === undefined
         ? undefined
         : isoDateOrNull(raw.restStartedAt, `${path}.restStartedAt`),
-    restSeconds:
-      raw.restSeconds === undefined
-        ? undefined
-        : integer(raw.restSeconds, `${path}.restSeconds`, 0, 900),
+    restSeconds: restSecondsOf(raw.restSeconds),
     restPausedAt:
       raw.restPausedAt === undefined
         ? undefined
         : isoDateOrNull(raw.restPausedAt, `${path}.restPausedAt`),
-    restPausedMs:
-      raw.restPausedMs === undefined
-        ? undefined
-        : finiteNumber(raw.restPausedMs, `${path}.restPausedMs`, 86_400_000),
+    restPausedMs: timerMs(raw.restPausedMs),
     // Optional and enumerated. An old record without it stays valid; an
     // unrecognised value is rejected rather than replaced with a guess.
     feedback:

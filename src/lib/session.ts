@@ -2,7 +2,7 @@ import type { AppState, PerformedSet, WorkoutExercise, WorkoutRecord } from '../
 import { needsLoad } from '../data/flagship.ts';
 import { advanceAfterFinish } from './sequence.ts';
 import { withoutCustomDay } from './plan.ts';
-import { MAX_REPS, MAX_WEIGHT } from './validate.ts';
+import { MAX_PAUSE_MS, MAX_REPS, MAX_WEIGHT } from './validate.ts';
 import { unpair } from './supersets.ts';
 
 function cleanNumber(value: number, fallback = 0): number {
@@ -89,7 +89,8 @@ export function toggleRestPause(session: WorkoutRecord, now: string): WorkoutRec
   const next = copyRecord(session);
   if (next.restPausedAt) {
     const pausedFor = Math.max(0, Date.parse(now) - Date.parse(next.restPausedAt));
-    next.restPausedMs = (next.restPausedMs ?? 0) + pausedFor;
+    // (#390) Capped at 24 h: an overnight pause must still save a record the loader accepts.
+    next.restPausedMs = Math.min(MAX_PAUSE_MS, (next.restPausedMs ?? 0) + pausedFor);
     next.restPausedAt = null;
   } else {
     next.restPausedAt = now;
