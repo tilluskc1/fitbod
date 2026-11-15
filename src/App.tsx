@@ -1601,6 +1601,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           raw={recovery.raw}
           onDownload={() => downloadText(recovery.raw, 'strength-original-state.json')}
           onRestore={(next: AppState, summary: ImportSummary) => {
+            // (#390) Keep the unreadable original before the restore replaces it, as Start fresh does.
+            if (recovery.raw) backupRaw(recovery.raw);
             setState(next);
             // Corrupt data loads with no profile, so the splash was armed; a restored profile
             // opens straight on Today (#285).
