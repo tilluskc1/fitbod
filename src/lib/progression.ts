@@ -9,7 +9,8 @@ import type {
   WorkoutExercise,
   WorkoutRecord,
 } from '../types.ts';
-import { loadLimitText, loadValue, unitLabel } from './units.ts';
+import { lbLoadAtOrUnder, lbNextLoad, lbStep } from './lbGrid.ts';
+import { loadLimitText, loadValue, unitLabel, unitOf } from './units.ts';
 import { MAX_WEIGHT } from './validate.ts';
 import { exerciseInWorkout } from './plan.ts';
 import { HOTEL_DUMBBELLS, programExercise } from '../data/flagship.ts';
@@ -89,7 +90,8 @@ const FREE_WEIGHT_STRENGTH_LEAD: RepRange = { min: 5, max: 8 };
 /**
  * Fallback steps when no load inventory exists. These are starting points, not
  * claims about every gym: a barbell moves in plate pairs, a kettlebell in whole
- * sizes, a machine stack in whatever the manufacturer chose.
+ * sizes, a machine stack in whatever the manufacturer chose. Kilograms only: a
+ * pound lifter with no rack steps on the pound grid instead (#391, `lbGrid.ts`).
  */
 export const DEFAULT_INCREMENTS: Record<Equipment, number> = {
   Barbell: 2.5,
@@ -440,6 +442,8 @@ function prescribeOn(
   const catalog = repRangeFor(exercise);
   const { sets, range } = roleTarget(exercise, profile, lead, dayHasLead);
   const increment = incrementFor(exercise.equipment, available);
+  // #391: a pound lifter with no owned rack rounds on the 5 lb grid, never the kg one (135 → 140, not 143.5).
+  const poundStep = unitOf(profile) === 'lb' && available.length === 0 && increment > 0 ? lbStep(exercise.equipment) : 0;
   const last = lastExercisePerformance(history, exercise.id, setup);
   const base = {
     equipment: exercise.equipment,
@@ -501,7 +505,9 @@ function prescribeOn(
     const estimate = (workingWeight * (1 + lowestReps / 30)) / (1 + range.min / 30);
     const down = available.length > 0
       ? atOrUnder(available, estimate) ?? available[0]
-      : Math.max(increment, round(Math.floor((estimate + 0.001) / increment) * increment));
+      : poundStep > 0
+        ? lbLoadAtOrUnder(estimate, poundStep)
+        : Math.max(increment, round(Math.floor((estimate + 0.001) / increment) * increment));
     return { ...base, weight: Math.min(down, workingWeight), reps: range.min, basis: 'range-reset' };
   }
 
@@ -522,7 +528,8 @@ function prescribeOn(
     return { ...base, weight: workingWeight, reps: range.min, basis: 'go-heavier' };
   }
 
-  const next = increment > 0 ? nextLoad(workingWeight, increment, available) : workingWeight;
+  const next = poundStep > 0 ? lbNextLoad(workingWeight, poundStep)
+    : increment > 0 ? nextLoad(workingWeight, increment, available) : workingWeight;
   if (next <= workingWeight + 0.001) {
     // No heavier load exists (bodyweight, the top of the recorded rack, or the app's load limit).
     return {

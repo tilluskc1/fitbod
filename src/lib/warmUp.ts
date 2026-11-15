@@ -28,7 +28,7 @@ export const BAR: Record<Unit, number> = { kg: 20, lb: 45 };
 /** (#345) Below this working load, in the display unit, the lift is its own warm-up: no ramp rows. */
 export const RAMP_FLOOR: Record<Unit, number> = { kg: 15, lb: 30 };
 
-/** Plate steps by display unit, for kit with no listed loads (the logger's − and + read them too, #371). */
+/** Plate steps by display unit, for ramp rows on kit with no listed loads. The logger's − and + and the next load read `lbGrid.ts` instead (#389). */
 export const STEPS: Record<Unit, Partial<Record<Equipment, number>>> = {
   kg: { Barbell: 2.5, Dumbbell: 2.5, Kettlebell: 4, Machine: 5, Cable: 2.5 },
   lb: { Barbell: 5, Dumbbell: 5, Kettlebell: 5, Machine: 10, Cable: 5 },

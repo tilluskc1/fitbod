@@ -227,7 +227,7 @@ test('an app-prescribed barbell step reads the same on target, rows, Log button 
   } finally { await server.close(); }
 });
 
-/** Overhead Press: typed 42.3 lb, then the app's 22.5 kg step logged unchanged (or typed again). */
+/** Overhead Press: typed 42.3 lb, then the app's step (50 lb / 22.5 kg, #391) logged unchanged (or typed again). */
 test('a logged load reads like its target when accepted unchanged and as typed otherwise, on every logged surface', async () => {
   const server = await createServer({ plugins: [historyView], server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
@@ -249,8 +249,9 @@ test('a logged load reads like its target when accepted unchanged and as typed o
       };
       const first = finish([], 'a', '2026-11-02', 18, typed);
       const step = prescribeExercise(ohp, bar, first).weight;
-      assert.equal(step, 22.5, 'the app steps to 22.5 kg');
-      const X = inputValue(step, unit); // 49.5 lb / 22.5 kg
+      // #391: a pound lifter steps on the 5 lb grid (42.3 → 50 lb), a kg lifter on the 2.5 kg one (19.3 → 22.5).
+      assert.equal(step, unit === 'lb' ? toKg(50, 'lb') : 22.5, 'the app steps to 50 lb / 22.5 kg');
+      const X = inputValue(step, unit); // 50 lb / 22.5 kg
       const trainProps = { now: Date.parse('2026-11-04T10:01:00.000Z'), rampLoads: [], profileLoads: bar.loads, unit,
         onMinimize() {}, onFinish() {}, onUpdateSet() {}, onLogSet() {}, onToggleRestPause() {}, onExtendRest() {},
         onReturn() {} };

@@ -36,12 +36,12 @@ test('a kilogram barbell steps incrementFor (2.5 kg): 60 → 62.5 and 57.5', () 
   close(steps.down, 57.5);
 });
 
-test('a machine stack steps 5 kg, or 10 lb', () => {
+test('a machine stack steps 5 kg, or 5 lb (#389: the shared pound grid, as the next load steps)', () => {
   assert.equal(weightSteps({ kg: 40, equipment: 'Machine', available: [], unit: 'kg' }).step, 5);
   const steps = weightSteps({ kg: lb(100), equipment: 'Machine', available: [], unit: 'lb' });
-  assert.equal(steps.step, 10);
-  close(steps.up, lb(110));
-  close(steps.down, lb(90));
+  assert.equal(steps.step, 5);
+  close(steps.up, lb(105));
+  close(steps.down, lb(95));
 });
 
 test('an off-grid load moves to the grid point at least half a step away (the nextLoad rule)', () => {
@@ -57,8 +57,12 @@ test('review 2: planned 22.5 kg in pounds (49.6 lb) steps to 55 and 45, never a 
   const steps = weightSteps({ kg: 22.5, equipment: 'Barbell', available: [], unit: 'lb' });
   close(steps.up, lb(55));
   close(steps.down, lb(45));
-  assert.equal(steps.upBy, 5.4);
-  assert.equal(steps.downBy, 4.6);
+  // #389: measured from 49.5, the half pound the cell shows for an app-planned 22.5 kg.
+  assert.equal(steps.upBy, 5.5);
+  assert.equal(steps.downBy, 4.5);
+  // A typed 49.6 lb reads exactly as typed.
+  const typed = weightSteps({ kg: lb(49.6), equipment: 'Barbell', available: [], unit: 'lb' });
+  assert.deepEqual([typed.upBy, typed.downBy], [5.4, 4.6]);
   // The same rule in kg: 62.4 is a hair under 62.5, so + goes to 65 and − to 60.
   const kg = weightSteps({ kg: 62.4, equipment: 'Barbell', available: [], unit: 'kg' });
   close(kg.up, 65);
@@ -161,10 +165,10 @@ test('review 1: a load under the lightest owned one steps up to it, and − is d
   close(weightSteps({ kg: 6, equipment: 'Dumbbell', available: HOTEL, unit: 'kg' }).up, 10);
 });
 
-test('review 1: pound steps come from the warm-up plate table (kettlebell 5 lb, machine 10 lb)', () => {
+test('review 1: pound steps come from the shared pound grid (#389: 5 lb on every loaded kit)', () => {
   assert.equal(weightSteps({ kg: lb(35), equipment: 'Kettlebell', available: [], unit: 'lb' }).step, 5);
   close(weightSteps({ kg: lb(35), equipment: 'Kettlebell', available: [], unit: 'lb' }).up, lb(40));
-  assert.equal(weightSteps({ kg: lb(100), equipment: 'Machine', available: [], unit: 'lb' }).step, 10);
+  assert.equal(weightSteps({ kg: lb(100), equipment: 'Machine', available: [], unit: 'lb' }).step, 5);
   assert.equal(weightSteps({ kg: lb(50), equipment: 'Cable', available: [], unit: 'lb' }).step, 5);
   assert.equal(weightSteps({ kg: 16, equipment: 'Kettlebell', available: [], unit: 'kg' }).step, 4);
 });
