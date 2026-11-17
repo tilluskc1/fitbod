@@ -74,7 +74,7 @@ try {
 
     // A message raised while leaving the logger shows where it lands (Today).
     await page.getByRole('button', { name: 'Finish', exact: true }).click();
-    const skipOrDiscard = page.getByRole('dialog').getByRole('button', { name: /Discard|Skip/ }).first();
+    const skipOrDiscard = page.getByRole('dialog').getByRole('button', { name: /Discard|End and skip/ }).first();
     await skipOrDiscard.click();
     const confirmDiscard = page.getByRole('dialog').getByRole('button', { name: /Discard/ }).first();
     if (await confirmDiscard.count()) await confirmDiscard.click();

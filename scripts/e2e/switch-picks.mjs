@@ -246,7 +246,9 @@ try {
     await page.close();
   }
 
-  // A running session disables Switch (review 3: this check must reach the pill, not skip it).
+  // (#397, replaces the old "a running session disables Switch") Switch is live while a session runs: with no
+  // sets logged the tap ends the empty session and opens Switch (review 3: this check must reach the pill).
+  // The sets-logged path (Finish sheet first) is in scripts/e2e/end-workout.mjs.
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await onboard(page);
   await page.locator('.tab-action').click();
@@ -254,7 +256,11 @@ try {
   await page.locator('.t7-hero').waitFor();
   const switchPill = page.getByRole('button', { name: 'Switch workout' });
   check(await switchPill.count() === 1, '390x844: no Switch pill on Today while a session runs');
-  check(await switchPill.isDisabled(), '390x844: Switch is enabled while a session runs');
+  check(await switchPill.isEnabled(), '390x844: Switch is disabled while a session runs (#397: no dead chip)');
+  await switchPill.click();
+  await page.locator('.sheet--switch').waitFor({ timeout: 3000 }).catch(() => {});
+  check(await page.locator('.sheet--switch').count() === 1, '390x844: Switch with an empty session open did not open Switch');
+  check((await stored(page))?.current === null, '390x844: Switch left the empty session open');
   await page.close();
 } finally {
   await browser.close();
@@ -267,3 +273,7 @@ if (failures.length) {
   process.exit(1);
 }
 console.log('switch-picks: ok');
+
+// (#397) Ending a workout runs here, after Switch's own checks, so `npm run e2e` covers it without a
+// package.json change (off-limits for #397). Product can move it into the e2e list.
+await import('./end-workout.mjs');

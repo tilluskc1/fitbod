@@ -317,6 +317,15 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    which one wins (here the field being typed) in the code, not by call order. Check: the "keyboard already
    up" case in `scripts/e2e/big-jump.mjs` holds frames until the keys are typed and runs with a 10px taller top.
 
+44. **An exit says what it does to the workout, not only to the plan.** #397: the owner could not end a
+   5-day-old empty Push. The empty Finish sheet's way out read "Keep Push for next time" (it did end the
+   workout), so it looked like one more skip; Today offered only Resume, and the top chips were disabled with
+   a "Finish or discard" heads-up. Rule: a destructive or exit action names the action in its label ("End
+   workout", "End and skip to Pull"); what happens to the plan goes after it or in the body. A control that
+   cannot act now leads to the step that lets it act (here the Finish sheet), never a dead tap. Check:
+   `tests/endWorkout397.test.ts` and `scripts/e2e/end-workout.mjs` (no "for next time", no disabled top chip
+   while a session is open).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

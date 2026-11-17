@@ -59,7 +59,6 @@ test('Today shows at most one Heads-up card: install, then backup, then the rest
  */
 const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> = [
   ['problem', "'No movement in this workout can be done with that setup.'"],
-  ['headsUp', "'Finish or discard the open session before skipping this one.'"],
   ['done', "'Session skipped. Skips earn no progression.'"],
   ['problem', "'That preview is out of date. Preview again to approve it.'"],
   ['problem', "'No movement in this workout can be done with that setup.'"],
@@ -68,10 +67,8 @@ const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> 
   ['done', 'CHANGED_FOR_TODAY'],
   ['done', "'Back to your gear.'"],
   ['done', 'CHANGED_FOR_TODAY'],
-  ['headsUp', "'Finish or discard the open session before switching days.'"],
   ['done', '`${option.name} is up.'],
-  // #296: a picked day from Switch, and Switch's "Or train something else" while a session runs.
-  ['headsUp', "'Finish or discard the open session before switching days.'"],
+  // #296: Switch's "Or train something else". (#397) No "Finish or discard" heads-ups: the chips end or finish first.
   ['done', 'CHANGED_FOR_TODAY'],
   ['done', 'message'],
   ['headsUp', 'text'],
@@ -88,6 +85,8 @@ const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> 
   ['done', "'Workout saved.'"],
   ['done', '`${slot.name} skipped'],
   ['done', "'Session discarded. Nothing was added to history.'"],
+  // #397: ending an empty session from Today, the Finish sheet or a chip.
+  ['done', 'noSetsNotice(hadNotes)'],
   ['problem', 'refused'],
   ['done', "'Workout deleted.'"],
   ['problem', "'Backup not saved, so nothing was recorded. Try again.'"],
