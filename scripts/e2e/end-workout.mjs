@@ -97,11 +97,12 @@ async function chipsLive(page, where) {
   const disabled = await page.locator('.t7-controls .t7-pill[disabled]').count();
   check(disabled === 0, `${where}: ${disabled} top chip(s) are disabled while a session is open`);
 }
-/** The End link sits inside the visible viewport and is at least 44px tall. */
+/** The End link sits inside the visible viewport, at least 44px both ways, and never spans the dock (#397 review 1). */
 async function endInView(page, where) {
   const box = await endLink(page).boundingBox();
   const height = page.viewportSize().height;
-  check(box && box.y >= 0 && box.y + box.height <= height && box.height >= 44, `${where}: End is not a visible 44px target (${JSON.stringify(box)} of ${height})`);
+  check(box && box.y >= 0 && box.y + box.height <= height && box.height >= 44 && box.width >= 44, `${where}: End is not a visible 44x44 target (${JSON.stringify(box)} of ${height})`);
+  check(box && box.width < page.viewportSize().width / 2, `${where}: End's tap area spans the dock (${box && Math.round(box.width)}px wide)`);
 }
 
 const noon = new Date();

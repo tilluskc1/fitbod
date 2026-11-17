@@ -79,8 +79,7 @@ const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> 
   // #372: a note saved or removed from the exercise menu.
   ['done', "after === undefined ? 'Note removed.'"],
   ['headsUp', 'liveCarry.note'],
-  // #372: the no-sets toast says when notes went with the session.
-  ['done', 'noSetsNotice('],
+  // #372's no-sets toast (notes went with the session) now comes from endEmptySession below (#397, lesson 9).
   ['headsUp', 'progress.skipped > 0'],
   ['done', "'Workout saved.'"],
   ['done', '`${slot.name} skipped'],

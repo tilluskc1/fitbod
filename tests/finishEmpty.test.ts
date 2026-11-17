@@ -37,7 +37,7 @@ test('the empty Finish sheet ends the workout, with or without a skip, never "Sa
     const { FinishSheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
     const noop = () => {};
     const empty = renderToStaticMarkup(createElement(FinishSheet, { done: 0, total: 24, onSave: noop, onContinue: noop,
-      onDiscard: noop, onClose: noop, slotName: 'Push', nextName: 'Pull', onSkip: noop })).replace(/<[^>]+>/g, ' ');
+      onDiscard: noop, onClose: noop, nextName: 'Pull', onSkip: noop })).replace(/<[^>]+>/g, ' ');
     assert.match(empty, /End this workout\?/);
     assert.match(empty, /No sets logged, so nothing is saved\./);
     assert.match(empty, /End workout/);
@@ -46,7 +46,7 @@ test('the empty Finish sheet ends the workout, with or without a skip, never "Sa
     assert.doesNotMatch(empty, /for next time/);
     assert.doesNotMatch(empty, /Save completed work/);
     const some = renderToStaticMarkup(createElement(FinishSheet, { done: 3, total: 24, onSave: noop, onContinue: noop,
-      onDiscard: noop, onClose: noop, slotName: 'Push', nextName: 'Pull', onSkip: noop })).replace(/<[^>]+>/g, ' ');
+      onDiscard: noop, onClose: noop, nextName: 'Pull', onSkip: noop })).replace(/<[^>]+>/g, ' ');
     assert.match(some, /Save completed work/, 'with sets logged the sheet is unchanged');
   } finally {
     await server.close();

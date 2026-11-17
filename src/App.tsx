@@ -1347,14 +1347,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const saveFinish = (then?: ChipSheet) => {
     if (!current) return;
     const progress = sessionProgress(current);
-    if (progress.done === 0) {
-      setState((currentState) => applyCancel(currentState, current.id));
-      setSheet({ kind: 'none' });
-      setView('tabs');
-      setTab('today');
-      setNotice(done(noSetsNotice(current.exercises.some((exercise) => exercise.note))));
-      return;
-    }
+    // Nothing logged: the same path as End workout (#397, lesson 9).
+    if (progress.done === 0) return endEmptySession();
     const early = progress.done < progress.total;
     const id = current.id;
     track(early ? 'workout-cut-short' : 'workout-finished', dayTypeOf(current.name));
