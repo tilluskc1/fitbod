@@ -312,13 +312,18 @@ export default function TodayScreen({
             icon: 'info',
           }
         : { tone: 'ready', label: 'Ready', icon: 'check' };
-  // (#260) An open session shows its progress; the colour keeps its status, a Limited or Not-enough icon too.
-  const chip = current
-    ? { ...status, label: `In progress · ${progress} of ${total} sets`, icon: status.tone === 'ready' ? 'play_arrow' : status.icon }
-    : status;
-  const heroName = todayOnly && current ? current.name : program.name;
   // (#397) A session from an earlier calendar day is never offered as today's.
   const unfinished = unfinishedSince(current, now);
+  // (#260) An open session shows its progress; the colour keeps its status, a Limited or Not-enough icon too.
+  // (#399) An unfinished one from an earlier day counts what was logged and never says "In progress".
+  const chip = current
+    ? {
+        ...status,
+        label: unfinished ? `${progress} of ${total} sets logged` : `In progress · ${progress} of ${total} sets`,
+        icon: status.tone === 'ready' ? 'play_arrow' : status.icon,
+      }
+    : status;
+  const heroName = todayOnly && current ? current.name : program.name;
   const heroSlot = todayOnly ? 'Today only' : slotLabel;
   const leadId = leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId));
   const leadName = adapted.exercises.find((exercise) => exercise.exerciseId === leadId)?.name;
@@ -392,11 +397,11 @@ export default function TodayScreen({
 
         <section
           className="t7-hero"
-          aria-label={timed ? `${heroName}, ${minutes} minutes` : heroName}
+          aria-label={timed && !unfinished ? `${heroName}, ${minutes} minutes` : heroName}
         >
           <img className="t7-hero__photo" src={HERO_PHOTO} alt="" />
           <span className="t7-hero__top">
-            <span className="t7-hero__eyebrow">{current ? 'In progress' : 'Your next workout'}</span>
+            <span className="t7-hero__eyebrow">{current ? (unfinished ? 'Unfinished' : 'In progress') : 'Your next workout'}</span>
           </span>
           <h2 className="t7-hero__title">
             {current
@@ -406,7 +411,8 @@ export default function TodayScreen({
                 : `Your ${program.name} Day Starts Here!`}
           </h2>
           <span className="t7-hero__meta">
-            {timed && (
+            {/* (#399) An unfinished workout from an earlier day promises no length. */}
+            {timed && !unfinished && (
               <>
                 <Icon name="timer" size={16} />
                 {approx ? '≈' : ''}
@@ -664,7 +670,18 @@ export default function TodayScreen({
       </div>
 
       <div className="flow-dock" hidden={composing && !current}>
-        {current ? (
+        {current && unfinished && onEnd ? (
+          // (#399) From an earlier day, the way out leads: End with nothing logged, Finish (the sheet
+          // that saves the logged sets) otherwise. Resume stays, as the quiet choice.
+          <>
+            <button className="link-btn today-end" onClick={onResume}>
+              Resume
+            </button>
+            <button className="pill-primary" onClick={onEnd}>
+              {progress === 0 ? 'End workout' : 'Finish workout'}
+            </button>
+          </>
+        ) : current ? (
           <>
             {onEnd && (
               <button className="link-btn today-end" onClick={onEnd}>
