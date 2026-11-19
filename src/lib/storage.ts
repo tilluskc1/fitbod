@@ -47,6 +47,40 @@ function storage(): Storage | null {
   }
 }
 
+/** (#390) Where Recovery keeps the unreadable original before Restore or Start fresh replaces it. */
+export const CORRUPT_BACKUP_KEY = `${STORAGE_KEY}:corrupt-backup`;
+
+/** (#395) Recovery's one line when the safety copy could not be written; nothing was replaced. */
+export const COPY_FAILED = "Couldn't keep a copy of your old data. Tap Download original first.";
+
+/**
+ * (#395) Keep the unreadable original under the safety-copy key. True only when the key holds exactly
+ * `raw` afterwards: a full storage throws and leaves any older copy, which is not this one.
+ */
+export function keepSafetyCopy(raw: string): boolean {
+  const store = storage();
+  if (!store) return false;
+  try {
+    store.setItem(CORRUPT_BACKUP_KEY, raw);
+  } catch {
+    // Read back below: the key may already hold this exact original.
+  }
+  try {
+    return store.getItem(CORRUPT_BACKUP_KEY) === raw;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * (#395) Restore and Start fresh may replace the original only once a copy of it is kept: under the
+ * safety-copy key, or in a file the lifter downloaded with Download original. No original, nothing to keep.
+ */
+export function mayReplaceOriginal(raw: string, downloaded: boolean): boolean {
+  if (!raw) return true;
+  return keepSafetyCopy(raw) || downloaded;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

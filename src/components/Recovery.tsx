@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { AppState } from '../types';
 import type { ImportSummary } from '../lib/storage';
-import { EMPTY_STATE, mergeImport } from '../lib/storage';
+import { COPY_FAILED, EMPTY_STATE, mergeImport } from '../lib/storage';
 import { parseState } from '../lib/validate';
 import { ConfirmSheet } from '../screens/Sheets';
 
@@ -9,14 +9,16 @@ interface Props {
   error: string;
   raw: string;
   onDownload: () => void;
-  onRestore: (state: AppState, summary: ImportSummary) => void;
-  onStartFresh: () => void;
+  /** (#395) False when no copy of the original could be kept: nothing was replaced. */
+  onRestore: (state: AppState, summary: ImportSummary) => boolean;
+  onStartFresh: () => boolean;
 }
 
 export default function Recovery({ error, raw, onDownload, onRestore, onStartFresh }: Props) {
   const [pending, setPending] = useState<{ filename: string; state: AppState } | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [confirmFresh, setConfirmFresh] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   const chooseFile = async (file: File | undefined) => {
     if (!file) return;
@@ -58,7 +60,13 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
           {raw.length.toLocaleString()} characters are stored under the app&apos;s storage key.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button className="secondary" onClick={onDownload}>
+          <button
+            className="secondary"
+            onClick={() => {
+              onDownload();
+              setCopyFailed(false);
+            }}
+          >
             Download original
           </button>
           <label className="secondary recovery-restore">
@@ -74,6 +82,12 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
             />
           </label>
         </div>
+
+        {copyFailed && (
+          <p className="error-text" role="alert">
+            {COPY_FAILED}
+          </p>
+        )}
 
         {fileError && (
           <p className="error-text" role="alert">
@@ -91,7 +105,7 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
               <button
                 className="primary"
-                onClick={() => onRestore(pending.state, {
+                onClick={() => setCopyFailed(!onRestore(pending.state, {
                   newWorkouts: pending.state.history.length,
                   duplicateWorkouts: 0,
                   localOnlyWorkouts: 0,
@@ -100,7 +114,7 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
                   activeSessionKept: false,
                   activeSessionConflict: false,
                   feedbackPreserved: 0,
-                })}
+                }))}
               >
                 Confirm restore
               </button>
@@ -121,7 +135,11 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
           title="Start with empty data?"
           confirmLabel="Start fresh"
           cancelLabel="Cancel"
-          onConfirm={onStartFresh}
+          onConfirm={() => {
+            if (onStartFresh()) return;
+            setConfirmFresh(false);
+            setCopyFailed(true);
+          }}
           onCancel={() => setConfirmFresh(false)}
         >
           The unreadable data is backed up first, but your app will look new.

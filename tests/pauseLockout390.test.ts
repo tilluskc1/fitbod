@@ -8,8 +8,8 @@ import { GYM_ITEM_IDS } from '../src/data/gymItems.ts';
 import { adaptWorkout, toWorkoutExercises } from '../src/lib/adapt.ts';
 import { buildPlan } from '../src/lib/generator.ts';
 import { completeSession, createSession, logSet, toggleRestPause } from '../src/lib/session.ts';
-import { STORAGE_KEY, loadState, saveState } from '../src/lib/storage.ts';
-import { MAX_PAUSE_MS, SCHEMA_VERSION, APP_MARKER, validateState } from '../src/lib/validate.ts';
+import { STORAGE_KEY, loadState, saveState, serializeExport } from '../src/lib/storage.ts';
+import { MAX_PAUSE_MS, SCHEMA_VERSION, APP_MARKER, parseState, validateState } from '../src/lib/validate.ts';
 import type { AppState, Profile, WorkoutRecord } from '../src/types.ts';
 
 const OVERNIGHT = 89_910_000; // Pause 18:01, Resume 19:00 the next day (the issue's case).
@@ -59,15 +59,19 @@ function fullState(): AppState {
     loads: { Dumbbell: [5, 10, 15, 20] }, name: 'Sam', unit: 'kg', sessionMinutes: 45,
     preferences: { 'push-up': 'less' }, pairExercises: true, gymItems: [GYM_ITEM_IDS[0]],
   };
-  const done = completeSession(
+  const finished = completeSession(
     logSet(logSet(decorated(open('w1', '2026-11-10T18:00:00.000Z')), 0, 0, '2026-11-10T18:05:00.000Z'), 1, 0, '2026-11-10T18:07:00.000Z'),
     { early: true, now: '2026-11-10T19:00:00.000Z' },
   );
+  // (#395) Rated, with paused workout time banked.
+  const done: WorkoutRecord = { ...finished, feedback: 'about-right', pausedMs: 240_000 };
   // Mid-rest, paused, with paused time already banked.
   let current = logSet(decorated(open('w2', '2026-11-12T18:00:00.000Z')), 0, 0, '2026-11-12T18:05:00.000Z', 90);
   current = toggleRestPause(current, '2026-11-12T18:05:30.000Z');
   current = toggleRestPause(current, '2026-11-12T18:06:00.000Z');
   current = toggleRestPause(current, '2026-11-12T18:06:10.000Z');
+  // (#395) The workout itself is paused too, after an earlier pause of 90 s.
+  current = { ...current, pausedMs: 90_000, pausedAt: '2026-11-12T18:06:20.000Z' };
   return {
     profile,
     plan: buildPlan(profile),
@@ -207,6 +211,9 @@ test('save, then load, over a fully populated state gives the same state back', 
   const state = fullState();
   // The fixture really is fully populated.
   assert.ok(state.current?.restStartedAt && state.current.restPausedAt && (state.current.restPausedMs ?? 0) > 0);
+  // (#395) Feedback, a running workout pause and banked paused time, on both current and history.
+  assert.ok(state.current.pausedAt && (state.current.pausedMs ?? 0) > 0);
+  assert.ok(state.history[0].feedback && (state.history[0].pausedMs ?? 0) > 0);
   assert.ok(state.history[0].exercises.some((e) => e.pair) && state.history[0].exercises.some((e) => e.note));
   assert.ok(state.history[0].exercises.some((e) => e.originalPlannedSets) && state.history[0].exercises.some((e) => e.skipped));
   const direct = validateState(plain(state));
@@ -220,13 +227,41 @@ test('save, then load, over a fully populated state gives the same state back', 
   assert.deepEqual(plain(loaded.state), plain(state));
 });
 
+test('(#395) export, then restore the file, over the fully populated state gives the same state back', () => {
+  const state = fullState();
+  const parsed = parseState(serializeExport(state, '2026-11-13T20:00:00.000Z'));
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
+  const { lastBackupAt: _exported, ...restored } = plain(parsed.state);
+  const { lastBackupAt: _kept, ...expected } = plain(state);
+  assert.deepEqual(restored, expected);
+  assert.equal(parsed.state.history[0].feedback, 'about-right');
+  assert.deepEqual([parsed.state.current?.pausedAt, parsed.state.current?.pausedMs], ['2026-11-12T18:06:20.000Z', 90_000]);
+});
+
+test('(#395) older data without feedback or workout pause fields still loads, with them absent', () => {
+  const stored = plain(fullState());
+  for (const workout of [stored.current, stored.history[0]]) {
+    delete workout.feedback;
+    delete workout.pausedAt;
+    delete workout.pausedMs;
+  }
+  installStorage({ [STORAGE_KEY]: envelope(stored) });
+  const loaded = loadState();
+  assert.equal(loaded.status, 'ok', loaded.error);
+  assert.deepEqual(plain(loaded.state), stored);
+  assert.equal(loaded.state.history[0].feedback, undefined);
+  assert.equal(loaded.state.current?.pausedAt, undefined);
+});
+
 test('Restore on Recovery keeps the unreadable original first, like Start fresh (#390)', () => {
   const source = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   const restore = source.match(/onRestore=\{\(next: AppState, summary: ImportSummary\) => \{([\s\S]*?)\}\}\n/);
   assert.ok(restore, 'the Recovery onRestore handler is found');
   const body = restore[1];
-  const backup = body.indexOf('if (recovery.raw) backupRaw(recovery.raw);');
-  assert.ok(backup >= 0, 'onRestore backs up the raw text, guarded for no raw');
+  // (#395) The copy now goes through mayReplaceOriginal, which also stops the restore when it fails.
+  const backup = body.indexOf('if (!mayReplaceOriginal(recovery.raw, originalDownloaded.current)) return false;');
+  assert.ok(backup >= 0, 'onRestore keeps the raw text first');
   assert.ok(backup < body.indexOf('setState(next)'), 'the backup happens before the restored state replaces it');
-  assert.equal((source.match(/fitbod-clone-v1:corrupt-backup/g) ?? []).length, 1, 'no new stored key: one corrupt-backup key');
+  const storage = readFileSync(new URL('../src/lib/storage.ts', import.meta.url), 'utf8');
+  assert.equal((`${source}\n${storage}`.match(/corrupt-backup/g) ?? []).length, 1, 'no new stored key: one corrupt-backup key');
 });
