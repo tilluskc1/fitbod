@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
@@ -144,6 +144,26 @@ test('Plan, stale session: "Unfinished · N of M sets"; same day keeps "In progr
   });
 });
 
+test('(#399 review 1) Plan with no now reads the live clock: a 23:50 session is In progress at 23:59, Unfinished at 00:10', async () => {
+  await withServer(async (load) => {
+    const Plan = (await load('/src/screens/PlanScreen.tsx')).default;
+    const session = sessionAt(local(2026, 11, 16, 23, 50));
+    const render = () => text(renderToStaticMarkup(createElement(Plan as never, { profile: home, program: FULL_BODY_A,
+      today: todayGlance(adapted, session, false), history: [], unit: 'kg', current: session, onResume: noop,
+      onOpenSettings: noop, onViewDay: noop, onOpenLibrary: noop })));
+    mock.timers.enable({ apis: ['Date'], now: local(2026, 11, 16, 23, 59) });
+    try {
+      const before = render();
+      mock.timers.setTime(local(2026, 11, 17, 0, 10).getTime());
+      const after = render();
+      assert.match(before, /Today In progress · 0 of/);
+      assert.match(after, /Today Unfinished · 0 of/);
+    } finally {
+      mock.timers.reset();
+    }
+  });
+});
+
 test('Logger save bar: End workout at 0 sets, Finish workout once a set is logged', async () => {
   await withServer(async (load) => {
     const Train = (await load('/src/screens/TrainScreen.tsx')).default;
@@ -167,6 +187,8 @@ test('one stale test: Today and Plan both read isStaleSession; the stale primary
   const today = readFileSync(new URL('../src/screens/TodayScreen.tsx', import.meta.url), 'utf8');
   const plan = readFileSync(new URL('../src/screens/PlanScreen.tsx', import.meta.url), 'utf8');
   assert.match(today, /isStaleSession\(current, now\)/);
-  assert.match(plan, /isStaleSession\(current, now \?\? opened\)/);
+  // (#399 review 1) Plan reads the live clock at render, never one frozen at mount.
+  assert.match(plan, /isStaleSession\(current, now \?\? new Date\(\)\)/);
+  assert.doesNotMatch(plan, /useState\(\(\) => new Date\(\)\)/);
   assert.match(today, /<button className="pill-primary" onClick=\{onEnd\}>/, 'End workout and Finish workout both call onEnd');
 });

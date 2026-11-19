@@ -6,7 +6,8 @@
 //    toast clears the greeting and the hero (lesson 36).
 // B. same-day open session: unchanged (In progress, End link, Resume workout); Plan says "In progress".
 // C. the logger's save bar at 0 sets (shown once nothing is pending) says "End workout" and ends it.
-// D. midnight: started 23:50, seen 00:10 is the stale card; End workout keeps the same day next.
+// D. midnight: started 23:50, seen 00:10 is the stale card, on Plan left open across midnight too (review 1);
+//    End workout keeps the same day next.
 // E. stale, 2 sets: Finish workout is the primary; Plan says "Unfinished · 2 of N sets"; Finish opens
 //    "Finish your session?" and Save keeps both sets.
 // Screenshots only when E2E_SHOTS is set, named <E2E_SHOT_TAG or 399>-<state>-<width>x<height>.png.
@@ -202,7 +203,7 @@ try {
     check(sameDayPlan.includes(`In progress · 0 of ${total} sets`) && !/Unfinished/.test(sameDayPlan), `${where} B: same-day Plan row reads "${sameDayPlan}"`);
     await toToday(page);
 
-    // C. The logger's save bar at 0 sets (every exercise skipped) says End workout and opens the End sheet.
+    // C. The logger's save bar at 0 sets (every exercise skipped) says End workout and ends it at once.
     await seed(page, { ...template, date: at(day, 0, 11, 30).toISOString(), exercises: template.exercises.map((exercise) => ({ ...exercise, skipped: true })) });
     await page.getByRole('button', { name: 'Resume workout', exact: true }).click();
     const bar = page.locator('.save-bar');
@@ -224,7 +225,16 @@ try {
     const next = await offered(page);
     await seed(page, { ...template, date: at(day, 0, 23, 50).toISOString() });
     check(await eyebrow(page) === 'In progress', `${where} D: at 23:59 a 23:50 session reads "${await eyebrow(page)}"`);
+    // (#399 review 1) Plan open across midnight, never remounted: it follows the same live clock as Today.
+    const beforeMidnight = await planRow(page);
+    check(beforeMidnight.includes(`In progress · 0 of ${total} sets`), `${where} D: at 23:59 Plan reads "${beforeMidnight}"`);
     await page.clock.setFixedTime(at(day, 1, 0, 10));
+    await page.waitForTimeout(1500); // App's session clock ticks once a second
+    const afterMidnight = squash(await page.locator('.plan-row--today').innerText());
+    check(afterMidnight.includes(`Unfinished · 0 of ${total} sets`) && !/In progress/.test(afterMidnight), `${where} D: Plan left open past midnight reads "${afterMidnight}"`);
+    await page.locator('button.tab', { hasText: 'Today' }).click();
+    await page.waitForSelector('.t7-hero');
+    check(await eyebrow(page) === 'Unfinished', `${where} D: Today after midnight (no reload) reads "${await eyebrow(page)}"`);
     await page.reload();
     await toToday(page);
     await staleCard(page, `${where} D`, 0, total);

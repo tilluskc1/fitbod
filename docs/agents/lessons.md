@@ -326,6 +326,13 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    `tests/endWorkout397.test.ts` and `scripts/e2e/end-workout.mjs` (no "for next time", no disabled top chip
    while a session is open).
 
+45. **Sibling screens read one live clock.** #399 review 1: Plan froze its clock at mount
+   (`useState(() => new Date())`) while Today followed App's ticking `now`, so with Plan left open past
+   midnight, Today said "Unfinished" and Plan still said "In progress". Rule: a screen that classifies by time
+   reads the same live clock as its sibling screens (the `now` prop, else `new Date()` at render), never a
+   value frozen at mount. Check: the 23:59/00:10 test in `tests/staleEnd399.test.ts` and step D of
+   `scripts/e2e/stale-end-399.mjs`, which keeps Plan mounted across midnight (it fails on 94146c9).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
