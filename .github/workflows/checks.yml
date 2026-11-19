@@ -1,6 +1,8 @@
 name: checks
 
-# One required status, `checks`: unit tests, lint, build, e2e, and phone screenshots.
+# One required status, `checks`, that needs every job below (#385): `verify` (unit tests, lint, build) and
+# three parallel `e2e` groups (phone screenshots included). The groups come from scripts/e2e/groups.mjs,
+# which reads package.json's "e2e" script, so a new e2e script needs no edit here.
 # Playwright is not a repo dependency (issue #317, option A): the e2e scripts load a global
 # install, so CI installs a pinned copy globally. Bump PLAYWRIGHT_VERSION here, nowhere else.
 
@@ -21,13 +23,38 @@ env:
   PLAYWRIGHT_VERSION: 1.63.0
 
 jobs:
-  checks:
-    name: checks
+  verify:
+    name: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      pull-requests: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  e2e:
+    name: e2e (group ${{ matrix.group }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [0, 1, 2]
     steps:
       - uses: actions/checkout@v4
 
@@ -57,53 +84,74 @@ jobs:
             playwright install --with-deps chromium
           fi
 
-      - name: Unit tests
-        run: npm test
-
-      - name: Lint
-        run: npm run lint
-
       - name: Build
         run: npm run build
 
-      - name: E2E (with screenshots)
+      - name: E2E group ${{ matrix.group }} (with screenshots)
         env:
           E2E_SHOTS: ${{ runner.temp }}/shots
         run: |
           mkdir -p "$E2E_SHOTS"
-          npm run e2e
+          node scripts/e2e/groups.mjs ${{ matrix.group }}
 
       - name: Upload screenshots
-        id: shots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          # run_attempt keeps "Re-run jobs" from colliding with the first attempt's artifact (#319).
-          name: screenshots-${{ github.sha }}-${{ github.run_attempt }}
+          # run_attempt keeps "Re-run jobs" from colliding with the first attempt's artifact (#319);
+          # the group suffix keeps the three jobs from colliding with each other (#385).
+          name: screenshots-${{ github.sha }}-${{ github.run_attempt }}-g${{ matrix.group }}
           path: ${{ runner.temp }}/shots
           if-no-files-found: warn
           retention-days: 14
 
+  # The one required status. Red unless verify and every e2e group passed.
+  checks:
+    name: checks
+    needs: [verify, e2e]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    steps:
+      - name: Require every job green
+        env:
+          VERIFY: ${{ needs.verify.result }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          echo "verify=${VERIFY} e2e=${E2E}"
+          [ "$VERIFY" = "success" ] && [ "$E2E" = "success" ]
+
       # A read-only token (Dependabot, forks) can 403 here; that must not turn `checks` red (#319).
-      - name: Comment screenshot link on the PR
+      # One comment per PR, updated in place, linking each group's screenshot artifact.
+      - name: Comment screenshot links on the PR
         continue-on-error: true
         if: >-
-          ${{ !cancelled() && github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository &&
-          steps.shots.outputs.artifact-url != '' }}
+          ${{ always() && github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
-          SHOTS_URL: ${{ steps.shots.outputs.artifact-url }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_ID: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
           JOB_STATUS: ${{ job.status }}
         run: |
           marker='<!-- checks-screenshots -->'
+          base="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts"
+          links="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts" --paginate \
+            --jq '.artifacts[] | select(.name | test("-'"${ATTEMPT}"'-g[0-9]$")) | [(.name | sub(".*-g"; "")), (.id | tostring)] | @tsv' \
+            | sort | while IFS=$'\t' read -r grp aid; do
+              echo "- [Screenshots, group ${grp} (390x844, 360x780, 390x650, artifact zip)](${base}/${aid})"
+            done)"
           body="${marker}
           **checks** ${JOB_STATUS} at \`${SHA:0:7}\`
 
-          - [Screenshots (390x844, 360x780, 390x650, artifact zip)](${SHOTS_URL})
+          ${links}
           - [Run log](${RUN_URL})"
           id="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
             --jq "[.[] | select(.body | startswith(\"${marker}\"))][0].id // empty" | head -n1)"
