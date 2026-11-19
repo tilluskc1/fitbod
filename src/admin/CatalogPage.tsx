@@ -25,6 +25,8 @@ import { plain } from '../lib/catalogSync';
 import type { FirestoreDoc } from '../lib/adminData';
 import type { MuscleGroup, MovementPattern } from '../types';
 import { AdminError, readCatalog, uploadMedia, writeCatalog } from './api';
+import AllExercises from './AllExercises';
+import { patternLabel } from './allExercises';
 
 /**
  * (#360) /admin Exercises and Equipment: add a draft, publish it, unpublish it. Additions only: the
@@ -33,7 +35,6 @@ import { AdminError, readCatalog, uploadMedia, writeCatalog } from './api';
  */
 
 const STATUS_LABEL: Record<Status, string> = { draft: 'Draft', published: 'Published', unpublished: 'Unpublished' };
-const patternLabel = (pattern: string) => pattern[0].toUpperCase() + pattern.slice(1).replace(/_/g, ' ');
 
 function entriesOf(docs: FirestoreDoc[]): Entry[] {
   return docs.flatMap((doc) => {
@@ -70,11 +71,18 @@ export default function CatalogPage({ kind, token, onFail }: Props) {
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [editing, setEditing] = useState<{ draft: Draft; isNew: boolean; said?: string } | null>(null);
   const [failed, setFailed] = useState(false);
+  // (#377) Every catalog document as read, so All exercises still lists an addition `validRow` refuses.
+  const [raw, setRaw] = useState<Array<Record<string, unknown>>>([]);
+  const [view, setView] = useState<'added' | 'all'>('added');
 
   useEffect(() => {
     let live = true;
     readCatalog(token).then(
-      (docs) => live && setEntries(entriesOf(docs)),
+      (docs) => {
+        if (!live) return;
+        setRaw(docs.map((doc) => plain(doc.fields as never)));
+        setEntries(entriesOf(docs));
+      },
       (error: unknown) => {
         if (!live) return;
         if (error instanceof AdminError && error.kind !== 'offline') onFail(error);
@@ -112,8 +120,25 @@ export default function CatalogPage({ kind, token, onFail }: Props) {
 
   const mine = entries.filter((entry) => entry.row.kind === kind).sort((a, b) => a.row.name.localeCompare(b.row.name));
   const noun = kind === 'exercise' ? 'exercise' : 'equipment';
+  // (#377) Exercises opens on the additions (#360); All exercises lists the built-ins with them, read-only.
+  const views = kind === 'exercise' && (
+    <div className="segmented adm-all__views">
+      {([['added', 'Added here'], ['all', 'All exercises']] as const).map(([id, label]) => (
+        <button key={id} type="button" aria-pressed={view === id} className={view === id ? 'on' : ''} onClick={() => setView(id)}>{label}</button>
+      ))}
+    </div>
+  );
+  if (kind === 'exercise' && view === 'all') {
+    return (
+      <>
+        {views}
+        <AllExercises entries={entries} raw={raw} />
+      </>
+    );
+  }
   return (
     <section aria-label={kind === 'exercise' ? 'Exercises' : 'Equipment'}>
+      {views}
       <p className="adm-muted adm-cat__intro">
         {kind === 'exercise'
           ? 'Exercises you add here join the built-in list on phones the next time the app opens online. Built-in exercises are not edited here.'
