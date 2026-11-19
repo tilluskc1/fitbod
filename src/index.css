@@ -2195,6 +2195,7 @@ body {
   /* (#256) Short visible area: the dock's two actions share one row so the planner entry stays above it. */
   .flow-dock.flow-dock { flex-direction: row; align-items: center; gap: 8px; padding-top: 4px; padding-bottom: 8px; }
   .flow-dock.flow-dock > .pill-primary { flex: 1; }
+  .today + .flow-dock > .today-end { padding: 0 12px; }
   /* (#279) Today's primary label stays on one line; "Short on time or gear?" takes the width left and may wrap. */
   .today + .flow-dock > .pill-primary { white-space: nowrap; }
 }
@@ -5131,6 +5132,8 @@ button.aw-exercise__name-btn {
 @media (prefers-reduced-motion: reduce) { .tt-chev { transition: none; } }
 /* (#193) While the composer is open or previewing, its button is the screen's one primary. */
 .flow-dock[hidden] { display: none; }
+/* (#397) Today's End: a quiet link, centred, never a full-width band over Resume; 44px both ways. */
+.today + .flow-dock > .today-end { align-self: center; min-width: 44px; }
 .tt-stop .secondary { margin-top: 10px; min-height: 44px; background: var(--card); }
 
 /* #300: the warm-up block and ramp rows. Muted, labelled Warm-up, never counted as sets.

@@ -1,7 +1,7 @@
 import type { AppState, PerformedSet, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { needsLoad } from '../data/flagship.ts';
 import { advanceAfterFinish } from './sequence.ts';
-import { withoutCustomDay } from './plan.ts';
+import { dayKey, withoutCustomDay } from './plan.ts';
 import { MAX_PAUSE_MS, MAX_REPS, MAX_WEIGHT } from './validate.ts';
 import { unpair } from './supersets.ts';
 
@@ -587,6 +587,18 @@ export function applyFinish(
   // Explicit completion with work advances the program sequence exactly once. A described
   // day (#193) has no slot link, so it moves nothing; Today goes back to the planned day.
   return completed.slotSeq === undefined ? withoutCustomDay(next) : advanceAfterFinish(next, completed);
+}
+
+/**
+ * (#397) An open session started on an earlier local calendar day than `now` is unfinished: Today names
+ * the day it is from ("Wed, Nov 12") instead of offering it as today's. Null while it is still today's.
+ * A session started at 23:50 and seen at 00:10 is from yesterday.
+ */
+export function unfinishedSince(session: Pick<WorkoutRecord, 'date'> | null, now: Date): string | null {
+  if (!session) return null;
+  const started = new Date(session.date);
+  if (Number.isNaN(started.getTime()) || dayKey(started) >= dayKey(now)) return null;
+  return started.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 export function applyCancel(state: AppState, sessionId: string): AppState {

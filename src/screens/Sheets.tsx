@@ -774,7 +774,6 @@ export function FinishSheet({
   onContinue,
   onDiscard,
   onClose,
-  slotName,
   nextName,
   onSkip,
 }: {
@@ -784,32 +783,29 @@ export function FinishSheet({
   onContinue: () => void;
   onDiscard: () => void;
   onClose: () => void;
-  /** The day this session is for, and the one after it in the plan (#184). */
-  slotName?: string;
+  /** The day after this session's in the plan (#184); absent for a described day. */
   nextName?: string;
   /** Close the empty session and move the plan on to the next day, recorded as a skip. */
   onSkip?: () => void;
 }) {
-  // Nothing logged: there is nothing to save, so the real choice is whether the plan moves on (#184).
+  // Nothing logged: nothing to save, so the sheet ends the workout and asks only whether the plan
+  // moves on (#184). (#397) Every exit says it ends the workout; "Keep Push for next time" read as a skip.
   if (done === 0) {
-    const day = slotName ?? 'this workout';
+    const skip = Boolean(onSkip && nextName);
     return (
-      <Sheet title="No sets logged" onClose={onClose}>
-        <p className="sheet-copy">
-          Nothing was recorded, so this can't count as a workout.
-          {nextName ? ` Move on to ${nextName}, or keep ${day} as your next workout?` : ''}
-        </p>
+      <Sheet title="End this workout?" onClose={onClose}>
+        <p className="sheet-copy">No sets logged, so nothing is saved.</p>
         <div className="sheet-actions">
-          {onSkip && nextName && (
-            <button className="primary" onClick={onSkip}>
-              Skip to {nextName}
+          <button className="primary" onClick={onDiscard}>
+            End workout
+          </button>
+          {skip && (
+            <button className="secondary" onClick={onSkip}>
+              End and skip to {nextName}
             </button>
           )}
-          <button className={onSkip && nextName ? 'secondary' : 'primary'} onClick={onDiscard}>
-            Keep {day} for next time
-          </button>
           <button className="link-btn" style={{ alignSelf: 'center' }} onClick={onContinue}>
-            Continue workout
+            Keep going
           </button>
         </div>
       </Sheet>

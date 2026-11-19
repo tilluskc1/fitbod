@@ -15,6 +15,7 @@ import type { TodayDiff, TodayOnly } from '../lib/todayOnly';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
 import { isDescribedSession } from '../lib/sequence';
+import { unfinishedSince } from '../lib/session';
 import Demo from '../components/ui/Demo';
 import HowTo from '../components/ui/HowTo';
 import FeasibilityNote, { DescribedNote } from '../components/ui/FeasibilityNote';
@@ -42,6 +43,8 @@ interface Props {
   onPreview: () => void;
   /** (#260) Reopens the open session: the tab bar's own centre action, one handler. */
   onResume: () => void;
+  /** (#397) End the open session: at once with no sets logged, else through the Finish sheet. */
+  onEnd?: () => void;
   onAdjust: () => void;
   onWhy: () => void;
   onRestore: () => void;
@@ -231,6 +234,7 @@ export default function TodayScreen({
   now,
   onPreview,
   onResume,
+  onEnd,
   onAdjust,
   onWhy,
   onRestore,
@@ -313,6 +317,8 @@ export default function TodayScreen({
     ? { ...status, label: `In progress · ${progress} of ${total} sets`, icon: status.tone === 'ready' ? 'play_arrow' : status.icon }
     : status;
   const heroName = todayOnly && current ? current.name : program.name;
+  // (#397) A session from an earlier calendar day is never offered as today's.
+  const unfinished = unfinishedSince(current, now);
   const heroSlot = todayOnly ? 'Today only' : slotLabel;
   const leadId = leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId));
   const leadName = adapted.exercises.find((exercise) => exercise.exerciseId === leadId)?.name;
@@ -351,7 +357,6 @@ export default function TodayScreen({
               type="button"
               className="t7-pill"
               onClick={onOpenLength}
-              disabled={Boolean(current)}
               aria-label={
                 todayDiff?.lengthDiffers
                   ? `Workout length, usually ${profile.sessionMinutes ?? 35} minutes, today ${adapted.minutes} minutes`
@@ -368,7 +373,6 @@ export default function TodayScreen({
                 type="button"
                 className="t7-pill t7-pill--gym"
                 onClick={onOpenGym}
-                disabled={Boolean(current)}
                 aria-label={todayDiff?.gearDiffers ? `Equipment, usually ${usualGear ?? setup.short}, today ${setup.chip}` : `Equipment today, ${setup.chip}`}
               >
                 <Icon name="fitness_center" size={16} />
@@ -378,7 +382,7 @@ export default function TodayScreen({
               </button>
             )}
             {onOpenSwitch && (
-              <button type="button" className="t7-pill" onClick={onOpenSwitch} disabled={Boolean(current)} aria-label="Switch workout">
+              <button type="button" className="t7-pill" onClick={onOpenSwitch} aria-label="Switch workout">
                 <Icon name="arrow_forward" size={16} />
                 <span className="t7-pill__l">Switch</span>
               </button>
@@ -396,7 +400,7 @@ export default function TodayScreen({
           </span>
           <h2 className="t7-hero__title">
             {current
-              ? `${current.name} in progress`
+              ? unfinished ? `Unfinished ${current.name} from ${unfinished}` : `${current.name} in progress`
               : adapted.exercises.length === 0
                 ? `Nothing in ${program.name} fits today`
                 : `Your ${program.name} Day Starts Here!`}
@@ -661,10 +665,17 @@ export default function TodayScreen({
 
       <div className="flow-dock" hidden={composing && !current}>
         {current ? (
-          <button className="pill-primary" onClick={onResume}>
-            Resume workout
-            <Icon name="arrow_forward" size={20} />
-          </button>
+          <>
+            {onEnd && (
+              <button className="link-btn today-end" onClick={onEnd}>
+                End
+              </button>
+            )}
+            <button className="pill-primary" onClick={onResume}>
+              {unfinished ? 'Resume' : 'Resume workout'}
+              <Icon name="arrow_forward" size={20} />
+            </button>
+          </>
         ) : (
           <>
             <button className="text-action" onClick={onAdjust}>

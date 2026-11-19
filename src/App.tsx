@@ -182,6 +182,9 @@ import
 
 type View = 'tabs' | 'train' | 'recap' | 'library' | 'adapt';
 
+/** (#397) Today's top chips: time, gear, Switch. */
+type ChipSheet = 'length' | 'gym' | 'switch';
+
 type SheetState =
   | { kind: 'none' }
   | { kind: 'adjust' }
@@ -197,7 +200,8 @@ type SheetState =
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
   | { kind: 'why'; exerciseId: string; exerciseIndex: number }
-  | { kind: 'finish' }
+  // (#397) `then`: the Today chip tapped while sets were logged; its sheet opens after Save or Discard.
+  | { kind: 'finish'; then?: ChipSheet }
   | { kind: 'swap'; exerciseIndex: number }
   | { kind: 'confirm'; change: ProfileChange }
   | { kind: 'delete-workout'; workoutId: string };
@@ -727,11 +731,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
    * Skip the slot on offer. Explicit only: nothing skips because a date passed,
    * and a skip is recorded apart from history so it counts as no training.
    */  const skipTodaySlot = () => {
-    if (!slot) return;
-    if (current) {
-      setNotice(headsUp('Finish or discard the open session before skipping this one.'));
-      return;
-    }
+    // (#397) Skip is not offered while a session is open; End is.
+    if (!slot || current) return;
     const offered = cursorFor(state);
     setState((currentState) => skipCurrentSlot(currentState, new Date().toISOString(), offered));
     setNotice(done('Session skipped. Skips earn no progression.'));
@@ -957,10 +958,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       setSheet({ kind: 'none' });
       return;
     }
-    if (current) {
-      setNotice(headsUp('Finish or discard the open session before switching days.'));
-      return;
-    }
+    // (#397) Switch opens only once the open session has ended (openChip), so this never meets one.
+    if (current) return;
     // A planned day picked here replaces a described one (#193).
     setState((currentState) => withoutCustomDay(skipForward(currentState, option.offset, new Date().toISOString())));
     setSheet({ kind: 'none' });
@@ -985,11 +984,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
    */
   const buildPick = (picks: Picks) => {
     const next = switchPickFor(picks);
-    if (!profile || !next) return;
-    if (current) {
-      setNotice(headsUp('Finish or discard the open session before switching days.'));
-      return;
-    }
+    // (#397) As pickDay: Switch opens only once the open session has ended.
+    if (!profile || !next || current) return;
     const choice: EquipmentChoice = next.equipment;
     const plain = !next.focus && (choice === 'home' || choice === savedSetup(profile)) && next.minutes === (profile.sessionMinutes ?? 35);
     if (plain) {
@@ -1348,26 +1344,27 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setSheet({ kind: 'finish' });
   };
 
-  const saveFinish = () => {
+  const saveFinish = (then?: ChipSheet) => {
     if (!current) return;
     const progress = sessionProgress(current);
-    if (progress.done === 0) {
-      setState((currentState) => applyCancel(currentState, current.id));
-      setSheet({ kind: 'none' });
-      setView('tabs');
-      setTab('today');
-      setNotice(done(noSetsNotice(current.exercises.some((exercise) => exercise.note))));
-      return;
-    }
+    // Nothing logged: the same path as End workout (#397, lesson 9).
+    if (progress.done === 0) return endEmptySession();
     const early = progress.done < progress.total;
     const id = current.id;
     track(early ? 'workout-cut-short' : 'workout-finished', dayTypeOf(current.name));
     setState((currentState) =>
       applyFinish(currentState, id, { early, now: new Date().toISOString() }),
     );
-    setRecapId(id);
-    setSheet({ kind: 'none' });
-    setView('recap');
+    // (#397) Saved from a Today chip: back to Today with the chip's sheet open, so the change applies.
+    if (then) {
+      setSheet({ kind: then });
+      setView('tabs');
+      setTab('today');
+    } else {
+      setRecapId(id);
+      setSheet({ kind: 'none' });
+      setView('recap');
+    }
     // (#333) Part of the workout was dropped, so a partial save is a Heads-up, not a Done tick.
     if (early) {
       setNotice(headsUp(
@@ -1393,13 +1390,47 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setNotice(done(`${slot.name} skipped${next ? `; ${next} is next` : ''}. Skips earn no progression.`));
   };
 
-  const discardSession = () => {
+  const discardSession = (then?: ChipSheet) => {
     if (!current) return;
+    setState((currentState) => applyCancel(currentState, current.id));
+    setSheet(then ? { kind: then } : { kind: 'none' });
+    setView('tabs');
+    setTab('today');
+    setNotice(done('Session discarded. Nothing was added to history.'));
+  };
+
+  /**
+   * (#397) End a session with no sets logged: nothing to save, and the same day stays next. Notes on it
+   * go with it, and the toast says so (#372). `quiet` (a Today chip) speaks only when notes were lost.
+   */
+  const endEmptySession = (quiet = false) => {
+    if (!current) return;
+    const hadNotes = current.exercises.some((exercise) => exercise.note);
     setState((currentState) => applyCancel(currentState, current.id));
     setSheet({ kind: 'none' });
     setView('tabs');
     setTab('today');
-    setNotice(done('Session discarded. Nothing was added to history.'));
+    if (!quiet || hadNotes) setNotice(done(noSetsNotice(hadNotes)));
+  };
+
+  /** (#397) Today's End: with no sets logged it ends at once; with sets logged it asks through the Finish sheet. */
+  const endFromToday = () => {
+    if (!current) return;
+    if (sessionProgress(current).done === 0) endEmptySession();
+    else setSheet({ kind: 'finish' });
+  };
+
+  /**
+   * (#397) A Today chip while a session is open is never dead: an empty session ends quietly and the chip
+   * opens; with sets logged the Finish sheet comes first and the chip opens after Save or Discard.
+   */
+  const openChip = (kind: ChipSheet) => {
+    if (current && sessionProgress(current).done > 0) {
+      setSheet({ kind: 'finish', then: kind });
+      return;
+    }
+    if (current) endEmptySession(true);
+    setSheet({ kind });
   };
 
   const correctSet = (
@@ -1778,10 +1809,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             now={today}
             onPreview={() => setSheet({ kind: 'preview' })}
             onResume={openWorkout}
+            onEnd={current ? endFromToday : undefined}
             onAdjust={() => setSheet({ kind: 'adjust' })}
-            onOpenLength={() => setSheet({ kind: 'length' })}
-            onOpenGym={() => setSheet({ kind: 'gym' })}
-            onOpenSwitch={slot ? () => { track('switch'); setSheet({ kind: 'switch' }); } : undefined}
+            onOpenLength={() => openChip('length')}
+            onOpenGym={() => openChip('gym')}
+            onOpenSwitch={slot ? () => { track('switch'); openChip('switch'); } : undefined}
             alternativeDay={alternativeDay}
             composer={slot && talkBase ? (
               <TodayTalk
@@ -2215,12 +2247,12 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         <FinishSheet
           done={sessionProgress(current).done}
           total={sessionProgress(current).total}
-          onSave={saveFinish}
+          onSave={() => saveFinish(sheet.then)}
           onContinue={closeSheet}
-          onDiscard={discardSession}
+          // (#397) With no sets logged this is End workout: the same day stays next.
+          onDiscard={sessionProgress(current).done === 0 ? () => endEmptySession() : () => discardSession(sheet.then)}
           onClose={closeSheet}
-          // A described day (#193) has no slot to skip; keeping it leaves the planned day next.
-          slotName={current.slotSeq === undefined ? undefined : slot?.name}
+          // A described day (#193) has no slot to skip; ending it leaves the planned day next.
           nextName={current.slotSeq === undefined ? undefined : nextSlotName}
           onSkip={skipFromSession}
         />
