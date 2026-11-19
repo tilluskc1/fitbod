@@ -1,8 +1,9 @@
 // (#397) Ending a workout. The owner could not end a 5-day-old empty Push: the way out read
 // "Keep Push for next time", Today offered only "Resume workout", and the top chips were dead while a
 // session was open. Checks, at 390x844, 360x780 and 390x650:
-// A. a Push started 5 days ago, 0 sets: Today reads "Unfinished Push from <day>" with Resume and End;
-//    Resume opens it; End ends it with no question and a fresh Push is offered.
+// A. a Push started 5 days ago, 0 sets: Today reads "Unfinished Push from <day>" with Resume and End
+//    workout (#399: End workout leads; its layout is checked in stale-end-399.mjs); Resume opens it; End
+//    workout ends it with no question and a fresh Push is offered.
 // B. the empty Finish sheet: End workout keeps Push next; End and skip to Pull moves the plan to Pull.
 // C. 2 sets, End from Today: the Finish sheet, never a silent discard; Save keeps the 2 sets and Today
 //    offers the next day.
@@ -131,14 +132,14 @@ try {
     const day = new Date(noon.getTime() - 5 * 86_400_000).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     check(await heroTitle(page) === `Unfinished Push from ${day}`, `${where} A: hero reads "${await heroTitle(page)}", not "Unfinished Push from ${day}"`);
     check(await dock(page).getByRole('button', { name: 'Resume', exact: true }).count() === 1, `${where} A: no Resume in the dock`);
-    check(await endLink(page).count() === 1, `${where} A: no End in the dock`);
-    await endInView(page, `${where} A`);
+    const endStale = dock(page).getByRole('button', { name: 'End workout', exact: true });
+    check(await endStale.count() === 1, `${where} A: no End workout in the dock`);
     await chipsLive(page, `${where} A`);
     await shot(page, 'stale', where);
     await dock(page).getByRole('button', { name: 'Resume', exact: true }).click();
     check(await page.locator('.lg-ex').first().isVisible().catch(() => false), `${where} A: Resume did not open the stale session`);
     await toToday(page);
-    await endLink(page).click();
+    await endStale.click();
     await settle(page);
     check(await page.locator('.sheet-title').count() === 0, `${where} A: End with 0 sets asked a question ("${await sheetTitle(page)}")`);
     let state = await stored(page);

@@ -418,7 +418,8 @@ export default function TrainScreen({
           </div>
           {bar}
           <button className="save-bar" onClick={onFinish}>
-            {progress.done === 0 ? 'Finish or discard' : 'Finish workout'}
+            {/* (#399) At 0 sets this opens the "End this workout?" sheet (#397), so it says End. */}
+            {progress.done === 0 ? 'End workout' : 'Finish workout'}
           </button>
         </div>
       </div>
