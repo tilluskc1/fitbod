@@ -95,7 +95,8 @@ test('Today with an open session: End beside Resume workout; a stale one reads U
     assert.doesNotMatch(text(stale), /Push in progress/);
     assert.match(dock(stale), />Resume</);
     assert.doesNotMatch(dock(stale), /Resume workout/);
-    assert.match(dock(stale), />End<\/button>/);
+    // (#399) A stale session leads with End workout; Resume is its quiet link (tests/staleEnd399.test.ts).
+    assert.match(dock(stale), />End workout<\/button>/);
   } finally {
     await server.close();
   }

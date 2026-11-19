@@ -16,6 +16,7 @@ import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
 import { isDescribedSession } from '../lib/sequence';
 import { unfinishedSince } from '../lib/session';
+import { isStaleSession } from '../lib/staleSession';
 import Demo from '../components/ui/Demo';
 import HowTo from '../components/ui/HowTo';
 import FeasibilityNote, { DescribedNote } from '../components/ui/FeasibilityNote';
@@ -312,13 +313,16 @@ export default function TodayScreen({
             icon: 'info',
           }
         : { tone: 'ready', label: 'Ready', icon: 'check' };
-  // (#260) An open session shows its progress; the colour keeps its status, a Limited or Not-enough icon too.
-  const chip = current
-    ? { ...status, label: `In progress · ${progress} of ${total} sets`, icon: status.tone === 'ready' ? 'play_arrow' : status.icon }
-    : status;
-  const heroName = todayOnly && current ? current.name : program.name;
   // (#397) A session from an earlier calendar day is never offered as today's.
   const unfinished = unfinishedSince(current, now);
+  // (#399) The one stale test Plan reads too: a stale session never says "In progress" and leads with End.
+  const stale = isStaleSession(current, now);
+  // (#260) An open session shows its progress; the colour keeps its status, a Limited or Not-enough icon too.
+  const chip = current
+    ? { ...status, label: stale ? `${progress} of ${total} sets logged` : `In progress · ${progress} of ${total} sets`,
+      icon: status.tone === 'ready' ? 'play_arrow' : status.icon }
+    : status;
+  const heroName = todayOnly && current ? current.name : program.name;
   const heroSlot = todayOnly ? 'Today only' : slotLabel;
   const leadId = leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId));
   const leadName = adapted.exercises.find((exercise) => exercise.exerciseId === leadId)?.name;
@@ -396,7 +400,7 @@ export default function TodayScreen({
         >
           <img className="t7-hero__photo" src={HERO_PHOTO} alt="" />
           <span className="t7-hero__top">
-            <span className="t7-hero__eyebrow">{current ? 'In progress' : 'Your next workout'}</span>
+            <span className="t7-hero__eyebrow">{stale ? 'Unfinished' : current ? 'In progress' : 'Your next workout'}</span>
           </span>
           <h2 className="t7-hero__title">
             {current
@@ -406,7 +410,8 @@ export default function TodayScreen({
                 : `Your ${program.name} Day Starts Here!`}
           </h2>
           <span className="t7-hero__meta">
-            {timed && (
+            {/* (#399) A stale session's planned length means nothing now: the meta keeps the gear and the day. */}
+            {timed && !stale && (
               <>
                 <Icon name="timer" size={16} />
                 {approx ? '≈' : ''}
@@ -664,7 +669,18 @@ export default function TodayScreen({
       </div>
 
       <div className="flow-dock" hidden={composing && !current}>
-        {current ? (
+        {current && stale && onEnd ? (
+          <>
+            {/* (#399) A workout from an earlier day leads with its way out: End with nothing logged, Finish
+                (the existing sheet, so logged sets are saved) otherwise. Resume stays as the quiet link. */}
+            <button className="link-btn today-resume" onClick={onResume}>
+              Resume
+            </button>
+            <button className="pill-primary" onClick={onEnd}>
+              {progress === 0 ? 'End workout' : 'Finish workout'}
+            </button>
+          </>
+        ) : current ? (
           <>
             {onEnd && (
               <button className="link-btn today-end" onClick={onEnd}>

@@ -5556,3 +5556,10 @@ button.aw-exercise__name-btn {
   -webkit-touch-callout: none;
   user-select: none;
 }
+
+/* #399 */
+/* A stale session's Resume: the quiet link beside End or Finish workout, centred, 44px both ways (as #397's End). */
+.today + .flow-dock > .today-resume { align-self: center; min-width: 44px; }
+@media (max-height: 700px) {
+  .today + .flow-dock > .today-resume { padding: 0 12px; }
+}

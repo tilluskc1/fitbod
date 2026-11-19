@@ -6,6 +6,7 @@ import { canPerform, capabilitiesFor } from '../lib/capabilities';
 import { catalogRowMeta } from '../lib/liveProgression';
 import { describedChip, feasibilityChip, plainFocus, usualLine } from '../lib/planPage';
 import { sessionProgress } from '../lib/session';
+import { isStaleSession } from '../lib/staleSession';
 import type { MuscleGroup, Profile, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import TodayOnlyBar from '../components/ui/TodayOnlyBar';
@@ -40,6 +41,8 @@ interface Props {
   /** (#297) A running session: Today's row shows its progress and Resume (#260). */
   current?: WorkoutRecord | null;
   onResume?: () => void;
+  /** (#399) The clock the stale test reads; absent, the live clock at each render (never frozen at mount). */
+  now?: Date;
   /** (#297) Slots skipped today, marked where the sequence moved them. */
   skipped?: ReadonlySet<string>;
   /** (#297) Why days differ in exercises: shown until tapped away, for this app session only. */
@@ -72,6 +75,7 @@ export default function PlanScreen({
   onUndo,
   current,
   onResume,
+  now,
   skipped,
   explainer,
   onDismissExplainer,
@@ -89,8 +93,9 @@ export default function PlanScreen({
   // A described day is named after what it trains, so it needs no focus words (#193).
   const todayFocus = described ? '' : plainFocus(focus, todayIds);
   const progress = current ? sessionProgress(current) : null;
+  // (#399) Today's stale test, the same helper: a session from an earlier day is "Unfinished", never "In progress".
   const todayChip = progress
-    ? { tone: 'progress', label: `In progress · ${progress.done} of ${progress.total} sets` }
+    ? { tone: 'progress', label: `${isStaleSession(current, now ?? new Date()) ? 'Unfinished' : 'In progress'} · ${progress.done} of ${progress.total} sets` }
     : described ? describedChip(described) : feasibilityChip(program.feasibility);
 
   return (
