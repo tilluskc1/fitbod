@@ -95,10 +95,11 @@ const DAY_ORDER = ['Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Full body'];
 /**
  * The coach check: the split days the planner would place this exercise on, from the planner's own
  * `buildPlan` and `isRelevantToDay`, across every split (2 to 6 days). "Upper A" and "Upper B" read Upper.
+ * (#377) A built-in passes its secondary patterns (a secondary hinge places it like a hinge).
  */
-export function appearsIn(muscles: MuscleGroup[], pattern: MovementPattern | ''): string[] {
+export function appearsIn(muscles: MuscleGroup[], pattern: MovementPattern | '', secondaryPatterns: MovementPattern[] = []): string[] {
   if (!muscles.length || !pattern) return [];
-  const exercise = { muscles, pattern, secondaryPatterns: [] } as unknown as Exercise;
+  const exercise = { muscles, pattern, secondaryPatterns } as unknown as Exercise;
   const days = new Set<string>();
   for (let daysPerWeek = 2; daysPerWeek <= 6; daysPerWeek += 1) {
     for (const day of buildPlan({ daysPerWeek } as Parameters<typeof buildPlan>[0]) as PlanDay[]) {
