@@ -3,7 +3,7 @@
 // (#390) Restore and Start fresh both keep the unreadable original in corrupt-backup first, and a record
 // stored with an overnight rest pause (restPausedMs over 24 h) opens normally instead of on Recovery.
 // (#395) When that copy cannot be written (storage full), Restore and Start fresh stop: the original stays
-// byte-identical and one line says to download it first. After Download original, Restore goes ahead.
+// byte-identical and one line says to download it first. (#412) Download original does not unlock Restore; only a kept copy does.
 //
 //   npm run e2e        (builds, then runs every scripts/e2e check against the built app)
 import { execSync } from 'node:child_process';
@@ -122,17 +122,14 @@ try {
     check(await page.getByRole('dialog').count() === 0, `${where}: the Start fresh sheet stays over the line (#395)`);
     await stoppedOnRecovery('Start fresh');
 
-    // After Download original the file is the copy: the line goes and Restore goes ahead, still full.
+    // (#412) Download original no longer counts as the copy: Restore still stops while storage is full.
     await corrupt(page, FULL);
     await fillStorage(page);
     await chooseBackup();
     await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), page.getByRole('button', { name: 'Download original' }).click()]);
-    check(!(await line.isVisible().catch(() => false)), `${where}: the line stays after Download original (#395)`);
     await page.getByRole('button', { name: 'Confirm restore' }).click();
-    await page.waitForSelector('.t7-hero', { timeout: 5000 }).catch(() => {});
-    check(await page.locator('.t7-hero').isVisible().catch(() => false), `${where}: Restore after Download original does not open Today (#395)`);
-    check((await storedText(page))?.includes('"name":"Sam"'), `${where}: Restore after Download original did not save the backup (#395)`);
-    check(await backupText(page) === '{older copy', `${where}: the safety copy was written although storage was full (#395)`);
+    await page.waitForTimeout(300);
+    await stoppedOnRecovery('Restore after Download original');
 
     // A restore from Recovery opens on Today with the restored plan, never the splash (#285).
     await page.evaluate((key) => localStorage.removeItem(key), BACKUP_KEY);
