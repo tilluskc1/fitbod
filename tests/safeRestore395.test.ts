@@ -1,7 +1,7 @@
 // (#395) Restore and Start fresh on Recovery replace the unreadable original only once a copy of it is
 // kept. When the safety copy cannot be written (storage full), nothing is overwritten and Recovery says
-// "Couldn't keep a copy of your old data. Tap Download original first."; once the lifter has downloaded
-// the original, that file is the copy and the action goes ahead.
+// "Couldn't keep a copy of your old data. Tap Download original first." (#412: downloading no longer
+// unlocks the action; only a kept safety copy does.)
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';

@@ -344,7 +344,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const pendingWriteRef = useRef<string | undefined>(undefined);
   const adoptingRef = useRef(false);
   const forceSaveRef = useRef(initial.status === 'corrupt');
-  /** (#395) Download original was tapped on Recovery: that file is the copy if the safety copy cannot be kept. */
 
   /* ---------- persistence ---------- */
 
