@@ -72,7 +72,7 @@ test('the empty sheet with no next day shows only End workout and Keep going', a
   }
 });
 
-test('Today with an open session: End beside Resume workout; a stale one reads Unfinished … from … with Resume', async () => {
+test('Today with an open session: End beside Resume workout; a stale one reads Unfinished … from … with Resume and End workout', async () => {
   const home = { ...profile, loads: { Dumbbell: [10, 15, 18] } } as unknown as Profile;
   const adapted = liveAdapted(adaptWorkout(FULL_BODY_A, { minutes: 35, equipment: 'home', loads: [10, 15, 18] }, [], undefined), home, []);
   const started = local(2026, 11, 12, 18).toISOString();
@@ -95,7 +95,8 @@ test('Today with an open session: End beside Resume workout; a stale one reads U
     assert.doesNotMatch(text(stale), /Push in progress/);
     assert.match(dock(stale), />Resume</);
     assert.doesNotMatch(dock(stale), /Resume workout/);
-    assert.match(dock(stale), />End<\/button>/);
+    // (#399) From an earlier day with nothing logged, End workout is the main button.
+    assert.match(dock(stale), /<button class="pill-primary"[^>]*>End workout<\/button>/);
   } finally {
     await server.close();
   }
