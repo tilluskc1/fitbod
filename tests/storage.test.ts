@@ -116,7 +116,7 @@ test('v1 data migrates in place, preserving history identity and set values', ()
   assert.equal(storage.data.get(LEGACY_BACKUP_KEY), FIXTURE);
 });
 
-test('restoring an older backup puts back its profile and plan, and keeps skip events (#419)', () => {
+test('restoring an older backup puts back its profile and plan, and its own skip events (#419)', () => {
   const profile = {
     goal: 'Build Muscle' as const, experience: 'Beginner' as const, daysPerWeek: 3,
     equipment: ['Dumbbell' as const], support: [], exclusions: [], loads: { Dumbbell: [10] },
@@ -144,7 +144,7 @@ test('restoring an older backup puts back its profile and plan, and keeps skip e
   assert.equal(merged.programCursor?.seq, 1);
   assert.equal(merged.plan.length, older.plan.length);
   assert.equal(merged.profile?.daysPerWeek, 3);
-  assert.deepEqual(merged.slotSkips?.map((skip) => skip.id), ['skip:1:0', 'skip:2:0', 'skip:2:1']);
+  assert.deepEqual(merged.slotSkips?.map((skip) => skip.id), ['skip:1:0']);
 });
 
 test('unreadable or invalid stored data is reported and never overwritten on load', () => {
@@ -600,6 +600,19 @@ test('restore replaces an existing local profile and plan with the backup\'s (#4
   assert.equal(result.state.planRevision, 1);
   assert.equal(result.summary.profileReplaced, true);
   assert.equal(result.summary.planReplaced, true);
+});
+
+test('a losing plan\'s skips never show against the restored plan at the same revision (#419)', () => {
+  const base = { goal: 'Build Muscle' as const, experience: 'Beginner' as const, daysPerWeek: 3,
+    equipment: ['Dumbbell' as const], support: [], exclusions: [], loads: { Dumbbell: [10] },
+    name: 'Backup', unit: 'kg' as const, sessionMinutes: 35 };
+  const skip = (slotId: string) => ({ id: 'skip:0:0', revision: 0, seq: 0, slotId, at: '2026-11-01T10:00:00.000Z' });
+  const backup = { ...EMPTY_STATE, profile: base, plan: buildPlan(base), planRevision: 0, slotSkips: [skip('slot-0-push')] };
+  const local = { ...backup, profile: { ...base, name: 'Phone' }, slotSkips: [skip('slot-1-pull')] };
+  assert.deepEqual(mergeImport(local, backup).state.slotSkips?.map((s) => s.slotId), ['slot-0-push']);
+  // A backup with no plan keeps the local plan, so its skips stay too.
+  const noPlan = { ...backup, plan: [] };
+  assert.deepEqual(mergeImport(local, noPlan).state.slotSkips?.map((s) => s.slotId), ['slot-1-pull']);
 });
 
 test('an integrated log, swap, reload, resume and finish keeps each set once', () => {

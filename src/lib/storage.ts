@@ -472,11 +472,9 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
   const cursorSeq = importPlan
     ? imported.programCursor?.seq ?? 0
     : current.programCursor?.seq ?? 0;
-  const skipIds = new Set((current.slotSkips ?? []).map((skip) => skip.id));
-  const slotSkips = [
-    ...(current.slotSkips ?? []),
-    ...(imported.slotSkips ?? []).filter((skip) => !skipIds.has(skip.id)),
-  ];
+  // Skip ids carry only a per-device revision, so two unrelated plans can share
+  // one. Skips follow whichever plan wins, never a union of both.
+  const slotSkips = importPlan ? imported.slotSkips ?? [] : current.slotSkips ?? [];
   const importProfile = imported.profile !== null;
 
   return {
