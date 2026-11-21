@@ -74,11 +74,11 @@ export function keepSafetyCopy(raw: string): boolean {
 
 /**
  * (#395) Restore and Start fresh may replace the original only once a copy of it is kept: under the
- * safety-copy key, or in a file the lifter downloaded with Download original. No original, nothing to keep.
+ * safety-copy key (#412: a manual Download original no longer counts). No original, nothing to keep.
  */
-export function mayReplaceOriginal(raw: string, downloaded: boolean): boolean {
+export function mayReplaceOriginal(raw: string): boolean {
   if (!raw) return true;
-  return keepSafetyCopy(raw) || downloaded;
+  return keepSafetyCopy(raw);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

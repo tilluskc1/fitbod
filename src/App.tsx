@@ -345,7 +345,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const adoptingRef = useRef(false);
   const forceSaveRef = useRef(initial.status === 'corrupt');
   /** (#395) Download original was tapped on Recovery: that file is the copy if the safety copy cannot be kept. */
-  const originalDownloaded = useRef(false);
 
   /* ---------- persistence ---------- */
 
@@ -1626,11 +1625,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           raw={recovery.raw}
           onDownload={() => {
             downloadText(recovery.raw, 'strength-original-state.json');
-            originalDownloaded.current = true;
           }}
           onRestore={(next: AppState, summary: ImportSummary) => {
             // (#390, #395) Keep the unreadable original before the restore replaces it; no copy, no restore.
-            if (!mayReplaceOriginal(recovery.raw, originalDownloaded.current)) return false;
+            if (!mayReplaceOriginal(recovery.raw)) return false;
             setState(next);
             // Corrupt data loads with no profile, so the splash was armed; a restored profile
             // opens straight on Today (#285).
@@ -1640,7 +1638,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             return true;
           }}
           onStartFresh={() => {
-            if (!mayReplaceOriginal(recovery.raw, originalDownloaded.current)) return false;
+            if (!mayReplaceOriginal(recovery.raw)) return false;
             revisionRef.current = 0;
             forceSaveRef.current = true;
             setState({ ...EMPTY_STATE });

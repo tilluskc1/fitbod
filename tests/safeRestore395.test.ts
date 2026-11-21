@@ -44,14 +44,14 @@ test('the line and the key are the ones product named', () => {
 test('storage full: the copy reports failure and leaves the original byte-identical', () => {
   const data = installStorage({ [STORAGE_KEY]: ORIGINAL }, { full: true });
   assert.equal(keepSafetyCopy(ORIGINAL), false);
-  assert.equal(mayReplaceOriginal(ORIGINAL, false), false, 'Restore and Start fresh stop');
+  assert.equal(mayReplaceOriginal(ORIGINAL), false, 'Restore and Start fresh stop');
   assert.equal(data.get(STORAGE_KEY), ORIGINAL);
   assert.equal(data.has(CORRUPT_BACKUP_KEY), false);
 });
 
 test('storage full with an older copy already kept: that older copy is not this one, so they stop', () => {
   const data = installStorage({ [STORAGE_KEY]: ORIGINAL, [CORRUPT_BACKUP_KEY]: '{older copy' }, { full: true });
-  assert.equal(mayReplaceOriginal(ORIGINAL, false), false);
+  assert.equal(mayReplaceOriginal(ORIGINAL), false);
   assert.equal(data.get(STORAGE_KEY), ORIGINAL);
   assert.equal(data.get(CORRUPT_BACKUP_KEY), '{older copy', 'the older copy is left as it was');
 });
@@ -59,43 +59,43 @@ test('storage full with an older copy already kept: that older copy is not this 
 test('storage full but the copy key already holds this exact original: it is kept, they go ahead', () => {
   installStorage({ [STORAGE_KEY]: ORIGINAL, [CORRUPT_BACKUP_KEY]: ORIGINAL }, { full: true });
   assert.equal(keepSafetyCopy(ORIGINAL), true);
-  assert.equal(mayReplaceOriginal(ORIGINAL, false), true);
+  assert.equal(mayReplaceOriginal(ORIGINAL), true);
 });
 
 test('the copy works: an older copy is replaced by this original, and they go ahead', () => {
   const data = installStorage({ [STORAGE_KEY]: ORIGINAL, [CORRUPT_BACKUP_KEY]: '{older copy' });
-  assert.equal(mayReplaceOriginal(ORIGINAL, false), true);
+  assert.equal(mayReplaceOriginal(ORIGINAL), true);
   assert.equal(data.get(CORRUPT_BACKUP_KEY), ORIGINAL);
   assert.equal(data.get(STORAGE_KEY), ORIGINAL, 'the copy itself never touches the original');
 });
 
-test('after Download original the downloaded file is the copy: a failed copy no longer stops them', () => {
+test('a failed safety copy stops Restore and Start fresh even after Download original (#412)', () => {
   const data = installStorage({ [STORAGE_KEY]: ORIGINAL, [CORRUPT_BACKUP_KEY]: '{older copy' }, { full: true });
-  assert.equal(mayReplaceOriginal(ORIGINAL, true), true);
+  assert.equal(mayReplaceOriginal(ORIGINAL), false);
   assert.equal(data.get(CORRUPT_BACKUP_KEY), '{older copy', 'the copy was still tried and still failed');
 });
 
 test('a setItem that does not throw but does not store either counts as failed', () => {
   const data = installStorage({ [STORAGE_KEY]: ORIGINAL });
   (globalThis.localStorage as Storage).setItem = () => {};
-  assert.equal(mayReplaceOriginal(ORIGINAL, false), false);
+  assert.equal(mayReplaceOriginal(ORIGINAL), false);
   assert.equal(data.get(STORAGE_KEY), ORIGINAL);
 });
 
 test('no storage at all: no copy is claimed', () => {
   Object.defineProperty(globalThis, 'localStorage', { value: undefined, configurable: true, writable: true });
   assert.equal(keepSafetyCopy(ORIGINAL), false);
-  assert.equal(mayReplaceOriginal(ORIGINAL, false), false);
+  assert.equal(mayReplaceOriginal(ORIGINAL), false);
 });
 
 test('nothing stored under the key: there is nothing to keep, so they go ahead', () => {
   installStorage({}, { full: true });
-  assert.equal(mayReplaceOriginal('', false), true);
+  assert.equal(mayReplaceOriginal(''), true);
 });
 
 test('Start fresh after a kept copy writes empty data; the copy still holds the original', () => {
   const data = installStorage({ [STORAGE_KEY]: ORIGINAL });
-  assert.equal(mayReplaceOriginal(ORIGINAL, false), true);
+  assert.equal(mayReplaceOriginal(ORIGINAL), true);
   assert.ok(saveState({ ...EMPTY_STATE }, 0, { force: true }).ok);
   assert.equal(loadState().status, 'ok');
   assert.equal(data.get(CORRUPT_BACKUP_KEY), ORIGINAL);
@@ -110,7 +110,7 @@ test('App: both Recovery handlers ask mayReplaceOriginal before anything replace
     const handler = source.match(pattern);
     assert.ok(handler, `${name} is found`);
     const body = handler[1];
-    const guard = body.indexOf('if (!mayReplaceOriginal(recovery.raw, originalDownloaded.current)) return false;');
+    const guard = body.indexOf('if (!mayReplaceOriginal(recovery.raw)) return false;');
     assert.ok(guard >= 0, `${name} stops when no copy is kept`);
     assert.ok(guard < body.indexOf(write), `${name} checks before it replaces the original`);
     assert.ok(guard < body.indexOf('forceSaveRef') || !body.includes('forceSaveRef'), `${name} checks before it arms a forced save`);

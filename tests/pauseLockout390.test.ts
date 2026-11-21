@@ -259,7 +259,7 @@ test('Restore on Recovery keeps the unreadable original first, like Start fresh 
   assert.ok(restore, 'the Recovery onRestore handler is found');
   const body = restore[1];
   // (#395) The copy now goes through mayReplaceOriginal, which also stops the restore when it fails.
-  const backup = body.indexOf('if (!mayReplaceOriginal(recovery.raw, originalDownloaded.current)) return false;');
+  const backup = body.indexOf('if (!mayReplaceOriginal(recovery.raw)) return false;');
   assert.ok(backup >= 0, 'onRestore keeps the raw text first');
   assert.ok(backup < body.indexOf('setState(next)'), 'the backup happens before the restored state replaces it');
   const storage = readFileSync(new URL('../src/lib/storage.ts', import.meta.url), 'utf8');
