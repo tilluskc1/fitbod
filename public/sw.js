@@ -46,8 +46,13 @@ function offlineResponse() {
  * component's error handler instead of spinning forever.
  */
 function fetchWithTimeout(request) {
+  return tryFetch(request).then((response) => response || offlineResponse());
+}
+
+/** Like fetchWithTimeout, but null when the fetch rejected or hung (offline, or CORS-blocked). */
+function tryFetch(request) {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(offlineResponse()), NETWORK_TIMEOUT_MS);
+    const timer = setTimeout(() => resolve(null), NETWORK_TIMEOUT_MS);
     fetch(request).then(
       (response) => {
         clearTimeout(timer);
@@ -55,7 +60,7 @@ function fetchWithTimeout(request) {
       },
       () => {
         clearTimeout(timer);
-        resolve(offlineResponse());
+        resolve(null);
       },
     );
   });
@@ -91,16 +96,29 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.hostname === STORAGE_HOST && request.destination === 'image') {
+    // (#420) Stale-while-revalidate. Show the cached photo at once, refetch behind it, and replace
+    // the entry only with a response confirmed ok. A plain <img> sends a no-cors request whose
+    // response is opaque (status 0, error or not), so refetch it as cors (Storage allows any
+    // origin) to read the status; if that is blocked, pass the original through uncached.
     event.respondWith(
-      caches.open(CATALOG).then((cache) =>
-        cache.match(request, { ignoreVary: true }).then((cached) => {
-          if (cached) return cached;
-          return fetchWithTimeout(request).then((response) => {
-            if (response.ok || response.type === 'opaque') cache.put(request, response.clone());
+      caches.open(CATALOG).then(async (cache) => {
+        const cached = await cache.match(request, { ignoreVary: true });
+        const refresh = (async () => {
+          const noCors = request.mode === 'no-cors';
+          const response = await tryFetch(noCors ? new Request(request.url, { mode: 'cors' }) : request);
+          if (response) {
+            if (response.ok) event.waitUntil(cache.put(request, response.clone()).catch(() => {}));
             return response;
-          });
-        }),
-      ),
+          }
+          // No answer: offline, hung, or the cors read was blocked. Pass the original through, uncached.
+          return noCors ? fetchWithTimeout(request) : offlineResponse();
+        })();
+        if (cached) {
+          event.waitUntil(refresh.catch(() => {}));
+          return cached;
+        }
+        return refresh;
+      }),
     );
     return;
   }
