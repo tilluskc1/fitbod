@@ -86,6 +86,7 @@ import
   STORAGE_KEY,
   exportFilename,
   loadState,
+  mayReplaceOriginal,
   mergeImport,
   saveState,
   serializeExport,
@@ -216,7 +217,6 @@ interface SaveUi {
 // saved gym item or preference for an addition is known when the profile is validated.
 let INITIAL: LoadedState | undefined;
 const initialState = () => (INITIAL ??= loadState());
-const CORRUPT_BACKUP_KEY = 'fitbod-clone-v1:corrupt-backup';
 
 /** An event's timestamp; only ever called from handlers. */
 function stampNow(): string {
@@ -236,15 +236,6 @@ function initialSaveUi(load: LoadedState): SaveUi {
 const NO_EXCLUSIONS: string[] = [];
 /** (#333) Finish's partial-save Heads-up, which a failed save makes untrue. */
 const PARTIAL_SAVE = /^Saved the completed sets\./;
-
-function backupRaw(raw: string): boolean {
-  try {
-    globalThis.localStorage?.setItem(CORRUPT_BACKUP_KEY, raw);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * (#263) Starting over remounts the app from storage, exactly as a first
@@ -352,6 +343,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const pendingWriteRef = useRef<string | undefined>(undefined);
   const adoptingRef = useRef(false);
   const forceSaveRef = useRef(initial.status === 'corrupt');
+  /** (#395) Download original was tapped on Recovery: that file is the copy if the safety copy cannot be kept. */
+  const originalDownloaded = useRef(false);
 
   /* ---------- persistence ---------- */
 
@@ -1630,25 +1623,30 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         <Recovery
           error={recovery.message}
           raw={recovery.raw}
-          onDownload={() => downloadText(recovery.raw, 'strength-original-state.json')}
+          onDownload={() => {
+            downloadText(recovery.raw, 'strength-original-state.json');
+            originalDownloaded.current = true;
+          }}
           onRestore={(next: AppState, summary: ImportSummary) => {
-            // (#390) Keep the unreadable original before the restore replaces it, as Start fresh does.
-            if (recovery.raw) backupRaw(recovery.raw);
+            // (#390, #395) Keep the unreadable original before the restore replaces it; no copy, no restore.
+            if (!mayReplaceOriginal(recovery.raw, originalDownloaded.current)) return false;
             setState(next);
             // Corrupt data loads with no profile, so the splash was armed; a restored profile
             // opens straight on Today (#285).
             setShowSplash(opensOnSplash(next));
             setRecovery(null);
             setNotice(done(`Restored ${summary.newWorkouts} workouts.`));
+            return true;
           }}
           onStartFresh={() => {
-            if (recovery.raw) backupRaw(recovery.raw);
+            if (!mayReplaceOriginal(recovery.raw, originalDownloaded.current)) return false;
             revisionRef.current = 0;
             forceSaveRef.current = true;
             setState({ ...EMPTY_STATE });
             setShowSplash(opensOnSplash(EMPTY_STATE));
             setRecovery(null);
             setNotice(done('Started with empty data.'));
+            return true;
           }}
         />
       </PhoneFrame>

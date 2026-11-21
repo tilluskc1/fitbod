@@ -2,6 +2,8 @@
 // Start fresh still opens on the splash. 390x844 and 360x780.
 // (#390) Restore and Start fresh both keep the unreadable original in corrupt-backup first, and a record
 // stored with an overnight rest pause (restPausedMs over 24 h) opens normally instead of on Recovery.
+// (#395) When that copy cannot be written (storage full), Restore and Start fresh stop: the original stays
+// byte-identical and one line says to download it first. After Download original, Restore goes ahead.
 //
 //   npm run e2e        (builds, then runs every scripts/e2e check against the built app)
 import { execSync } from 'node:child_process';
@@ -35,6 +37,28 @@ const shot = (page, name, where) => shots && page.screenshot({ path: join(shots,
 const KEY = 'fitbod-clone-v1';
 const BACKUP_KEY = 'fitbod-clone-v1:corrupt-backup';
 const backupText = (page) => page.evaluate((key) => localStorage.getItem(key), BACKUP_KEY);
+const storedText = (page) => page.evaluate((key) => localStorage.getItem(key), KEY);
+const COPY_FAILED = "Couldn't keep a copy of your old data. Tap Download original first.";
+
+/** (#395) A nearly full phone: writing the safety copy throws, every other key still saves. Lasts until a reload. */
+const fillStorage = (page) => page.evaluate((key) => {
+  const setItem = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (name, value) {
+    if (name === key) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+    return setItem.call(this, name, value);
+  };
+}, BACKUP_KEY);
+
+const settle = (page) => page.evaluate(() => Promise.all(document.getAnimations()
+  .filter((a) => Number.isFinite(a.effect?.getComputedTiming?.().endTime))
+  .map((a) => a.finished.catch(() => {}))));
+
+const shot395 = async (page, where) => {
+  if (!shots) return;
+  await settle(page);
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: join(shots, `395-copy-failed-${where}.png`) });
+};
 
 async function onboard(page) {
   await page.getByRole('button', { name: 'Get started' }).click();
@@ -68,6 +92,47 @@ try {
     await page.goto(url);
     await onboard(page);
     const backup = await page.evaluate((key) => localStorage.getItem(key), KEY);
+
+    // (#395) Storage full, an older safety copy already kept. Restore stops: nothing is overwritten.
+    const FULL = '{not json: storage full';
+    const chooseBackup = () => page.locator('.recovery-restore input[type=file]').setInputFiles({ name: 'strength-backup.json', mimeType: 'application/json', buffer: Buffer.from(backup) });
+    const line = page.getByRole('alert').filter({ hasText: COPY_FAILED });
+    const stoppedOnRecovery = async (action) => {
+      check(await page.locator('.recovery').isVisible().catch(() => false), `${where}: ${action} left Recovery although no copy was kept (#395)`);
+      check(await storedText(page) === FULL, `${where}: ${action} overwrote the original although no copy was kept (#395)`);
+      check(await backupText(page) === '{older copy', `${where}: ${action} changed the older safety copy (#395)`);
+      check(await line.isVisible().catch(() => false), `${where}: ${action} does not show "${COPY_FAILED}" (#395)`);
+      check(await page.getByRole('button', { name: 'Download original' }).isVisible().catch(() => false), `${where}: Download original is gone after ${action} stopped (#395)`);
+    };
+    await page.evaluate((key) => localStorage.setItem(key, '{older copy'), BACKUP_KEY);
+    await corrupt(page, FULL);
+    await fillStorage(page);
+    await chooseBackup();
+    await page.getByRole('button', { name: 'Confirm restore' }).click();
+    await page.waitForTimeout(300);
+    await shot395(page, where);
+    await stoppedOnRecovery('Restore');
+
+    // Start fresh stops the same way, and its sheet closes so the line shows.
+    await corrupt(page, FULL);
+    await fillStorage(page);
+    await page.getByRole('button', { name: 'Start fresh' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Start fresh' }).click();
+    await page.waitForTimeout(300);
+    check(await page.getByRole('dialog').count() === 0, `${where}: the Start fresh sheet stays over the line (#395)`);
+    await stoppedOnRecovery('Start fresh');
+
+    // After Download original the file is the copy: the line goes and Restore goes ahead, still full.
+    await corrupt(page, FULL);
+    await fillStorage(page);
+    await chooseBackup();
+    await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), page.getByRole('button', { name: 'Download original' }).click()]);
+    check(!(await line.isVisible().catch(() => false)), `${where}: the line stays after Download original (#395)`);
+    await page.getByRole('button', { name: 'Confirm restore' }).click();
+    await page.waitForSelector('.t7-hero', { timeout: 5000 }).catch(() => {});
+    check(await page.locator('.t7-hero').isVisible().catch(() => false), `${where}: Restore after Download original does not open Today (#395)`);
+    check((await storedText(page))?.includes('"name":"Sam"'), `${where}: Restore after Download original did not save the backup (#395)`);
+    check(await backupText(page) === '{older copy', `${where}: the safety copy was written although storage was full (#395)`);
 
     // A restore from Recovery opens on Today with the restored plan, never the splash (#285).
     await page.evaluate((key) => localStorage.removeItem(key), BACKUP_KEY);
