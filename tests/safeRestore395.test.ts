@@ -1,6 +1,6 @@
 // (#395) Restore and Start fresh on Recovery replace the unreadable original only once a copy of it is
 // kept. When the safety copy cannot be written (storage full), nothing is overwritten and Recovery says
-// "Couldn't keep a copy of your old data. Tap Download original first." (#412: downloading no longer
+// "Couldn't save a safety copy of your old data, so nothing was changed." (#412: downloading no longer
 // unlocks the action; only a kept safety copy does.)
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -37,7 +37,7 @@ function installStorage(seed: Record<string, string>, { full = false } = {}) {
 }
 
 test('the line and the key are the ones product named', () => {
-  assert.equal(COPY_FAILED, "Couldn't keep a copy of your old data. Tap Download original first.");
+  assert.equal(COPY_FAILED, "Couldn't save a safety copy of your old data, so nothing was changed.");
   assert.equal(CORRUPT_BACKUP_KEY, 'fitbod-clone-v1:corrupt-backup');
 });
 

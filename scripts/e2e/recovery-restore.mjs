@@ -3,7 +3,7 @@
 // (#390) Restore and Start fresh both keep the unreadable original in corrupt-backup first, and a record
 // stored with an overnight rest pause (restPausedMs over 24 h) opens normally instead of on Recovery.
 // (#395) When that copy cannot be written (storage full), Restore and Start fresh stop: the original stays
-// byte-identical and one line says to download it first. (#412) Download original does not unlock Restore; only a kept copy does.
+// byte-identical and one line says nothing was changed. (#412) Download original does not unlock Restore; only a kept copy does.
 //
 //   npm run e2e        (builds, then runs every scripts/e2e check against the built app)
 import { execSync } from 'node:child_process';
@@ -38,7 +38,7 @@ const KEY = 'fitbod-clone-v1';
 const BACKUP_KEY = 'fitbod-clone-v1:corrupt-backup';
 const backupText = (page) => page.evaluate((key) => localStorage.getItem(key), BACKUP_KEY);
 const storedText = (page) => page.evaluate((key) => localStorage.getItem(key), KEY);
-const COPY_FAILED = "Couldn't keep a copy of your old data. Tap Download original first.";
+const COPY_FAILED = "Couldn't save a safety copy of your old data, so nothing was changed.";
 
 /** (#395) A nearly full phone: writing the safety copy throws, every other key still saves. Lasts until a reload. */
 const fillStorage = (page) => page.evaluate((key) => {
@@ -126,7 +126,12 @@ try {
     await corrupt(page, FULL);
     await fillStorage(page);
     await chooseBackup();
+    await page.getByRole('button', { name: 'Confirm restore' }).click();
+    await page.waitForTimeout(300);
+    await stoppedOnRecovery('Restore');
+    // The warning stays until a copy saves: tapping Download original does not hide it.
     await Promise.all([page.waitForEvent('download', { timeout: 5000 }).catch(() => null), page.getByRole('button', { name: 'Download original' }).click()]);
+    check(await line.isVisible().catch(() => false), `${where}: Download original hid the copy-failed line (#414)`);
     await page.getByRole('button', { name: 'Confirm restore' }).click();
     await page.waitForTimeout(300);
     await stoppedOnRecovery('Restore after Download original');

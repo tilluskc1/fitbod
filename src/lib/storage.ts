@@ -51,7 +51,7 @@ function storage(): Storage | null {
 export const CORRUPT_BACKUP_KEY = `${STORAGE_KEY}:corrupt-backup`;
 
 /** (#395) Recovery's one line when the safety copy could not be written; nothing was replaced. */
-export const COPY_FAILED = "Couldn't keep a copy of your old data. Tap Download original first.";
+export const COPY_FAILED = "Couldn't save a safety copy of your old data, so nothing was changed.";
 
 /**
  * (#395) Keep the unreadable original under the safety-copy key. True only when the key holds exactly

@@ -62,10 +62,7 @@ export default function Recovery({ error, raw, onDownload, onRestore, onStartFre
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button
             className="secondary"
-            onClick={() => {
-              onDownload();
-              setCopyFailed(false);
-            }}
+            onClick={onDownload}
           >
             Download original
           </button>
