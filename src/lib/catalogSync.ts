@@ -93,7 +93,13 @@ export async function refreshCatalog(): Promise<void> {
     const published = publishedRows(reply);
     if (!published) return;
     const copy = nextCopy(await readCopy(), published, publishedMedia(reply));
-    await (await caches.open(CATALOG_CACHE)).put(KEY, new Response(JSON.stringify(copy)));
+    const cache = await caches.open(CATALOG_CACHE);
+    await cache.put(KEY, new Response(JSON.stringify(copy)));
+    // (#387) A replaced or unpublished clip no longer needs its saved copy (up to 10 MB each).
+    const live = (copy.media ?? []).map((row) => encodeURIComponent(row.video));
+    for (const request of await cache.keys()) {
+      if (request.url.includes('/o/catalog%2Fmedia-') && !live.some((path) => request.url.includes(path))) await cache.delete(request);
+    }
   } catch {
     // Offline or refused: the last good copy stays.
   }

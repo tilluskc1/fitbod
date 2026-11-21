@@ -328,6 +328,7 @@ try {
     await openAgain(phone, base);
     const after = await player(phone);
     check(after === 'none', `${where}: after unpublish the exercise ${after}, not "No video yet"`);
+    check(!(await phone.evaluate(async () => (await (await caches.open('catalog-v1')).keys()).some((request) => request.url.includes('video-')))), `${where}: the unpublished clip is still saved on the phone`);
     await shot(phone, `phone-unpublished-${where}`);
 
     check(errors.length === 0 && adminErrors.length === 0, `${where}: page errors ${errors.concat(adminErrors).join(' | ')}`);

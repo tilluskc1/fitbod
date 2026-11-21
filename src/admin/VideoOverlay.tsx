@@ -102,7 +102,7 @@ export default function VideoOverlay({ exerciseId, name, overlay, token, onFail,
         <span>Credit (shown in the app's About)</span>
         <input className="search" value={draft.credit} maxLength={120} onChange={(event) => set({ credit: event.target.value })} />
       </label>
-      {problems.length > 0 && status !== 'published' && <p className="adm-muted" role="status">Can't publish yet: {problems.join(' ')}</p>}
+      {problems.length > 0 && <p className="adm-muted" role="status">Can't publish yet: {problems.join(' ')}</p>}
       {message && <p className={message.ok ? 'adm-ok' : 'adm-error'} role={message.ok ? 'status' : 'alert'}>{message.text}</p>}
       <div className="adm-cat__actions">
         <button type="button" className="pill-primary" disabled={busy || problems.length > 0} onClick={() => void save('published')}>
