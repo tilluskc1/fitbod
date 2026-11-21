@@ -46,8 +46,13 @@ function offlineResponse() {
  * component's error handler instead of spinning forever.
  */
 function fetchWithTimeout(request) {
+  return tryFetch(request).then((response) => response || offlineResponse());
+}
+
+/** Like fetchWithTimeout, but null when the fetch rejected or hung (offline, or CORS-blocked). */
+function tryFetch(request) {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(offlineResponse()), NETWORK_TIMEOUT_MS);
+    const timer = setTimeout(() => resolve(null), NETWORK_TIMEOUT_MS);
     fetch(request).then(
       (response) => {
         clearTimeout(timer);
@@ -55,7 +60,7 @@ function fetchWithTimeout(request) {
       },
       () => {
         clearTimeout(timer);
-        resolve(offlineResponse());
+        resolve(null);
       },
     );
   });
@@ -99,14 +104,14 @@ self.addEventListener('fetch', (event) => {
       caches.open(CATALOG).then(async (cache) => {
         const cached = await cache.match(request, { ignoreVary: true });
         const refresh = (async () => {
-          const checked = request.mode === 'no-cors' ? new Request(request.url, { mode: 'cors' }) : request;
-          const response = await fetchWithTimeout(checked);
-          if (response.ok) {
-            await cache.put(request, response.clone());
+          const noCors = request.mode === 'no-cors';
+          const response = await tryFetch(noCors ? new Request(request.url, { mode: 'cors' }) : request);
+          if (response) {
+            if (response.ok) event.waitUntil(cache.put(request, response.clone()).catch(() => {}));
             return response;
           }
-          // Offline (504) or a plain error: nothing to retry. A cors-blocked refetch falls back to the original.
-          return request.mode !== 'no-cors' || response.status === 504 ? response : fetchWithTimeout(request);
+          // No answer: offline, hung, or the cors read was blocked. Pass the original through, uncached.
+          return noCors ? fetchWithTimeout(request) : offlineResponse();
         })();
         if (cached) {
           event.waitUntil(refresh.catch(() => {}));

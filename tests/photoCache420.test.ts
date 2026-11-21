@@ -11,6 +11,7 @@ type Reply = { ok: boolean; status: number; type?: string; body: string };
 function setup(replies: Reply[]) {
   const store = new Map<string, any>();
   const calls: { mode: string }[] = [];
+  const reject = { first: false };
   const mk = (r: Reply) => ({ ...r, clone() { return r; } });
   const cache = {
     match: async (req: any) => store.get(req.url),
@@ -20,7 +21,7 @@ function setup(replies: Reply[]) {
   const sandbox: any = {
     self: { addEventListener: (n: string, f: any) => { if (n === 'fetch') handler = f; }, location: { origin: 'https://app.test' } },
     caches: { open: async () => cache },
-    fetch: async (req: any) => { calls.push({ mode: req.mode }); const r = replies.shift(); if (!r) throw new Error('offline'); return mk(r); },
+    fetch: async (req: any) => { calls.push({ mode: req.mode }); if (reject.first) { reject.first = false; throw new TypeError('cors'); } const r = replies.shift(); if (!r) throw new Error('offline'); return mk(r); },
     Request: class { url: string; mode: string; constructor(u: string, o: any = {}) { this.url = u; this.mode = o.mode ?? 'cors'; } },
     Response: class { status: number; ok: boolean; constructor(_b: string, o: any) { this.status = o.status; this.ok = false; } },
     URL, setTimeout, clearTimeout, Promise,
@@ -33,7 +34,7 @@ function setup(replies: Reply[]) {
     handler({ request: req, respondWith: (p: Promise<any>) => { out = p; }, waitUntil: (p: Promise<unknown>) => waits.push(p) });
     const res = await out; await Promise.all(waits); return res;
   };
-  return { store, calls, run };
+  return { store, calls, run, reject };
 }
 
 test('a failed fetch is not cached, opaque or not', async () => {
@@ -65,4 +66,21 @@ test('a failed refresh keeps the cached photo', async () => {
   t.store.set(URL_, { ok: true, status: 200, body: 'old' });
   assert.equal((await t.run()).body, 'old');
   assert.equal(t.store.get(URL_).body, 'old');
+});
+
+test('a blocked cors read falls back to the original request, uncached', async () => {
+  // First fetch (cors) rejects; the second (original no-cors) returns an opaque image.
+  const t2 = setup([{ ok: false, status: 0, type: 'opaque', body: 'opaque-image' }]);
+  t2.reject.first = true;
+  const res = await t2.run('no-cors');
+  assert.equal(res.body, 'opaque-image');
+  assert.deepEqual(t2.calls.map((c) => c.mode), ['cors', 'no-cors']);
+  assert.equal(t2.store.size, 0);
+});
+
+test('offline with nothing cached gives a 504, and nothing is cached', async () => {
+  const t = setup([]);
+  const res = await t.run('no-cors');
+  assert.equal(res.status, 504);
+  assert.equal(t.store.size, 0);
 });
