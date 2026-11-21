@@ -123,7 +123,8 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
-  if (url.hostname === STORAGE_HOST && request.destination === 'video') {
+  // (#387) Only built-in overlay clips (catalog/media-<id>/...); added-exercise videos stay network-only.
+  if (url.hostname === STORAGE_HOST && request.destination === 'video' && url.pathname.includes('/o/catalog%2Fmedia-')) {
     event.respondWith(serveClip(request, event));
     return;
   }

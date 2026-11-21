@@ -176,7 +176,8 @@ function worker(files: Map<string, Blob>, network: () => Promise<Response>) {
       respondWith: (p: Promise<Response>) => { response = p; },
       waitUntil: (p: Promise<unknown>) => { waits.push(p); },
     });
-    const done = await response!;
+    if (!response) return undefined;
+    const done = await response;
     await Promise.all(waits);
     return done;
   };
@@ -191,7 +192,9 @@ test('#387 the worker keeps a seen clip and answers byte ranges from it offline'
     if (!online) throw new TypeError('offline');
     return new Response(bytes, { status: 200, headers: { 'Content-Type': 'video/mp4' } });
   });
-  const first = await serve(URL_, 'bytes=0-');
+  const added = await serve(mediaUrl('catalog/add-landmine-press/video-1.mp4'), 'bytes=0-');
+  assert.equal(added, undefined, 'a video on an added exercise is not the worker\'s: network only, as before');
+  const first = (await serve(URL_, 'bytes=0-'))!;
   assert.equal(first.status, 200, 'first view goes through the network');
   assert.ok(files.has(URL_), 'and the whole clip is kept');
   online = false;
