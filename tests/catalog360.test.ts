@@ -94,11 +94,11 @@ test('#360 the download keeps published rows, drops bad ones, and ignores a repl
 
 test('#360 an unpublished row moves to retired and stays there; a republished one comes back', () => {
   const one = nextCopy(null, [LANDMINE, BELT]);
-  assert.deepEqual(one, { published: [LANDMINE, BELT], retired: [] });
+  assert.deepEqual(one, { published: [LANDMINE, BELT], retired: [], media: [] });
   const two = nextCopy(one, [BELT]);
-  assert.deepEqual(two, { published: [BELT], retired: [LANDMINE] });
-  assert.deepEqual(nextCopy(two, []), { published: [], retired: [BELT, LANDMINE] });
-  assert.deepEqual(nextCopy(nextCopy(two, []), [LANDMINE]), { published: [LANDMINE], retired: [BELT] });
+  assert.deepEqual(two, { published: [BELT], retired: [LANDMINE], media: [] });
+  assert.deepEqual(nextCopy(two, []), { published: [], retired: [BELT, LANDMINE], media: [] });
+  assert.deepEqual(nextCopy(nextCopy(two, []), [LANDMINE]), { published: [LANDMINE], retired: [BELT], media: [] });
 });
 
 test('#360 equipment items map to the families the app already reads', () => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MUSCLE_GROUPS } from '../data/exercises';
 import { GYM_GROUPS, GYM_ITEMS } from '../data/gymItems';
-import { BODYWEIGHT, BUCKET, mediaUrl, validRow, type Row } from '../lib/additions';
+import { BODYWEIGHT, BUCKET, mediaUrl, validMedia, validRow, type Row } from '../lib/additions';
 import {
   ADDITION_GROUPS,
   FAMILY_LIST,
@@ -19,6 +19,7 @@ import {
   unpublishProblems,
   type Draft,
   type Entry,
+  type Overlay,
   type Status,
 } from '../lib/adminCatalog';
 import { plain } from '../lib/catalogSync';
@@ -27,6 +28,7 @@ import type { MuscleGroup, MovementPattern } from '../types';
 import { AdminError, readCatalog, uploadMedia, writeCatalog } from './api';
 import AllExercises from './AllExercises';
 import { patternLabel } from './allExercisesData';
+import { videoSeconds } from './videoSeconds';
 
 /**
  * (#360) /admin Exercises and Equipment: add a draft, publish it, unpublish it. Additions only: the
@@ -45,22 +47,6 @@ function entriesOf(docs: FirestoreDoc[]): Entry[] {
   });
 }
 
-/** The browser's reading of a video file's length, in seconds (NaN when it can't). */
-function videoSeconds(file: File): Promise<number> {
-  return new Promise((resolve) => {
-    const video = document.createElement('video');
-    const url = URL.createObjectURL(file);
-    const done = (value: number) => {
-      URL.revokeObjectURL(url);
-      resolve(value);
-    };
-    video.preload = 'metadata';
-    video.onloadedmetadata = () => done(video.duration);
-    video.onerror = () => done(Number.NaN);
-    video.src = url;
-  });
-}
-
 interface Props {
   kind: Row['kind'];
   token: string;
@@ -74,6 +60,8 @@ export default function CatalogPage({ kind, token, onFail }: Props) {
   // (#377) Every catalog document as read, so All exercises still lists an addition `validRow` refuses.
   const [raw, setRaw] = useState<Array<Record<string, unknown>>>([]);
   const [view, setView] = useState<'added' | 'all'>('added');
+  // (#387) Video overlays on built-ins, with their status, as read and as saved this visit.
+  const [overlays, setOverlays] = useState<Overlay[]>([]);
 
   useEffect(() => {
     let live = true;
@@ -82,6 +70,11 @@ export default function CatalogPage({ kind, token, onFail }: Props) {
         if (!live) return;
         setRaw(docs.map((doc) => plain(doc.fields as never)));
         setEntries(entriesOf(docs));
+        setOverlays(docs.flatMap((doc) => {
+          const fields = plain(doc.fields as never);
+          const row = validMedia(fields);
+          return row && STATUS_LABEL[fields.status as Status] ? [{ row, status: fields.status as Status }] : [];
+        }));
       },
       (error: unknown) => {
         if (!live) return;
@@ -132,7 +125,14 @@ export default function CatalogPage({ kind, token, onFail }: Props) {
     return (
       <>
         {views}
-        <AllExercises entries={entries} raw={raw} />
+        <AllExercises
+          entries={entries}
+          raw={raw}
+          overlays={overlays}
+          token={token}
+          onFail={onFail}
+          onOverlay={(next) => setOverlays((list) => [...list.filter((item) => item.row.id !== next.row.id), next])}
+        />
       </>
     );
   }

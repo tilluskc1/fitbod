@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import type { Entry } from '../lib/adminCatalog';
+import type { Entry, Overlay } from '../lib/adminCatalog';
 import type { MovementPattern, MuscleGroup } from '../types';
+import VideoOverlay from './VideoOverlay';
 import { NO_FILTER, allExercises, countOf, daysFor, filterOptions, filterRows, patternLabel, type Filter, type ListRow } from './allExercisesData';
 
 /**
@@ -15,7 +16,16 @@ const STATUS_NOTE: Partial<Record<ListRow['tag'], string>> = {
   Unpublished: 'Unpublished: phones no longer plan it; past workouts keep it.',
 };
 
-export default function AllExercises({ entries, raw }: { entries: Entry[]; raw: Array<Record<string, unknown>> }) {
+interface Props {
+  entries: Entry[];
+  raw: Array<Record<string, unknown>>;
+  overlays: Overlay[];
+  token: string;
+  onFail: (error: unknown) => void;
+  onOverlay: (overlay: Overlay) => void;
+}
+
+export default function AllExercises({ entries, raw, overlays, token, onFail, onOverlay }: Props) {
   const rows = useMemo(() => allExercises(entries, raw), [entries, raw]);
   const [filter, setFilter] = useState<Filter>(NO_FILTER);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -26,7 +36,7 @@ export default function AllExercises({ entries, raw }: { entries: Entry[]; raw: 
   const set = (patch: Partial<Filter>) => setFilter((current) => ({ ...current, ...patch }));
   const filtered = filter.query.trim() || filter.muscle || filter.pattern || filter.equipment;
 
-  if (open) return <Detail row={open} onBack={() => setOpenId(null)} />;
+  if (open) return <Detail row={open} overlay={overlays.find((item) => item.row.exercise === open.id)} token={token} onFail={onFail} onOverlay={onOverlay} onBack={() => setOpenId(null)} />;
 
   return (
     <section aria-label="All exercises" className="adm-all">
@@ -98,7 +108,7 @@ function Thumb({ row, large = false }: { row: ListRow; large?: boolean }) {
   return <img className={className} src={row.photo} alt="" loading="lazy" onError={() => setBroken(true)} />;
 }
 
-function Detail({ row, onBack }: { row: ListRow; onBack: () => void }) {
+function Detail({ row, overlay, token, onFail, onOverlay, onBack }: { row: ListRow; overlay?: Overlay; token: string; onFail: (error: unknown) => void; onOverlay: (overlay: Overlay) => void; onBack: () => void }) {
   const days = daysFor(row);
   return (
     <section aria-label={row.name} className="adm-all__detail">
@@ -130,6 +140,9 @@ function Detail({ row, onBack }: { row: ListRow; onBack: () => void }) {
           <ul className="adm-all__cues">{row.cues.map((cue) => <li key={cue}>{cue}</li>)}</ul>
         ) : (
           <p className="adm-muted">{row.tag === 'Built-in' ? 'None. The how-to shows the first sentences of the instructions.' : 'None saved.'}</p>
+        )}
+        {row.tag === 'Built-in' && (
+          <VideoOverlay key={row.id + (overlay?.row.video ?? '')} exerciseId={row.id} name={row.name} overlay={overlay} token={token} onFail={onFail} onSaved={onOverlay} />
         )}
         <h3 className="adm-all__label">Media credit</h3>
         <p className="adm-all__text">

@@ -5,8 +5,10 @@ import {
   FAMILIES,
   LICENCES,
   isAdditionId,
+  validMedia,
   validRow,
   type EquipmentRow,
+  type MediaRow,
   type Licence,
   type Row,
 } from './additions.ts';
@@ -170,7 +172,7 @@ type Field = { stringValue: string } | { arrayValue: { values: Field[] } } | { t
 const field = (value: unknown): Field => (Array.isArray(value) ? { arrayValue: { values: value.map(field) } } : { stringValue: String(value) });
 
 /** Firestore fields for a row and its status; `updatedAt` is the save time. */
-export function fieldsOf(row: Row, status: Status, at: Date): Record<string, Field> {
+export function fieldsOf(row: Row | MediaRow, status: Status, at: Date): Record<string, Field> {
   return {
     ...Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined).map(([key, value]) => [key, field(value)])),
     status: field(status),
@@ -180,3 +182,23 @@ export function fieldsOf(row: Row, status: Status, at: Date): Record<string, Fie
 
 export const LICENCE_LABELS = Object.entries(LICENCES).map(([value, label]) => ({ value: value as Licence, label: label[0].toUpperCase() + label.slice(1) }));
 export const FAMILY_LIST = FAMILIES;
+
+/** (#387) The Storage path of a new overlay clip: its own `media-<exercise>` folder, one video per upload. */
+export const overlayPath = (exercise: string, at: number) => `catalog/media-${exercise}/video-${at}.mp4`;
+
+/** A video overlay on a built-in exercise, with its status. */
+export interface Overlay { row: MediaRow; status: Status }
+
+export interface OverlayDraft { source: string; licence: Licence | ''; credit: string }
+
+/** What stops an overlay publishing: a clip (chosen or already saved) and its rights. Empty means it can. */
+export function overlayProblems(draft: OverlayDraft, hasClip: boolean): string[] {
+  const problems: string[] = [];
+  if (!hasClip) problems.push('Choose a video.');
+  if (!draft.source.trim() || !draft.licence || !draft.credit.trim()) problems.push('Add the source, licence and credit for the video. No rights, no publish.');
+  return problems;
+}
+
+/** The overlay the draft would save, checked by `validMedia` like the phone does. */
+export const overlayRow = (exercise: string, video: string, draft: OverlayDraft): MediaRow | null =>
+  validMedia({ kind: 'media', id: `media-${exercise}`, exercise, video, source: draft.source.trim(), licence: draft.licence, credit: draft.credit.trim() });

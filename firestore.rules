@@ -79,9 +79,26 @@ service cloud.firestore {
               || (str(d.source, 1, 300) && str(d.credit, 1, 120) && d.licence in ['own-work', 'cc0', 'cc-by', 'public-domain']))));
     }
 
+    // (#387) A video the admin attaches to a BUILT-IN exercise: one row per exercise, id `media-<built-in
+    // id>`, with the clip under `catalog/<id>/` and its rights (#254). The built-in exercise is never
+    // written. Read and delete follow the same rules as any catalog row (published is public).
+    function mediaRow(id) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['id', 'kind', 'status', 'exercise', 'video', 'source', 'licence', 'credit', 'updatedAt'])
+        && d.keys().hasAll(['id', 'kind', 'status', 'exercise', 'video', 'source', 'licence', 'credit', 'updatedAt'])
+        && d.kind == 'media'
+        && d.id == id && id.size() <= 48 && id.matches('media-[a-z0-9]+(-[a-z0-9]+)*')
+        && d.status in ['draft', 'published', 'unpublished']
+        && str(d.exercise, 1, 41) && id == 'media-' + d.exercise
+        && d.video is string && d.video.matches('catalog/' + id + '/video-[0-9]{1,15}[.]mp4')
+        && str(d.source, 1, 300) && str(d.credit, 1, 120)
+        && d.licence in ['own-work', 'cc0', 'cc-by', 'public-domain']
+        && d.updatedAt is timestamp;
+    }
+
     match /catalog/{id} {
       allow read: if resource.data.status == 'published' || isAdmin();
-      allow create, update: if isAdmin() && catalogRow(id);
+      allow create, update: if isAdmin() && (catalogRow(id) || mediaRow(id));
     }
   }
 }

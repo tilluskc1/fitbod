@@ -50,6 +50,22 @@ export interface EquipmentRow {
 
 export type Row = ExerciseRow | EquipmentRow;
 
+/**
+ * (#387) A video the owner attaches to a built-in exercise. Doc id `media-<built-in id>`, so there is one
+ * per exercise, and the built-in data itself is never touched. The video lives under `catalog/<doc id>/`.
+ */
+export interface MediaRow {
+  kind: 'media';
+  id: string;
+  /** The built-in exercise it plays on. */
+  exercise: string;
+  video: string;
+  source: string;
+  licence: Licence;
+  credit: string;
+}
+export const MEDIA_ID = /^media-[a-z0-9]+(-[a-z0-9]+)*$/;
+
 const text = (value: unknown, min: number, max: number): value is string =>
   typeof value === 'string' && value.trim().length >= min && value.length <= max;
 
@@ -98,6 +114,16 @@ export function validRow(raw: unknown): Row | null {
   return row;
 }
 
+/** A plain overlay row (Firestore fields decoded) or null. Rights are required, as for any media (#254). */
+export function validMedia(raw: unknown): MediaRow | null {
+  const r = Object(raw) as Record<string, unknown>;
+  const { id, exercise } = r;
+  if (r.kind !== 'media' || typeof exercise !== 'string' || id !== `media-${exercise}` || !MEDIA_ID.test(id) || id.length > 48
+    || isAdditionId(exercise) || !mediaPath(id, r.video, 'video')
+    || !text(r.source, 1, 300) || !text(r.credit, 1, 120) || !(typeof r.licence === 'string' && r.licence in LICENCES)) return null;
+  return { kind: 'media', id, exercise, video: r.video as string, source: r.source as string, licence: r.licence as Licence, credit: r.credit as string };
+}
+
 /** Firebase Storage's public download URL for a media path. */
 export const BUCKET = 'home-strength.firebasestorage.app';
 export const mediaUrl = (path: string) =>
@@ -122,6 +148,8 @@ export function toExercise(row: ExerciseRow): Exercise | null {
 }
 
 const MEDIA = media as Record<string, { frames: string[]; video?: string }>;
+/** (#387) The built-in video each overlay replaced (none, for every built-in today), so tests can put it back. */
+const covered = new Map<string, string | undefined>();
 let credits: string[] = [];
 
 /** About > Credits lines for published additions with media (#254). */
@@ -135,7 +163,7 @@ let applied = false;
  * phone cached them) only stay readable: `exerciseById`, the media map and hidden gym items, so history
  * keeps their name and photo while planning, Switch and Replace never offer them.
  */
-export function applyRows(published: Row[], retired: Row[]): void {
+export function applyRows(published: Row[], retired: Row[], overlays: MediaRow[] = []): void {
   if (applied) return;
   applied = true;
   // Equipment first: an exercise may stand on an added item. Ids are unique: Firestore's are, and a row is
@@ -157,6 +185,14 @@ export function applyRows(published: Row[], retired: Row[]): void {
       if (!hidden) credits.push(`${row.name}: ${row.credit} (${LICENCES[row.licence!]}).`);
     }
   }
+  // (#387) Published video overlays on built-ins. An unpublished one is simply not in the list: no video.
+  for (const overlay of overlays) {
+    const entry = MEDIA[overlay.exercise];
+    if (!entry || !EXERCISES.some((exercise) => exercise.id === overlay.exercise)) continue;
+    covered.set(overlay.exercise, entry.video);
+    entry.video = mediaUrl(overlay.video);
+    credits.push(`${EXERCISES.find((exercise) => exercise.id === overlay.exercise)!.name} video: ${overlay.credit} (${LICENCES[overlay.licence]}).`);
+  }
 }
 
 /** Tests only: puts the built-in lists back. */
@@ -169,4 +205,9 @@ export function resetAdditions(): void {
   for (let i = GYM_ITEM_IDS.length - 1; i >= 0; i -= 1) if (isAdditionId(GYM_ITEM_IDS[i])) GYM_ITEM_IDS.splice(i, 1);
   RETIRED_EXERCISES.clear();
   for (const id of Object.keys(MEDIA)) if (isAdditionId(id)) delete MEDIA[id];
+  for (const [id, video] of covered) {
+    if (video) MEDIA[id].video = video;
+    else delete MEDIA[id].video;
+  }
+  covered.clear();
 }

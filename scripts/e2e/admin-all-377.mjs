@@ -194,8 +194,8 @@ try {
       const row = ROWS.find((item) => item.name === name);
       const coach = await page.locator('.adm-coach p').first().innerText();
       check(coach === `Would appear in: ${daysFor(row).join(', ')}.`, `${where}: ${name} coach "${coach}" vs planner ${daysFor(row)}`);
-      check(!(await page.locator('.adm-all__detail input, .adm-all__detail textarea, .adm-all__detail select').count()), `${where}: ${name} detail has a form control`);
-      check(!(await page.getByRole('button', { name: /Publish|Save|Edit/ }).count()), `${where}: ${name} detail can write`);
+      check(!(await page.locator('.adm-all__detail input:not(.adm-media input), .adm-all__detail textarea, .adm-all__detail select:not(.adm-media select)').count()), `${where}: ${name} detail has a form control outside the Video panel (#387)`);
+      check(!(await page.locator('.adm-all__detail button').filter({ hasText: /Publish|Save|Edit/ }).filter({ hasNot: page.locator('.adm-media') }).evaluateAll((buttons) => buttons.filter((button) => !button.closest('.adm-media')).length)), `${where}: ${name} detail can write outside the Video panel (#387)`);
       check((await page.locator('.adm-all__detail').innerText()).includes(row.instructions), `${where}: ${name} instructions`);
       if (name === 'Landmine Press') {
         const text = await page.locator('.adm-all__detail').innerText();

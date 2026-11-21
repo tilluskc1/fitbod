@@ -324,6 +324,14 @@
   border-radius: 10px;
 }
 
+.adm-media__video {
+  width: 100%;
+  max-width: 100%;
+  max-height: 240px;
+  border-radius: 10px;
+  background: #000;
+}
+
 .adm-file {
   display: grid;
   gap: 6px;

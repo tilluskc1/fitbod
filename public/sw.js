@@ -36,6 +36,39 @@ const NETWORK_TIMEOUT_MS = 4000;
 const CATALOG = 'catalog-v1';
 const STORAGE_HOST = 'firebasestorage.googleapis.com';
 
+// (#387) A clip the owner attached to a built-in exercise. A <video> asks for byte ranges, which a plain
+// cache hit can't answer: the first time, the request goes through and the whole clip (10 MB at most) is
+// kept in `catalog-v1`; from then on the kept copy is cut into the range asked for, offline included.
+const clipsLoading = new Set();
+
+async function serveClip(request, event) {
+  const cache = await caches.open(CATALOG);
+  const hit = await cache.match(request.url, { ignoreVary: true });
+  if (!hit) {
+    if (!clipsLoading.has(request.url)) {
+      clipsLoading.add(request.url);
+      event.waitUntil(
+        fetch(request.url)
+          .then((response) => (response.ok && response.status === 200 ? cache.put(request.url, response) : undefined))
+          .catch(() => undefined)
+          .finally(() => clipsLoading.delete(request.url)),
+      );
+    }
+    return fetchWithTimeout(request);
+  }
+  const clip = await hit.blob();
+  const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('range') || '');
+  const type = { 'Content-Type': clip.type || 'video/mp4', 'Accept-Ranges': 'bytes' };
+  if (!range || (!range[1] && !range[2])) return new Response(clip, { status: 200, headers: type });
+  const start = range[1] ? Number(range[1]) : Math.max(0, clip.size - Number(range[2]));
+  const end = range[1] && range[2] ? Math.min(Number(range[2]), clip.size - 1) : clip.size - 1;
+  if (start > end) return new Response('', { status: 416, headers: { 'Content-Range': `bytes */${clip.size}` } });
+  return new Response(clip.slice(start, end + 1), {
+    status: 206,
+    headers: { ...type, 'Content-Range': `bytes ${start}-${end}/${clip.size}` },
+  });
+}
+
 function offlineResponse() {
   return new Response('', { status: 504, statusText: 'Offline' });
 }
@@ -90,6 +123,10 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+  if (url.hostname === STORAGE_HOST && request.destination === 'video') {
+    event.respondWith(serveClip(request, event));
+    return;
+  }
   if (url.hostname === STORAGE_HOST && request.destination === 'image') {
     event.respondWith(
       caches.open(CATALOG).then((cache) =>

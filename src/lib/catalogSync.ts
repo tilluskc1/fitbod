@@ -1,6 +1,6 @@
 import { EVENTS_HOST } from './events.ts';
 import { FIREBASE } from './firebase.ts';
-import { applyRows, validRow, type Row } from './additions.ts';
+import { applyRows, validMedia, validRow, type MediaRow, type Row } from './additions.ts';
 
 /**
  * (#360) The phone's copy of the published additions: one Cache Storage cache, `catalog-v1`, holding
@@ -15,15 +15,18 @@ const KEY = '/catalog-v1.json';
 export interface CatalogCopy {
   published: Row[];
   retired: Row[];
+  /** (#387) Published video overlays on built-in exercises. Absent in a copy kept before #387. */
+  media?: MediaRow[];
 }
 
 const rows = (list: unknown): Row[] => (Array.isArray(list) ? list.flatMap((row) => validRow(row) ?? []) : []);
+const overlays = (list: unknown): MediaRow[] => (Array.isArray(list) ? list.flatMap((row) => validMedia(row) ?? []) : []);
 
 async function readCopy(): Promise<CatalogCopy | null> {
   try {
     const hit = await (await caches.open(CATALOG_CACHE)).match(KEY);
     const body = hit ? ((await hit.json()) as Partial<CatalogCopy>) : null;
-    return body ? { published: rows(body.published), retired: rows(body.retired) } : null;
+    return body ? { published: rows(body.published), retired: rows(body.retired), media: overlays(body.media) } : null;
   } catch {
     return null;
   }
@@ -32,7 +35,7 @@ async function readCopy(): Promise<CatalogCopy | null> {
 /** Before the first render: apply the cached copy. Never throws, never waits more than a second. */
 export async function loadCatalog(): Promise<void> {
   const copy = await Promise.race([readCopy(), new Promise<undefined>((done) => setTimeout(done, 1000))]);
-  if (copy) applyRows(copy.published, copy.retired);
+  if (copy) applyRows(copy.published, copy.retired, copy.media);
 }
 
 type Value = { stringValue?: string; arrayValue?: { values?: Value[] } };
@@ -47,11 +50,11 @@ export function plain(fields: Record<string, Value> = {}): Record<string, unknow
  * The next copy: what the server publishes now, and every row this phone held that the server no longer
  * publishes (kept so history still reads it).
  */
-export function nextCopy(previous: CatalogCopy | null, published: Row[]): CatalogCopy {
+export function nextCopy(previous: CatalogCopy | null, published: Row[], media: MediaRow[] = []): CatalogCopy {
   const live = new Set(published.map((row) => row.id));
   // A row is in one list or the other, never both; the retired list grows by one per unpublish.
   const retired = [...(previous?.published ?? []), ...(previous?.retired ?? [])].filter((row) => !live.has(row.id));
-  return { published, retired };
+  return { published, retired, media };
 }
 
 /** The published rows, or null when the reply is not a query result (the last good copy stays). */
@@ -63,6 +66,12 @@ export function publishedRows(reply: unknown): Row[] | null {
     // Only published rows: the query asks for them and the rules serve nothing else to the public.
     return (row && validRow(row)) ?? [];
   });
+}
+
+/** (#387) The published video overlays in the same reply. */
+export function publishedMedia(reply: unknown): MediaRow[] {
+  const fieldsOf = (item: unknown) => (item as { document?: { fields?: Record<string, Value> } })?.document?.fields;
+  return Array.isArray(reply) ? reply.flatMap((item) => validMedia(fieldsOf(item) && plain(fieldsOf(item))) ?? []) : [];
 }
 
 /** After the first render, online: download the published rows and keep them for the next open. */
@@ -80,9 +89,10 @@ export async function refreshCatalog(): Promise<void> {
         } }),
       },
     );
-    const published = response.ok ? publishedRows(await response.json()) : null;
+    const reply: unknown = response.ok ? await response.json() : null;
+    const published = publishedRows(reply);
     if (!published) return;
-    const copy = nextCopy(await readCopy(), published);
+    const copy = nextCopy(await readCopy(), published, publishedMedia(reply));
     await (await caches.open(CATALOG_CACHE)).put(KEY, new Response(JSON.stringify(copy)));
   } catch {
     // Offline or refused: the last good copy stays.
