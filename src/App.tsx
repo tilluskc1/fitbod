@@ -65,6 +65,7 @@ import
   updatePerformedSet,
   logSet,
   sessionProgress,
+  unfinishedSince,
   skipExercise,
   swapPendingExercise,
   toggleRestPause,
@@ -1901,6 +1902,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onDelete={(workoutId) => setSheet({ kind: 'delete-workout', workoutId })}
             onFeedback={saveFeedback}
             running={Boolean(current)}
+            // (#406) An open workout from an earlier day: End or Finish leads, Resume is the quiet link.
+            unfinished={Boolean(unfinishedSince(current, today))}
+            loggedSets={current ? sessionProgress(current).done : 0}
+            onEnd={current ? endFromToday : undefined}
             // (#294) The empty state's one action: today's preview, as Today's Preview button, or resume.
             onStartToday={current ? openWorkout : () => setSheet({ kind: 'preview' })}
             startDisabled={liveProgram.exercises.length === 0}
@@ -2149,6 +2154,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       {sheet.kind === 'startOver' && (
         <StartOverSheet
           sessionOpen={Boolean(state.current)}
+          since={unfinishedSince(state.current, today)}
           lastBackupAt={state.lastBackupAt}
           onBackup={backupNow}
           onErase={startOver}
@@ -2289,6 +2295,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       {replacePrompt && current && (
         <DiscardSessionSheet
           currentName={current.name}
+          since={unfinishedSince(current, today)}
           nextName={adaptFor(replacePrompt).name}
           onDiscard={discardAndBegin}
           onKeep={() => setReplacePrompt(null)}

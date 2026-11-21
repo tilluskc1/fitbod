@@ -320,7 +320,7 @@ export default function TodayScreen({
     ? {
         ...status,
         label: unfinished ? `${progress} of ${total} sets logged` : `In progress · ${progress} of ${total} sets`,
-        icon: status.tone === 'ready' ? 'play_arrow' : status.icon,
+        icon: unfinished ? 'info' : status.tone === 'ready' ? 'play_arrow' : status.icon,
       }
     : status;
   const heroName = todayOnly && current ? current.name : program.name;
@@ -485,7 +485,7 @@ export default function TodayScreen({
           <div className="list-head">
             <h2>The workout</h2>
             <span>
-              {timed && `${approx ? '≈' : ''}${minutes} min · `}
+              {timed && !unfinished && `${approx ? '≈' : ''}${minutes} min · `}
               {adapted.totalSets} {adapted.totalSets === 1 ? 'set' : 'sets'}
             </span>
           </div>

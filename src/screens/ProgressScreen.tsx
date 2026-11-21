@@ -32,6 +32,11 @@ interface Props {
   onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
   /** (#294) A workout is under way: the empty state resumes it instead of starting today's. */
   running?: boolean;
+  /** (#406) The running workout is from an earlier day: End or Finish leads, Resume is the quiet link. */
+  unfinished?: boolean;
+  /** Sets logged in the running workout, to choose between End and Finish. */
+  loggedSets?: number;
+  onEnd?: () => void;
   /** Opens today's preview (Today's Start), or resumes the running workout. */
   onStartToday: () => void;
   /** Today has nothing to start, as Today's own Preview button is then disabled. */
@@ -63,6 +68,9 @@ export default function ProgressScreen({
   onDelete,
   onFeedback,
   running = false,
+  unfinished = false,
+  loggedSets = 0,
+  onEnd,
   onStartToday,
   startDisabled = false,
   initialTab = 'overview',
@@ -187,10 +195,21 @@ export default function ProgressScreen({
         <div className="empty-state progress-empty">
           <h2 className="progress-empty__title">Your progress starts with your first workout.</h2>
           <p>After it, you'll see your workouts, sets and minutes here, and a chart for each lift.</p>
-          <button className="primary" onClick={onStartToday} disabled={!running && startDisabled}>
-            {running ? 'Resume workout' : "Start today's workout"}
-            <ArrowIcon />
-          </button>
+          {running && unfinished && onEnd ? (
+            <>
+              <button className="primary" onClick={onEnd}>
+                {loggedSets === 0 ? 'End workout' : 'Finish workout'}
+              </button>
+              <button className="link-btn" onClick={onStartToday}>
+                Resume
+              </button>
+            </>
+          ) : (
+            <button className="primary" onClick={onStartToday} disabled={!running && startDisabled}>
+              {running ? 'Resume workout' : "Start today's workout"}
+              <ArrowIcon />
+            </button>
+          )}
         </div>
       ) : tab === 'overview' ? (
         <>
