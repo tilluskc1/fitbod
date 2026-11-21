@@ -17,7 +17,7 @@ import { preview } from 'vite';
 import { EXERCISES } from '../../src/data/exercises.ts';
 import { validRow } from '../../src/lib/additions.ts';
 import { plain } from '../../src/lib/catalogSync.ts';
-import { NO_FILTER, allExercises, countOf, daysFor, filterRows } from '../../src/admin/allExercises.ts';
+import { NO_FILTER, allExercises, countOf, daysFor, filterRows } from '../../src/admin/allExercisesData.ts';
 
 async function loadPlaywright() {
   try {

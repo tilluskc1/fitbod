@@ -26,7 +26,7 @@ import type { FirestoreDoc } from '../lib/adminData';
 import type { MuscleGroup, MovementPattern } from '../types';
 import { AdminError, readCatalog, uploadMedia, writeCatalog } from './api';
 import AllExercises from './AllExercises';
-import { patternLabel } from './allExercises';
+import { patternLabel } from './allExercisesData';
 
 /**
  * (#360) /admin Exercises and Equipment: add a draft, publish it, unpublish it. Additions only: the

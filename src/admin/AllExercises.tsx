@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Entry } from '../lib/adminCatalog';
 import type { MovementPattern, MuscleGroup } from '../types';
-import { NO_FILTER, allExercises, countOf, daysFor, filterOptions, filterRows, patternLabel, type Filter, type ListRow } from './allExercises';
+import { NO_FILTER, allExercises, countOf, daysFor, filterOptions, filterRows, patternLabel, type Filter, type ListRow } from './allExercisesData';
 
 /**
  * (#377) /admin Exercises > All exercises: every built-in exercise and every addition, one row each.

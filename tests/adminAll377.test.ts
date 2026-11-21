@@ -8,7 +8,7 @@ import { mediaUrl, type Row } from '../src/lib/additions.ts';
 import { appearsIn, type Entry } from '../src/lib/adminCatalog.ts';
 import { isRelevantToDay } from '../src/lib/feasibility.ts';
 import { buildPlan } from '../src/lib/generator.ts';
-import { allExercises, countOf, daysFor, filterRows, filterOptions, NO_FILTER } from '../src/admin/allExercises.ts';
+import { allExercises, countOf, daysFor, filterRows, filterOptions, NO_FILTER } from '../src/admin/allExercisesData.ts';
 import type { Exercise, PlanDay, Profile } from '../src/types.ts';
 
 /* #377: /admin lists every exercise, built-in and added, read-only, with search, filters and the planner's days. */
