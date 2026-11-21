@@ -116,7 +116,7 @@ test('v1 data migrates in place, preserving history identity and set values', ()
   assert.equal(storage.data.get(LEGACY_BACKUP_KEY), FIXTURE);
 });
 
-test('restoring an older backup keeps newer skip events and the newer plan', () => {
+test('restoring an older backup puts back its profile and plan, and keeps skip events (#419)', () => {
   const profile = {
     goal: 'Build Muscle' as const, experience: 'Beginner' as const, daysPerWeek: 3,
     equipment: ['Dumbbell' as const], support: [], exclusions: [], loads: { Dumbbell: [10] },
@@ -140,9 +140,10 @@ test('restoring an older backup keeps newer skip events and the newer plan', () 
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
   const merged = mergeImport(local, parsed.state).state;
-  assert.equal(merged.planRevision, 2);
-  assert.equal(merged.programCursor?.seq, 2);
-  assert.equal(merged.plan.length, 5);
+  assert.equal(merged.planRevision, 1);
+  assert.equal(merged.programCursor?.seq, 1);
+  assert.equal(merged.plan.length, older.plan.length);
+  assert.equal(merged.profile?.daysPerWeek, 3);
   assert.deepEqual(merged.slotSkips?.map((skip) => skip.id), ['skip:1:0', 'skip:2:0', 'skip:2:1']);
 });
 
@@ -582,7 +583,23 @@ test('restore keeps local-only workouts and an unrelated active session', () => 
   assert.equal(merged.summary.localOnlyWorkouts, 1);
   assert.equal(merged.summary.activeSessionKept, true);
   assert.equal(merged.state.current?.id, 'local-active');
+  // (#419) a backup with no profile has nothing to put back: the local one stays.
   assert.equal(merged.state.profile?.goal, 'Build Muscle');
+});
+
+test('restore replaces an existing local profile and plan with the backup\'s (#419)', () => {
+  const base = { goal: 'Build Muscle' as const, experience: 'Beginner' as const, daysPerWeek: 3,
+    equipment: ['Dumbbell' as const], support: [], exclusions: [], loads: { Dumbbell: [10] },
+    name: 'Backup', unit: 'kg' as const, sessionMinutes: 35 };
+  const phone = { ...base, name: 'New phone', daysPerWeek: 5 };
+  const backup = { ...EMPTY_STATE, profile: base, plan: buildPlan(base), planRevision: 1, programCursor: { revision: 1, seq: 0 } };
+  const local = { ...EMPTY_STATE, profile: phone, plan: buildPlan(phone), planRevision: 4, programCursor: { revision: 4, seq: 3 } };
+  const result = mergeImport(local, backup);
+  assert.equal(result.state.profile?.name, 'Backup');
+  assert.equal(result.state.plan.length, backup.plan.length);
+  assert.equal(result.state.planRevision, 1);
+  assert.equal(result.summary.profileReplaced, true);
+  assert.equal(result.summary.planReplaced, true);
 });
 
 test('an integrated log, swap, reload, resume and finish keeps each set once', () => {
