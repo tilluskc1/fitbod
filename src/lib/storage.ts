@@ -275,6 +275,10 @@ export function eraseLocalData(store: EraseStore | null = storage()): EraseResul
 
 export const START_OVER_BLOCKED = 'A workout is in progress. Finish or discard it first, then start over.';
 
+/** (#406) The same block for a workout left open from an earlier day: it names the day and never says "in progress". */
+export const startOverBlocked = (since: string | null): string =>
+  since ? `A workout from ${since} is still open. End or finish it first, then start over.` : START_OVER_BLOCKED;
+
 /** (#263) The one start-over path: an open workout refuses it before any key is touched. */
 export function startOverErase(
   state: Pick<AppState, 'current'>,
