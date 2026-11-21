@@ -1884,6 +1884,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             todayBar={todayOnly(state, today)}
             onUndo={describedSession ? undefined : () => restoreOriginal(undoToast(profile))}
             current={current}
+            now={today}
             onResume={openWorkout}
             skipped={skippedToday(state.slotSkips, cursorFor(state).revision, today)}
             explainer={planTipShown}

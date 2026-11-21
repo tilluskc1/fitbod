@@ -5,7 +5,7 @@ import type { Program } from '../data/flagship';
 import { canPerform, capabilitiesFor } from '../lib/capabilities';
 import { catalogRowMeta } from '../lib/liveProgression';
 import { describedChip, feasibilityChip, plainFocus, usualLine } from '../lib/planPage';
-import { sessionProgress } from '../lib/session';
+import { sessionProgress, unfinishedSince } from '../lib/session';
 import type { MuscleGroup, Profile, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import TodayOnlyBar from '../components/ui/TodayOnlyBar';
@@ -39,6 +39,8 @@ interface Props {
   onUndo?: () => void;
   /** (#297) A running session: Today's row shows its progress and Resume (#260). */
   current?: WorkoutRecord | null;
+  /** (#399) The clock Today reads, so a session from an earlier day says Unfinished here too. */
+  now?: Date;
   onResume?: () => void;
   /** (#297) Slots skipped today, marked where the sequence moved them. */
   skipped?: ReadonlySet<string>;
@@ -71,6 +73,7 @@ export default function PlanScreen({
   todayBar,
   onUndo,
   current,
+  now,
   onResume,
   skipped,
   explainer,
@@ -90,7 +93,7 @@ export default function PlanScreen({
   const todayFocus = described ? '' : plainFocus(focus, todayIds);
   const progress = current ? sessionProgress(current) : null;
   const todayChip = progress
-    ? { tone: 'progress', label: `In progress · ${progress.done} of ${progress.total} sets` }
+    ? { tone: 'progress', label: `${current && now && unfinishedSince(current, now) ? 'Unfinished' : 'In progress'} · ${progress.done} of ${progress.total} sets` }
     : described ? describedChip(described) : feasibilityChip(program.feasibility);
 
   return (
