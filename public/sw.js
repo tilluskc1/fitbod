@@ -91,16 +91,29 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.hostname === STORAGE_HOST && request.destination === 'image') {
+    // (#420) Stale-while-revalidate. Show the cached photo at once, refetch behind it, and replace
+    // the entry only with a response confirmed ok. A plain <img> sends a no-cors request whose
+    // response is opaque (status 0, error or not), so refetch it as cors (Storage allows any
+    // origin) to read the status; if that is blocked, pass the original through uncached.
     event.respondWith(
-      caches.open(CATALOG).then((cache) =>
-        cache.match(request, { ignoreVary: true }).then((cached) => {
-          if (cached) return cached;
-          return fetchWithTimeout(request).then((response) => {
-            if (response.ok || response.type === 'opaque') cache.put(request, response.clone());
+      caches.open(CATALOG).then(async (cache) => {
+        const cached = await cache.match(request, { ignoreVary: true });
+        const refresh = (async () => {
+          const checked = request.mode === 'no-cors' ? new Request(request.url, { mode: 'cors' }) : request;
+          const response = await fetchWithTimeout(checked);
+          if (response.ok) {
+            await cache.put(request, response.clone());
             return response;
-          });
-        }),
-      ),
+          }
+          // Offline (504) or a plain error: nothing to retry. A cors-blocked refetch falls back to the original.
+          return request.mode !== 'no-cors' || response.status === 504 ? response : fetchWithTimeout(request);
+        })();
+        if (cached) {
+          event.waitUntil(refresh.catch(() => {}));
+          return cached;
+        }
+        return refresh;
+      }),
     );
     return;
   }
