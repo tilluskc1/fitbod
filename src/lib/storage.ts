@@ -416,7 +416,7 @@ export interface MergeResult {
 }
 
 /**
- * Merge a validated import into current state. History is de-duplicated by
+ * Merge a validated import into current state. The backup's profile and plan win; history is de-duplicated by
  * workout id (restoring the same file twice is a no-op), imported data wins
  * for ids it contains, and an unrelated active session is never discarded.
  */
@@ -462,21 +462,20 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
       ? importedActive ?? localActive
       : localActive ?? importedActive;
 
-  // Older backups add history, but cannot replace a newer plan or erase skip
-  // events. Equal revisions retain the existing import behavior.
+  // (#419) Restore means "put me back the way I was": the backup's profile and
+  // plan win outright, whatever this browser holds. A backup with no profile or
+  // an empty plan has nothing to put back, so the local one stays.
   const currentRevision = current.planRevision ?? 0;
   const importedRevision = imported.planRevision ?? 0;
-  const importPlan = imported.plan.length > 0 && (current.plan.length === 0 || importedRevision >= currentRevision);
+  const importPlan = imported.plan.length > 0;
   const revision = importPlan ? importedRevision : currentRevision;
-  const cursorSeq = currentRevision === importedRevision
-    ? Math.max(current.programCursor?.seq ?? 0, imported.programCursor?.seq ?? 0)
-    : importPlan ? imported.programCursor?.seq ?? 0 : current.programCursor?.seq ?? 0;
-  const skipIds = new Set((current.slotSkips ?? []).map((skip) => skip.id));
-  const slotSkips = [
-    ...(current.slotSkips ?? []),
-    ...(imported.slotSkips ?? []).filter((skip) => !skipIds.has(skip.id)),
-  ];
-  const importProfile = imported.profile !== null && (current.profile === null || importedRevision >= currentRevision);
+  const cursorSeq = importPlan
+    ? imported.programCursor?.seq ?? 0
+    : current.programCursor?.seq ?? 0;
+  // Skip ids carry only a per-device revision, so two unrelated plans can share
+  // one. Skips follow whichever plan wins, never a union of both.
+  const slotSkips = importPlan ? imported.slotSkips ?? [] : current.slotSkips ?? [];
+  const importProfile = imported.profile !== null;
 
   return {
     state: {
