@@ -181,6 +181,15 @@ function readAreas(text: string): { train: Area[]; skip: Area[]; sore: Area[] } 
   };
 }
 
+/** (#426) Cardio words the app never tracks. A match is a display-only notice, not a stored field. */
+const CARDIO_RE = /\b(?:bik(?:e|ing)|cycl(?:e|ing)|treadmill|elliptical|rowing\s*machine|row\s*machine)\b/i;
+
+/** The cardio word said, if any, for a "noted, not tracked" line. Never written to a plan or override. */
+export function cardioNotice(text: string): string | null {
+  const match = CARDIO_RE.exec(text);
+  return match ? match[0].toLowerCase() : null;
+}
+
 /** Hours said in words or digits, in minutes; undefined when the sentence names none. */
 function hoursIn(text: string): number | undefined {
   if (/\bhalf an? hour\b/i.test(text)) return 30;

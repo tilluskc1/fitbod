@@ -326,6 +326,17 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    `tests/endWorkout397.test.ts` and `scripts/e2e/end-workout.mjs` (no "for next time", no disabled top chip
    while a session is open).
 
+45. **A browser-only API read at render time needs an SSR guard, not just a try/catch.** #426: `voiceSupported()`
+   read `window.SpeechRecognition` directly, called straight from `TodayTalk`'s render body. `tests/oneMinutesModel.test.ts`
+   renders `TodayTalk` with `react-dom/server` in Node, where `window` does not exist, so every test touching that
+   render crashed with `window is not defined` — a previously-passing, unrelated test broke on an unrelated change.
+   Separately, the e2e check's "no voice support" case assumed a plain Chromium page has no `SpeechRecognition`
+   constructor; real Chromium ships its own `webkitSpeechRecognition`, so the check passed for the wrong reason
+   until both were explicitly deleted. Rule: any new module that reads a browser global (`window`, `navigator`,
+   `document`) guards with `typeof window === 'undefined'` before touching it, and its e2e "unsupported" case
+   deletes the real constructor rather than assuming it is absent. Check: `src/lib/speech.ts`'s
+   `speechRecognitionCtor()` and the `noSupport()` case in `scripts/e2e/voice-plan-426.mjs`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

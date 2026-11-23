@@ -16,7 +16,7 @@ import { applyFinish, createSession } from '../src/lib/session.ts';
 import { serializeExport } from '../src/lib/storage.ts';
 import { parseState } from '../src/lib/validate.ts';
 import {
-  NO_TAPS, baseTalk, composeTalk, customDayName, customDayPreview, describesDay, talkConstraints, talkFromText, talkParse,
+  NO_TAPS, baseTalk, cardioNotice, composeTalk, customDayName, customDayPreview, describesDay, talkConstraints, talkFromText, talkParse,
   tapSkip, tapTrain, tapsAfterEdit,
 } from '../src/lib/todayTalk.ts';
 import type { TalkState } from '../src/lib/todayTalk.ts';
@@ -79,6 +79,16 @@ test('#426: spoken numbers read as digits, and "lower back is a bit sore" never 
   // No punctuation: one sore word must not bleed onto the area named after it.
   assert.deepEqual(pick(talkParse('half an hour back is sore upper body')),
     { minutes: 30, train: ['Chest', 'Shoulders', 'Arms'], avoid: ['Back'], sore: ['Back'] });
+});
+
+test('#426: cardioNotice names the equipment heard, for display only, never for the plan', () => {
+  assert.equal(cardioNotice('thirty minutes, some biking and then upper body'), 'biking');
+  assert.equal(cardioNotice('I want to do the treadmill'), 'treadmill');
+  assert.equal(cardioNotice('elliptical for a bit'), 'elliptical');
+  assert.equal(cardioNotice('thirty minutes upper body'), null);
+  // R3 (#426): cardio never changes train/equipment, whatever cardioNotice reports.
+  assert.deepEqual(pick(talkParse('thirty minutes, some biking and then upper body')),
+    { minutes: 30, train: ['Chest', 'Back', 'Shoulders', 'Arms'] });
 });
 
 test('#193: only a determiner may sit between "no/skip" and an area; "not sore" trains', () => {

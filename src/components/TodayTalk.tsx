@@ -14,6 +14,8 @@ import {
 } from '../lib/planToday';
 import type { Question } from '../lib/planToday';
 import Icon from './ui/Icon';
+import VoiceSheet from './VoiceSheet';
+import { voiceSupported } from '../lib/speech';
 import BodyMap from './BodyMap';
 import { talkMapMuscles } from '../lib/bodyMap';
 import type { Shade } from '../lib/bodyMap';
@@ -60,7 +62,8 @@ const minutesLabel = (minutes: number) => (minutes === 60 ? '1 hr' : `${minutes}
  * "Plan today with me" (#236) on the #193 composer: one question per screen with tap answers,
  * defaults pre-selected, then the day the generator builds from them. "Or just tell me" fills the
  * same answers from a sentence. Answers are chip taps over the text (`composeTalk`), so every way
- * of answering builds the same day. Voice is the keyboard's own dictation: nothing here listens.
+ * of answering builds the same day. (#426) The mic is a second way to fill that same sentence —
+ * `VoiceSheet` only transcribes; it never parses on its own.
  */
 export default function TodayTalk({ profile, plannedName, todayName, plannedAreas, plannedFocus, savedGear, savedMinutes, base, preview, onStart, onActive, openAsk = 0, shade = {} }: Props) {
   const [step, setStep] = useState<Question | 'summary' | null>(null);
@@ -70,6 +73,10 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
   // Q2 "It hurts", and the text "It's only soreness" answered: other text with pain stops again.
   const [pain, setPain] = useState(NO_PAIN_ANSWER);
   const [built, setBuilt] = useState<{ talk: TalkState; day: CustomDayPreview } | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  // (#426) A start error, unsupported API or a permission denial hides the mic for the rest of this
+  // session; chips are never affected. A silent timeout never sets this (see VoiceSheet's onBlocked).
+  const [micBlocked, setMicBlocked] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const said = composeTalk(base, text, taps);
   const talk = { ...said, pain: painStops(pain, text, said.pain) };
@@ -126,17 +133,71 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
     requestAnimationFrame(() => document.querySelector<HTMLElement>('.tt-open')?.focus());
   };
 
+  // (#426) Voice is a second way to fill the same taps/text the chips and typing already fill;
+  // each handler seeds them from the transcript and then reuses the exact path that already
+  // existed (go/build/preview), so a voice-built day is never built by different logic.
+  const voiceConfirm = (transcript: string) => {
+    const nextTaps = tapsAfterEdit(taps, text, transcript);
+    const said = composeTalk(base, transcript, nextTaps);
+    const finalTalk = { ...said, pain: painStops(pain, transcript, said.pain) };
+    setTaps(nextTaps);
+    setText(transcript);
+    setVoiceOpen(false);
+    if (finalTalk.pain) return go('sore');
+    if (finalTalk.train.length === 0) return go('train');
+    const day = preview(finalTalk);
+    if (!day) return;
+    setBuilt({ talk: finalTalk, day });
+    go('summary');
+  };
+  const voiceEditSlot = (question: Question, transcript: string) => {
+    setTaps(tapsAfterEdit(taps, text, transcript));
+    setText(transcript);
+    setVoiceOpen(false);
+    go(question);
+  };
+  const voicePain = (transcript: string) => {
+    setTaps(tapsAfterEdit(taps, text, transcript));
+    setText(transcript);
+    setVoiceOpen(false);
+    go('sore');
+  };
+  const voiceFallback = () => {
+    setVoiceOpen(false);
+    go('time');
+  };
+
   if (step === null) {
+    const micAvailable = !micBlocked && voiceSupported();
     return (
       <section className="t7-card tt" aria-label="Plan today with me">
         <span className="tt-badge">{todayName ? `Today · ${todayName}` : `Planned today · ${plannedName}`}</span>
-        <button type="button" className="tt-open" onClick={() => { track('plan-today'); go('time'); }}>
-          <span>
-            <b>Plan today with me</b>
-            <small>How long, what's sore, what to train. I'll build it from your answers.</small>
-          </span>
-          <Icon name="chevron_right" size={22} />
-        </button>
+        <div className="tt-open-row">
+          <button type="button" className="tt-open" onClick={() => { track('plan-today'); go('time'); }}>
+            <span>
+              <b>Plan today with me</b>
+              <small>How long, what's sore, what to train. I'll build it from your answers.</small>
+            </span>
+            <Icon name="chevron_right" size={22} />
+          </button>
+          {micAvailable && (
+            <button type="button" className="tt-mic" aria-label="Plan by voice" onClick={() => { track('plan-today'); setVoiceOpen(true); }}>
+              <Icon name="mic" size={18} />
+            </button>
+          )}
+        </div>
+        {voiceOpen && (
+          <VoiceSheet
+            base={base}
+            profile={profile}
+            onConfirm={voiceConfirm}
+            onEditSlot={voiceEditSlot}
+            onPain={voicePain}
+            onFallback={voiceFallback}
+            onBlocked={() => { setVoiceOpen(false); setMicBlocked(true); }}
+            onClose={() => setVoiceOpen(false)}
+          />
+        )}
       </section>
     );
   }
