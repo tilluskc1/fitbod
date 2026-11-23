@@ -5136,6 +5136,81 @@ button.aw-exercise__name-btn {
 .today + .flow-dock > .today-end { align-self: center; min-width: 44px; }
 .tt-stop .secondary { margin-top: 10px; min-height: 44px; background: var(--card); }
 
+/* ---------- Voice sheet (#426), "Voice sheet" mockup opt-c2 ----------
+   The entry mic stays small and layered (owner feedback: the mockup's solid 48px circle read as
+   too bold) — a quiet pill beside "Plan today with me", never competing with it for attention. */
+.tt-open-row { display: flex; align-items: center; gap: 8px; }
+.tt-open-row .tt-open { flex: 1; min-width: 0; }
+.tt-mic {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline-variant);
+  color: var(--accent-text);
+}
+.tt-mic:active { background: var(--surface-container-highest); }
+
+.tt-voice-listen { display: grid; justify-items: center; gap: 16px; padding: 8px 0 4px; text-align: center; }
+.tt-voice-mic {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline-variant);
+  color: var(--accent-text);
+  position: relative;
+}
+.tt-voice-mic--live { animation: tt-voice-pulse 1.6s ease-in-out infinite; }
+@keyframes tt-voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(163, 184, 58, 0.35); }
+  50% { box-shadow: 0 0 0 10px rgba(163, 184, 58, 0); }
+}
+.tt-voice-eq { position: absolute; bottom: -10px; display: flex; gap: 3px; align-items: flex-end; height: 10px; }
+.tt-voice-eq i { width: 3px; border-radius: 2px; background: var(--accent-edge); animation: tt-voice-eq 0.9s ease-in-out infinite; }
+.tt-voice-eq i:nth-child(2) { animation-delay: 0.15s; }
+.tt-voice-eq i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes tt-voice-eq { 0%, 100% { height: 3px; } 50% { height: 10px; } }
+.tt-voice-transcript { min-height: 44px; font-size: 16px; color: var(--on-surface); line-height: 1.4; }
+.tt-voice-transcript--done { color: var(--on-surface-muted); font-style: italic; text-align: left; }
+.tt-voice-stop {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.tt-stopsq { width: 12px; height: 12px; border-radius: 2px; background: currentColor; }
+.tt-voice-notheard { border: 1.5px dashed var(--amber); background: var(--amber-fill); }
+.tt-voice-slots { display: grid; gap: 8px; }
+.tt-voice-slot {
+  min-height: 56px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: var(--surface-container-high);
+  text-align: left;
+}
+.tt-voice-slot__label { flex: none; width: 48px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.tt-voice-slot__value { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; color: var(--on-surface); }
+.tt-voice-slot .ms { flex: none; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  .tt-voice-mic--live { animation: none; }
+  .tt-voice-eq i { animation: none; height: 6px; }
+}
+
 /* #300: the warm-up block and ramp rows. Muted, labelled Warm-up, never counted as sets.
    (#380) One card while open (title, note, timer, check); one quiet line once done. */
 .lg-warm {

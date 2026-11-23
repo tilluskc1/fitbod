@@ -45,9 +45,45 @@ function snapMinutes(value: number): number {
 /** Equipment families the user can name that the program does not cover yet. */
 const UNSUPPORTED_EQUIPMENT = ['kettlebell', 'barbell', 'machine', 'cable'] as const;
 
+const ONES: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+  seventeen: 17, eighteen: 18, nineteen: 19,
+};
+const TENS: Record<string, number> = {
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+};
+const ONES_WORDS = Object.keys(ONES).join('|');
+const TENS_WORDS = Object.keys(TENS).join('|');
+/**
+ * (#426) Spoken numbers, not typed ones: "thirty", "forty-five", "a hundred and ten". The
+ * trailing `\b` saves "four" from eating the front of "fourteen" — a prefix match fails the
+ * boundary check (still inside a word) and the engine falls through to the longer alternative.
+ */
+const NUMBER_WORD = new RegExp(
+  `\\b(?:(?<hundred>(?:a\\s+)?hundred)(?:\\s+and)?(?:\\s+(?<hTens>${TENS_WORDS}))?(?:[\\s-]+(?<hOnes>${ONES_WORDS}))?|(?<tens>${TENS_WORDS})(?:[\\s-]+(?<ones>${ONES_WORDS}))?|(?<lone>${ONES_WORDS}))\\b`,
+  'gi',
+);
+
+/** Spoken numbers read as digits, so "thirty minutes" parses the same as "30 minutes" (#426). */
+export function normalizeNumberWords(text: string): string {
+  return text.replace(NUMBER_WORD, (match: string, ...rest: unknown[]) => {
+    const groups = rest[rest.length - 1] as Record<string, string | undefined>;
+    if (groups.hundred) {
+      const tens = groups.hTens ? TENS[groups.hTens.toLowerCase()] : 0;
+      const ones = groups.hOnes ? ONES[groups.hOnes.toLowerCase()] : 0;
+      return String(100 + tens + ones);
+    }
+    if (groups.tens) return String(TENS[groups.tens.toLowerCase()] + (groups.ones ? ONES[groups.ones.toLowerCase()] : 0));
+    if (groups.lone) return String(ONES[groups.lone.toLowerCase()]);
+    return match;
+  });
+}
+
 /** Local keyword parser. Deterministic and offline. */
 export const keywordParser: ConstraintParser = {
-  parse(text: string): ParsedConstraints {
+  parse(rawText: string): ParsedConstraints {
+    const text = normalizeNumberWords(rawText);
     const result: ParsedConstraints = {};
     // Loads come out first: "5 kg dumbbells" is a weight, not five minutes.
     const weights: number[] = [];
