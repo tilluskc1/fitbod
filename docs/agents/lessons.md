@@ -337,6 +337,16 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    deletes the real constructor rather than assuming it is absent. Check: `src/lib/speech.ts`'s
    `speechRecognitionCtor()` and the `noSupport()` case in `scripts/e2e/voice-plan-426.mjs`.
 
+46. **A confirmation card must read the exact inputs the action builds from, not a simplified stand-in.**
+   #426's review: `VoiceSheet`'s "Here's what I heard" card computed its Time/Sore/Train/Gear values with
+   `composeTalk(base, finalText, NO_TAPS)`, ignoring any taps/text already sitting in `TodayTalk`'s state
+   from an earlier, cancelled chip session — while the real build (`voiceConfirm`) read that leftover state
+   via `tapsAfterEdit(taps, text, transcript)`. The card could show one plan and build a different one,
+   defeating the card's purpose (catching a misheard word before committing). Rule: when a screen previews
+   what another function is about to do, compute the preview with that same function and the same inputs —
+   never a default/empty stand-in for state the real action reads. Check: `scripts/e2e/voice-plan-426.mjs`'s
+   `staleTaps()` (tap chips, cancel, then speak; the heard-you card and the built summary must agree).
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

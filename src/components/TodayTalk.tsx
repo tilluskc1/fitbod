@@ -190,6 +190,8 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
           <VoiceSheet
             base={base}
             profile={profile}
+            taps={taps}
+            text={text}
             onConfirm={voiceConfirm}
             onEditSlot={voiceEditSlot}
             onPain={voicePain}

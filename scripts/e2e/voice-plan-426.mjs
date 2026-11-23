@@ -160,6 +160,41 @@ async function voiceFlow(browser, where) {
   await page.close();
 }
 
+/** A chip tap left over from an earlier, cancelled chip session must still show in the heard-you
+ * card — and match what "Yes, build it" actually builds. Regression: the card used to read
+ * `NO_TAPS` instead of the real taps/text, so it could show different values than the build. */
+async function staleTaps(browser, where) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(installFakeRecognition, 'SpeechRecognition');
+  await onboard(page);
+  const mic = page.locator('.tt-mic');
+
+  await page.locator('.tt-open').click();
+  await page.locator('.tt h2:has-text("How long do you have?")').waitFor();
+  await page.locator('[role="group"][aria-label="Time"]').getByText('20 min', { exact: true }).click();
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.locator('.tt h2:has-text("Anything sore or hurting?")').waitFor();
+  await page.locator('[role="group"][aria-label="Sore or hurting"]').getByText('Back', { exact: true }).click();
+  await page.locator('.tt-nav .secondary').click(); // Back: sore (index 1) to time (index 0)
+  await page.locator('.tt-nav .secondary').click(); // Cancel: time (index 0) closes the planner
+  await page.locator('.tt-open').waitFor();
+
+  await openListening(page, mic);
+  await page.evaluate(() => window.__voiceSay('legs'));
+  await page.evaluate(() => window.__voiceEnd());
+  await page.locator("text=Here's what I heard").waitFor();
+  check(await page.locator('.tt-voice-slot__value').getByText('20 min').isVisible(), `${where}: heard-you card dropped the earlier 20 min tap`);
+  check(await page.locator('.tt-voice-slot__value').getByText('Back', { exact: true }).isVisible(), `${where}: heard-you card dropped the earlier Back tap`);
+  check(await page.locator('.tt-voice-slot__value').getByText('Legs', { exact: true }).isVisible(), `${where}: heard-you card missing Legs from "legs"`);
+  await page.getByRole('button', { name: 'Yes, build it' }).click();
+  await page.getByRole('button', { name: 'Start this workout' }).waitFor();
+  // `.tt-line` echoes `talk.minutes` verbatim (unlike `.tt-meta`, which shows the adapted/approx
+  // exercise time), so it proves the build used the same 20-minute tap the card showed.
+  check(await page.locator('.tt-line').getByText('20 min').isVisible(), `${where}: built plan did not use the 20 min tap the card showed`);
+  await shot(page, `${where}-stale-taps-summary`);
+  await page.close();
+}
+
 async function noSupport(browser, where) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   // Real Chromium ships its own webkitSpeechRecognition; R1 needs the true no-support case, so remove both.
@@ -200,6 +235,7 @@ const chromiumBrowser = await chromium.launch();
 const webkitBrowser = shots ? await webkit.launch() : null;
 try {
   await voiceFlow(chromiumBrowser, 'chromium');
+  await staleTaps(chromiumBrowser, 'chromium-stale-taps');
   await noSupport(chromiumBrowser, 'chromium-no-support');
   await layoutShots(chromiumBrowser, 'chromium');
   if (webkitBrowser) await layoutShots(webkitBrowser, 'webkit');
@@ -213,4 +249,4 @@ if (failures.length) {
   console.error(`voice-plan-426: ${failures.length} failure(s)\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('voice-plan-426: pass — mic entry, listening, heard-you slots, pain bypass, silent timeout vs. real failure, no-support fallback, and layout at 360/390/430/tablet/desktop in Chromium and WebKit');
+console.log('voice-plan-426: pass — mic entry, listening, heard-you slots, stale taps match the build, pain bypass, silent timeout vs. real failure, no-support fallback, and layout at 360/390/430/tablet/desktop in Chromium and WebKit');

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Profile } from '../types';
-import { NO_TAPS, cardioNotice, composeTalk, gearLabel, talkParse } from '../lib/todayTalk';
-import type { TalkState } from '../lib/todayTalk';
+import { cardioNotice, composeTalk, gearLabel, talkParse, tapsAfterEdit } from '../lib/todayTalk';
+import type { TalkState, Taps } from '../lib/todayTalk';
 import type { Question } from '../lib/planToday';
 import { newRecognition } from '../lib/speech';
 import Sheet from './ui/Sheet';
@@ -12,6 +12,9 @@ type Stage = 'listening' | 'heard' | 'empty' | 'retry';
 interface Props {
   base: TalkState;
   profile: Pick<Profile, 'equipment'>;
+  /** The chips/text left from any earlier session, so the card matches what `onConfirm` will build. */
+  taps: Taps;
+  text: string;
   /** "Yes": build from this transcript, unedited. */
   onConfirm: (transcript: string) => void;
   /** Tapped one of the four slots: open that question, seeded with this transcript. */
@@ -34,7 +37,7 @@ const SILENCE_MS = 2000;
  * back to the chips. It parses nothing itself; every reading goes through `talkParse`/`composeTalk`,
  * the same engine typed text already uses, so voice can never disagree with typing.
  */
-export default function VoiceSheet({ base, profile, onConfirm, onEditSlot, onPain, onFallback, onBlocked, onClose }: Props) {
+export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEditSlot, onPain, onFallback, onBlocked, onClose }: Props) {
   const [stage, setStage] = useState<Stage>('listening');
   const [live, setLive] = useState('');
   const [finalText, setFinalText] = useState('');
@@ -155,7 +158,9 @@ export default function VoiceSheet({ base, profile, onConfirm, onEditSlot, onPai
     );
   }
 
-  const talk = composeTalk(base, finalText, NO_TAPS);
+  // Same inputs `onConfirm` builds from (see TodayTalk's voiceConfirm), so the card never shows
+  // something different from the plan a tap on "Yes, build it" produces.
+  const talk = composeTalk(base, finalText, tapsAfterEdit(taps, text, finalText));
   const cardio = cardioNotice(finalText);
   const slots: { question: Question; label: string; value: string }[] = [
     { question: 'time', label: 'Time', value: `${talk.minutes} min` },
