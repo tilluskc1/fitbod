@@ -94,6 +94,7 @@ async function voiceFlow(browser, where) {
   const openBox = await page.locator('.tt-open').boundingBox();
   check(micBox.width <= 44 && micBox.height <= 44, `${where}: mic is ${micBox.width}x${micBox.height}, want small (<=44px)`);
   check(Math.abs(micBox.y - openBox.y) < openBox.height, `${where}: mic not beside the main entry`);
+  check(await page.getByText("Voice uses your browser's speech service.").isVisible(), `${where}: R2 disclosure not shown near the mic`);
   await shot(page, `${where}-today`);
 
   // Heard: a sentence with sore (not pain) and a cardio word goes to the "heard you" card.
@@ -195,6 +196,25 @@ async function staleTaps(browser, where) {
   await page.close();
 }
 
+/** A real browser's `onend` can fire right after `onerror`; the network message must survive it
+ * instead of getting overwritten by the generic "Didn't catch that" (the fake recognizer normally
+ * fires only one or the other, so this drives both explicitly to reproduce the real sequencing). */
+async function errorThenEnd(browser, where) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(installFakeRecognition, 'SpeechRecognition');
+  await onboard(page);
+  const mic = page.locator('.tt-mic');
+
+  await openListening(page, mic);
+  await page.evaluate(() => window.__voiceError('network'));
+  await page.getByRole('heading', { name: "Didn't catch that" }).waitFor();
+  await page.evaluate(() => window.__voiceEnd());
+  await page.waitForTimeout(100); // lets a regression's setState (onend overwriting the stage) settle before the check below
+  check(await page.getByText("Voice needs your browser's speech service online.").isVisible().catch(() => false),
+    `${where}: onend after onerror overwrote the network message`);
+  await page.close();
+}
+
 async function noSupport(browser, where) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   // Real Chromium ships its own webkitSpeechRecognition; R1 needs the true no-support case, so remove both.
@@ -236,6 +256,7 @@ const webkitBrowser = shots ? await webkit.launch() : null;
 try {
   await voiceFlow(chromiumBrowser, 'chromium');
   await staleTaps(chromiumBrowser, 'chromium-stale-taps');
+  await errorThenEnd(chromiumBrowser, 'chromium-error-then-end');
   await noSupport(chromiumBrowser, 'chromium-no-support');
   await layoutShots(chromiumBrowser, 'chromium');
   if (webkitBrowser) await layoutShots(webkitBrowser, 'webkit');
@@ -249,4 +270,4 @@ if (failures.length) {
   console.error(`voice-plan-426: ${failures.length} failure(s)\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('voice-plan-426: pass — mic entry, listening, heard-you slots, stale taps match the build, pain bypass, silent timeout vs. real failure, no-support fallback, and layout at 360/390/430/tablet/desktop in Chromium and WebKit');
+console.log('voice-plan-426: pass — mic entry, R2 disclosure, listening, heard-you slots, stale taps match the build, a network error surviving onend, pain bypass, silent timeout vs. real failure, no-support fallback, and layout at 360/390/430/tablet/desktop in Chromium and WebKit');

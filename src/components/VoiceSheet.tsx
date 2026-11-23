@@ -46,8 +46,12 @@ export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEdi
   const liveRef = useRef('');
   const recognitionRef = useRef<ReturnType<typeof newRecognition>>(null);
   const silenceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // onerror's retry message must survive the onend that follows it in real browsers (the fake
+  // recognizer used by the e2e check fires only one or the other, so it can't catch this).
+  const erroredRef = useRef(false);
 
   useEffect(() => {
+    erroredRef.current = false;
     const recognition = newRecognition();
     if (!recognition) {
       onBlocked();
@@ -77,6 +81,7 @@ export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEdi
       }
       // Our own stop()/abort() surfaces as this error in some browsers; onend settles it instead.
       if (event.error === 'aborted') return;
+      erroredRef.current = true;
       setRetryMessage(event.error === 'network'
         ? "Voice needs your browser's speech service online."
         : "Didn't catch that.");
@@ -84,6 +89,7 @@ export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEdi
     };
     recognition.onend = () => {
       if (silenceRef.current) clearTimeout(silenceRef.current);
+      if (erroredRef.current) return; // onerror already chose the stage and message for this attempt.
       const text = liveRef.current.trim();
       if (!text) {
         setStage('empty');

@@ -186,6 +186,7 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
             </button>
           )}
         </div>
+        {micAvailable && <p className="tt-hint">Voice uses your browser's speech service.</p>}
         {voiceOpen && (
           <VoiceSheet
             base={base}
