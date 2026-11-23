@@ -70,6 +70,17 @@ test('#193: area words, sore and skip phrasing, never across a comma', () => {
   assert.deepEqual(pick(talkParse('back is sore, legs')), { train: ['Legs'], avoid: ['Back'], sore: ['Back'] });
 });
 
+test('#426: spoken numbers read as digits, and "lower back is a bit sore" never trains Back', () => {
+  assert.deepEqual(pick(talkParse('Thirty minutes')), { minutes: 30 });
+  assert.deepEqual(pick(talkParse('Forty-five minutes, bodyweight')), { minutes: 45, equipment: 'bodyweight' });
+  // The acceptance sentence (#426): Back must land in avoid/sore, never train, despite "upper body" after it.
+  assert.deepEqual(pick(talkParse('Thirty minutes. My lower back is a bit sore. Upper body.')),
+    { minutes: 30, train: ['Chest', 'Shoulders', 'Arms'], avoid: ['Back'], sore: ['Back'] });
+  // No punctuation: one sore word must not bleed onto the area named after it.
+  assert.deepEqual(pick(talkParse('half an hour back is sore upper body')),
+    { minutes: 30, train: ['Chest', 'Shoulders', 'Arms'], avoid: ['Back'], sore: ['Back'] });
+});
+
 test('#193: only a determiner may sit between "no/skip" and an area; "not sore" trains', () => {
   assert.deepEqual(pick(talkParse('30 min no dumbbells chest')), { minutes: 30, equipment: 'bodyweight', train: ['Chest'] });
   assert.deepEqual(pick(talkParse('no time chest')), { train: ['Chest'] });

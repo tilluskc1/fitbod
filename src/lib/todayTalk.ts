@@ -115,7 +115,9 @@ const ALL_SORE = /(?<!\bnot\s)\b(?:everything|(?<!\b(?:is|are|feel|feels)\s)all|
 const NOT_BEFORE = '(?<!\\b(?:not|no|never)\\s)';
 const SORE_BEFORE_RE = new RegExp(`${NOT_BEFORE}\\b(?:${SORE_BEFORE})\\s+$`);
 const LEAVE_BEFORE_RE = new RegExp(`${NOT_BEFORE}\\b(?:${LEAVE_BEFORE})\\s+$`);
-const SORE_AFTER_RE = new RegExp(`^((?:\\s+[\\w'’]+){0,2}?)\\s+(?:${SORE_AFTER})\\b`);
+// (#426) Up to three filler words: "lower back is a bit sore" has three ("is", "a", "bit")
+// between the area and the sore word. Two was one short and silently dropped the sore reading.
+const SORE_AFTER_RE = new RegExp(`^((?:\\s+[\\w'’]+){0,3}?)\\s+(?:${SORE_AFTER})\\b`);
 
 const areasIn = (text: string): Area[] =>
   AREA_WORDS.filter(({ word }) => new RegExp(`\\b(?:${word})\\b`).test(text)).flatMap(({ areas }) => areas);
@@ -142,6 +144,10 @@ function readAreas(text: string): { train: Area[]; skip: Area[]; sore: Area[] } 
     return soreRest ? ' ' : ` ${rest}`;
   });
   for (const clause of said.split(/[.;:!?\n]+|\bbut\b/)) {
+    // (#426) A sore word already claimed by an earlier area in this clause (the forward match
+    // below) cannot also sore-tag a later area found by the backward check — "back is sore
+    // upper body" (no punctuation) names one sore word, not two sore areas.
+    let usedSoreEnd = -1;
     for (const run of clause.matchAll(RUN)) {
       const at = run.index ?? 0;
       // "chest, legs are sore" is two mentions, not a list: only an and/or makes one.
@@ -156,7 +162,10 @@ function readAreas(text: string): { train: Area[]; skip: Area[]; sore: Area[] } 
         const before = clause.slice(0, piece.at);
         const after = fine ? '' : clause.slice(piece.at + piece.text.length);
         const named = SORE_AFTER_RE.exec(after);
-        const isSore = Boolean(named && !NEGATED.test(named[1])) || SORE_BEFORE_RE.test(before);
+        const namedSore = Boolean(named && !NEGATED.test(named[1]));
+        if (namedSore && named) usedSoreEnd = piece.at + piece.text.length + named[0].length;
+        const beforeMatch = SORE_BEFORE_RE.exec(before);
+        const isSore = namedSore || Boolean(beforeMatch && beforeMatch.index >= usedSoreEnd);
         const left = LEAVE_BEFORE_RE.test(before);
         for (const area of areasIn(piece.text)) {
           if (isSore) sore.add(area);

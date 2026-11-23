@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   defaultConstraints,
   keywordParser,
+  normalizeNumberWords,
   resolveConstraints,
 } from '../src/lib/constraints.ts';
 import type { Profile } from '../src/types.ts';
@@ -28,6 +29,14 @@ test('kettlebell-only names the unsupported equipment instead of mapping to home
 
 test('a one-minute request stays visible instead of snapping to ten', () => {
   assert.deepEqual(keywordParser.parse('I only have 1 minute'), { minutes: 1 });
+});
+
+test('#426: spoken numbers normalize to digits, so voice reads the same as typed text', () => {
+  assert.equal(normalizeNumberWords('thirty minutes'), '30 minutes');
+  assert.equal(normalizeNumberWords('Forty-five minutes'), '45 minutes');
+  assert.equal(normalizeNumberWords('a hundred and ten minutes'), '110 minutes');
+  assert.equal(normalizeNumberWords('30 minutes'), '30 minutes', 'typed digits pass through unchanged');
+  assert.deepEqual(keywordParser.parse('thirty minutes'), { minutes: 30 });
 });
 
 test('unsupported equipment keeps the current setup and says what was asked', () => {
