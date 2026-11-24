@@ -166,6 +166,8 @@ import
  RecapScreen from './screens/RecapScreen';
 import
  LibraryScreen from './screens/LibraryScreen';
+import ExercisesScreen from './screens/ExercisesScreen';
+import { prefetchLibraryAtIdle } from './data/library';
 import
  AdaptScreen from './screens/AdaptScreen';
 import DurationSheet from './components/DurationSheet';
@@ -203,7 +205,7 @@ import
   WhySheet,
 } from './screens/Sheets';
 
-type View = 'tabs' | 'train' | 'recap' | 'library' | 'adapt';
+type View = 'tabs' | 'train' | 'recap' | 'library' | 'exercises' | 'adapt';
 
 /**
  * (#430) A start (or a Switch) asked for while another workout is open: held until the lifter picks Save
@@ -425,6 +427,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       setFeedbackWrite((current) => (current ? { ...current, kind: 'error' } : current));
     }
   }, [state]);
+
+  // (#431) Saved data naming a library exercise loads the library's index at idle, after the first
+  // render, so the Exercises screen opens warm. History never waits on it: records keep their own names.
+  useEffect(() => prefetchLibraryAtIdle(initial.state), [initial.state]);
 
   useEffect(() => {
     // Never write back what was just loaded. An identity check, not a one-shot flag: StrictMode
@@ -2002,6 +2008,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         onSave={patchProfile}
         onBack={() => setView('tabs')}
       />
+    ) : view === 'exercises' ? (
+      <ExercisesScreen onBack={() => setView('tabs')} />
     ) : view === 'adapt' && pendingAdapted && pending ? (
       <AdaptScreen
         profile={profile}
@@ -2126,6 +2134,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onOpenSettings={openTrainingSettings}
             onViewDay={(dayIndex) => setSheet({ kind: 'day', dayIndex })}
             onOpenLibrary={() => setView('library')}
+            onOpenExercises={() => setView('exercises')}
             described={described}
             todayBar={todayOnly(state, today)}
             onUndo={() => restoreOriginal(undoToast(profile))}
