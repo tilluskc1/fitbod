@@ -8,6 +8,7 @@
  */
 
 import { exerciseById } from './exercises.ts';
+import { libraryFamily } from './library.ts';
 import { displayValue, unitLabel } from '../lib/units.ts';
 import type { Feasibility, Unit } from '../types.ts';
 
@@ -118,6 +119,8 @@ export const HOTEL_DUMBBELLS = [10, 15, 18, 22, 25];
  * holds in the same set.
  */
 export function setUnit(exerciseId: string): 'reps' | 'seconds' {
+  // (#432) An added Stretching row logs seconds held. Library ids only, so no built-in's unit moves.
+  if (libraryFamily(exerciseId) === 'timed') return 'seconds';
   return programExercise(exerciseId)?.holdSeconds ? 'seconds' : 'reps';
 }
 
@@ -201,6 +204,9 @@ export function programExercise(exerciseId: string): ProgramExercise | undefined
 
 /** Catalog swaps keep their own equipment; only the program defines special load modes. */
 export function loadModeOf(exerciseId: string): LoadMode {
+  // (#432) An added library row: its family. Cardio's optional weight is a total; see `needsLoad`.
+  const family = libraryFamily(exerciseId);
+  if (family) return family === 'each' ? 'each' : family === 'total' || family === 'free' ? 'total' : 'none';
   const program = programExercise(exerciseId);
   if (program) return program.load;
   const equipment = exerciseById(exerciseId)?.equipment;
@@ -212,6 +218,8 @@ export const NEEDS_LOAD_REASON = 'Enter a weight to log this set';
 
 /** A loaded, counted set: it cannot be logged until it carries a load (#103). */
 export function needsLoad(exerciseId: string): boolean {
+  // (#432) A library Cardio row's weight is optional.
+  if (libraryFamily(exerciseId) === 'free') return false;
   return loadModeOf(exerciseId) !== 'none' && setUnit(exerciseId) !== 'seconds';
 }
 

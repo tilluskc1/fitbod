@@ -1,7 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { LIBRARY_GROUPS, libraryLoaded, loadLibraryIndex, loadLibraryText, type LibraryGroup } from '../data/library';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { LIBRARY_GROUPS, type LibraryGroup } from '../data/library';
 import { PAGE, libraryEntries, searchLibrary, youLog, type LibraryEntry } from '../lib/librarySearch';
 import { BackIcon, ChevronIcon } from '../components/ui/Icons';
+import { LibraryEmpty, LibraryLoading, LibraryOffline, LibrarySteps } from './libraryParts';
+import { useLibraryIndex } from './useLibraryIndex';
 import './exercises.css';
 
 /**
@@ -13,13 +15,10 @@ interface Props {
   onBack: () => void;
 }
 
-type Load = 'loading' | 'ready' | 'offline';
-
 const CHIPS = ['All', ...LIBRARY_GROUPS] as const;
 
 export default function ExercisesScreen({ onBack }: Props) {
-  const [load, setLoad] = useState<Load>(libraryLoaded() ? 'ready' : 'loading');
-  const [attempt, setAttempt] = useState(0);
+  const { load, retry } = useLibraryIndex();
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState<LibraryGroup | 'All'>('All');
   const [shown, setShown] = useState(PAGE);
@@ -28,23 +27,11 @@ export default function ExercisesScreen({ onBack }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const scrollTop = useRef(0);
 
-  useEffect(() => {
-    let live = true;
-    void loadLibraryIndex().then((ok) => live && setLoad(ok ? 'ready' : 'offline'));
-    return () => {
-      live = false;
-    };
-  }, [attempt]);
-
   const entries = useMemo(() => (load === 'ready' ? libraryEntries() : []), [load]);
   // The whole ranked list once per query and chip; "Show more" only reveals more of it.
   const results = useMemo(() => searchLibrary(entries, query, group), [entries, query, group]);
   const open = openId ? entries.find((entry) => entry.id === openId) : undefined;
 
-  const retry = () => {
-    setLoad('loading');
-    setAttempt((n) => n + 1);
-  };
   const search = (value: string) => {
     setQuery(value);
     setShown(PAGE);
@@ -92,57 +79,11 @@ export default function ExercisesScreen({ onBack }: Props) {
         ))}
       </div>
 
-      {load === 'loading' && (
-        <>
-          <p role="status" className="ex-status">
-            Loading exercises…
-          </p>
-          <div className="ex-list" aria-hidden="true">
-            {Array.from({ length: 6 }, (_, index) => (
-              <div className="ex-row ex-row--skeleton" key={index}>
-                <span className="ex-skel ex-skel--name" />
-                <span className="ex-skel ex-skel--meta" />
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      {load === 'loading' && <LibraryLoading />}
 
-      {load === 'offline' && (
-        <div className="empty-state ex-state">
-          <p>
-            <b>The exercise list needs a connection once.</b> Your plan and everything you've logged still work.
-          </p>
-          <button className="secondary" onClick={retry}>
-            Try again
-          </button>
-        </div>
-      )}
+      {load === 'offline' && <LibraryOffline onRetry={retry} />}
 
-      {load === 'ready' && results.length === 0 && (
-        <div className="empty-state ex-state">
-          {group === 'All' ? (
-            <>
-              <p>
-                <b>No matches for "{query.trim()}"</b>
-              </p>
-              <p>Check the spelling.</p>
-            </>
-          ) : (
-            <>
-              <p>
-                <b>
-                  No matches for "{query.trim()}" with {group} selected
-                </b>
-              </p>
-              <p>Check the spelling, or search all muscles.</p>
-              <button className="secondary" onClick={() => pick('All')}>
-                Clear muscle filter
-              </button>
-            </>
-          )}
-        </div>
-      )}
+      {load === 'ready' && results.length === 0 && <LibraryEmpty query={query} group={group} onClear={() => pick('All')} />}
 
       {load === 'ready' && results.length > 0 && (
         <>
@@ -174,24 +115,8 @@ export default function ExercisesScreen({ onBack }: Props) {
   );
 }
 
-type TextLoad = { state: 'loading' } | { state: 'ready'; steps: string[] } | { state: 'offline' };
-
 function Detail({ entry, onBack }: { entry: LibraryEntry; onBack: () => void }) {
   const builtIn = entry.tier === 'program';
-  const [text, setText] = useState<TextLoad>(
-    builtIn ? { state: 'ready', steps: entry.instructions ? [entry.instructions] : [] } : { state: 'loading' },
-  );
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    if (builtIn) return;
-    let live = true;
-    void loadLibraryText(entry.id).then((steps) => live && setText(steps ? { state: 'ready', steps } : { state: 'offline' }));
-    return () => {
-      live = false;
-    };
-  }, [builtIn, entry.id, attempt]);
-
   const facts: [string, string][] = [
     ['Muscle', entry.muscle],
     ['Equipment', entry.equipment],
@@ -216,43 +141,7 @@ function Detail({ entry, onBack }: { entry: LibraryEntry; onBack: () => void }) 
         ))}
       </dl>
 
-      {text.state === 'loading' && (
-        <div className="ex-steps">
-          <div aria-hidden="true">
-            <span className="ex-skel ex-skel--line" />
-            <span className="ex-skel ex-skel--line" />
-            <span className="ex-skel ex-skel--line ex-skel--short" />
-          </div>
-          <p role="status" className="ex-status">
-            Loading instructions…
-          </p>
-        </div>
-      )}
-
-      {text.state === 'offline' && (
-        <div className="empty-state ex-state">
-          <p>
-            <b>Instructions aren't saved on this phone yet.</b> Connect once and they stay for offline use.
-          </p>
-          <button
-            className="secondary"
-            onClick={() => {
-              setText({ state: 'loading' });
-              setAttempt((n) => n + 1);
-            }}
-          >
-            Try again
-          </button>
-        </div>
-      )}
-
-      {text.state === 'ready' && text.steps.length > 0 && (
-        <ol className="ex-steps">
-          {text.steps.map((step, index) => (
-            <li key={index}>{step}</li>
-          ))}
-        </ol>
-      )}
+      <LibrarySteps key={entry.id} id={entry.id} steps={builtIn ? (entry.instructions ? [entry.instructions] : []) : undefined} />
 
       {!builtIn && <p className="data-note ex-footer">Browse only for now. Library exercises aren't used in generated plans.</p>}
     </div>

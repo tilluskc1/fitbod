@@ -97,6 +97,8 @@ const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> 
   // #430: Hide for now; Ask with no plan.
   ['done', "'Hidden on this phone. Resume it from Plan.'"],
   ['problem', "'Set up your plan first, then ask about today.'"],
+  // #432: a library exercise added to the open workout.
+  ['done', '`${row.name} added to the end of ${open.name}.`'],
   ['problem', 'refused'],
   ['done', "'Workout deleted.'"],
   ['problem', "'Backup not saved, so nothing was recorded. Try again.'"],

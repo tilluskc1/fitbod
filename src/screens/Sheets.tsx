@@ -34,6 +34,8 @@ import { MAX_NOTE } from '../lib/notes';
 import { PREF_LABEL, conflictChanges, exclusionChange, preferenceChange, type ProfileChange } from '../lib/preferences';
 import Sheet from '../components/ui/Sheet';
 import Demo from '../components/ui/Demo';
+import { isLibraryId } from '../data/library';
+import { LibrarySteps } from './libraryParts';
 import Icon from '../components/ui/Icon';
 import { CheckIcon, LockIcon, PhoneIcon, ShareIcon } from '../components/ui/Icons';
 import { currentDevice, installGuide, installSteps, type InstallGuide } from '../lib/install';
@@ -386,7 +388,8 @@ export function ExerciseActionsSheet({
   inSession: boolean;
   /** Already removed for today (#26); its return path replaces replace/remove. */
   skipped: boolean;
-  onReplace: () => void;
+  /** (#432) Absent for an added library row: the planner has nothing to replace it with. */
+  onReplace?: () => void;
   onSaveProfile: (patch: Partial<Profile>) => void;
   onRemoveToday: () => void;
   onReturn: () => void;
@@ -402,7 +405,8 @@ export function ExerciseActionsSheet({
 }) {
   const [mode, setMode] = useState<ActionMode>(initialMode);
   const meta = exerciseById(exerciseId);
-  const actions = exerciseActions(pending, done, inSession, skipped, Boolean(note));
+  const library = isLibraryId(exerciseId);
+  const actions = exerciseActions(pending, done, inSession, skipped, Boolean(note), library);
   const blockedReason = actions.find((action) => action.blockedReason)?.blockedReason;
   const entries = mode === 'history' ? exerciseHistory(history, exerciseId) : [];
   const back = () => setMode('menu');
@@ -420,7 +424,7 @@ export function ExerciseActionsSheet({
     if (id === 'instructions' || id === 'history') setMode(id);
     if (id === 'replace') {
       onClose();
-      onReplace();
+      onReplace?.();
     }
     // Tapping the active choice offers neutral, so more and less never coexist.
     if (id === 'more' || id === 'less')
@@ -507,7 +511,21 @@ export function ExerciseActionsSheet({
         </div>
       )}
 
-      {mode === 'instructions' && (
+      {mode === 'instructions' && library && (
+        <>
+          {/* (#432) A library row is text only: no demo, so nothing is announced as one. */}
+          <div style={{ marginTop: 4 }}>
+            <LibrarySteps id={exerciseId} />
+          </div>
+          <div className="sheet-actions">
+            <button className="secondary" onClick={back}>
+              Back to actions
+            </button>
+          </div>
+        </>
+      )}
+
+      {mode === 'instructions' && !library && (
         <>
           <Demo exerciseId={exerciseId} name={exerciseName} className="lib-photo" />
           <p className="lib-instructions" style={{ marginTop: 12 }}>

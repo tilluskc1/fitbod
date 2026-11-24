@@ -261,6 +261,7 @@ export function WorkoutAskSheet({
   voice,
   onLogSet,
   onSwap,
+  onAdd,
   onBack,
   onFinish,
   onVoice,
@@ -271,6 +272,8 @@ export function WorkoutAskSheet({
   voice: boolean;
   onLogSet: () => void;
   onSwap?: () => void;
+  /** (#432) Add a library exercise to this workout only. */
+  onAdd?: () => void;
   onBack: () => void;
   onFinish: () => void;
   onVoice: () => void;
@@ -296,6 +299,16 @@ export function WorkoutAskSheet({
           <button type="button" className="opt" onClick={onSwap}>
             <span className="opt__ic"><SwapIcon /></span>
             <span>Swap this exercise</span>
+            <Icon name="chevron_right" size={20} />
+          </button>
+        )}
+        {onAdd && (
+          <button type="button" className="opt" onClick={onAdd}>
+            <span className="opt__ic"><Icon name="add" size={20} /></span>
+            <span>
+              Add exercise
+              <small>To this workout only</small>
+            </span>
             <Icon name="chevron_right" size={20} />
           </button>
         )}

@@ -115,6 +115,8 @@ export const LOG_LABEL: Record<LibraryLogType, string> = {
   free: 'Reps, optional weight and a note',
 };
 
-/** "You log" for a row: a built-in hold logs seconds, as the logger does. */
+/** "You log" for a row, as the logger does: a built-in hold and (#432) a Stretching row log seconds. */
 export const youLog = (entry: LibraryEntry): string =>
-  entry.tier === 'program' && setUnit(entry.id) === 'seconds' ? 'Seconds' : LOG_LABEL[entry.logType];
+  (entry.tier === 'program' && setUnit(entry.id) === 'seconds') || (entry.tier !== 'program' && entry.group === 'Stretching')
+    ? 'Seconds'
+    : LOG_LABEL[entry.logType];

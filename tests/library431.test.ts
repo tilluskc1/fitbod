@@ -320,7 +320,10 @@ test('#431 You log: the family decides, and a built-in hold logs seconds', () =>
   assert.equal(youLog(by('push-up')), 'Reps');
   assert.equal(youLog(by('plank')), 'Seconds');
   const stretch = entries.find((entry) => entry.group === 'Stretching')!;
-  assert.equal(youLog(stretch), 'Reps, optional weight and a note');
+  // (#432) A Stretching row logs seconds held, as the logger records it.
+  assert.equal(youLog(stretch), 'Seconds');
+  const cardio = entries.find((entry) => entry.group === 'Cardio')!;
+  assert.equal(youLog(cardio), 'Reps, optional weight and a note');
   resetLibrary();
 });
 

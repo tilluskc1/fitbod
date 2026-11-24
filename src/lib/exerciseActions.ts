@@ -31,7 +31,18 @@ const NOTHING_PENDING_EMPTY = 'This exercise has no sets to change.';
 // Today's preview has no session to edit; acting on it would be a silent no-op.
 const NO_SESSION = "Start the workout to change today's sets.";
 
-export function exerciseActions(pending: number, done: number, inSession: boolean, skipped: boolean, hasNote = false): ExerciseAction[] {
+/** (#432) Rows an added library exercise never offers: it is not in the planner's pool, so nothing replaces it and no preference names it. */
+const PLANNER_ONLY: readonly ExerciseActionId[] = ['replace', 'more', 'less', 'dont-recommend'];
+
+export function exerciseActions(pending: number, done: number, inSession: boolean, skipped: boolean, hasNote = false, library = false): ExerciseAction[] {
+  const all = plannerActions(pending, done, inSession, skipped, hasNote);
+  if (!library) return all;
+  return all
+    .filter((action) => !PLANNER_ONLY.includes(action.id))
+    .map((action) => (action.id === 'instructions' ? { ...action, label: 'Instructions' } : action));
+}
+
+function plannerActions(pending: number, done: number, inSession: boolean, skipped: boolean, hasNote: boolean): ExerciseAction[] {
   const blocked = !inSession
     ? NO_SESSION
     : pending > 0
