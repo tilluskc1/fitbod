@@ -689,19 +689,61 @@ export function touch(workout: WorkoutRecord, now: string): WorkoutRecord {
 }
 
 /**
- * Wrap a state update caused by a real action: when it changed the same open workout, stamp it.
- * Ticks, views, Ask and Preview never pass through here, so they never write `lastActiveAt`.
+ * (#430) A Resume tap, held in memory until the first real action. Opening the workout writes nothing, so
+ * opening and closing it without acting leaves it suspended. `gapMs` is the time away up to the tap.
  */
-export function withActivity(prev: AppState, next: AppState, now: string): AppState {
-  const before = prev.current;
-  const after = next.current;
-  if (!before || !after || before.id !== after.id || before === after) return next;
-  return { ...next, current: touch(after, now) };
+export interface PendingResume {
+  id: string;
+  atMs: number;
+  gapMs: number;
+}
+
+/** The pending Resume for a tap at `nowMs`, or null when the workout is still active (no time away). */
+export function pendingResumeFor(workout: WorkoutRecord, nowMs: number): PendingResume | null {
+  if (idleState(workout, nowMs) === 'active') return null;
+  const gap = nowMs - idleFromMs(workout);
+  return { id: workout.id, atMs: nowMs, gapMs: Number.isFinite(gap) && gap > 0 ? gap : 0 };
+}
+
+/** The Resume still waits on its first action: same workout, and nothing stamped since the tap. */
+function resumeWaiting(workout: WorkoutRecord, pending: PendingResume | null | undefined): pending is PendingResume {
+  return Boolean(pending && pending.id === workout.id && !(lastActiveMs(workout) >= pending.atMs));
+}
+
+/** The time away of a waiting Resume added to `pausedMs`, capped so the loader keeps it. */
+export function withResumeGap(workout: WorkoutRecord, pending: PendingResume | null | undefined): WorkoutRecord {
+  if (!resumeWaiting(workout, pending)) return workout;
+  return { ...workout, pausedMs: Math.min(MAX_PAUSE_MS, (workout.pausedMs ?? 0) + pending.gapMs) };
 }
 
 /**
- * An explicit Resume. Time away (from idle start to now) goes into `pausedMs`, capped so the loader keeps
- * it, so elapsed time, recap and totals exclude it. An active workout only gets the stamp.
+ * What the logger shows after a Resume tap with no action yet: the clock leaves the time away out and the
+ * workout reads active from the tap. Display only; never stored.
+ */
+export function resumedView(workout: WorkoutRecord, pending: PendingResume | null | undefined): WorkoutRecord {
+  if (!resumeWaiting(workout, pending)) return workout;
+  return { ...withResumeGap(workout, pending), lastActiveAt: new Date(pending.atMs).toISOString() };
+}
+
+/**
+ * Wrap a state update caused by a real action: when it changed the same open workout, stamp it. The first
+ * action after a Resume tap also books that Resume's time away into `pausedMs` (once: the stamp it writes
+ * is later than the tap). Ticks, views, Ask and Preview never pass through here, so they never write.
+ */
+export function withActivity(prev: AppState, next: AppState, now: string, pending?: PendingResume | null): AppState {
+  const before = prev.current;
+  const after = next.current;
+  if (!before || !after || before.id !== after.id || before === after) return next;
+  const booked = resumeWaiting(before, pending)
+    ? { ...after, pausedMs: Math.min(MAX_PAUSE_MS, (after.pausedMs ?? 0) + pending.gapMs) }
+    : after;
+  return { ...next, current: touch(booked, now) };
+}
+
+/**
+ * An explicit Resume committed at once: time away (from idle start to now) goes into `pausedMs`, capped so
+ * the loader keeps it, so elapsed time, recap and totals exclude it. An active workout only gets the stamp.
+ * The app defers this to the first action (`pendingResumeFor` + `withActivity`); the sum is the same.
  */
 export function resumeSession(workout: WorkoutRecord, nowMs: number): WorkoutRecord {
   let pausedMs = workout.pausedMs ?? 0;
@@ -770,21 +812,33 @@ export interface SlotLink {
 }
 
 /**
- * (#430, ruling 4a) Starting the workout that is already open just resumes it: same plan slot under the
- * same plan, same name, same length and same setup. A described day, a different slot, another length or
- * other gear is a different workout and reaches the start-conflict sheet.
+ * (#430, ruling 4a) Starting the workout that is already open just resumes it: same name, same length and
+ * same setup under the same plan, and either the same plan slot or, for a described day (no slot on either
+ * side), the same movements. A described day is not keyed by today's override, because Switch and Short
+ * on time write the override before Start; the movements are what the person would actually train. A
+ * different slot, a planned day against a described one, other movements, another length or other gear is
+ * a different workout and reaches the start-conflict sheet (whose Back resumes without a write).
  */
 export function isSameWorkout(
   open: WorkoutRecord,
   link: SlotLink,
-  next: { name: string; minutes: number; setup?: SetupChoice },
+  next: { name: string; minutes: number; setup?: SetupChoice; exerciseIds?: readonly string[] },
 ): boolean {
-  if (open.slotSeq === undefined || link.slotSeq === undefined) return false;
-  if (open.slotSeq !== link.slotSeq || open.planRevision !== link.planRevision) return false;
+  if (open.planRevision !== link.planRevision) return false;
+  if (open.slotSeq === undefined || link.slotSeq === undefined) {
+    if (open.slotSeq !== undefined || link.slotSeq !== undefined) return false;
+    if (!sameIds(open.exercises.map((exercise) => exercise.exerciseId), next.exerciseIds)) return false;
+  } else if (open.slotSeq !== link.slotSeq) return false;
   if (open.name !== next.name) return false;
   if (open.durationMin !== undefined && open.durationMin !== next.minutes) return false;
   const openSetup = open.exercises.find((exercise) => exercise.setup)?.setup ?? 'home';
   return openSetup === (next.setup ?? 'home');
+}
+
+function sameIds(a: readonly string[], b: readonly string[] | undefined): boolean {
+  if (!b || a.length === 0 || a.length !== b.length) return false;
+  const right = new Set(b);
+  return new Set(a).size === right.size && a.every((id) => right.has(id));
 }
 
 /**

@@ -23,7 +23,7 @@ import HowTo from '../components/ui/HowTo';
 import Sheet from '../components/ui/Sheet';
 import Icon from '../components/ui/Icon';
 import { NoticeCard } from '../components/ui/Notices';
-import { MoreIcon } from '../components/ui/Icons';
+import { HelpIcon, MoreIcon } from '../components/ui/Icons';
 
 interface Props {
   session: WorkoutRecord;
@@ -49,6 +49,11 @@ interface Props {
   goHeavier?: Record<string, number>;
   onMinimize: () => void;
   onFinish: () => void;
+  /**
+   * (#430, spec 7) Ask mid-workout: the logger has no tab bar, so its header carries the centre button's
+   * Ask (same name, same icon). It opens the mid-workout Ask sheet; absent, no Ask shows.
+   */
+  ask?: { onAsk: () => void; voiceBlocked: boolean };
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>, how?: SetEdit) => void;
   /**
    * (#327) A weight more than 10% over last time, held on the set typed: its Heads-up shows under that
@@ -182,6 +187,7 @@ export default function TrainScreen({
   goHeavier = {},
   onMinimize,
   onFinish,
+  ask,
   onUpdateSet,
   held = null,
   onLogSet,
@@ -328,6 +334,11 @@ export default function TrainScreen({
         </button>
         <h1 className="flow-title">{session.name}</h1>
         <div className="flow-header__right">
+          {ask && (
+            <button type="button" className="flow-ask" onClick={ask.onAsk} aria-label="Ask">
+              {ask.voiceBlocked ? <HelpIcon size={22} /> : <Icon name="mic" size={22} />}
+            </button>
+          )}
           <button className="finish-btn" onClick={onFinish}>
             Finish
           </button>

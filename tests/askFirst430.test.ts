@@ -7,6 +7,10 @@ import { createServer } from 'vite';
 import {
   EXPIRE_AFTER_MS,
   SUSPEND_AFTER_MS,
+  elapsedMs,
+  pendingResumeFor,
+  resumedView,
+  withResumeGap,
   applyFinish,
   createSession,
   expireOpenWorkout,
@@ -23,14 +27,13 @@ import {
   startRest,
   toggleRestPause,
   unlinkedIfSameSlot,
-  updatePerformedSet,
   withActivity,
 } from '../src/lib/session.ts';
 import { MAX_PAUSE_MS, parseState } from '../src/lib/validate.ts';
 import { EMPTY_STATE, mergeImport } from '../src/lib/storage.ts';
 import { progressTotals, trainedMinutes } from '../src/lib/progressTotals.ts';
 import { HIDDEN_RESUME_KEY, readHiddenResume, writeHiddenResume } from '../src/lib/hiddenResume.ts';
-import { agoLabel, menuStatus, rowKind, setsLabel } from '../src/lib/openWorkout.ts';
+import { agoLabel, mayExpireNow, menuStatus, rowKind, setsLabel } from '../src/lib/openWorkout.ts';
 import type { AppState, Profile, WorkoutExercise, WorkoutRecord } from '../src/types.ts';
 
 // #430: an open workout is active, suspended (10 idle minutes) or expired (6 idle hours, or idle past local
@@ -160,6 +163,61 @@ test('resume adds the time away to pausedMs, capped; an active workout only gets
   assert.deepEqual(later.exercises, w.exercises);
 });
 
+test('opening and closing the workout without acting leaves it suspended and writes nothing (spec 9)', () => {
+  const w = logged(open(), 0, 0);
+  const stored = stateWith(w);
+  const bytes = JSON.stringify(stored);
+  // Resume tapped at +15 min: only an in-memory pending Resume; the logger shows the resumed view.
+  const pending = pendingResumeFor(w, at(15 * MIN).getTime());
+  assert.deepEqual(pending, { id: w.id, atMs: at(15 * MIN).getTime(), gapMs: 15 * MIN });
+  const shown = resumedView(w, pending);
+  assert.equal(idleState(shown, at(16 * MIN).getTime()), 'active', 'the logger reads active from the tap');
+  assert.equal(elapsedMs(shown, at(16 * MIN).getTime()), MIN, 'its clock leaves the time away out');
+  // Closed again with no action: no update went through act, so storage is byte-for-byte what it was.
+  assert.equal(JSON.stringify(stored), bytes);
+  assert.equal(stored.current?.lastActiveAt, iso(0), 'lastActiveAt not written');
+  assert.equal(idleState(stored.current as WorkoutRecord, at(16 * MIN).getTime()), 'suspended', 'still suspended');
+  assert.equal(stored.current?.pausedMs, 0, 'no time away booked');
+  // A still-active workout has nothing to hold.
+  assert.equal(pendingResumeFor(w, at(4 * MIN).getTime()), null);
+  // A clock set back: suspended, but no negative gap.
+  assert.equal(pendingResumeFor(logged(open(), 0, 30 * MIN), at(0).getTime())?.gapMs, 0);
+});
+
+test('the first action after a Resume books its time away once, capped; later actions only stamp', () => {
+  const w = logged(open(), 0, 0);
+  const pending = pendingResumeFor(w, at(15 * MIN).getTime());
+  const before = stateWith(w);
+  const first = withActivity(before, { ...before, current: logSet(w, 0, 1, iso(17 * MIN)) }, iso(17 * MIN), pending);
+  assert.equal(first.current?.pausedMs, 15 * MIN, 'the gap up to the tap');
+  assert.equal(first.current?.lastActiveAt, iso(17 * MIN));
+  assert.equal(resumedView(first.current as WorkoutRecord, pending), first.current, 'acted on: nothing left to show');
+  const second = withActivity(first, { ...first, current: { ...(first.current as WorkoutRecord), restSeconds: 90 } }, iso(18 * MIN), pending);
+  assert.equal(second.current?.pausedMs, 15 * MIN, 'booked once, not twice');
+  // Another workout's pending Resume books nothing; neither does no pending at all.
+  assert.equal(withActivity(before, { ...before, current: logSet(w, 0, 1, iso(17 * MIN)) }, iso(17 * MIN), { ...pending!, id: 'w9' }).current?.pausedMs, 0);
+  assert.equal(withActivity(before, { ...before, current: logSet(w, 0, 1, iso(17 * MIN)) }, iso(17 * MIN)).current?.pausedMs, 0);
+  // Capped where the loader keeps it.
+  const big = { ...w, pausedMs: MAX_PAUSE_MS - MIN };
+  assert.equal(withResumeGap(big, pendingResumeFor(big, at(5 * 60 * MIN).getTime())).pausedMs, MAX_PAUSE_MS);
+  // Finishing right after the tap leaves the time away out as well (App's saveFinish uses withResumeGap).
+  assert.equal(withResumeGap(w, pending).pausedMs, 15 * MIN);
+  assert.deepEqual(withResumeGap(w, pending).exercises, w.exercises, 'sets untouched');
+});
+
+test('expiry guards: it runs only with a workout open on a visible tab, off the workout screen, outside Recovery, with saves working', () => {
+  const ok = { open: true, visible: true, onWorkoutScreen: false, recovery: false, saveFailed: false };
+  assert.equal(mayExpireNow(ok), true);
+  assert.equal(mayExpireNow({ ...ok, onWorkoutScreen: true }), false, 'never on the workout screen');
+  assert.equal(mayExpireNow({ ...ok, recovery: true }), false, 'never in Recovery');
+  assert.equal(mayExpireNow({ ...ok, saveFailed: true }), false, 'never under a failed save');
+  assert.equal(mayExpireNow({ ...ok, visible: false }), false, 'never from a hidden tab');
+  assert.equal(mayExpireNow({ ...ok, open: false }), false, 'nothing open');
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /mayExpireNow\(\{ open: true, visible, onWorkoutScreen: view === 'train', recovery: Boolean\(recovery\), saveFailed \}\)/,
+    'the expiry effect is gated by mayExpireNow with the live view, Recovery and save state');
+});
+
 test('totals and the recap leave out pausedMs', () => {
   const w: WorkoutRecord = { ...logged(open(), 0, 0), status: 'completed', endedAt: iso(70 * MIN), pausedMs: 30 * MIN };
   assert.deepEqual(trainedMinutes(w), { minutes: 40, planned: false });
@@ -239,8 +297,26 @@ test('isSameWorkout: same slot, plan, name, length and setup resume; anything el
   assert.equal(isSameWorkout(w, link, { ...same, name: 'Pull' }), false);
   assert.equal(isSameWorkout(w, link, { ...same, minutes: 30 }), false, 'another length');
   assert.equal(isSameWorkout(w, link, { ...same, setup: 'hotel' }), false, 'other gear');
-  assert.equal(isSameWorkout(w, { planRevision: 1 }, same), false, 'a described day is never the same');
+  assert.equal(isSameWorkout(w, { planRevision: 1 }, same), false, 'a planned day against a described one');
   assert.equal(isSameWorkout({ ...w, slotSeq: undefined }, link, same), false);
+});
+
+test('isSameWorkout (ruling 4a): the open described day started again resumes; another description is a conflict', () => {
+  // A described day carries no slot: only the plan revision (`slotLinkFor(state, true)`).
+  const described = logged(open({ name: 'Legs', slotId: undefined, slotSeq: undefined }), 0, 0);
+  const link = { planRevision: 1 };
+  const ids = described.exercises.map((exercise) => exercise.exerciseId);
+  const same = { name: 'Legs', minutes: 45, exerciseIds: [...ids].reverse() };
+  assert.equal(sessionProgress(described).done, 1, 'has a logged set');
+  assert.equal(isSameWorkout(described, link, same), true, 'same described day, any order: resume, no conflict sheet');
+  assert.equal(isSameWorkout(described, link, { ...same, exerciseIds: ['goblet-squat'] }), false, 'other movements');
+  assert.equal(isSameWorkout(described, link, { ...same, exerciseIds: ['goblet-squat', 'curl'] }), false, 'a swapped movement');
+  assert.equal(isSameWorkout(described, link, { ...same, exerciseIds: undefined }), false, 'nothing to compare');
+  assert.equal(isSameWorkout(described, link, { ...same, name: 'Upper' }), false, 'another name');
+  assert.equal(isSameWorkout(described, link, { ...same, minutes: 30 }), false, 'another length');
+  assert.equal(isSameWorkout(described, link, { ...same, setup: 'hotel' }), false, 'other gear');
+  assert.equal(isSameWorkout(described, { planRevision: 2 }, same), false, 'another plan');
+  assert.equal(isSameWorkout(described, { slotId: 'push', slotSeq: 0, planRevision: 1 }, same), false, 'the planned day');
 });
 
 test('unlinkedIfSameSlot: a new workout for the slot just saved starts unlinked, so the plan cannot advance twice', () => {
@@ -397,7 +473,9 @@ test('Ask with a workout open: four ways back, then the plan question; it never 
 
 test('App: real actions go through act (withActivity); expiry and visibility read the injected clock', () => {
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
-  assert.match(app, /const act = \(updater: \(currentState: AppState\) => AppState\) =>\s*setState\(\(previous\) => withActivity\(previous, updater\(previous\), stampNow\(\)\)\);/);
+  assert.match(app, /const act = \(updater: \(currentState: AppState\) => AppState\) =>\s*setState\(\(previous\) => withActivity\(previous, updater\(previous\), stampNow\(\), pendingResume\)\);/);
+  assert.doesNotMatch(app, /resumeSession\(/, 'Resume writes nothing until the first action');
+  assert.match(app, /session=\{shownCurrent \?\? current\}/, 'the logger shows the resumed view');
   assert.match(app, /expireOpenWorkout\(state, now\)/);
   assert.match(app, /addEventListener\('visibilitychange'/);
   assert.match(app, /addEventListener\('pageshow'/);

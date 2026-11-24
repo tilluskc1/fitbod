@@ -45,3 +45,11 @@ export function menuStatus(workout: WorkoutRecord, nowMs: number): string {
     ? `${word} · last set ${agoLabel(lastSet, nowMs)}`
     : `${word} · opened ${agoLabel(lastActiveMs(workout), nowMs)}`;
 }
+
+/**
+ * (#430, D1) Whether expiry may run now: a workout is open, the tab is visible, and the person is not on
+ * the workout screen, not in Recovery and not under a failed save. Any one of those holds it off.
+ */
+export function mayExpireNow(gate: { open: boolean; visible: boolean; onWorkoutScreen: boolean; recovery: boolean; saveFailed: boolean }): boolean {
+  return gate.open && gate.visible && !gate.onWorkoutScreen && !gate.recovery && !gate.saveFailed;
+}

@@ -75,7 +75,10 @@ import
   type CarryResult,
   type Followers,
   withActivity,
-  resumeSession,
+  pendingResumeFor,
+  resumedView,
+  withResumeGap,
+  type PendingResume,
   idleState,
   saveOpenWorkout,
   isSameWorkout,
@@ -97,7 +100,7 @@ import {
   WorkoutMenuSheet,
   type ExpiryNoteKind,
 } from './components/OpenWorkout';
-import { setsLabel } from './lib/openWorkout';
+import { mayExpireNow, setsLabel } from './lib/openWorkout';
 import type { TalkAsk } from './components/TodayTalk';
 import { bigJumpNote, burstLive, burstMark, carryMessage, heldMessage, overLastTime, setAllMessage } from './lib/carry';
 import { loadModeOf, needsLoad, setUnit } from './data/flagship';
@@ -384,10 +387,15 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const pendingWriteRef = useRef<string | undefined>(undefined);
   const adoptingRef = useRef(false);
   const forceSaveRef = useRef(initial.status === 'corrupt');
+  // (#430) A Resume tap not yet acted on: held here, never stored (see `pendingResumeFor`).
+  const [pendingResume, setPendingResume] = useState<PendingResume | null>(null);
+  /** The open workout as the logger shows it: a waiting Resume's time away left out (display only). */
+  const openNow = state.current;
+  const shownCurrent = useMemo(() => openNow && resumedView(openNow, pendingResume), [openNow, pendingResume]);
   /** (#430) What listeners registered once (storage, visibility) need to read: the latest render's values. */
   const liveRef = useRef({ view, current: state.current, sheetOpen: false });
   useLayoutEffect(() => {
-    liveRef.current = { view, current: state.current, sheetOpen: sheet.kind !== 'none' || startIntent !== null };
+    liveRef.current = { view, current: shownCurrent, sheetOpen: sheet.kind !== 'none' || startIntent !== null };
   });
 
   /* ---------- persistence ---------- */
@@ -541,8 +549,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
    */
   useEffect(() => {
     const open = state.current;
-    if (recovery || saveFailed || view === 'train' || !open) return;
-    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    const visible = typeof document === 'undefined' || document.visibilityState === 'visible';
+    if (!open || !mayExpireNow({ open: true, visible, onWorkoutScreen: view === 'train', recovery: Boolean(recovery), saveFailed })) return;
     const result = expireOpenWorkout(state, now);
     if (!result) return;
     const loaded = loadState();
@@ -557,6 +565,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       currentState.current?.id === open.id ? expireOpenWorkout(currentState, now)?.state ?? currentState : currentState,
     );
     if (result.outcome === 'saved' || result.outcome === 'closed') {
+      // Intentional: expiry is driven by the clock and storage (external), not by a user event, so its note
+      // is raised here, once; the next pass finds no open workout and returns before this line.
+      // eslint-disable-next-line react/set-state-in-effect
       setExpiryNote({ kind: result.outcome, sets: result.sets });
     }
   }, [now, state, recovery, saveFailed, view]);
@@ -768,7 +779,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
    * changed that same workout. Ticks, views, Ask and Preview never come through here.
    */
   const act = (updater: (currentState: AppState) => AppState) =>
-    setState((previous) => withActivity(previous, updater(previous), stampNow()));
+    setState((previous) => withActivity(previous, updater(previous), stampNow(), pendingResume));
 
   /** One creation path for every start, so preview and logger can never disagree. */
   const sessionFor = (workout: ReturnType<typeof adaptWorkout>, link: SlotLink) =>
@@ -798,20 +809,16 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     track('workout-started', dayTypeOf(workout.name));
   };
 
-  /** (#430) Resume: time away goes into `pausedMs`, the row shows again next time, and the logger opens. */
+  /**
+   * (#430) Resume: the logger opens and the row shows again next time. Nothing about the workout is
+   * written until the first real action, which books the time away into `pausedMs` (`withActivity`), so
+   * opening and closing it without acting leaves it suspended.
+   */
   const resumeWorkout = (override?: TodayOverride | null) => {
     const open = state.current;
     if (!open) return;
-    const at = Date.now();
-    setState((currentState) =>
-      currentState.current?.id === open.id
-        ? {
-          ...currentState,
-          ...(override !== undefined ? { todayOverride: override } : {}),
-          current: resumeSession(currentState.current, at),
-        }
-        : currentState,
-    );
+    setPendingResume(pendingResumeFor(open, Date.now()));
+    if (override !== undefined) setState((currentState) => ({ ...currentState, todayOverride: override }));
     if (hiddenResume !== null) {
       writeHiddenResume(null);
       setHiddenResume(null);
@@ -853,7 +860,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       const link = slotLinkFor(state, custom);
       const draft = sessionFor(workout, link);
       const setup = draft.exercises.find((exercise) => exercise.setup)?.setup;
-      if (isSameWorkout(open, link, { name: workout.name, minutes: workout.minutes, setup })) {
+      const exerciseIds = draft.exercises.map((exercise) => exercise.exerciseId);
+      if (isSameWorkout(open, link, { name: workout.name, minutes: workout.minutes, setup, exerciseIds })) {
         resumeWorkout(options.override);
         settleStart(options);
         return 'started';
@@ -1545,11 +1553,15 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const id = current.id;
     track(early ? 'workout-cut-short' : 'workout-finished', dayTypeOf(current.name));
     const at = Date.now();
-    setState((currentState) =>
-      atLastActivity
+    // (#430) Finished right after a Resume tap: that Resume's time away is left out too.
+    setState((previous) => {
+      const currentState = previous.current?.id === id
+        ? { ...previous, current: withResumeGap(previous.current, pendingResume) }
+        : previous;
+      return atLastActivity
         ? saveOpenWorkout(currentState, id, at)
-        : applyFinish(currentState, id, { early, now: new Date(at).toISOString() }),
-    );
+        : applyFinish(currentState, id, { early, now: new Date(at).toISOString() });
+    });
     setRecapId(id);
     setSheet({ kind: 'none' });
     setView('recap');
@@ -1602,7 +1614,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setNotice(done(noSetsNotice(hadNotes)));
   };
 
-  /** (#430) The row's `...` Discard: with no sets it goes at once; with sets it asks with the count first. */
+  /**
+   * (#430) Every Discard (the row's `...`, the Finish sheet): with no sets it goes at once; with sets it asks
+   * with the count first, and only that confirm's Discard calls `discardSession`.
+   */
   const requestDiscard = () => {
     if (!current) return;
     if (sessionProgress(current).done === 0) endEmptySession();
@@ -1737,6 +1752,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       `Restored ${merged.summary.newWorkouts} workout${merged.summary.newWorkouts === 1 ? '' : 's'}; ${merged.summary.duplicateWorkouts} already present.` +
         (merged.summary.activeSessionConflict
           ? ' Kept the open session with more logged sets.'
+          : '') +
+        // (#430) The backup's own different open workout is saved, never dropped, and the person is told.
+        (merged.summary.backupSessionSavedSets
+          ? ` Saved ${setsLabel(merged.summary.backupSessionSavedSets)} from the backup's open workout to Progress; your open workout stays open.`
           : '') +
         // Restore must not drop an answer the backup simply predates, and it
         // must say so rather than keeping it quietly.
@@ -1916,7 +1935,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const activeScreen =
     view === 'train' && current ? (
       <TrainScreen
-        session={current}
+        session={shownCurrent ?? current}
         history={state.history}
         now={now}
         profileLoads={profile?.loads}
@@ -1933,6 +1952,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           setTab('today');
         }}
         onFinish={requestFinish}
+        ask={{ onAsk, voiceBlocked: !voiceAvailable }}
         onUpdateSet={updateSet}
         held={heldLive ? { exerciseIndex: held.exerciseIndex, setIndex: held.setIndex, text: held.text, onApply: applyHeldToAll, onDismiss: () => setNotice(null) } : null}
         onLogSet={logOneSet}
@@ -2479,8 +2499,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           total={sessionProgress(current).total}
           onSave={() => saveFinish()}
           onContinue={closeSheet}
-          // (#397) With no sets logged this is End workout: the same day stays next.
-          onDiscard={sessionProgress(current).done === 0 ? () => endEmptySession() : () => discardSession()}
+          // (#397) With no sets logged this is End workout: the same day stays next. (#430) With sets it
+          // reaches the same named confirm as the row's Discard (Cancel focused); only that removes sets.
+          onDiscard={requestDiscard}
           onClose={closeSheet}
           // A described day (#193) has no slot to skip; ending it leaves the planned day next.
           nextName={current.slotSeq === undefined ? undefined : nextSlotName}
