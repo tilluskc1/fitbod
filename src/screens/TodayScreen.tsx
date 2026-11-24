@@ -10,12 +10,10 @@ import { toDisplay, unitLabel, unitOf } from '../lib/units';
 import { exerciseMeta, lastSummary, setText, targetSummary } from '../data/flagship';
 import type { Program, ProgramExercise } from '../data/flagship';
 import type { AdaptedWorkout, EquipmentChoice } from '../lib/adapt';
-import { currentWorkout, setupFor, todayGlance } from '../lib/adapt';
+import { setupFor, todayGlance } from '../lib/adapt';
 import type { TodayDiff, TodayOnly } from '../lib/todayOnly';
 import { plannedLoad, targetCoachLine } from '../lib/liveProgression';
 import { leadCompoundId } from '../lib/progression';
-import { isDescribedSession } from '../lib/sequence';
-import { unfinishedSince } from '../lib/session';
 import Demo from '../components/ui/Demo';
 import HowTo from '../components/ui/HowTo';
 import FeasibilityNote, { DescribedNote } from '../components/ui/FeasibilityNote';
@@ -37,14 +35,18 @@ interface Props {
   equipment: EquipmentChoice;
   adjusted: boolean;
   history: WorkoutRecord[];
-  current: WorkoutRecord | null;
   now: Date;
-  /** Opens the session's exercise list; Start lives in the tab bar. */
+  /**
+   * (#430, ruling 4a) A workout is open. Today still shows the plan (hero, list, composer, dock); this only
+   * keeps the backup and install notes away, since a backup taken now would miss the open sets.
+   */
+  workoutOpen?: boolean;
+  /** (#430) Sets logged in the open workout: the week and session cards fill them in. */
+  logged?: number;
+  /** (#430) The slight resume row, or the one-time expiry note, under the greeting. */
+  openRow?: ReactNode;
+  /** Opens today's preview, where Start is the only way to start (#430). */
   onPreview: () => void;
-  /** (#260) Reopens the open session: the tab bar's own centre action, one handler. */
-  onResume: () => void;
-  /** (#397) End the open session: at once with no sets logged, else through the Finish sheet. */
-  onEnd?: () => void;
   onAdjust: () => void;
   onWhy: () => void;
   onRestore: () => void;
@@ -64,7 +66,7 @@ interface Props {
   onOpenSwitch?: () => void;
   /** (#149) On a day nothing fits, another day in the split that does, in one sentence. */
   alternativeDay?: string;
-  /** (#193) "Tell me about today", shown above the workout card while no session is open. */
+  /** (#193) "Tell me about today", shown above the workout card; (#430) open workout or not. */
   composer?: ReactNode;
   /** (#193) The composer is open or previewing: its button is the screen's one primary, so the dock steps aside. */
   composing?: boolean;
@@ -230,11 +232,11 @@ export default function TodayScreen({
   equipment,
   adjusted,
   history,
-  current,
   now,
+  workoutOpen = false,
+  logged = 0,
+  openRow,
   onPreview,
-  onResume,
-  onEnd,
   onAdjust,
   onWhy,
   onRestore,
@@ -266,31 +268,21 @@ export default function TodayScreen({
   onPickFresher,
   onKeepNext,
 }: Props) {
-  const adapted = current ? currentWorkout(proposedWorkout, current) : proposedWorkout;
+  // (#430, ruling 4a) Today is the plan's day, open workout or not; the resume row carries the workout.
+  const adapted = proposedWorkout;
   const unit = unitOf(profile);
   const name = profile.name?.trim() || 'Athlete';
   const week = workoutsThisWeek(history, now);
   const targetDays = profile.daysPerWeek;
   const setup = setupFor(equipment, profile);
   // Equipment or exclusions can leave far less work than the requested time.
-  const { minutes, approx } = todayGlance(proposedWorkout, current, false, profile.goal, profile);
+  const { minutes, approx } = todayGlance(proposedWorkout, null, false, profile.goal, profile);
   // A day with nothing to do has no duration to promise.
-  const timed = Boolean(current) || adapted.exercises.length > 0;
+  const timed = adapted.exercises.length > 0;
   const first = adapted.exercises[0];
   const last = first ? lastPerformance(history, first.exerciseId) : null;
-  const progress = current
-    ? current.exercises.reduce(
-        (sum, exercise) => sum + exercise.performed.filter((set) => set.done).length,
-        0,
-      )
-    : 0;
-  const total = current
-    ? current.exercises.reduce((sum, exercise) => sum + exercise.performed.length, 0)
-    : adapted.totalSets;
-
-  // (#220) A running described session is today's own: its name, "Today only", never a plan slot,
-  // and never the planned day's status once its ask has expired (App passes no status then).
-  const todayOnly = current ? isDescribedSession(current) : false;
+  const total = adapted.totalSets;
+  const progress = Math.min(logged, total);
   // Every day states its feasibility (story contract). The detail and alternatives stay in FeasibilityNote.
   const feasibility = program.feasibility;
   // A described day reads as its preview did (#219): Limited only for a gap it names.
@@ -298,9 +290,7 @@ export default function TodayScreen({
     ? described.status === 'none' ? { tone: 'none', label: 'Not enough equipment', icon: 'remove' }
       : described.status === 'limited' ? { tone: 'limited', label: 'Limited', icon: 'info' }
       : { tone: 'ready', label: 'Ready', icon: 'check' }
-    : todayOnly
-      ? { tone: 'ready', label: 'Ready', icon: 'check' }
-      : adapted.exercises.length === 0 || feasibility?.status === 'infeasible'
+    : adapted.exercises.length === 0 || feasibility?.status === 'infeasible'
       ? { tone: 'none', label: 'Not enough equipment', icon: 'remove' }
       : feasibility?.status === 'limited'
         ? {
@@ -312,30 +302,20 @@ export default function TodayScreen({
             icon: 'info',
           }
         : { tone: 'ready', label: 'Ready', icon: 'check' };
-  // (#397) A session from an earlier calendar day is never offered as today's.
-  const unfinished = unfinishedSince(current, now);
-  // (#260) An open session shows its progress; the colour keeps its status, a Limited or Not-enough icon too.
-  // (#399) An unfinished one from an earlier day counts what was logged and never says "In progress".
-  const chip = current
-    ? {
-        ...status,
-        label: unfinished ? `${progress} of ${total} sets logged` : `In progress · ${progress} of ${total} sets`,
-        icon: unfinished ? 'info' : status.tone === 'ready' ? 'play_arrow' : status.icon,
-      }
-    : status;
-  const heroName = todayOnly && current ? current.name : program.name;
-  const heroSlot = todayOnly ? 'Today only' : slotLabel;
+  const chip = status;
+  const heroName = program.name;
+  const heroSlot = slotLabel;
   const leadId = leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId));
   const leadName = adapted.exercises.find((exercise) => exercise.exerciseId === leadId)?.name;
   const loads = leadId ? topLoads(history, leadId).map((kg) => toDisplay(kg, unit)) : [];
 
   // (#295) At most one Heads-up card, never mid-session: install, then backup, then the rest.
   const card = todayCard({
-    install: Boolean(install && onInstall && onDismissInstall && !current),
-    backup: Boolean(backup && onBackup && !current),
+    install: Boolean(install && onInstall && onDismissInstall && !workoutOpen),
+    backup: Boolean(backup && onBackup && !workoutOpen),
     message: Boolean(message),
-    limited: !described && !current && !adjusted && program.feasibility?.status === 'limited',
-    fresher: Boolean(fresher && onPickFresher && onKeepNext && !current),
+    limited: !described && !adjusted && program.feasibility?.status === 'limited',
+    fresher: Boolean(fresher && onPickFresher && onKeepNext),
   });
 
   return (
@@ -355,6 +335,8 @@ export default function TodayScreen({
             {initials(name)}
           </button>
         </header>
+
+        {openRow}
 
         {onOpenLength && (
           <div className="t7-controls">
@@ -397,22 +379,19 @@ export default function TodayScreen({
 
         <section
           className="t7-hero"
-          aria-label={timed && !unfinished ? `${heroName}, ${minutes} minutes` : heroName}
+          aria-label={timed ? `${heroName}, ${minutes} minutes` : heroName}
         >
           <img className="t7-hero__photo" src={HERO_PHOTO} alt="" />
           <span className="t7-hero__top">
-            <span className="t7-hero__eyebrow">{current ? (unfinished ? 'Unfinished' : 'In progress') : 'Your next workout'}</span>
+            <span className="t7-hero__eyebrow">Your next workout</span>
           </span>
           <h2 className="t7-hero__title">
-            {current
-              ? unfinished ? `Unfinished ${current.name} from ${unfinished}` : `${current.name} in progress`
-              : adapted.exercises.length === 0
+            {adapted.exercises.length === 0
                 ? `Nothing in ${program.name} fits today`
                 : `Your ${program.name} Day Starts Here!`}
           </h2>
           <span className="t7-hero__meta">
-            {/* (#399) An unfinished workout from an earlier day promises no length. */}
-            {timed && !unfinished && (
+            {timed && (
               <>
                 <Icon name="timer" size={16} />
                 {approx ? '≈' : ''}
@@ -434,16 +413,16 @@ export default function TodayScreen({
         </section>
 
         {/* (#298) Today differs from the saved setup: say what, and undo it in one tap. */}
-        {!current && <TodayOnlyBar bar={todayBar} onUndo={canRestore ? onUndo : undefined} />}
+        <TodayOnlyBar bar={todayBar} onUndo={canRestore ? onUndo : undefined} />
 
         {/* A described day names its gaps, open or not (#219); otherwise the status describes the saved setup. */}
         {described && <DescribedNote day={described} />}
-        {!described && !current && !adjusted && (program.feasibility?.status !== 'limited' || card === 'limited') && (
+        {!described && !adjusted && (program.feasibility?.status !== 'limited' || card === 'limited') && (
           <FeasibilityNote feasibility={program.feasibility} profile={profile} onOpenSettings={onOpenSettings} onReviewChange={onReviewChange} />
         )}
 
         {/* (#256) The planner entry comes straight after the hero, ahead of the backup note, so it stays above the dock. */}
-        {!current && composer}
+        {composer}
         {/* (#225) Not mid-session: a backup taken now would miss the open session. */}
         {/* (#295) One Heads-up card at a time on Today: install, then backup, then the rest. */}
         {card === 'install' && onInstall && (
@@ -485,7 +464,7 @@ export default function TodayScreen({
           <div className="list-head">
             <h2>The workout</h2>
             <span>
-              {timed && !unfinished && `${approx ? '≈' : ''}${minutes} min · `}
+              {timed && `${approx ? '≈' : ''}${minutes} min · `}
               {adapted.totalSets} {adapted.totalSets === 1 ? 'set' : 'sets'}
             </span>
           </div>
@@ -583,9 +562,7 @@ export default function TodayScreen({
               <p className="coach-card__text">
                 {adjusted
                   ? adapted.note
-                  : current
-                    ? `Session open. ${progress} of ${total} sets logged so far.`
-                    : first
+                  : first
                       ? coachInsight(last, first, unit, targetCoachLine(first.exerciseId, profile, history, unit, first.exerciseId === leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId)), adapted.setup), plannedLoad(profile.loads, history, first.exerciseId, unit))
                       : 'Pick a workout you can keep. The program follows from that.'}
               </p>
@@ -603,7 +580,7 @@ export default function TodayScreen({
               <Icon name="info" size={16} />
               Why this target
             </button>
-            {onSkipSlot && !current && (
+            {onSkipSlot && (
               <button className="text-action" onClick={onSkipSlot}>
                 <Icon name="arrow_forward" size={16} />
                 Skip this session
@@ -669,42 +646,16 @@ export default function TodayScreen({
         )}
       </div>
 
-      <div className="flow-dock" hidden={composing && !current}>
-        {current && unfinished && onEnd ? (
-          // (#399) From an earlier day, the way out leads: End with nothing logged, Finish (the sheet
-          // that saves the logged sets) otherwise. Resume stays, as the quiet choice.
-          <>
-            <button className="link-btn today-end" onClick={onResume}>
-              Resume
-            </button>
-            <button className="pill-primary" onClick={onEnd}>
-              {progress === 0 ? 'End workout' : 'Finish workout'}
-            </button>
-          </>
-        ) : current ? (
-          <>
-            {onEnd && (
-              <button className="link-btn today-end" onClick={onEnd}>
-                End
-              </button>
-            )}
-            <button className="pill-primary" onClick={onResume}>
-              {unfinished ? 'Resume' : 'Resume workout'}
-              <Icon name="arrow_forward" size={20} />
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="text-action" onClick={onAdjust}>
-              <Icon name="tune" size={16} />
-              Short on time or gear?
-            </button>
-            <button className="pill-primary" onClick={onPreview} disabled={adapted.exercises.length === 0}>
-              Preview workout
-              <Icon name="arrow_forward" size={20} />
-            </button>
-          </>
-        )}
+      {/* (#430) The dock never changes for an open workout: Start lives only behind Preview workout. */}
+      <div className="flow-dock" hidden={composing}>
+        <button className="text-action" onClick={onAdjust}>
+          <Icon name="tune" size={16} />
+          Short on time or gear?
+        </button>
+        <button className="pill-primary" onClick={onPreview} disabled={adapted.exercises.length === 0}>
+          Preview workout
+          <Icon name="arrow_forward" size={20} />
+        </button>
       </div>
     </div>
   );

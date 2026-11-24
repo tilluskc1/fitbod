@@ -153,3 +153,78 @@ export function BarIcon({ size = 40 }: IconProps) {
     </svg>
   );
 }
+
+/* (#430) Glyphs the self-hosted Material subset lacks, drawn at the same optical size (stroke 2, round). */
+const strong = (size: number) => ({ ...base(size), strokeWidth: 2, style: { flex: 'none' as const } });
+
+export function MoreHorizIcon({ size = 22 }: IconProps) {
+  return (
+    <svg {...strong(size)}>
+      <circle cx="5" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function HideIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...strong(size)}>
+      <path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z" />
+      <circle cx="12" cy="12" r="2.6" />
+      <path d="M4 4l16 16" />
+    </svg>
+  );
+}
+
+export function CheckCircleIcon({ size = 20 }: IconProps) {
+  return (
+    <svg {...strong(size)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12.5l2.7 2.7L16 9.5" />
+    </svg>
+  );
+}
+
+export function LogSetIcon({ size = 20 }: IconProps) {
+  return (
+    <svg {...strong(size)}>
+      <path d="M4 20l1-4L16.5 4.5a2 2 0 012.8 0l.2.2a2 2 0 010 2.8L8 19z" />
+      <path d="M14.5 6.5l3 3" />
+    </svg>
+  );
+}
+
+export function SwapIcon({ size = 20 }: IconProps) {
+  return (
+    <svg {...strong(size)}>
+      <path d="M4 8h15M15 4l4 4-4 4M20 16H5M9 12l-4 4 4 4" />
+    </svg>
+  );
+}
+
+export function FlagIcon({ size = 20 }: IconProps) {
+  return (
+    <svg {...strong(size)}>
+      <path d="M5 21V4M5 4h11l-2 4 2 4H5" />
+    </svg>
+  );
+}
+
+export function SendIcon({ size = 20 }: IconProps) {
+  return (
+    <svg {...strong(size)}>
+      <path d="M12 19V5M6 11l6-6 6 6" />
+    </svg>
+  );
+}
+
+/** The centre Ask when voice is blocked: a question mark in the mic's place. */
+export function HelpIcon({ size = 28 }: IconProps) {
+  return (
+    <svg {...strong(size)}>
+      <path d="M9.2 9.2a2.9 2.9 0 015.6 1c0 2-2.8 2.6-2.8 4.3" />
+      <circle cx="12" cy="18.2" r="1.1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}

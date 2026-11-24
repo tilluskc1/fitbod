@@ -26,6 +26,8 @@ interface Props {
   /** A start error, unsupported API, or a permission denial: hide the mic for the rest of the session. */
   onBlocked: () => void;
   onClose: () => void;
+  /** (#430) Opened from the centre Ask: the listening sheet asks "What do you want to do today?". */
+  askTitle?: string;
 }
 
 /** (#426) No new result for this long auto-stops listening, same as the approved mockup. */
@@ -37,7 +39,7 @@ const SILENCE_MS = 2000;
  * back to the chips. It parses nothing itself; every reading goes through `talkParse`/`composeTalk`,
  * the same engine typed text already uses, so voice can never disagree with typing.
  */
-export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEditSlot, onPain, onFallback, onBlocked, onClose }: Props) {
+export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEditSlot, onPain, onFallback, onBlocked, onClose, askTitle }: Props) {
   const [stage, setStage] = useState<Stage>('listening');
   const [live, setLive] = useState('');
   const [finalText, setFinalText] = useState('');
@@ -134,7 +136,7 @@ export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEdi
 
   if (stage === 'listening') {
     return (
-      <Sheet title="Listening…" onClose={onClose} variant="voice">
+      <Sheet title={askTitle ?? 'Listening…'} status={askTitle ? 'Listening…' : undefined} onClose={onClose} variant="voice">
         <div className="tt-voice-listen">
           <div className="tt-voice-mic tt-voice-mic--live" aria-hidden="true">
             <Icon name="mic" size={28} />

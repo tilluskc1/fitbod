@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useWakeLock } from '../lib/wakeLock';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
-import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
+import { elapsedMs, idleState, restRemaining, sessionProgress } from '../lib/session';
 import { lastNote } from '../lib/notes';
 import { canMoveLater, pairRound, pairedPendingIndex, partnerOf, restAfterLog } from '../lib/supersets';
 import './supersets.css';
@@ -267,11 +267,13 @@ export default function TrainScreen({
   if (rest > 0 && restOver) setRestOver(false);
   // The render above already advanced prevRest, so the tone reads its own ref.
   const cueFrom = useRef(rest);
+  // (#430) A rest that ran out while the phone was locked past suspension never chimes late on return.
+  const awake = idleState(session, now) === 'active';
   useEffect(() => {
     const prev = cueFrom.current;
     cueFrom.current = rest;
-    if (shouldCue({ prev, remaining: rest, active: restActive, paused: restPaused, muted })) playRestCue();
-  }, [rest, restActive, restPaused, muted]);
+    if (awake && shouldCue({ prev, remaining: rest, active: restActive, paused: restPaused, muted })) playRestCue();
+  }, [rest, restActive, restPaused, muted, awake]);
 
   // Only unskipped, unfinished work is offered. When nothing is left to log,
   // the trainer shows a review state instead of quietly landing on the last

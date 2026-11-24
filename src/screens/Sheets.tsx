@@ -37,7 +37,7 @@ import Demo from '../components/ui/Demo';
 import Icon from '../components/ui/Icon';
 import { CheckIcon, LockIcon, PhoneIcon, ShareIcon } from '../components/ui/Icons';
 import { currentDevice, installGuide, installSteps, type InstallGuide } from '../lib/install';
-import { startOverBlocked } from '../lib/storage';
+import { START_OVER_BLOCKED } from '../lib/storage';
 import { lastBackupLine, startOverBackupNote } from '../lib/backup';
 import { SAFETY_NOTICE } from '../lib/safety';
 import { clearReturnToAbout, markReturnToAbout, returnsToAbout } from '../lib/about';
@@ -872,35 +872,6 @@ export function ConfirmSheet({
   );
 }
 
-/** Starting a workout while one is open (#19): confirming discards the open session once. */
-export function DiscardSessionSheet({
-  currentName,
-  since = null,
-  nextName,
-  onDiscard,
-  onKeep,
-}: {
-  currentName: string;
-  /** (#406) The day an open workout was started, when that is an earlier day. */
-  since?: string | null;
-  nextName: string;
-  onDiscard: () => void;
-  onKeep: () => void;
-}) {
-  return (
-    <ConfirmSheet
-      title="Replace your open session?"
-      confirmLabel={`Discard and start ${nextName}`}
-      cancelLabel="Keep current workout"
-      onConfirm={onDiscard}
-      onCancel={onKeep}
-    >
-      <strong>{currentName}</strong> {since ? `from ${since} is still open` : 'is still in progress'}. Starting <strong>{nextName}</strong> discards it
-      — logged sets from the active session will be lost.
-    </ConfirmSheet>
-  );
-}
-
 /* ---------------- Start over (#263) ---------------- */
 
 /**
@@ -910,15 +881,12 @@ export function DiscardSessionSheet({
  */
 export function StartOverSheet({
   sessionOpen,
-  since = null,
   lastBackupAt,
   onBackup,
   onErase,
   onClose,
 }: {
   sessionOpen: boolean;
-  /** (#406) The day the open workout was started, when that is an earlier day. */
-  since?: string | null;
   lastBackupAt?: string;
   /** The #225 backup flow; resolves to whether a file left the app and the message it showed, if any. */
   onBackup: () => Promise<{ ok: boolean; message: string | null }>;
@@ -979,7 +947,7 @@ export function StartOverSheet({
       )}
       {sessionOpen && (
         <p className="note-card" role="note" style={{ marginTop: 12 }}>
-          {startOverBlocked(since)}
+          {START_OVER_BLOCKED}
         </p>
       )}
       <div className="sheet-actions">

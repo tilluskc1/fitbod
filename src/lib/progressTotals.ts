@@ -7,8 +7,12 @@ import { hasWork } from './plan.ts';
  */
 export function trainedMinutes(workout: WorkoutRecord): { minutes: number; planned: boolean } {
   if (workout.endedAt) {
+    // (#430) Time away from a resumed workout sits in pausedMs and does not count as trained.
     const span = (Date.parse(workout.endedAt) - Date.parse(workout.date)) / 60000;
-    if (Number.isFinite(span) && span > 0) return { minutes: Math.max(1, Math.round(span)), planned: false };
+    const away = (workout.pausedMs ?? 0) / 60000;
+    if (Number.isFinite(span) && span > 0) {
+      return { minutes: Math.max(1, Math.round(span - away)), planned: false };
+    }
   }
   return { minutes: workout.durationMin ?? 0, planned: true };
 }

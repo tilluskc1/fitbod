@@ -1,4 +1,4 @@
-import type { AppState, PerformedSet, WorkoutExercise, WorkoutRecord } from '../types.ts';
+import type { AppState, PerformedSet, SetupChoice, WorkoutExercise, WorkoutRecord } from '../types.ts';
 import { needsLoad } from '../data/flagship.ts';
 import { advanceAfterFinish } from './sequence.ts';
 import { dayKey, withoutCustomDay } from './plan.ts';
@@ -556,12 +556,12 @@ export function sessionProgress(session: WorkoutRecord): SessionProgress {
  */
 export function completeSession(
   session: WorkoutRecord,
-  options: { early: boolean; now: string },
+  options: { early: boolean; now: string; endedAt?: string },
 ): WorkoutRecord {
   const next = copyRecord(session);
   const progress = sessionProgress(next);
   next.status = 'completed';
-  next.endedAt = options.now;
+  next.endedAt = options.endedAt ?? options.now;
   next.completedEarly = options.early || !progress.complete;
   for (const exercise of next.exercises) {
     for (const set of exercise.performed) {
@@ -574,7 +574,7 @@ export function completeSession(
 export function applyFinish(
   state: AppState,
   sessionId: string,
-  options: { early: boolean; now: string },
+  options: { early: boolean; now: string; endedAt?: string },
 ): AppState {
   if (!state.current || state.current.id !== sessionId) return state;
   const completed = completeSession(state.current, options);
@@ -587,18 +587,6 @@ export function applyFinish(
   // Explicit completion with work advances the program sequence exactly once. A described
   // day (#193) has no slot link, so it moves nothing; Today goes back to the planned day.
   return completed.slotSeq === undefined ? withoutCustomDay(next) : advanceAfterFinish(next, completed);
-}
-
-/**
- * (#397) An open session started on an earlier local calendar day than `now` is unfinished: Today names
- * the day it is from ("Wed, Nov 12") instead of offering it as today's. Null while it is still today's.
- * A session started at 23:50 and seen at 00:10 is from yesterday.
- */
-export function unfinishedSince(session: Pick<WorkoutRecord, 'date'> | null, now: Date): string | null {
-  if (!session) return null;
-  const started = new Date(session.date);
-  if (Number.isNaN(started.getTime()) || dayKey(started) >= dayKey(now)) return null;
-  return started.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 export function applyCancel(state: AppState, sessionId: string): AppState {
@@ -622,4 +610,203 @@ export function applyCorrection(
     ...state,
     history: state.history.map((item) => (item.id === workoutId ? corrected : item)),
   };
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * (#430) Active, suspended, expired. Derived on read from timestamps, never stored: status stays
+ * `active` until a finish or an expiry save. Every function takes the clock as an argument.
+ * ---------------------------------------------------------------------------------------------- */
+
+/** Ten minutes without a real action (after any running rest's planned end) suspends a workout. */
+export const SUSPEND_AFTER_MS = 10 * 60_000;
+/** Six hours idle, or idle past local midnight, expires it into history. */
+export const EXPIRE_AFTER_MS = 6 * 60 * 60_000;
+/** Activity more than this far in the future (a clock change) reads as suspended and never expires. */
+export const FUTURE_SLACK_MS = 5 * 60_000;
+
+export type IdleState = 'active' | 'suspended' | 'expired';
+
+function stampMs(value: string | null | undefined): number {
+  return value ? Date.parse(value) : Number.NaN;
+}
+
+/**
+ * When the lifter last did something real. `lastActiveAt` wins when present; older records derive it
+ * from the latest done set, the rest start and the start date. NaN when nothing parses.
+ */
+export function lastActiveMs(workout: WorkoutRecord): number {
+  const stamped = stampMs(workout.lastActiveAt);
+  if (Number.isFinite(stamped)) return stamped;
+  let best = Number.NaN;
+  const consider = (ms: number) => {
+    if (Number.isFinite(ms) && !(ms <= best)) best = ms;
+  };
+  consider(stampMs(workout.date));
+  consider(stampMs(workout.restStartedAt));
+  for (const exercise of workout.exercises) {
+    for (const set of exercise.performed) if (set.done) consider(stampMs(set.completedAt));
+  }
+  return best;
+}
+
+/** Last activity, pushed to the planned end of a running, unpaused rest: resting is not idling. */
+export function idleFromMs(workout: WorkoutRecord): number {
+  const last = lastActiveMs(workout);
+  const restStart = stampMs(workout.restStartedAt);
+  if (Number.isFinite(restStart) && !workout.restPausedAt) {
+    const plannedEnd = restStart + (workout.restSeconds ?? 75) * 1000 + (workout.restPausedMs ?? 0);
+    if (Number.isFinite(plannedEnd) && !(plannedEnd <= last)) return plannedEnd;
+  }
+  return last;
+}
+
+export function idleState(workout: WorkoutRecord, nowMs: number): IdleState {
+  const from = idleFromMs(workout);
+  if (!Number.isFinite(from) || !Number.isFinite(nowMs)) return 'suspended';
+  const idle = nowMs - from;
+  if (idle < -FUTURE_SLACK_MS) return 'suspended';
+  if (idle < SUSPEND_AFTER_MS) return 'active';
+  if (idle >= EXPIRE_AFTER_MS || dayKey(new Date(from)) !== dayKey(new Date(nowMs))) return 'expired';
+  return 'suspended';
+}
+
+/**
+ * The end time a save writes: last activity, never later than now and never before the start, so
+ * duration, recap and recovery leave out the time away.
+ */
+export function lastActiveIso(workout: WorkoutRecord, nowMs: number): string {
+  const started = stampMs(workout.date);
+  let at = lastActiveMs(workout);
+  if (!Number.isFinite(at)) at = nowMs;
+  if (Number.isFinite(nowMs)) at = Math.min(at, nowMs);
+  if (Number.isFinite(started)) at = Math.max(at, started);
+  return new Date(at).toISOString();
+}
+
+/** Stamp a real action. Clamped: a stamp never runs ahead of the clock it was written with. */
+export function touch(workout: WorkoutRecord, now: string): WorkoutRecord {
+  return { ...workout, lastActiveAt: now };
+}
+
+/**
+ * Wrap a state update caused by a real action: when it changed the same open workout, stamp it.
+ * Ticks, views, Ask and Preview never pass through here, so they never write `lastActiveAt`.
+ */
+export function withActivity(prev: AppState, next: AppState, now: string): AppState {
+  const before = prev.current;
+  const after = next.current;
+  if (!before || !after || before.id !== after.id || before === after) return next;
+  return { ...next, current: touch(after, now) };
+}
+
+/**
+ * An explicit Resume. Time away (from idle start to now) goes into `pausedMs`, capped so the loader keeps
+ * it, so elapsed time, recap and totals exclude it. An active workout only gets the stamp.
+ */
+export function resumeSession(workout: WorkoutRecord, nowMs: number): WorkoutRecord {
+  let pausedMs = workout.pausedMs ?? 0;
+  if (idleState(workout, nowMs) !== 'active') {
+    const gap = nowMs - idleFromMs(workout);
+    if (Number.isFinite(gap) && gap > 0) pausedMs = Math.min(MAX_PAUSE_MS, pausedMs + gap);
+  }
+  return { ...workout, pausedMs, lastActiveAt: new Date(nowMs).toISOString() };
+}
+
+/** Any exercise carries the lifter's own note. */
+export function hasNotes(workout: WorkoutRecord): boolean {
+  return workout.exercises.some((exercise) => typeof exercise.note === 'string' && exercise.note.trim() !== '');
+}
+
+/**
+ * The expiry save path (D1). Not `completeSession`: no `completedAt` is stamped, so every set stays
+ * byte-identical, and `endedAt` is last activity. Completed early unless every set was done.
+ */
+export function closeAsSaved(workout: WorkoutRecord, nowMs: number): WorkoutRecord {
+  return {
+    ...workout,
+    status: 'completed',
+    completedEarly: !sessionProgress(workout).complete,
+    endedAt: lastActiveIso(workout, nowMs),
+  };
+}
+
+export type ExpiryOutcome = 'saved' | 'closed' | 'cancelled' | 'already-saved';
+
+/**
+ * Expire the open workout when its time is up. Never advances the plan. Idempotent by id: a workout
+ * another tab already saved just leaves `current`. Null when nothing changes (not expired, or empty with
+ * notes and still the same local day as its last activity).
+ */
+export function expireOpenWorkout(
+  state: AppState,
+  nowMs: number,
+): { state: AppState; outcome: ExpiryOutcome; sets: number } | null {
+  const workout = state.current;
+  if (!workout) return null;
+  if (state.history.some((item) => item.id === workout.id)) {
+    return { state: { ...state, current: null }, outcome: 'already-saved', sets: 0 };
+  }
+  if (idleState(workout, nowMs) !== 'expired') return null;
+  const sets = sessionProgress(workout).done;
+  if (sets > 0) {
+    return {
+      state: { ...state, history: [closeAsSaved(workout, nowMs), ...state.history], current: null },
+      outcome: 'saved',
+      sets,
+    };
+  }
+  if (!hasNotes(workout)) return { state: { ...state, current: null }, outcome: 'cancelled', sets: 0 };
+  // Empty with notes (D4): stays offered until local midnight, counted from its last activity.
+  const last = lastActiveMs(workout);
+  if (Number.isFinite(last) && dayKey(new Date(last)) === dayKey(new Date(nowMs))) return null;
+  return { state: { ...state, current: null }, outcome: 'closed', sets: 0 };
+}
+
+/** The plan link a new session carries (`slotLinkFor`). */
+export interface SlotLink {
+  slotId?: string;
+  slotSeq?: number;
+  planRevision?: number;
+}
+
+/**
+ * (#430, ruling 4a) Starting the workout that is already open just resumes it: same plan slot under the
+ * same plan, same name, same length and same setup. A described day, a different slot, another length or
+ * other gear is a different workout and reaches the start-conflict sheet.
+ */
+export function isSameWorkout(
+  open: WorkoutRecord,
+  link: SlotLink,
+  next: { name: string; minutes: number; setup?: SetupChoice },
+): boolean {
+  if (open.slotSeq === undefined || link.slotSeq === undefined) return false;
+  if (open.slotSeq !== link.slotSeq || open.planRevision !== link.planRevision) return false;
+  if (open.name !== next.name) return false;
+  if (open.durationMin !== undefined && open.durationMin !== next.minutes) return false;
+  const openSetup = open.exercises.find((exercise) => exercise.setup)?.setup ?? 'home';
+  return openSetup === (next.setup ?? 'home');
+}
+
+/**
+ * (#430) Save-and-start: when the new workout is the same plan slot the saved one just advanced past, it
+ * starts unlinked (plan revision only), so the plan can never advance twice for one slot.
+ */
+export function unlinkedIfSameSlot(link: SlotLink, open: WorkoutRecord): SlotLink {
+  if (link.slotSeq === undefined || open.slotSeq === undefined) return link;
+  if (link.slotSeq !== open.slotSeq || link.planRevision !== open.planRevision) return link;
+  return link.planRevision === undefined ? {} : { planRevision: link.planRevision };
+}
+
+/**
+ * (#430) The user's own Save (row `...`, Finish from Ask, Save-and-start): the normal finish, which
+ * advances the plan once, with the end time set to last activity so time away is left out.
+ */
+export function saveOpenWorkout(state: AppState, sessionId: string, nowMs: number): AppState {
+  const open = state.current;
+  if (!open || open.id !== sessionId) return state;
+  return applyFinish(state, sessionId, {
+    early: false,
+    now: new Date(nowMs).toISOString(),
+    endedAt: lastActiveIso(open, nowMs),
+  });
 }

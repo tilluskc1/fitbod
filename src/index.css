@@ -5631,3 +5631,49 @@ button.aw-exercise__name-btn {
   -webkit-touch-callout: none;
   user-select: none;
 }
+
+/* ---------- (#430) Open workout: resume row, workout sheets, Ask, expiry note ---------- */
+
+.rrow{display:flex;align-items:center;gap:4px;min-height:48px;margin:12px 0 0;padding:0 2px 0 14px;border-radius:14px;border:1px solid rgba(20,40,38,.14);background:rgba(255,255,255,.55);color:var(--on-surface-muted);font-size:13px;line-height:18px}
+.rrow__dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--accent-edge);margin-right:6px}
+.rrow--paused .rrow__dot{background:var(--outline)}
+.rrow--empty .rrow__dot{background:transparent;border:1.5px solid var(--outline)}
+.rrow__text{flex:1;min-width:0;display:flex;white-space:nowrap}
+.rrow__name{min-width:0;overflow:hidden;text-overflow:ellipsis;font-weight:600;color:var(--on-surface)}
+.rrow__rest{flex:none;white-space:nowrap;padding-left:.3em}
+.rrow__go{flex:none;min-height:44px;padding:0 10px;font-size:13px;font-weight:600;color:var(--accent-text);border-radius:10px}
+.rrow__more{flex:none;width:44px;height:44px;display:grid;place-items:center;color:var(--on-surface-variant);border-radius:50%}
+.rrow button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.rrow--in-progress{margin-top:12px}
+
+.opt-list{display:flex;flex-direction:column;gap:8px}
+.opt{display:flex;align-items:center;gap:14px;min-height:56px;padding:8px 14px;border-radius:14px;background:var(--surface-container);border:1px solid rgba(20,26,26,.045);text-align:left;width:100%;font-size:16px;font-weight:600;color:var(--on-surface)}
+.opt__ic{flex:none;width:36px;height:36px;border-radius:50%;background:var(--surface-container-high);display:grid;place-items:center;color:var(--on-surface)}
+.opt small{display:block;font-size:13px;font-weight:400;color:var(--on-surface-variant);margin-top:1px}
+.opt > .ms:last-child{margin-left:auto;color:var(--on-surface-variant)}
+.opt:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sheet-sub2{margin-top:4px;font-size:14px;color:var(--on-surface-variant)}
+.sheet-status{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:13px;font-weight:500;color:var(--accent-text)}
+.sheet-status i{width:8px;height:8px;border-radius:50%;background:var(--accent-edge)}
+.rec-tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--accent-text);margin-bottom:6px}
+.btn-danger-soft{min-height:52px;width:100%;border-radius:999px;border:1px solid var(--danger-line);background:var(--danger-fill);color:var(--danger);font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0 18px;text-align:center}
+.pill-quiet.wide{width:100%;min-height:52px;font-size:15px}
+.ask-in{display:flex;align-items:center;gap:8px;min-height:52px;border-radius:999px;background:#fff;border:1px solid var(--outline-variant);padding:0 6px 0 16px;color:var(--on-surface-variant);font-size:15px}
+.ask-in__field{flex:1;min-width:0;border:0;background:transparent;font:inherit;color:var(--on-surface);min-height:44px}
+.ask-in__field:focus{outline:none}
+.ask-in:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+.ask-in .ic{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:none}
+.ask-in .ic.go{background:var(--primary);color:var(--on-primary)}
+.ask-in .ic.go:disabled{opacity:.45}
+.ask-hint{margin-top:10px}
+.divider-label{font-size:12px;font-weight:500;color:var(--on-surface-variant);margin:16px 2px 8px}
+.search-wrap{position:relative;margin-top:12px}
+.search-wrap .search{margin-top:0;background:#fff}
+
+.note-line{display:flex;align-items:flex-start;gap:10px;margin:12px 0 0;padding:10px 4px 10px 14px;border-radius:14px;background:#fff;border:1px solid rgba(20,40,38,.14);font-size:14px;line-height:20px;color:var(--on-surface)}
+.note-line > svg:first-child,.note-line > .ms:first-child{flex:none;margin-top:1px;color:var(--accent-text)}
+.note-line p{flex:1;min-width:0}
+.note-line p small{display:block;font-size:13px;color:var(--on-surface-variant)}
+.note-line button{flex:none;width:44px;height:44px;margin:-8px 0;display:grid;place-items:center;color:var(--on-surface-variant);border-radius:50%}
+
+@media (max-width:399px){.rrow__sets{display:none}.rrow__go{padding:0 8px}}

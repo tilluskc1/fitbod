@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import Icon from './Icon';
-import type { TabBarActionKind } from '../../lib/tabBarAction';
+import { HelpIcon } from './Icons';
 
 export type Tab = 'today' | 'plan' | 'progress' | 'coach';
 
@@ -11,29 +11,21 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'coach', label: 'Coach', icon: 'chat_bubble' },
 ];
 
-export type TabBarAction = {
-  /** What the action does now: begin today's workout or reopen the live one. */
-  kind: TabBarActionKind;
-  label: string;
-  name: string;
-  onActivate: () => void;
-  disabled?: boolean;
-  /** Share of the open session's sets already logged (0–1); drawn as a ring around Resume. */
-  progress?: number;
+/** (#430) The centre button: Ask in every state. It never starts, resumes or ends a workout, and is never disabled. */
+export type TabBarAsk = {
+  onAsk: () => void;
+  /** Voice is missing or was refused: a question mark stands in for the mic. */
+  voiceBlocked: boolean;
 };
-
-/** Ring length for r=35 (2πr ≈ 220). */
-const RING = 220;
 
 export function TabBar({
   active,
   onChange,
-  workoutAction,
+  ask,
 }: {
   active: Tab;
   onChange: (tab: Tab) => void;
-  /** (#20) When set, a primary action sits between Plan and Progress. */
-  workoutAction?: TabBarAction;
+  ask?: TabBarAsk;
 }) {
   const tabButton = (tab: (typeof TABS)[number]) => (
     <button
@@ -50,38 +42,12 @@ export function TabBar({
   return (
     <nav className="tabbar" aria-label="Main navigation">
       {TABS.slice(0, 2).map((tab) => tabButton(tab))}
-      {workoutAction && (
-        <button
-          type="button"
-          className={`tab tab-action ${workoutAction.kind === 'resume' ? 'tab-action--resume' : ''}`.trim()}
-          onClick={workoutAction.onActivate}
-          disabled={workoutAction.disabled}
-          aria-label={
-            workoutAction.kind === 'resume' && workoutAction.progress !== undefined
-              ? `${workoutAction.name}, ${Math.round(workoutAction.progress * 100)}% of sets logged`
-              : workoutAction.name
-          }
-        >
+      {ask && (
+        <button type="button" className="tab tab-action" onClick={ask.onAsk} aria-label="Ask">
           <span className="tab-action__play" aria-hidden="true">
-            {workoutAction.kind === 'resume' && (
-              <svg className="tab-action__ring" viewBox="0 0 76 76">
-                <circle cx="38" cy="38" r="35" fill="none" stroke="rgba(28, 36, 6, 0.15)" strokeWidth="4" />
-                <circle
-                  cx="38"
-                  cy="38"
-                  r="35"
-                  fill="none"
-                  stroke="#1c2406"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeDasharray={`${(RING * Math.min(1, Math.max(0, workoutAction.progress ?? 0))).toFixed(1)} ${RING}`}
-                  transform="rotate(-90 38 38)"
-                />
-              </svg>
-            )}
-            <Icon name="play_arrow" size={28} />
+            {ask.voiceBlocked ? <HelpIcon /> : <Icon name="mic" size={28} />}
           </span>
-          <span className="tab-action__label" aria-hidden="true">{workoutAction.label}</span>
+          <span className="tab-action__label" aria-hidden="true">Ask</span>
         </button>
       )}
       {TABS.slice(2).map((tab) => tabButton(tab))}

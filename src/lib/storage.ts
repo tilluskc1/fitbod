@@ -1,5 +1,6 @@
 import type { AppState, WorkoutRecord } from '../types.ts';
 import { APP_MARKER, SCHEMA_VERSION, validateState } from './validate.ts';
+import { closeAsSaved, lastActiveMs } from './session.ts';
 export { SCHEMA_VERSION } from './validate.ts';
 
 export const STORAGE_KEY = 'fitbod-clone-v1';
@@ -275,10 +276,6 @@ export function eraseLocalData(store: EraseStore | null = storage()): EraseResul
 
 export const START_OVER_BLOCKED = 'A workout is in progress. Finish or discard it first, then start over.';
 
-/** (#406) The same block for a workout left open from an earlier day: it names the day and never says "in progress". */
-export const startOverBlocked = (since: string | null): string =>
-  since ? `A workout from ${since} is still open. End or finish it first, then start over.` : START_OVER_BLOCKED;
-
 /** (#263) The one start-over path: an open workout refuses it before any key is touched. */
 export function startOverErase(
   state: Pick<AppState, 'current'>,
@@ -408,6 +405,11 @@ export interface ImportSummary {
    * in the restore notice instead of happening silently.
    */
   feedbackPreserved: number;
+  /**
+   * (#430) Done sets from the backup's own open workout, saved to history as a partial workout (no plan
+   * advance) because this browser kept a different open workout. 0 when nothing was saved that way.
+   */
+  backupSessionSavedSets?: number;
 }
 
 export interface MergeResult {
@@ -420,7 +422,7 @@ export interface MergeResult {
  * workout id (restoring the same file twice is a no-op), imported data wins
  * for ids it contains, and an unrelated active session is never discarded.
  */
-export function mergeImport(current: AppState, imported: AppState): MergeResult {
+export function mergeImport(current: AppState, imported: AppState, nowMs: number = Date.now()): MergeResult {
   const importedIds = new Set(imported.history.map((workout) => workout.id));
   const currentIds = new Set(current.history.map((workout) => workout.id));
   const duplicateWorkouts = imported.history.filter((workout) => currentIds.has(workout.id)).length;
@@ -456,11 +458,28 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
     session === null
       ? -1
       : session.exercises.reduce((total, exercise) => total + exercise.performed.filter((set) => set.done).length, 0);
-  const active = activeSessionKept
+  const picked = activeSessionKept
     ? localActive
     : loggedSets(importedActive) > loggedSets(localActive)
       ? importedActive ?? localActive
       : localActive ?? importedActive;
+  // (#430) Same open workout on both sides: the winner keeps the later `lastActiveAt` of the two.
+  let active = picked;
+  if (activeSessionConflict && picked && localActive && importedActive) {
+    const other = picked === localActive ? importedActive : localActive;
+    if (lastActiveMs(other) > lastActiveMs(picked) && other.lastActiveAt !== undefined) {
+      active = { ...picked, lastActiveAt: other.lastActiveAt };
+    }
+  }
+  // (#430) A different open workout in the backup: this browser's stays open, and the backup's done sets go
+  // to history as a partial workout through the expiry save path (sets untouched, no plan advance).
+  const backupDone = activeSessionKept && importedActive ? loggedSets(importedActive) : 0;
+  if (backupDone > 0 && importedActive) {
+    // Newest first, like every finish: slotted in by start date without reordering anything else.
+    const saved = closeAsSaved(importedActive, nowMs);
+    const at = history.findIndex((workout) => Date.parse(workout.date) < Date.parse(saved.date));
+    history.splice(at === -1 ? history.length : at, 0, saved);
+  }
 
   // (#419) Restore means "put me back the way I was": the backup's profile and
   // plan win outright, whatever this browser holds. A backup with no profile or
@@ -501,6 +520,7 @@ export function mergeImport(current: AppState, imported: AppState): MergeResult 
       activeSessionKept,
       activeSessionConflict,
       feedbackPreserved,
+      ...(backupDone > 0 ? { backupSessionSavedSets: backupDone } : {}),
     },
   };
 }

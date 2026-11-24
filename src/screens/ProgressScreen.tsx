@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, setText, setUnit } from '../data/flagship';
 import {
   calibrationInputValue, correctionBlur, correctionKeystroke, loadLimitMessage, repsLimitMessage, typedReps, unitLabel,
@@ -30,14 +31,14 @@ interface Props {
   ) => void;
   onDelete: (workoutId: string) => void;
   onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
-  /** (#294) A workout is under way: the empty state resumes it instead of starting today's. */
-  running?: boolean;
-  /** (#406) The running workout is from an earlier day: End or Finish leads, Resume is the quiet link. */
-  unfinished?: boolean;
-  /** Sets logged in the running workout, to choose between End and Finish. */
-  loggedSets?: number;
-  onEnd?: () => void;
-  /** Opens today's preview (Today's Start), or resumes the running workout. */
+  /**
+   * (#430) The open workout's slight resume row (the same one Today shows), or nothing. It replaces the
+   * empty state's Resume and Finish buttons; the empty state then has no primary button.
+   */
+  openRow?: ReactNode;
+  /** (#430) The open workout's name and logged sets, for the empty state's "count once you save" line. */
+  openWorkout?: { name: string; sets: number } | null;
+  /** Opens today's preview (Today's Start). */
   onStartToday: () => void;
   /** Today has nothing to start, as Today's own Preview button is then disabled. */
   startDisabled?: boolean;
@@ -67,10 +68,8 @@ export default function ProgressScreen({
   onCorrect,
   onDelete,
   onFeedback,
-  running = false,
-  unfinished = false,
-  loggedSets = 0,
-  onEnd,
+  openRow,
+  openWorkout = null,
   onStartToday,
   startDisabled = false,
   initialTab = 'overview',
@@ -169,6 +168,7 @@ export default function ProgressScreen({
           <DownloadIcon />
         </button>
       </header>
+      {openRow}
       <p className="page-sub">Your records tell the story. No invented scores.</p>
 
       <div className="segmented" role="tablist" aria-label="Progress views">
@@ -194,21 +194,22 @@ export default function ProgressScreen({
         // (#294) No finished workout yet: say what is missing and the one action that fixes it.
         <div className="empty-state progress-empty">
           <h2 className="progress-empty__title">Your progress starts with your first workout.</h2>
-          <p>After it, you'll see your workouts, sets and minutes here, and a chart for each lift.</p>
-          {running && unfinished && onEnd ? (
+          {openWorkout ? (
+            // (#430) The row above resumes it; nothing here competes with it.
+            <p>
+              Your totals and history show up here after you finish a workout.
+              {openWorkout.sets > 0
+                ? ` Your ${openWorkout.sets} ${openWorkout.name} ${openWorkout.sets === 1 ? 'set counts' : 'sets count'} once you save the workout.`
+                : ''}
+            </p>
+          ) : (
             <>
-              <button className="primary" onClick={onEnd}>
-                {loggedSets === 0 ? 'End workout' : 'Finish workout'}
-              </button>
-              <button className="link-btn" onClick={onStartToday}>
-                Resume
+              <p>After it, you'll see your workouts, sets and minutes here, and a chart for each lift.</p>
+              <button className="primary" onClick={onStartToday} disabled={startDisabled}>
+                Start today's workout
+                <ArrowIcon />
               </button>
             </>
-          ) : (
-            <button className="primary" onClick={onStartToday} disabled={!running && startDisabled}>
-              {running ? 'Resume workout' : "Start today's workout"}
-              <ArrowIcon />
-            </button>
           )}
         </div>
       ) : tab === 'overview' ? (

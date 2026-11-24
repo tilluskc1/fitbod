@@ -16,9 +16,7 @@ import
   lengthOptions,
   setupOptions,
   EQUIPMENT_OPTIONS as SETUPS,
-  DEFAULT_CONSTRAINTS,
   loadOptions,
-  restorePendingWorkout,
   swapCandidateFor,
   toWorkoutExercises,
   todayGlance,
@@ -30,7 +28,7 @@ import
 import
  type { Proposal, ProposalContext } from './lib/proposal';
 import
- { defaultConstraints, ownedProfile, todayConstraints, withCeiling } from './lib/constraints';
+ { ownedProfile, todayConstraints, withCeiling } from './lib/constraints';
 import
  type { ConstraintNotice } from './lib/constraints';
 import  { FULL_BODY_A } from './data/flagship';
@@ -38,7 +36,7 @@ import { cursorFor, dayCounter, isDescribedSession, planSlots, revisePlan, skipC
 import { withoutCustomDay } from './lib/plan';
 import { skippedToday } from './lib/planPage';
 import { CHANGED_FOR_TODAY, todayDiff, todayOnly, undoToast, usualGear } from './lib/todayOnly';
-import { baseTalk, customDayPreview, describedDayStatus, describedSessionStatus, talkConstraints } from './lib/todayTalk';
+import { baseTalk, customDayPreview, describedDayStatus, talkConstraints } from './lib/todayTalk';
 import type { TalkState } from './lib/todayTalk';
 import TodayTalk from './components/TodayTalk';
 import {
@@ -50,7 +48,7 @@ import {
   goHeavierFloor,
 } from './lib/liveProgression';
 import { sessionRests } from './lib/sessionTime';
-import { canMoveLater, keptPairsOf, pairedPendingIndex, restAfterLog, sessionPairs, startPairs, storedPairs, type PairSource } from './lib/supersets';
+import { canMoveLater, pairedPendingIndex, restAfterLog, sessionPairs, startPairs, storedPairs, type PairSource } from './lib/supersets';
 import { removeTodayNotice } from './lib/exerciseActions';
 import { cleanNote, noSetsNotice, setExerciseNote, swapDropsNote, swapNotice } from './lib/notes';
 import { leadCompoundId, leadSlotIds, savedSetup } from './lib/progression';
@@ -65,7 +63,6 @@ import
   updatePerformedSet,
   logSet,
   sessionProgress,
-  unfinishedSince,
   skipExercise,
   swapPendingExercise,
   toggleRestPause,
@@ -77,7 +74,31 @@ import
   carryWeight,
   type CarryResult,
   type Followers,
+  withActivity,
+  resumeSession,
+  idleState,
+  saveOpenWorkout,
+  isSameWorkout,
+  unlinkedIfSameSlot,
+  expireOpenWorkout,
+  hasNotes,
+  pendingExerciseIndex,
+  type SlotLink,
 } from './lib/session';
+import { readHiddenResume, writeHiddenResume } from './lib/hiddenResume';
+import { voiceSupported } from './lib/speech';
+import {
+  DiscardWorkoutConfirm,
+  ExpiryNote,
+  ResumeRow,
+  StartConflictSheet,
+  TypedAskSheet,
+  WorkoutAskSheet,
+  WorkoutMenuSheet,
+  setsLabel,
+  type ExpiryNoteKind,
+} from './components/OpenWorkout';
+import type { TalkAsk } from './components/TodayTalk';
 import { bigJumpNote, burstLive, burstMark, carryMessage, heldMessage, overLastTime, setAllMessage } from './lib/carry';
 import { loadModeOf, needsLoad, setUnit } from './data/flagship';
 import { lastExercisePerformance } from './lib/progression';import { setWorkoutFeedback } from './lib/feedback';
@@ -114,7 +135,6 @@ import
  { PhoneFrame, TabBar } from './components/ui/Chrome';
 import
  type { Tab } from './components/ui/Chrome';
-import { tabBarAction } from './lib/tabBarAction';
 import type { ProfileChange } from './lib/preferences';
 import Sheet from './components/ui/Sheet';
 import
@@ -171,7 +191,6 @@ import
   ConfirmChange,
   DaySheet,
   ConfirmSheet,
-  DiscardSessionSheet,
   ExerciseActionsSheet,
   FinishSheet,
   SettingsSheet,
@@ -184,8 +203,17 @@ import
 
 type View = 'tabs' | 'train' | 'recap' | 'library' | 'adapt';
 
-/** (#397) Today's top chips: time, gear, Switch. */
-type ChipSheet = 'length' | 'gym' | 'switch';
+/**
+ * (#430) A start (or a Switch) asked for while another workout is open: held until the lifter picks Save
+ * and start, Back or Discard. `override` is today's override the start writes in the same update
+ * (undefined leaves it); `proposalId` is the approved preview it came from.
+ */
+type StartIntent =
+  | { kind: 'start'; next: Constraints; nextName: string; override?: TodayOverride | null; proposalId?: string }
+  | { kind: 'switch'; option: SwitchOption };
+
+/** What a start request did: began (or resumed) a workout, opened the conflict sheet, or was refused. */
+type StartOutcome = 'started' | 'conflict' | 'refused';
 
 type SheetState =
   | { kind: 'none' }
@@ -202,8 +230,12 @@ type SheetState =
   | { kind: 'day'; dayIndex: number }
   | { kind: 'preview' }
   | { kind: 'why'; exerciseId: string; exerciseIndex: number }
-  // (#397) `then`: the Today chip tapped while sets were logged; its sheet opens after Save or Discard.
-  | { kind: 'finish'; then?: ChipSheet }
+  | { kind: 'finish' }
+  // (#430) The open workout's `...` sheet, its discard confirm, and the centre Ask (with or without a workout).
+  | { kind: 'workoutMenu' }
+  | { kind: 'discardWorkout' }
+  | { kind: 'ask' }
+  | { kind: 'typedAsk' }
   | { kind: 'swap'; exerciseIndex: number }
   | { kind: 'confirm'; change: ProfileChange }
   | { kind: 'delete-workout'; workoutId: string };
@@ -329,9 +361,17 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       ? { message: initial.error ?? 'Saved data could not be read.', raw: initial.raw ?? '' }
       : null,
   );
-  // Active-session replacement asks in-app (#19); the native prompt blocked
-  // automated renderers and deadlocked a tab.
-  const [replacePrompt, setReplacePrompt] = useState<Constraints | null>(null);
+  // (#430) A start or Switch waiting on the conflict sheet (replaces #19's discard-only prompt).
+  const [startIntent, setStartIntent] = useState<StartIntent | null>(null);
+  /** (#430) The workout id whose resume row is hidden on this device (`hiddenResume.ts`). */
+  const [hiddenResume, setHiddenResume] = useState<string | null>(() => readHiddenResume());
+  /** (#430) The one-time note after an expiry; in memory only, so it shows once. */
+  const [expiryNote, setExpiryNote] = useState<{ kind: ExpiryNoteKind; sets: number } | null>(null);
+  /** (#430) A centre Ask handed to Today's planner: voice opens the mic, text builds the day. */
+  const [talkAsk, setTalkAsk] = useState<TalkAsk | null>(null);
+  const askSeqRef = useRef(0);
+  /** (#430) Voice was refused in this tab: the centre Ask shows its question mark and opens the typed sheet. */
+  const [voiceBlocked, setVoiceBlocked] = useState(false);
   /** First-weight steps skipped in this tab; in memory only, never stored. */
   /** (#134) Keep tapped on the fresher-day offer: this slot, today. In memory only, never stored. */
   const [keptFresher, setKeptFresher] = useState<string | null>(null);
@@ -344,6 +384,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const pendingWriteRef = useRef<string | undefined>(undefined);
   const adoptingRef = useRef(false);
   const forceSaveRef = useRef(initial.status === 'corrupt');
+  /** (#430) What listeners registered once (storage, visibility) need to read: the latest render's values. */
+  const liveRef = useRef({ view, current: state.current, sheetOpen: false });
+  useLayoutEffect(() => {
+    liveRef.current = { view, current: state.current, sheetOpen: sheet.kind !== 'none' || startIntent !== null };
+  });
 
   /* ---------- persistence ---------- */
 
@@ -408,6 +453,16 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           : open,
       );
       setState(loaded.state);
+      // (#430) A tab logging a workout another tab saved, discarded or expired goes back to Today and says so.
+      const live = liveRef.current;
+      if (live.view === 'train' && live.current && loaded.state.current?.id !== live.current.id) {
+        const savedThere = loaded.state.history.some((workout) => workout.id === live.current?.id);
+        setView('tabs');
+        setTab('today');
+        setNotice(headsUp(savedThere
+          ? 'This workout was saved in another tab. Find it in Progress.'
+          : 'This workout was closed in another tab.'));
+      }
       // A tab left on the splash follows another tab's onboarding to Today (#288).
       setShowSplash((shown) => splashAfterAdopt(shown, loaded.state));
       setSaveUi({ kind: 'saved' });
@@ -425,12 +480,28 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   }, [sessionRunning]);
 
   // (#134) Outside a session `now` does not tick: coming back to the app refreshes it.
+  // (#430) Coming back (`visibilitychange` or a `pageshow` from the back-forward cache) to a workout that
+  // went idle meanwhile lands on Today with the row, or the expiry note. A sheet or a field being edited
+  // keeps the workout screen; so does a workout still active. Locking the phone is not activity.
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') setNow(Date.now());
+    const onReturn = (event: Event) => {
+      if (event.type === 'visibilitychange' && document.visibilityState !== 'visible') return;
+      const at = Date.now();
+      setNow(at);
+      const live = liveRef.current;
+      if (live.view !== 'train' || !live.current || live.sheetOpen) return;
+      if (idleState(live.current, at) === 'active') return;
+      const focused = document.activeElement;
+      if (focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement || focused instanceof HTMLSelectElement) return;
+      setView('tabs');
+      setTab('today');
     };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('pageshow', onReturn);
+    return () => {
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('pageshow', onReturn);
+    };
   }, []);
 
   // (#295) Only a Done toast passes on its own, 4 s from when it shows; one fired during a sheet
@@ -460,6 +531,35 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const timer = window.setTimeout(() => setNotice(null), TOAST_MS);
     return () => window.clearTimeout(timer);
   }, [notice, toastUp]);
+
+  /**
+   * (#430, D1) Expiry: an open workout idle 6 h, or idle past local midnight, goes to history with its sets
+   * byte-identical (or closes when it has none), and never moves the plan. Only from a visible tab, never in
+   * Recovery, never under a failed save and never on the workout screen. Storage is read first: a newer
+   * write from another tab is adopted instead, so two tabs make one record (`expireOpenWorkout` is
+   * idempotent by id).
+   */
+  useEffect(() => {
+    const open = state.current;
+    if (recovery || saveFailed || view === 'train' || !open) return;
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    const result = expireOpenWorkout(state, now);
+    if (!result) return;
+    const loaded = loadState();
+    if (loaded.status !== 'corrupt' && loaded.status !== 'unavailable' && loaded.revision > revisionRef.current) {
+      proposalRevisionRef.current += 1;
+      adoptingRef.current = true;
+      revisionRef.current = loaded.revision;
+      setState(loaded.state);
+      return;
+    }
+    setState((currentState) =>
+      currentState.current?.id === open.id ? expireOpenWorkout(currentState, now)?.state ?? currentState : currentState,
+    );
+    if (result.outcome === 'saved' || result.outcome === 'closed') {
+      setExpiryNote({ kind: result.outcome, sets: result.sets });
+    }
+  }, [now, state, recovery, saveFailed, view]);
 
   // (#259) A message stays on the screen it was raised on. A new message is stamped with the screen
   // it first shows on, so a handler that sets a message and moves screen in one update stamps the new
@@ -542,22 +642,16 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const program = useMemo(() => programFor(constraints), [programFor, constraints]);
   /** The saved setup's day at today's length: what the saved gear runs and restores to. */
   const homeProgram = useMemo(() => programFor({ minutes: constraints.minutes }), [programFor, constraints.minutes]);
-  /** The saved day at the saved length: what Restore original goes back to (a short day today is rebuilt, #229). */
-  const savedProgram = useMemo(() => programFor(), [programFor]);
   /** Today's setup (and described day) at the saved length: the base the duration sheet compares against. */
   const defaultProgram = useMemo(
     () => programFor({ equipment: constraints.equipment, focus: constraints.focus, skip: constraints.skip }),
     [programFor, constraints.equipment, constraints.focus, constraints.skip],
   );
   /**
-   * (#88) The pairs a change is fitted and priced with: the profile's for a day not started; while a
-   * session runs, the pairs it stored, the only ones a rebuild keeps (`keepPairs`), so a shorter length
-   * never runs over the minutes it promised.
+   * (#88) The pairs a change is fitted and priced with: the profile's. (#430, ruling 4a) An open workout
+   * no longer changes what Today plans, so a change is always fitted as the day it would start.
    */
-  const fitPairing = useMemo(
-    () => (state.current ? keptPairsOf(state.current.exercises) : profile),
-    [state.current, profile],
-  );
+  const fitPairing: PairSource | null = profile;
   /** A proposed adaptation: another setup or a described day is rebuilt, the saved one adapts the saved day. */
   const adaptFor = useCallback(
     // The saved day at another length is the length sheet's rebuild (#193: the composer's time chip).
@@ -590,13 +684,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   }
   /**
    * (#219) A described day's status and reasons, read as its preview did; null on a planned day.
-   * (#220) While a described session runs, the session's own, until its day's override expires.
+   * (#430, ruling 4a) Today shows the plan while a workout is open, so this always reads the plan's day.
    */
   const described = useMemo(
-    () => (!profile ? null
-      : current && isDescribedSession(current) ? describedSessionStatus(current, override, profile)
-      : describedDayStatus(constraints, program, liveProgram, profile)),
-    [constraints, program, liveProgram, profile, current, override],
+    () => (!profile ? null : describedDayStatus(constraints, program, liveProgram, profile)),
+    [constraints, program, liveProgram, profile],
   );
 
   const pendingAdapted = useMemo(
@@ -610,19 +702,16 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   );
 
   /**
-   * The workout Today is showing, expressed as the logger's model: the live
-   * session when one exists, otherwise today's adapted program. Sheets read
-   * this instead of the generated plan, so they can never describe a movement
-   * that is not on screen.
+   * The workout Today is showing, expressed as the logger's model: today's adapted program. Sheets read
+   * this instead of the generated plan, so they can never describe a movement that is not on screen.
+   * (#430, ruling 4a) An open workout never takes Today over: Today, Plan and their sheets show the plan.
    */
   const todayExercises = useMemo(
-    () =>
-      current?.exercises ??
-      (profile ? liveExercises(liveProgram, profile, state.history) : toWorkoutExercises(adapted)),
-    [current, adapted, liveProgram, profile, state.history],
+    () => (profile ? liveExercises(liveProgram, profile, state.history) : toWorkoutExercises(adapted)),
+    [adapted, liveProgram, profile, state.history],
   );
   /** The name, counts and minutes of that same day, for Plan, View session and Coach alike (#189, #200). */
-  const todayDay = useMemo(() => todayGlance(adapted, current, Boolean(override), profile?.goal, profile), [adapted, current, override, profile]);
+  const todayDay = useMemo(() => todayGlance(adapted, null, Boolean(override), profile?.goal, profile), [adapted, override, profile]);
 
   /** The one-line reason behind each computed target, keyed by exercise. */
   const targetNotes = useMemo(() => {
@@ -674,70 +763,217 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setTab('today');
   };
 
+  /**
+   * (#430) A real action on the open workout: the update stamps `lastActiveAt` when (and only when) it
+   * changed that same workout. Ticks, views, Ask and Preview never come through here.
+   */
+  const act = (updater: (currentState: AppState) => AppState) =>
+    setState((previous) => withActivity(previous, updater(previous), stampNow()));
+
   /** One creation path for every start, so preview and logger can never disagree. */
-  const beginSession = (workout: ReturnType<typeof adaptWorkout>, custom = false) => {
-    // The link back to the slot is what makes completion advance once, and
-    // only for the plan it was started under. A described day (#193) has none.
-    const session = createSession({
+  const sessionFor = (workout: ReturnType<typeof adaptWorkout>, link: SlotLink) =>
+    createSession({
       id: uid(),
       name: workout.name,
       dayIndex: slot?.index ?? 0,
-      ...slotLinkFor(state, custom),
+      // The link back to the slot is what makes completion advance once, and
+      // only for the plan it was started under. A described day (#193) has none.
+      ...link,
       exercises: startPairs(profile
         ? liveExercises(workout, profile, state.history)
         : toWorkoutExercises(workout), profile, workout.minutes),
       now: new Date().toISOString(),
       durationMin: workout.minutes,
     });
-    setState((currentState) => ({ ...currentState, current: session }));
+
+  /** `override`: today's override written in the same update (undefined leaves it as it is). */
+  const beginSession = (workout: ReturnType<typeof adaptWorkout>, custom = false, override?: TodayOverride | null) => {
+    const session = sessionFor(workout, slotLinkFor(state, custom));
+    setState((currentState) => ({
+      ...currentState,
+      ...(override !== undefined ? { todayOverride: override } : {}),
+      current: session,
+    }));
     setView('train');
     track('workout-started', dayTypeOf(workout.name));
   };
 
+  /** (#430) Resume: time away goes into `pausedMs`, the row shows again next time, and the logger opens. */
+  const resumeWorkout = (override?: TodayOverride | null) => {
+    const open = state.current;
+    if (!open) return;
+    const at = Date.now();
+    setState((currentState) =>
+      currentState.current?.id === open.id
+        ? {
+          ...currentState,
+          ...(override !== undefined ? { todayOverride: override } : {}),
+          current: resumeSession(currentState.current, at),
+        }
+        : currentState,
+    );
+    if (hiddenResume !== null) {
+      writeHiddenResume(null);
+      setHiddenResume(null);
+    }
+    setSheet({ kind: 'none' });
+    setView('train');
+  };
+
+  /** The pending preview a start used is spent: the next preview is built fresh. */
+  const settleStart = (intent: { override?: TodayOverride | null; proposalId?: string }) => {
+    if (intent.override === undefined && intent.proposalId === undefined) return;
+    if (intent.proposalId !== undefined) appliedProposalRef.current = intent.proposalId;
+    else {
+      proposalRevisionRef.current += 1;
+      appliedProposalRef.current = null;
+    }
+    setPending(null);
+    setPendingNotices([]);
+  };
+
   /**
-   * Starting is always built from the same engine output the screens showed,
-   * so the preview, the review and the logger can never disagree.
+   * (#430) Every Start goes through here (Preview, the planner, an approved change). Starting the workout
+   * that is already open resumes it (ruling 4a); an open workout with nothing in it is replaced quietly;
+   * one with sets or notes asks on the start-conflict sheet first. Never loses a set on its own.
    */
-  const startSession = (next: Constraints): boolean => {
-    const workout = adaptFor(next);
+  const requestStart = (
+    next: Constraints,
+    options: { override?: TodayOverride | null; proposalId?: string } = {},
+  ): StartOutcome => {
+    // A new session: fitted with the profile's pairs, which Start stores (#88).
+    const workout = adaptFor(next, profile);
     if (workout.exercises.length === 0) {
       setNotice(problem('No movement in this workout can be done with that setup.'));
-      return false;
+      return 'refused';
     }
-    if (current) {
-      // Ask in-app; only an explicit discard reaches the replacement below.
-      setReplacePrompt(next);
-      return false;
+    const custom = Boolean(next.focus);
+    const open = state.current;
+    if (open) {
+      const link = slotLinkFor(state, custom);
+      const draft = sessionFor(workout, link);
+      const setup = draft.exercises.find((exercise) => exercise.setup)?.setup;
+      if (isSameWorkout(open, link, { name: workout.name, minutes: workout.minutes, setup })) {
+        resumeWorkout(options.override);
+        settleStart(options);
+        return 'started';
+      }
+      if (sessionProgress(open).done > 0 || hasNotes(open)) {
+        setSheet({ kind: 'none' });
+        setStartIntent({ kind: 'start', next, nextName: workout.name, ...options });
+        return 'conflict';
+      }
     }
-    beginSession(workout, Boolean(next.focus));
-    return true;
+    beginSession(workout, custom, options.override);
+    settleStart(options);
+    return 'started';
   };
 
   const startWorkout = () => {
-    startSession(constraints);
+    requestStart(constraints);
   };
-  // (#260) The tab bar's centre button and Today's Resume: one handler (lesson 9).
-  const openWorkout = current ? () => setView('train') : startWorkout;
 
   /**
    * Skip the slot on offer. Explicit only: nothing skips because a date passed,
    * and a skip is recorded apart from history so it counts as no training.
-   */  const skipTodaySlot = () => {
-    // (#397) Skip is not offered while a session is open; End is.
+   */
+  const skipTodaySlot = () => {
+    // (#430) Not offered while a workout is open: the open workout is still today's.
     if (!slot || current) return;
     const offered = cursorFor(state);
     setState((currentState) => skipCurrentSlot(currentState, new Date().toISOString(), offered));
     setNotice(done('Session skipped. Skips earn no progression.'));
   };
 
-  /** Explicit discard consent from the in-app sheet (#19) runs the replacement once. */
-  const discardAndBegin = () => {
-    const next = replacePrompt;
-    setReplacePrompt(null);
-    if (!next) return;
-    // A new session: fitted with the profile's pairs, which Start stores (#88).
-    const workout = adaptFor(next, profile);
-    if (workout.exercises.length > 0) beginSession(workout, Boolean(next.focus));
+  /** (#430) Save and start: one update finishes the open workout (the plan moves once) and starts the next. */
+  const saveAndStart = () => {
+    const intent = startIntent;
+    const open = state.current;
+    setStartIntent(null);
+    if (!intent || !open) return;
+    const at = Date.now();
+    const sets = sessionProgress(open).done;
+    const id = open.id;
+    track(sessionProgress(open).complete ? 'workout-finished' : 'workout-cut-short', dayTypeOf(open.name));
+    if (intent.kind === 'switch') {
+      const { option } = intent;
+      const stamp = new Date(at).toISOString();
+      setState((currentState) => {
+        if (currentState.current?.id !== id) return currentState;
+        const target = cursorFor(currentState).seq + option.offset;
+        const saved = saveOpenWorkout(currentState, id, at);
+        const left = target - cursorFor(saved).seq;
+        return withoutCustomDay(left > 0 ? skipForward(saved, left, stamp) : saved);
+      });
+      setSheet({ kind: 'none' });
+      setView('tabs');
+      setTab('today');
+      setNotice(done(`Saved ${setsLabel(sets)} from ${open.name}. ${option.name} is up.`));
+      return;
+    }
+    const workout = adaptFor(intent.next, profile);
+    if (workout.exercises.length === 0) {
+      setNotice(problem('No movement in this workout can be done with that setup.'));
+      return;
+    }
+    // Linked as the plan stood before the save; the same slot the save advances past starts unlinked.
+    const link = unlinkedIfSameSlot(slotLinkFor(state, Boolean(intent.next.focus)), open);
+    const session = sessionFor(workout, link);
+    setState((currentState) => {
+      if (currentState.current?.id !== id) return currentState;
+      const saved = saveOpenWorkout(currentState, id, at);
+      return {
+        ...saved,
+        ...(intent.override !== undefined ? { todayOverride: intent.override } : {}),
+        current: session,
+      };
+    });
+    settleStart(intent);
+    setSheet({ kind: 'none' });
+    setView('train');
+    track('workout-started', dayTypeOf(workout.name));
+    setNotice(done(`Saved ${setsLabel(sets)} from ${open.name}. ${workout.name} started.`));
+  };
+
+  /** (#430) Discard and start (after its own confirm when sets were logged): the open workout goes, nothing is saved. */
+  const discardAndStart = () => {
+    const intent = startIntent;
+    const open = state.current;
+    setStartIntent(null);
+    if (!intent || !open) return;
+    const id = open.id;
+    if (intent.kind === 'switch') {
+      const { option } = intent;
+      setState((currentState) =>
+        currentState.current?.id === id
+          ? withoutCustomDay(skipForward(applyCancel(currentState, id), option.offset, new Date().toISOString()))
+          : currentState,
+      );
+      setSheet({ kind: 'none' });
+      setView('tabs');
+      setTab('today');
+      setNotice(done(`${option.name} is up. Skipped ${option.skips.join(', ')}; a skip earns no progression.`));
+      return;
+    }
+    const workout = adaptFor(intent.next, profile);
+    if (workout.exercises.length === 0) {
+      setNotice(problem('No movement in this workout can be done with that setup.'));
+      return;
+    }
+    const session = sessionFor(workout, slotLinkFor(state, Boolean(intent.next.focus)));
+    setState((currentState) =>
+      currentState.current?.id === id
+        ? {
+          ...currentState,
+          ...(intent.override !== undefined ? { todayOverride: intent.override } : {}),
+          current: session,
+        }
+        : currentState,
+    );
+    settleStart(intent);
+    setSheet({ kind: 'none' });
+    setView('train');
+    track('workout-started', dayTypeOf(workout.name));
   };
 
   /** Fingerprint of everything a preview was built against. */
@@ -784,34 +1020,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       ...(next.focus ? { focus: next.focus } : {}),
       ...(next.skip ? { skip: next.skip } : {}),
     };
-    // An open session keeps its completed sets: the adaptation replaces only
-    // the pending prescriptions, so adjusting mid-workout never discards work.
-    const workout = adaptFor(next);
-    if (current) {
-      if (workout.exercises.length === 0) {
-        setNotice(problem('No movement in this workout can be done with that setup.'));
-        return;
-      }
-      setState((currentState) => ({
-        ...currentState,
-        todayOverride: approved,
-        current: currentState.current
-          ? restorePendingWorkout(currentState.current, workout, currentState.profile, currentState.history)
-          : null,
-      }));
-      appliedProposalRef.current = proposal.id;
-      setPendingNotices([]);
-      setPending(null);
-      setSheet({ kind: 'none' });
-      setView('train');
-      return;
-    }
-    if (!startSession(next)) return;
-    appliedProposalRef.current = proposal.id;
-    setPendingNotices([]);
-    setState((currentState) => ({ ...currentState, todayOverride: approved }));
-    setPending(null);
-    setSheet({ kind: 'none' });
+    // (#430) An approved change starts the day it describes, through the one start path: with a workout
+    // open, the conflict sheet decides; the open workout itself is never rebuilt by a preview.
+    if (requestStart(next, { override: approved, proposalId: proposal.id }) === 'started') setSheet({ kind: 'none' });
   };
 
   /** The described day (#193) a length or gear change keeps. */
@@ -823,7 +1034,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
    * "Set as default" changes the profile length, as Settings already does.
    */
   const pickLength = (minutes: number, scope: LengthScope) => {
-    if (!profile || current) return;
+    if (!profile) return;
     const fallback = profile.sessionMinutes ?? 35;
     if (scope === 'default') {
       patchProfile({ sessionMinutes: minutes });
@@ -861,7 +1072,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
   /** (#149) Today's equipment. Today only; the saved setup at the default length restores the original. */
   const pickSetup = (choice: EquipmentChoice) => {
-    if (!profile || current) return;
+    if (!profile) return;
     if ((choice === 'home' || choice === savedSetup(profile)) && constraints.minutes === (profile.sessionMinutes ?? 35) && !constraints.focus) {
       restoreOriginal();
       setNotice(done('Back to your gear.'));
@@ -922,12 +1133,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const startTalk = (talk: TalkState) => {
     if (!profile || !slot) return;
     const next = talkConstraints(talk, constraints.loads, slot.focus);
-    if (!startSession(next)) return;
     const choice: EquipmentChoice = next.equipment;
     const plain = !next.focus && (choice === 'home' || choice === savedSetup(profile)) && next.minutes === (profile.sessionMinutes ?? 35);
-    setState((currentState) => ({
-      ...currentState,
-      todayOverride: plain ? null : {
+    requestStart(next, {
+      override: plain ? null : {
         date: dayKey(new Date()),
         minutes: next.minutes,
         equipment: choice === 'home' || choice === 'hotel' ? ['Dumbbell'] : [],
@@ -937,11 +1146,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         ...(next.focus ? { focus: next.focus } : {}),
         ...(next.skip ? { skip: next.skip } : {}),
       },
-    }));
-    proposalRevisionRef.current += 1;
-    appliedProposalRef.current = null;
-    setPending(null);
-    setPendingNotices([]);
+    });
   };
 
   /** (#150) Train another day in the split: forward skips through the existing guarded skip, never a catch-up. */
@@ -950,10 +1155,17 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       setSheet({ kind: 'none' });
       return;
     }
-    // (#397) Switch opens only once the open session has ended (openChip), so this never meets one.
-    if (current) return;
+    // (#430) Switching with a workout open: one with sets or notes asks first (Save, Back or Discard); an
+    // empty one closes quietly, as a Start would replace it.
+    if (current && (sessionProgress(current).done > 0 || hasNotes(current))) {
+      setSheet({ kind: 'none' });
+      setStartIntent({ kind: 'switch', option });
+      return;
+    }
+    const emptyId = current?.id;
     // A planned day picked here replaces a described one (#193).
-    setState((currentState) => withoutCustomDay(skipForward(currentState, option.offset, new Date().toISOString())));
+    setState((currentState) => withoutCustomDay(skipForward(
+      emptyId !== undefined ? applyCancel(currentState, emptyId) : currentState, option.offset, new Date().toISOString())));
     setSheet({ kind: 'none' });
     setNotice(done(`${option.name} is up. Skipped ${option.skips.join(', ')}; a skip earns no progression.`));
   };
@@ -976,8 +1188,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
    */
   const buildPick = (picks: Picks) => {
     const next = switchPickFor(picks);
-    // (#397) As pickDay: Switch opens only once the open session has ended.
-    if (!profile || !next || current) return;
+    // (#430) Only today's override changes; an open workout stays as it is until a Start.
+    if (!profile || !next) return;
     const choice: EquipmentChoice = next.equipment;
     const plain = !next.focus && (choice === 'home' || choice === savedSetup(profile)) && next.minutes === (profile.sessionMinutes ?? 35);
     if (plain) {
@@ -1019,25 +1231,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     requestAnimationFrame(() => document.getElementById('settings-training')?.scrollIntoView({ block: 'start' }));
   };
 
-  const restoreOriginal = (message = 'Back to your plan. Logged sets kept.') => {
-    if (describedSession) return;
-    setState((currentState) => {
-      const original = adaptWorkout(
-        savedProgram,
-        currentState.profile ? defaultConstraints(currentState.profile) : DEFAULT_CONSTRAINTS,
-        currentState.profile?.exclusions ?? [],
-        currentState.profile?.goal,
-        // (#88) A running session is fitted with the pairs it keeps.
-        currentState.current ? keptPairsOf(currentState.current.exercises) : currentState.profile,
-      );
-      return {
-        ...currentState,
-        todayOverride: null,
-        current: currentState.current
-          ? restorePendingWorkout(currentState.current, original, currentState.profile, currentState.history)
-          : null,
-      };
-    });
+  /** (#430, ruling 4a) Today's override goes; an open workout is never rebuilt by it. */
+  const restoreOriginal = (message = 'Back to your plan.') => {
+    setState((currentState) => ({ ...currentState, todayOverride: null }));
     proposalRevisionRef.current += 1;
     appliedProposalRef.current = null;
     setPending(null);
@@ -1139,7 +1335,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         const target = keepsValue ? { [field]: origin[field] } : { [field]: 0 };
         const exerciseId = session.exercises[exerciseIndex].exerciseId;
         const previous = open?.previous ?? [];
-        setState((currentState) =>
+        act((currentState) =>
           currentState.current
             ? { ...currentState, current: revertBurst(currentState.current, exerciseIndex, exerciseId, setIndex, target, previous, stamp) }
             : currentState,
@@ -1163,7 +1359,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       const would = editSet(session, exerciseIndex, setIndex, patch, stamp, fixed);
       const carried = open?.previous ?? [];
       const previous = [...carried, ...would.previous.filter((p) => !carried.some((q) => q.index === p.index))];
-      setState((currentState) =>
+      act((currentState) =>
         currentState.current
           ? { ...currentState, current: revertBurst(currentState.current, exerciseIndex, exerciseId, setIndex, { weight: typedKg }, carried, stamp) }
           : currentState,
@@ -1183,7 +1379,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       setNotice(headsUp(text));
       return;
     }
-    setState((currentState) =>
+    act((currentState) =>
       currentState.current
         ? { ...currentState, current: editSet(currentState.current, exerciseIndex, setIndex, patch, stamp, fixed).session }
         : currentState,
@@ -1216,7 +1412,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const stamp = stampNow();
     const matches = (s: WorkoutRecord | null): s is WorkoutRecord =>
       s?.id === h.sessionId && s.exercises[h.exerciseIndex]?.exerciseId === h.exerciseId;
-    setState((currentState) =>
+    act((currentState) =>
       matches(currentState.current)
         ? { ...currentState, current: carryWeight(currentState.current, h.exerciseIndex, h.followers, h.kg, stamp).session }
         : currentState,
@@ -1249,7 +1445,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       if (notice?.text === held.text) setNotice(null);
     }
     if (!session || session.exercises[exerciseIndex]?.exerciseId !== exerciseId) return;
-    setState((currentState) =>
+    act((currentState) =>
       currentState.current?.exercises[exerciseIndex]?.exerciseId === exerciseId
         ? { ...currentState, current: setRemaining(currentState.current, exerciseIndex, value, stamp).session }
         : currentState,
@@ -1267,7 +1463,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     if (!before || before.exerciseId !== exerciseId) return;
     const after = cleanNote(text);
     if (after === before.note) return;
-    setState((currentState) => {
+    act((currentState) => {
       if (!currentState.current) return currentState;
       const next = setExerciseNote(currentState.current, exerciseIndex, exerciseId, text);
       return next === currentState.current ? currentState : { ...currentState, current: next };
@@ -1281,7 +1477,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const stamp = new Date().toISOString();
     // (#371) A − or + burst is undone whole: the tapped set (not yet logged) goes back to where it began too.
     const previous = undo.stepped && undo.origin ? [undo.origin, ...undo.previous] : undo.previous;
-    setState((currentState) =>
+    act((currentState) =>
       currentState.current?.id === undo.sessionId
         ? { ...currentState, current: undoCarry(currentState.current, undo.exerciseIndex, undo.exerciseId, previous, stamp, undo.edited) }
         : currentState,
@@ -1301,7 +1497,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       else setNotice(null);
     }
     setCarryUndo(null);
-    setState((currentState) => {
+    act((currentState) => {
       const session = currentState.current;
       const exercise = session?.exercises[exerciseIndex];
       // A tap rendered against another exercise, or on work the user set aside, records nothing.
@@ -1336,7 +1532,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setSheet({ kind: 'finish' });
   };
 
-  const saveFinish = (then?: ChipSheet) => {
+  /**
+   * `atLastActivity` (#430): Save from the row's `...` or Ask's Finish ends the workout at its last real
+   * action, so time away is left out of duration, recap and recovery. The logger's Finish ends it now.
+   */
+  const saveFinish = (atLastActivity = false) => {
     if (!current) return;
     const progress = sessionProgress(current);
     // Nothing logged: the same path as End workout (#397, lesson 9).
@@ -1344,19 +1544,15 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const early = progress.done < progress.total;
     const id = current.id;
     track(early ? 'workout-cut-short' : 'workout-finished', dayTypeOf(current.name));
+    const at = Date.now();
     setState((currentState) =>
-      applyFinish(currentState, id, { early, now: new Date().toISOString() }),
+      atLastActivity
+        ? saveOpenWorkout(currentState, id, at)
+        : applyFinish(currentState, id, { early, now: new Date(at).toISOString() }),
     );
-    // (#397) Saved from a Today chip: back to Today with the chip's sheet open, so the change applies.
-    if (then) {
-      setSheet({ kind: then });
-      setView('tabs');
-      setTab('today');
-    } else {
-      setRecapId(id);
-      setSheet({ kind: 'none' });
-      setView('recap');
-    }
+    setRecapId(id);
+    setSheet({ kind: 'none' });
+    setView('recap');
     // (#333) Part of the workout was dropped, so a partial save is a Heads-up, not a Done tick.
     if (early) {
       setNotice(headsUp(
@@ -1382,47 +1578,75 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     setNotice(done(`${slot.name} skipped${next ? `; ${next} is next` : ''}. Skips earn no progression.`));
   };
 
-  const discardSession = (then?: ChipSheet) => {
+  const discardSession = () => {
     if (!current) return;
-    setState((currentState) => applyCancel(currentState, current.id));
-    setSheet(then ? { kind: then } : { kind: 'none' });
-    setView('tabs');
-    setTab('today');
-    setNotice(done('Session discarded. Nothing was added to history.'));
-  };
-
-  /**
-   * (#397) End a session with no sets logged: nothing to save, and the same day stays next. Notes on it
-   * go with it, and the toast says so (#372). `quiet` (a Today chip) speaks only when notes were lost.
-   */
-  const endEmptySession = (quiet = false) => {
-    if (!current) return;
-    const hadNotes = current.exercises.some((exercise) => exercise.note);
+    const sets = sessionProgress(current).done;
     setState((currentState) => applyCancel(currentState, current.id));
     setSheet({ kind: 'none' });
     setView('tabs');
     setTab('today');
-    if (!quiet || hadNotes) setNotice(done(noSetsNotice(hadNotes)));
-  };
-
-  /** (#397) Today's End: with no sets logged it ends at once; with sets logged it asks through the Finish sheet. */
-  const endFromToday = () => {
-    if (!current) return;
-    if (sessionProgress(current).done === 0) endEmptySession();
-    else setSheet({ kind: 'finish' });
+    setNotice(done(sets > 0 ? `Workout discarded. ${setsLabel(sets)} deleted.` : 'Session discarded. Nothing was added to history.'));
   };
 
   /**
-   * (#397) A Today chip while a session is open is never dead: an empty session ends quietly and the chip
-   * opens; with sets logged the Finish sheet comes first and the chip opens after Save or Discard.
+   * (#397) End a session with no sets logged: nothing to save, and the same day stays next. Notes on it
+   * go with it, and the toast says so (#372).
    */
-  const openChip = (kind: ChipSheet) => {
-    if (current && sessionProgress(current).done > 0) {
-      setSheet({ kind: 'finish', then: kind });
+  const endEmptySession = () => {
+    if (!current) return;
+    const hadNotes = hasNotes(current);
+    setState((currentState) => applyCancel(currentState, current.id));
+    setSheet({ kind: 'none' });
+    setView('tabs');
+    setTab('today');
+    setNotice(done(noSetsNotice(hadNotes)));
+  };
+
+  /** (#430) The row's `...` Discard: with no sets it goes at once; with sets it asks with the count first. */
+  const requestDiscard = () => {
+    if (!current) return;
+    if (sessionProgress(current).done === 0) endEmptySession();
+    else setSheet({ kind: 'discardWorkout' });
+  };
+
+  /** (#430) Hide for now: this device only, this workout id only. The workout stays open and can expire. */
+  const hideResumeRow = () => {
+    if (!current) return;
+    writeHiddenResume(current.id);
+    setHiddenResume(current.id);
+    setSheet({ kind: 'none' });
+    setNotice(done('Hidden on this phone. Resume it from Plan.'));
+  };
+
+  /** (#430) The centre button: Ask, always. It never starts, resumes or ends a workout. */
+  const voiceAvailable = !voiceBlocked && voiceSupported();
+  const canTalk = Boolean(slot && talkBase);
+  const askToday = (kind: TalkAsk['kind'], text?: string) => {
+    setSheet({ kind: 'none' });
+    if (!canTalk) {
+      setNotice(problem('Set up your plan first, then ask about today.'));
       return;
     }
-    if (current) endEmptySession(true);
-    setSheet({ kind });
+    askSeqRef.current += 1;
+    setTalkAsk({ id: askSeqRef.current, kind, ...(text ? { text } : {}) });
+    setView('tabs');
+    setTab('today');
+  };
+  const onAsk = () => {
+    if (current) setSheet({ kind: 'ask' });
+    else if (voiceAvailable && canTalk) askToday('voice');
+    else setSheet({ kind: 'typedAsk' });
+  };
+
+  /** (#430) Ask's Log a set: back to the current set, the time away left out. */
+  const askLogSet = () => resumeWorkout();
+  /** (#430) Ask's Swap: the logger, with the swap sheet on the exercise up next. */
+  const askSwap = () => {
+    if (!current) return;
+    const index = pendingExerciseIndex(current);
+    if (index < 0) return;
+    resumeWorkout();
+    setSheet({ kind: 'swap', exerciseIndex: index });
   };
 
   const correctSet = (
@@ -1537,7 +1761,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const lead = state.current !== null && swapped !== undefined && leadSlotIds(state.current.exercises).includes(swapped);
     const candidate = swapCandidateFor(target, profile, state.history, state.current, lead, state.current?.exercises[exerciseIndex]?.setup);
     const noteDropped = swapDropsNote(state.current?.exercises[exerciseIndex]);
-    setState((currentState) =>
+    act((currentState) =>
       currentState.current
         ? { ...currentState, current: swapPendingExercise(currentState.current, exerciseIndex, candidate) }
         : currentState,
@@ -1548,7 +1772,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
   const skipCurrentExercise = (exerciseIndex: number) => {
     const removed = removeTodayNotice(current?.exercises[exerciseIndex]);
-    setState((currentState) => {
+    act((currentState) => {
       if (!currentState.current) return currentState;
       const skipped = skipExercise(currentState.current, exerciseIndex);
       return skipped === currentState.current ? currentState : { ...currentState, current: skipped };
@@ -1562,7 +1786,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const exercise = session?.exercises[exerciseIndex];
     if (!session || !exercise) return;
     const message = `${exercise.name} moved to later.`;
-    setState((currentState) => {
+    act((currentState) => {
       if (!currentState.current) return currentState;
       const skipped = skipExercise(currentState.current, exerciseIndex);
       return skipped === currentState.current ? currentState : { ...currentState, current: skipped };
@@ -1574,7 +1798,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const undoLater = () => {
     const undo = laterUndo;
     if (!undo) return;
-    setState((currentState) => {
+    act((currentState) => {
       if (currentState.current?.id !== undo.sessionId) return currentState;
       const restored = unskipExercise(currentState.current, undo.exerciseIndex);
       return restored === currentState.current ? currentState : { ...currentState, current: restored };
@@ -1585,7 +1809,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
   const returnToExercise = (exerciseIndex: number) => {
     const name = current?.exercises[exerciseIndex]?.name ?? 'That exercise';
-    setState((currentState) => {
+    act((currentState) => {
       if (!currentState.current) return currentState;
       const restored = unskipExercise(currentState.current, exerciseIndex);
       return restored === currentState.current
@@ -1680,6 +1904,15 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   }
 
   const recapLines = recap ? progressionLines(recap, profile, state.history, unit) : [];
+  // (#430) The slight resume row (unless hidden on this device), and the one-time expiry note above it.
+  const openDone = current ? sessionProgress(current).done : 0;
+  const resumeRow = current && hiddenResume !== current.id ? (
+    <ResumeRow workout={current} now={now} onResume={() => resumeWorkout()} onMore={() => setSheet({ kind: 'workoutMenu' })} />
+  ) : null;
+  const expiryLine = expiryNote ? (
+    <ExpiryNote kind={expiryNote.kind} sets={expiryNote.sets} onDismiss={() => setExpiryNote(null)} />
+  ) : null;
+  const openRow = resumeRow || expiryLine ? <>{expiryLine}{resumeRow}</> : undefined;
   const activeScreen =
     view === 'train' && current ? (
       <TrainScreen
@@ -1705,14 +1938,14 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         onLogSet={logOneSet}
         onToggleRestPause={() => {
           const stamp = new Date().toISOString();
-          setState((currentState) =>
+          act((currentState) =>
             currentState.current
               ? { ...currentState, current: toggleRestPause(currentState.current, stamp) }
               : currentState,
           );
         }}
         onExtendRest={() =>
-          setState((currentState) =>
+          act((currentState) =>
             currentState.current
               ? { ...currentState, current: extendRest(currentState.current, 30) }
               : currentState,
@@ -1796,20 +2029,21 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             profile={profile}
             program={program}
             slotLabel={slotLabel}
-            onSkipSlot={skipTodaySlot}
+            // (#430) The open workout is still today's: it is finished or discarded, not skipped.
+            onSkipSlot={current ? undefined : skipTodaySlot}
             adapted={liveProgram}
             equipment={constraints.equipment}
             adjusted={Boolean(override)}
             history={state.history}
-            current={current}
             now={today}
+            workoutOpen={Boolean(current)}
+            logged={openDone}
+            openRow={openRow}
             onPreview={() => setSheet({ kind: 'preview' })}
-            onResume={openWorkout}
-            onEnd={current ? endFromToday : undefined}
             onAdjust={() => setSheet({ kind: 'adjust' })}
-            onOpenLength={() => openChip('length')}
-            onOpenGym={() => openChip('gym')}
-            onOpenSwitch={slot ? () => { track('switch'); openChip('switch'); } : undefined}
+            onOpenLength={() => setSheet({ kind: 'length' })}
+            onOpenGym={() => setSheet({ kind: 'gym' })}
+            onOpenSwitch={slot ? () => { track('switch'); setSheet({ kind: 'switch' }); } : undefined}
             alternativeDay={alternativeDay}
             composer={slot && talkBase ? (
               <TodayTalk
@@ -1826,10 +2060,13 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
                 onActive={setComposing}
                 openAsk={planTodayAsk}
                 shade={bodyShade(state.history, today)}
+                ask={talkAsk}
+                onAskHandled={(id) => setTalkAsk((pendingAsk) => (pendingAsk?.id === id ? null : pendingAsk))}
+                onMicBlocked={() => setVoiceBlocked(true)}
               />
             ) : undefined}
             composing={composing}
-            canRestore={!describedSession}
+            canRestore
             described={described}
             onWhy={() =>
               setSheet({ kind: 'why', exerciseId: todayExercises[0]?.exerciseId ?? '', exerciseIndex: 0 })
@@ -1878,10 +2115,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onOpenLibrary={() => setView('library')}
             described={described}
             todayBar={todayOnly(state, today)}
-            onUndo={describedSession ? undefined : () => restoreOriginal(undoToast(profile))}
+            onUndo={() => restoreOriginal(undoToast(profile))}
             current={current}
             now={today}
-            onResume={openWorkout}
+            onResume={() => resumeWorkout()}
             skipped={skippedToday(state.slotSkips, cursorFor(state).revision, today)}
             explainer={planTipShown}
             onDismissExplainer={() => setPlanTipShown(false)}
@@ -1896,13 +2133,11 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             onCorrect={correctSet}
             onDelete={(workoutId) => setSheet({ kind: 'delete-workout', workoutId })}
             onFeedback={saveFeedback}
-            running={Boolean(current)}
-            // (#406) An open workout from an earlier day: End or Finish leads, Resume is the quiet link.
-            unfinished={Boolean(unfinishedSince(current, today))}
-            loggedSets={current ? sessionProgress(current).done : 0}
-            onEnd={current ? endFromToday : undefined}
-            // (#294) The empty state's one action: today's preview, as Today's Preview button, or resume.
-            onStartToday={current ? openWorkout : () => setSheet({ kind: 'preview' })}
+            // (#430) The same slight row as Today; the empty state loses its Resume and Finish buttons.
+            openRow={openRow}
+            openWorkout={current ? { name: current.name, sets: openDone } : null}
+            // (#294) The empty state's one action: today's preview, as Today's Preview button.
+            onStartToday={() => setSheet({ kind: 'preview' })}
             startDisabled={liveProgram.exercises.length === 0}
           />
         )}
@@ -1918,22 +2153,13 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           />
         )}
         {/* (#256) While the planner is open, its own action bar replaces the tab bar, as a sheet would. */}
-        {!(tab === 'today' && composing && !current) && <TabBar
+        {!(tab === 'today' && composing) && <TabBar
           active={tab}
           onChange={(next) => {
             setTab(next);
             setView('tabs');
           }}
-          workoutAction={{
-            ...tabBarAction(current, adapted),
-            onActivate: openWorkout,
-            progress: current
-              ? (() => {
-                  const sets = current.exercises.flatMap((exercise) => exercise.performed);
-                  return sets.length ? sets.filter((set) => set.done).length / sets.length : 0;
-                })()
-              : undefined,
-          }}
+          ask={{ onAsk, voiceBlocked: !voiceAvailable }}
         />}
       </>
     );
@@ -2149,7 +2375,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
       {sheet.kind === 'startOver' && (
         <StartOverSheet
           sessionOpen={Boolean(state.current)}
-          since={unfinishedSince(state.current, today)}
           lastBackupAt={state.lastBackupAt}
           onBackup={backupNow}
           onErase={startOver}
@@ -2159,7 +2384,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
       {sheet.kind === 'actions' &&
         (() => {
-          const exercise = todayExercises[sheet.exerciseIndex];
+          // (#430) From the logger, the open workout's exercises; from Today, the plan's (ruling 4a).
+          const inSession = view === 'train' && current !== null;
+          const list = inSession ? current.exercises : todayExercises;
+          const exercise = list[sheet.exerciseIndex];
           // A shifted segment or a discarded session closes the menu rather than
           // letting an action land on whichever exercise now sits at that index.
           if (!exercise || exercise.exerciseId !== sheet.exerciseId || !profile) return null;
@@ -2170,7 +2398,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               exerciseId={exercise.exerciseId}
               exerciseName={exercise.name}
               exerciseIndex={sheet.exerciseIndex}
-              exerciseCount={todayExercises.length}
+              exerciseCount={list.length}
               initialMode={sheet.mode}
               planned={exercise.planned}
               pending={pending}
@@ -2178,7 +2406,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               history={state.history}
               unit={unit}
               profile={profile}
-              inSession={Boolean(current)}
+              inSession={inSession}
               skipped={Boolean(exercise.skipped)}
               onReplace={() => { track('replace'); setSheet({ kind: 'swap', exerciseIndex: sheet.exerciseIndex }); }}
               onSaveProfile={(patch) => {
@@ -2201,7 +2429,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               onSetAll={(value) => setAllRemaining(sheet.exerciseIndex, sheet.exerciseId, value)}
               note={exercise.note}
               onSaveNote={(text) => saveNote(sheet.exerciseIndex, sheet.exerciseId, text)}
-              onLater={current && canMoveLater(current, sheet.exerciseIndex) ? () => {
+              onLater={inSession && canMoveLater(current, sheet.exerciseIndex) ? () => {
                 const index = sheet.exerciseIndex;
                 closeSheet();
                 laterExercise(index);
@@ -2235,12 +2463,12 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           minutes={todayDay.minutes}
           approx={todayDay.approx}
           exercises={todayExercises}
-          pairs={current ? storedPairs(current.exercises) : sessionPairs(todayExercises, profile, adapted.minutes)}
+          pairs={sessionPairs(todayExercises, profile, adapted.minutes)}
           unit={unit}
           history={state.history}
           loads={profile?.loads}
-          // The tab bar's start: the one validated path (startSession).
-          onStart={sheet.kind === 'preview' && !current ? () => { closeSheet(); startWorkout(); } : undefined}
+          // Preview > Start, the one way to start (#430): with a workout open it resumes the same day or asks.
+          onStart={sheet.kind === 'preview' ? () => { closeSheet(); startWorkout(); } : undefined}
           onClose={closeSheet}
         />
       )}
@@ -2249,10 +2477,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
         <FinishSheet
           done={sessionProgress(current).done}
           total={sessionProgress(current).total}
-          onSave={() => saveFinish(sheet.then)}
+          onSave={() => saveFinish()}
           onContinue={closeSheet}
           // (#397) With no sets logged this is End workout: the same day stays next.
-          onDiscard={sessionProgress(current).done === 0 ? () => endEmptySession() : () => discardSession(sheet.then)}
+          onDiscard={sessionProgress(current).done === 0 ? () => endEmptySession() : () => discardSession()}
           onClose={closeSheet}
           // A described day (#193) has no slot to skip; ending it leaves the planned day next.
           nextName={current.slotSeq === undefined ? undefined : nextSlotName}
@@ -2287,13 +2515,55 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           );
         })()}
 
-      {replacePrompt && current && (
-        <DiscardSessionSheet
-          currentName={current.name}
-          since={unfinishedSince(current, today)}
-          nextName={adaptFor(replacePrompt).name}
-          onDiscard={discardAndBegin}
-          onKeep={() => setReplacePrompt(null)}
+      {sheet.kind === 'workoutMenu' && current && (
+        <WorkoutMenuSheet
+          workout={current}
+          now={now}
+          onSave={() => saveFinish(true)}
+          onHide={hideResumeRow}
+          onDiscard={requestDiscard}
+          onClose={closeSheet}
+        />
+      )}
+
+      {sheet.kind === 'discardWorkout' && current && (
+        <DiscardWorkoutConfirm name={current.name} sets={openDone} onConfirm={discardSession} onCancel={closeSheet} />
+      )}
+
+      {sheet.kind === 'ask' && current && (
+        <WorkoutAskSheet
+          workout={current}
+          voice={voiceAvailable && canTalk}
+          onLogSet={askLogSet}
+          onSwap={pendingExerciseIndex(current) >= 0 ? askSwap : undefined}
+          onBack={() => {
+            closeSheet();
+            setView('train');
+          }}
+          onFinish={() => setSheet({ kind: 'workoutMenu' })}
+          onVoice={() => askToday('voice')}
+          onText={(text) => askToday('text', text)}
+          onClose={closeSheet}
+        />
+      )}
+
+      {sheet.kind === 'typedAsk' && (
+        <TypedAskSheet
+          onText={(text) => askToday('text', text)}
+          onPreview={() => setSheet({ kind: 'preview' })}
+          onClose={closeSheet}
+        />
+      )}
+
+      {startIntent && current && (
+        <StartConflictSheet
+          openName={current.name}
+          sets={openDone}
+          nextName={startIntent.kind === 'switch' ? startIntent.option.name : startIntent.nextName}
+          action={startIntent.kind}
+          onSaveAndStart={saveAndStart}
+          onBack={() => setStartIntent(null)}
+          onDiscardAndStart={discardAndStart}
         />
       )}
     </PhoneFrame>
