@@ -2,21 +2,28 @@
 // "Unfinished" card and the old Finish-sheet chips are gone (#430); an open workout is one quiet row on Today.
 // The page clock is pinned (lesson 35), so idle times are exact. Checks at 390x844 and 360x780:
 // A. Idle 15 min: the row reads "Push paused · 1 of N sets"; the dock still says Preview workout, the centre
-//    button says Ask, nothing says Resume workout or End. Resume opens the logger and the time away goes
-//    into pausedMs.
+//    button says Ask, nothing says Resume workout or End. Opening and closing the workout without acting
+//    writes nothing (still paused); after Resume, the first logged set books the time away into pausedMs.
 // B. Expiry with sets: idle 7 h, a reload saves the workout to history with its sets byte-identical, the end
 //    time at the last set, the plan not moved (Push still next), and a one-time note.
 // C. Expiry with no sets: the workout just closes; no note, no history.
 // D. The row's `...`: Save N sets and finish saves and moves the plan once; Discard asks with the count,
 //    Cancel first, and only then deletes; Hide tucks the row away (still hidden after a reload) and Plan's
 //    Resume brings it back.
-// E. Ask with a workout open: the sheet offers Back to my workout and never writes.
+// D2. The logger's Finish sheet: "Discard this session" reaches the same named confirm (Cancel first).
+// E. Ask with a workout open, from Today's centre button and from the logger's header: the sheet offers
+//    Back to my workout and never writes.
 // F. Switch to another day with sets logged: the start-conflict sheet. Back changes nothing; Save N sets
 //    and switch keeps every set and moves the plan to the picked day.
 // G. Midnight: a set at 23:50 is still in progress at 23:58; idle past midnight (00:20) saves it. (The
 //    23:58 -> 00:03 case is in tests/askFirst430.test.ts: logging a set starts a rest, and idle time counts
 //    from the rest's end.)
+// H. (ruling 4a) A described day open with a set: Preview -> Start of the same day resumes it, no conflict.
+// I. Restoring a backup whose open workout differs: this phone's stays open, the backup's sets are saved to
+//    Progress, and the restore notice says so.
 // Screenshots only when E2E_SHOTS is set.
+import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -146,11 +153,22 @@ try {
       check(box && box.height >= 44 && box.width >= 44, `${where} A: a row button is under 44px (${JSON.stringify(box)})`);
     }
     await shot(page, 'row-paused', where);
+    // Opening and closing it without acting writes nothing and leaves it paused (spec 9).
+    const untouched = JSON.stringify(await stored(page));
     await row(page).locator('.rrow__go').click();
     await page.waitForSelector('.lg-ex');
+    check(JSON.stringify(await stored(page)) === untouched, `${where} A: opening the workout wrote to storage`);
+    await page.getByRole('button', { name: 'Minimize workout' }).click();
+    await page.waitForSelector('.t7-hero');
+    check(await rowText(page) === `Push paused · 1 of ${total} sets`, `${where} A: after open and close the row reads "${await rowText(page)}"`);
+    check(JSON.stringify(await stored(page)) === untouched, `${where} A: open and close wrote to storage`);
+    // The first action after Resume books the time away into pausedMs.
+    await row(page).locator('.rrow__go').click();
+    await page.waitForSelector('.lg-ex');
+    await logSets(page, 1);
     state = await stored(page);
     check(state.current.pausedMs > 0 && state.current.pausedMs <= 15 * MIN, `${where} A: Resume put ${state.current.pausedMs} ms into pausedMs, not the time away`);
-    check(doneSets(state.current).length === 1, `${where} A: Resume changed the logged sets`);
+    check(doneSets(state.current).length === 2, `${where} A: Resume changed the logged sets`);
     await page.close();
 
     // B. Expiry with sets: saved byte-identical, ended at the last set, the plan unmoved, one note.
@@ -232,6 +250,25 @@ try {
     check(state.current === null && state.history.length === 1, `${where} D: Discard left the workout open or touched history (${state.history.length})`);
     check(await offered(page) === 'Pull', `${where} D: Discard moved the plan ("${await heroTitle(page)}")`);
 
+    // D2. The logger's Finish sheet: "Discard this session" reaches the same named confirm; Cancel keeps it all.
+    await start(page);
+    await logSets(page, 1);
+    const beforeFinish = JSON.stringify(await stored(page));
+    await page.locator('.lg-header .finish-btn').click();
+    await page.getByRole('button', { name: 'Discard this session' }).click();
+    check(await sheetTitle(page) === 'Discard Pull?', `${where} D2: Finish's Discard opened "${await sheetTitle(page)}", not the named confirm`);
+    check(await page.evaluate(() => document.activeElement?.textContent?.trim()) === 'Cancel', `${where} D2: Cancel does not take first focus`);
+    check(JSON.stringify(await stored(page)) === beforeFinish, `${where} D2: opening the confirm changed stored data`);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    state = await stored(page);
+    check(state.current !== null && doneSets(state.current).length === 1, `${where} D2: Cancel lost the workout or its set`);
+    await page.locator('.lg-header .finish-btn').click();
+    await page.getByRole('button', { name: 'Discard this session' }).click();
+    await page.getByRole('button', { name: 'Discard 1 set' }).click();
+    await page.waitForSelector('.t7-hero');
+    state = await stored(page);
+    check(state.current === null && state.history.length === 1, `${where} D2: the confirmed Discard left ${state.current ? 'the workout open' : 'history changed'}`);
+
     // E. Ask with a workout open: Back to my workout, nothing written.
     await start(page);
     await logSets(page, 1);
@@ -245,6 +282,19 @@ try {
     await page.getByRole('button', { name: /Back to my workout/ }).click();
     await page.waitForSelector('.lg-ex');
     check(JSON.stringify(await stored(page)) === kept, `${where} E: Ask changed stored data`);
+    // In the logger (no tab bar): the header's Ask opens the same mid-workout sheet; Back writes nothing.
+    const headerAsk = page.locator('.lg-header').getByRole('button', { name: 'Ask', exact: true });
+    for (const [label, target] of [['Ask', headerAsk], ['Finish', page.locator('.lg-header .finish-btn')], ['Minimize', page.getByRole('button', { name: 'Minimize workout' })]]) {
+      const box = await target.boundingBox();
+      check(box && box.width >= 44 && box.height >= 44 && box.x >= 0 && box.x + box.width <= width, `${where} E: the logger's ${label} is not a whole 44px target (${JSON.stringify(box)})`);
+    }
+    await headerAsk.click();
+    await page.getByRole('button', { name: /Back to my workout/ }).waitFor();
+    check(await page.getByRole('button', { name: /Log a set/ }).count() === 1, `${where} E: the logger's Ask has no Log a set`);
+    await shot(page, 'ask-logger', where);
+    await page.getByRole('button', { name: /Back to my workout/ }).click();
+    await page.waitForSelector('.lg-ex');
+    check(JSON.stringify(await stored(page)) === kept, `${where} E: the logger's Ask changed stored data`);
 
     // F. Switch to Push with a Pull set logged: the conflict sheet; Back keeps everything; Save keeps the set.
     await toToday(page);
@@ -267,6 +317,60 @@ try {
     check(state.current === null && state.history.length === 2 && state.history.every((workout) => doneSets(workout).length === 1),
       `${where} F: after Save, ${state.history.length} record(s), current ${state.current ? 'open' : 'closed'}`);
     check(await offered(page) === 'Push', `${where} F: after Save and switch, Today offers "${await heroTitle(page)}"`);
+    await page.close();
+
+    // H. (ruling 4a) A described day open with a set: Preview -> Start of the same day resumes it, no conflict.
+    page = await fresh(browser, width, height, noon);
+    await page.getByRole('button', { name: 'Switch workout' }).click();
+    await page.locator('.sheet--switch').waitFor();
+    await page.locator('.sw-chip', { hasText: /^Chest/ }).first().click();
+    await page.locator('.sw-build').click();
+    await page.waitForSelector('.t7-hero');
+    const described = await heroTitle(page);
+    await start(page);
+    await logSets(page, 1);
+    await toToday(page);
+    const describedOpen = await stored(page);
+    check(describedOpen.current?.slotSeq === undefined && doneSets(describedOpen.current).length === 1,
+      `${where} H: the described day did not open unlinked with one set`);
+    await page.getByRole('button', { name: 'Preview workout' }).first().click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Start workout' }).click();
+    await page.waitForSelector('.lg-ex');
+    check(await page.getByRole('button', { name: /^Back to / }).count() === 0, `${where} H: starting the open described day showed the conflict sheet`);
+    state = await stored(page);
+    check(state.current?.id === describedOpen.current.id && doneSets(state.current).length === 1 && state.history.length === 0,
+      `${where} H: "${described}" started again did not resume the open workout`);
+    await page.close();
+
+    // I. A backup with a different open workout: its sets go to Progress and the notice says so.
+    page = await fresh(browser, width, height, noon);
+    await start(page);
+    await logSets(page, 2);
+    await toToday(page);
+    await page.getByRole('button', { name: 'Open profile and settings' }).click();
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Back up now' }).click()]);
+    const backup = join(tmpdir(), `end-workout-430-${where}.json`);
+    await download.saveAs(backup);
+    check(JSON.parse(readFileSync(backup, 'utf8'))?.state?.current !== null, `${where} I: the backup carries no open workout`);
+    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).first().click();
+    await row(page).locator('.rrow__more').click();
+    await page.getByRole('button', { name: 'Discard workout' }).click();
+    await page.getByRole('button', { name: 'Discard 2 sets' }).click();
+    await start(page);
+    await logSets(page, 1);
+    await toToday(page);
+    const localId = (await stored(page)).current.id;
+    await page.getByRole('button', { name: 'Open profile and settings' }).click();
+    await page.locator('.settings-row input[type=file]').setInputFiles(backup);
+    await page.getByRole('dialog').getByRole('button', { name: 'Close' }).first().click();
+    const restored = page.getByText(/^Restored \d+ workouts?/).first();
+    await restored.waitFor({ timeout: 5000 }).catch(() => {});
+    const restoreNote = squash(await restored.textContent().catch(() => ''));
+    check(/Saved 2 sets from the backup's open workout to Progress; your open workout stays open\./.test(restoreNote),
+      `${where} I: the restore notice reads "${restoreNote}"`);
+    state = await stored(page);
+    check(state.current?.id === localId && doneSets(state.current).length === 1, `${where} I: this phone's open workout did not stay`);
+    check(state.history.length === 1 && doneSets(state.history[0]).length === 2, `${where} I: the backup's 2 sets are not in history (${state.history.length})`);
     await page.close();
 
     // G. Midnight: a set at 23:50, still in progress at 23:58; idle past midnight, saved at 00:20.

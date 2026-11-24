@@ -290,7 +290,3 @@ if (failures.length) {
   process.exit(1);
 }
 console.log('switch-picks: ok');
-
-// (#397) Ending a workout runs here, after Switch's own checks, so `npm run e2e` covers it without a
-// package.json change (off-limits for #397). Product can move it into the e2e list.
-await import('./end-workout.mjs');
