@@ -181,3 +181,71 @@ div.ex-steps {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* (#432) Add exercise sheet: a row with an inline Add. */
+.ex-row--add {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.ex-add {
+  min-height: 44px;
+  min-width: 64px;
+  font-weight: 600;
+}
+
+.add-count {
+  margin-top: 10px;
+}
+
+/* (#432) An added library row in the logger: muscle, an equipment chip, then the tag. */
+.lg-lib-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.lg-lib-eq {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  font-size: 12px;
+}
+
+.lg-fields--one {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lg-lib-tag {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.lg-help {
+  margin: 8px 2px 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--on-surface-variant);
+}
+
+.lg-libnote {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.lg-libnote input {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-container-highest);
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  font-size: 15px;
+}

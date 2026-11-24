@@ -167,7 +167,9 @@ import
 import
  LibraryScreen from './screens/LibraryScreen';
 import ExercisesScreen from './screens/ExercisesScreen';
-import { prefetchLibraryAtIdle } from './data/library';
+import { isLibraryId, libraryExerciseById, loadLibraryIndex, prefetchLibraryAtIdle } from './data/library';
+import { addLibraryExercise } from './lib/addFromLibrary';
+import AddExerciseSheet from './components/AddExerciseSheet';
 import
  AdaptScreen from './screens/AdaptScreen';
 import DurationSheet from './components/DurationSheet';
@@ -241,6 +243,8 @@ type SheetState =
   | { kind: 'ask' }
   | { kind: 'typedAsk' }
   | { kind: 'swap'; exerciseIndex: number }
+  // (#432) Ask's Add exercise: a library row joins the open workout only.
+  | { kind: 'add' }
   | { kind: 'confirm'; change: ProfileChange }
   | { kind: 'delete-workout'; workoutId: string };
 
@@ -430,7 +434,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
   // (#431) Saved data naming a library exercise loads the library's index at idle, after the first
   // render, so the Exercises screen opens warm. History never waits on it: records keep their own names.
-  useEffect(() => prefetchLibraryAtIdle(initial.state), [initial.state]);
+  // (#432) Loaded, an added row logs as its family (seconds held, no weight): render again.
+  const [, setLibraryTick] = useState(0);
+  const libraryLoadedTick = () => setLibraryTick((n) => n + 1);
+  useEffect(() => prefetchLibraryAtIdle(initial.state, libraryLoadedTick), [initial.state]);
 
   useEffect(() => {
     // Never write back what was just loaded. An identity check, not a one-shot flag: StrictMode
@@ -691,6 +698,16 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const current = state.current;
   /** (#88) The running session's supersets: the pairs stored when it started, never re-derived. */
   const currentPairs = useMemo(() => (current ? storedPairs(current.exercises) : []), [current]);
+  // (#432) The logger with an added library row needs the index now, not at idle, to log it as its family.
+  const loggingLibrary = view === 'train' && Boolean(current?.exercises.some((item) => isLibraryId(item.exerciseId)));
+  useEffect(() => {
+    if (!loggingLibrary) return;
+    let live = true;
+    void loadLibraryIndex().then((ok) => ok && live && libraryLoadedTick());
+    return () => {
+      live = false;
+    };
+  }, [loggingLibrary]);
   // (#327) A held jump's Heads-up lasts while its exercise is the one being logged and its card is up.
   const heldLive = held !== null && view === 'train' && current?.id === held.sessionId && notice?.text === held.text
     && pairedPendingIndex(current, currentPairs) === held.exerciseIndex && current.exercises[held.exerciseIndex]?.exerciseId === held.exerciseId;
@@ -1654,6 +1671,34 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
 
   /** (#430) Ask's Log a set: back to the current set, the time away left out. */
   const askLogSet = () => resumeWorkout();
+  /** (#432) Ask's Add exercise: the logger behind, the Add sheet over it. */
+  const askAdd = () => {
+    if (!current) return;
+    resumeWorkout();
+    setSheet({ kind: 'add' });
+  };
+
+  /** (#432) A library row after the open workout's last exercise; the plan and the current set stay. */
+  const addFromLibrary = (id: string) => {
+    const row = libraryExerciseById(id);
+    const open = state.current;
+    if (!row || !open || open.status !== 'active') return;
+    act((currentState) =>
+      currentState.current ? { ...currentState, current: addLibraryExercise(currentState.current, row) } : currentState,
+    );
+    closeSheet();
+    setNotice(done(`${row.name} added to the end of ${open.name}.`));
+  };
+
+  /** (#432) An added row's optional note, typed in the logger: saved as it is typed, no toast. */
+  const writeNote = (exerciseIndex: number, exerciseId: string, text: string) => {
+    act((currentState) => {
+      if (!currentState.current) return currentState;
+      const next = setExerciseNote(currentState.current, exerciseIndex, exerciseId, text);
+      return next === currentState.current ? currentState : { ...currentState, current: next };
+    });
+  };
+
   /** (#430) Ask's Swap: the logger, with the swap sheet on the exercise up next. */
   const askSwap = () => {
     if (!current) return;
@@ -1971,6 +2016,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           )
         }
         onReplace={(exerciseIndex) => { track('replace'); setSheet({ kind: 'swap', exerciseIndex }); }}
+        onNote={writeNote}
         onLater={laterExercise}
         onOpenActions={(exerciseIndex, mode) =>
           setSheet({
@@ -2430,7 +2476,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
               profile={profile}
               inSession={inSession}
               skipped={Boolean(exercise.skipped)}
-              onReplace={() => { track('replace'); setSheet({ kind: 'swap', exerciseIndex: sheet.exerciseIndex }); }}
+              onReplace={isLibraryId(exercise.exerciseId) ? undefined : () => { track('replace'); setSheet({ kind: 'swap', exerciseIndex: sheet.exerciseIndex }); }}
               onSaveProfile={(patch) => {
                 // Closing first: a saved preference can reorder today's preview under the sheet.
                 closeSheet();
@@ -2558,7 +2604,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           workout={current}
           voice={voiceAvailable && canTalk}
           onLogSet={askLogSet}
-          onSwap={pendingExerciseIndex(current) >= 0 ? askSwap : undefined}
+          onSwap={pendingExerciseIndex(current) >= 0 && !isLibraryId(current.exercises[pendingExerciseIndex(current)].exerciseId) ? askSwap : undefined}
+          onAdd={current.status === 'active' ? askAdd : undefined}
           onBack={() => {
             closeSheet();
             setView('train');
@@ -2568,6 +2615,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           onText={(text) => askToday('text', text)}
           onClose={closeSheet}
         />
+      )}
+
+      {sheet.kind === 'add' && current && (
+        <AddExerciseSheet workoutName={current.name} onAdd={addFromLibrary} onClose={closeSheet} />
       )}
 
       {sheet.kind === 'typedAsk' && (

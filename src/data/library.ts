@@ -1,6 +1,6 @@
 import { EXERCISES } from './exercises.ts';
 import { LIBRARY_FILES } from './libraryFiles.ts';
-import type { AppState } from '../types.ts';
+import type { AppState, Equipment } from '../types.ts';
 
 /**
  * (#431) The exercise library: free-exercise-db's text and tags (scripts/import-library.mjs), read from
@@ -58,6 +58,30 @@ export const isLibraryId = (id: string): boolean => id.startsWith('lib-');
 
 /** A library row by id, once the index has loaded. Built-in ids are `exerciseById`'s. */
 export const libraryExerciseById = (id: string): LibraryExercise | undefined => LIBRARY.get(id);
+
+/**
+ * (#432) How an added library row logs: its `logType`, except that every Stretching row is `timed`
+ * (seconds held, stored in the set's reps field like a built-in hold). Undefined for a built-in id, and
+ * for a library id while the index is not loaded: readers then fall back to their built-in rules.
+ */
+export type LibraryFamily = LibraryLogType | 'timed';
+
+export function libraryFamily(id: string): LibraryFamily | undefined {
+  const row = isLibraryId(id) ? LIBRARY.get(id) : undefined;
+  if (!row) return undefined;
+  return row.group === 'Stretching' ? 'timed' : row.logType;
+}
+
+/** (#432) The logger's rack and weight steps for a loaded library row: its equipment as the app's kit. */
+const LOAD_EQUIPMENT: Record<string, Equipment> = {
+  Barbell: 'Barbell', 'EZ bar': 'Barbell', Dumbbell: 'Dumbbell', Kettlebell: 'Kettlebell', 'Medicine ball': 'Kettlebell',
+  Machine: 'Machine', Cable: 'Cable',
+};
+
+export function libraryLoadEquipment(id: string): Equipment | undefined {
+  const row = isLibraryId(id) ? LIBRARY.get(id) : undefined;
+  return row ? LOAD_EQUIPMENT[row.equipment] : undefined;
+}
 
 const GROUPS: readonly string[] = LIBRARY_GROUPS;
 const LOG_TYPES: readonly string[] = ['each', 'total', 'none', 'free'];
@@ -146,11 +170,12 @@ export function referencesLibrary(state: Pick<AppState, 'history' | 'current'>):
  * the phone has not asked to save data. History never waits on it: a record keeps its stored name.
  * Returns a cancel.
  */
-export function prefetchLibraryAtIdle(state: Pick<AppState, 'history' | 'current'>): () => void {
+export function prefetchLibraryAtIdle(state: Pick<AppState, 'history' | 'current'>, onLoaded?: () => void): () => void {
   if (typeof window === 'undefined' || !referencesLibrary(state)) return () => {};
   const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
   if (connection?.saveData) return () => {};
-  const run = () => void loadLibraryIndex();
+  // (#432) Loaded, a seconds-held row reads "30s" rather than "30 reps": the caller renders again.
+  const run = () => void loadLibraryIndex().then((ok) => ok && onLoaded?.());
   if (typeof window.requestIdleCallback === 'function') {
     const handle = window.requestIdleCallback(run, { timeout: 5000 });
     return () => window.cancelIdleCallback(handle);

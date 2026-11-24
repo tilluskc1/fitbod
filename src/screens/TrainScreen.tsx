@@ -3,6 +3,10 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useWakeLock } from '../lib/wakeLock';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
+import { isLibraryId, libraryExerciseById, libraryFamily, libraryLoadEquipment } from '../data/library';
+import { noWeightLine } from '../lib/addFromLibrary';
+import { MAX_NOTE } from '../lib/notes';
+import './exercises.css';
 import { elapsedMs, idleState, restRemaining, sessionProgress } from '../lib/session';
 import { lastNote } from '../lib/notes';
 import { canMoveLater, pairRound, pairedPendingIndex, partnerOf, restAfterLog } from '../lib/supersets';
@@ -73,6 +77,8 @@ interface Props {
   /** (#369) One tap: this exercise moves to Skipped today, the same as Remove today's remaining work. */
   onLater?: (exerciseIndex: number) => void;
   onReturn: (exerciseIndex: number) => void;
+  /** (#432) An added library row's optional note, saved as it is typed (this workout's note on it). */
+  onNote?: (exerciseIndex: number, exerciseId: string, text: string) => void;
 }
 
 function clock(ms: number): string {
@@ -196,6 +202,7 @@ export default function TrainScreen({
   onOpenActions,
   onReplace,
   onLater,
+  onNote,
   onReturn,
 }: Props) {
   useWakeLock();
@@ -312,6 +319,8 @@ export default function TrainScreen({
    * on a log, and whenever the exercise on screen, its key or the set itself is no longer there.
    */
   const [focus, setFocus] = useState<{ key: string; setIndex: number } | null>(null);
+  // (#432) An added row's note while it is typed: the stored note is trimmed, the field keeps what was typed.
+  const [noteDraft, setNoteDraft] = useState<{ key: string; text: string } | null>(null);
   /**
    * (#380 review 1) While rest runs the dock sits over the bottom of the screen: its height is published as
    * --lg-dock, so the card's fields and Log button scroll clear of it (the keyboard, when up, covers it).
@@ -441,7 +450,13 @@ export default function TrainScreen({
 
   const activeSet = exercise.performed.findIndex((set) => !set.done);
   const mode = loadModeOf(exercise.exerciseId);
-  const equipment = exerciseById(exercise.exerciseId)?.equipment ?? (mode === 'none' ? 'Bodyweight' : 'Dumbbell');
+  // (#432) An added library row: no demo, its own meta line, and reps-only or seconds-held rows weigh nothing.
+  const lib = isLibraryId(exercise.exerciseId);
+  const libRow = lib ? libraryExerciseById(exercise.exerciseId) : undefined;
+  const family = libraryFamily(exercise.exerciseId);
+  const noWeight = lib && mode === 'none';
+  const equipment = exerciseById(exercise.exerciseId)?.equipment ?? libraryLoadEquipment(exercise.exerciseId)
+    ?? (mode === 'none' ? 'Bodyweight' : 'Dumbbell');
   const weightLabel =
     mode === 'total'
       ? `${unitLabel(unit)} total`
@@ -492,7 +507,7 @@ export default function TrainScreen({
     : null;
   const coach = raising
     ? `Ready to go heavier. Pick your next ${equipment.toLowerCase()} up from ${calibrationInputValue(floor, unit)} ${weightLabel}, for ${exercise.planned[0]?.reps ?? 0} reps.`
-    : hint ?? (firstTime && mode !== 'none'
+    : hint ?? (firstTime && mode !== 'none' && family !== 'free'
       ? `First time on this one. Pick a weight you could lift for ${exercise.planned[0]?.reps ?? 10} reps with 2–3 to spare.`
       : targetNotes?.[exercise.exerciseId]);
   // (#372) The lifter's own note from the last finished session with one on this exact exercise.
@@ -577,7 +592,12 @@ export default function TrainScreen({
   const repsText = (reps: number, hold: boolean) => (hold ? `${reps}s` : String(reps));
   /** "135 lb × 5", "BW × 12", "20 lb × 30s": what a list row says about its set. */
   const setLine = (weight: string, reps: number, bodyweight: boolean, hold: boolean) =>
-    `${bodyweight ? 'BW' : weight ? `${weight} ${unitLabel(unit)}` : '—'} × ${repsText(reps, hold)}`;
+    noWeight ? `${reps} ${hold ? 'sec' : 'reps'}`
+      : `${bodyweight ? 'BW' : weight ? `${weight} ${unitLabel(unit)}` : '—'} × ${repsText(reps, hold)}`;
+  /** (#432) The line under an added row's fields: there is nothing to weigh, or what History will show. */
+  const libHelp = !noWeight ? null
+    : holdUnit ? `Record how long you held it. History shows ${exercise.performed[focused]?.reps ?? 0} sec.`
+      : noWeightLine(libRow?.equipment ?? '');
 
   // ---------- The card: the focused set's fields and its one button ----------
   const set = exercise.performed[focused] ?? exercise.performed[0];
@@ -630,8 +650,8 @@ export default function TrainScreen({
           </span>
         )}
       </div>
-      <div className="lg-fields">
-        {mode === 'none' ? (
+      <div className={noWeight ? 'lg-fields lg-fields--one' : 'lg-fields'}>
+        {noWeight ? null : mode === 'none' ? (
           <div className="lg-field">
             <span className="lg-field__num"><span className="lg-cell lg-cell--bw">BW</span><small>bodyweight</small></span>
           </div>
@@ -668,10 +688,25 @@ export default function TrainScreen({
               shown={String(set.reps)} empty={false} inputMode="numeric" enterKeyHint="done"
               onText={(text, typed) => typeReps(set, focused, key, text, typed)}
               onEnter={(input) => input.blur()} />
-            <small>{holdUnit ? 'sec' : 'reps'}</small>
+            <small>{noWeight ? (holdUnit ? 'Seconds held' : 'Reps') : holdUnit ? 'sec' : 'reps'}</small>
           </label>
         </div>
       </div>
+      {libHelp && <p className="lg-help">{libHelp}</p>}
+      {lib && onNote && (family === undefined || family === 'none' || family === 'timed' || family === 'free') && (
+        <label className="lg-libnote">
+          Note (optional)
+          <input type="text" maxLength={MAX_NOTE} enterKeyHint="done"
+            placeholder={holdUnit ? '30 sec hold, left leg' : libRow?.equipment === 'Bands' ? 'Light band' : ''}
+            value={noteDraft?.key === exerciseKey ? noteDraft.text : exercise.note ?? ''}
+            onChange={(event) => {
+              setNoteDraft({ key: exerciseKey, text: event.target.value });
+              onNote(index, exercise.exerciseId, event.target.value);
+            }}
+            onBlur={() => setNoteDraft(null)}
+            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} />
+        </label>
+      )}
       {reason && <p className="lg-note" id={reason}>{noLoad ? NEEDS_LOAD_REASON : `Enter ${holdUnit ? 'seconds' : 'reps'} to log this set`}</p>}
       {refused && <p className="lg-note error-text" id={refused} role="alert">{refusal?.text}</p>}
       {held !== null && held.exerciseIndex === index && held.setIndex === focused && heldNotice}
@@ -788,7 +823,7 @@ export default function TrainScreen({
   // (#151) The photo's hold menu: one-tap shortcuts into the same actions the sheet holds (#379, unchanged).
   type Act = [string, ReactNode, () => void];
   const historyAct: Act = ['History', <Icon key="i" name="monitoring" size={16} />, () => onOpenActions(index, 'history')];
-  const replace: Act[] = onReplace ? [['Replace', <Icon key="i" name="tune" size={16} />, () => onReplace(index)]] : [];
+  const replace: Act[] = onReplace && !lib ? [['Replace', <Icon key="i" name="tune" size={16} />, () => onReplace(index)]] : [];
   const acts: Act[] = [
     ['How-to', null, () => setHowTo(exercise)],
     historyAct,
@@ -847,7 +882,7 @@ export default function TrainScreen({
         )}
 
         <section className="lg-ex" aria-label={exercise.name}>
-          <button type="button" className="lg-thumb" aria-label={`${exercise.name} how-to, hold for actions`} aria-haspopup="dialog"
+          {!lib && <button type="button" className="lg-thumb" aria-label={`${exercise.name} how-to, hold for actions`} aria-haspopup="dialog"
             onPointerDown={() => {
               holding.current = false;
               release();
@@ -858,13 +893,20 @@ export default function TrainScreen({
             onClick={() => { if (holding.current) holding.current = false; else setHowTo(exercise); }}>
             <Demo exerciseId={exercise.exerciseId} name={exercise.name} eager />
             <span className="lg-thumb__play" aria-hidden="true"><Icon name="play_arrow" size={12} /></span>
-          </button>
+          </button>}
           <div className="lg-ex__text">
             <h2 className="aw-exercise__name">
               <button className="aw-exercise__name-btn" onClick={() => onOpenActions(index)} aria-haspopup="dialog">
                 {exercise.name}
               </button>
             </h2>
+            {lib && (
+              <p className="lg-ex__meta lg-lib-meta">
+                {libRow && <span>{libRow.muscle}</span>}
+                {libRow && <span className="lg-lib-eq">{libRow.equipment}</span>}
+                <span className="lg-lib-tag">Added from library</span>
+              </p>
+            )}
             <p className="lg-ex__meta">
               Exercise {index + 1} of {session.exercises.length} · Target <b>{shortTarget(exercise)}</b>
               {restAfter ? <> · Rest {restLabel(restAfter)}</> : null}
