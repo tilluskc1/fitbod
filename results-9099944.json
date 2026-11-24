@@ -1,0 +1,1106 @@
+[
+ {
+  "br": "chromium",
+  "state": "plan-equipment",
+  "w": 360,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x36"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "plan-equipment-buttons",
+  "w": 360,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x36"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list-loading",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list-showmore",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "search",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "empty",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..662"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "empty-nomuscle",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "detail-loading",
+  "w": 360,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail",
+  "w": 360,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-footer",
+  "w": 360,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-builtin",
+  "w": 360,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "list-offline",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "detail-offline",
+  "w": 360,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "plan-equipment",
+  "w": 390,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x36"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "plan-equipment-buttons",
+  "w": 390,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x36"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list-loading",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list-showmore",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "search",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "empty",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..662"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "empty-nomuscle",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "detail-loading",
+  "w": 390,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail",
+  "w": 390,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-footer",
+  "w": 390,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-builtin",
+  "w": 390,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "list-offline",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "detail-offline",
+  "w": 390,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "plan-equipment",
+  "w": 430,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x36"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "plan-equipment-buttons",
+  "w": 430,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x36"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list-loading",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list-showmore",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "search",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "empty",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..662"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "empty-nomuscle",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "detail-loading",
+  "w": 430,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail",
+  "w": 430,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-footer",
+  "w": 430,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-builtin",
+  "w": 430,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "list-offline",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "detail-offline",
+  "w": 430,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "plan-equipment",
+  "w": 768,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x36"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "plan-equipment-buttons",
+  "w": 768,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x36"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list-loading",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list-showmore",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "search",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "empty",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..852"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "empty-nomuscle",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "detail-loading",
+  "w": 768,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail",
+  "w": 768,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-footer",
+  "w": 768,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-builtin",
+  "w": 768,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "list-offline",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "detail-offline",
+  "w": 768,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "plan-equipment",
+  "w": 1280,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x36"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "plan-equipment-buttons",
+  "w": 1280,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x36"
+  ]
+ },
+ {
+  "br": "chromium",
+  "state": "list-loading",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "list",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "list-showmore",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "search",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "empty",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "empty-nomuscle",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-loading",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-footer",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-builtin",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "list-offline",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "chromium",
+  "state": "detail-offline",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "plan-equipment",
+  "w": 360,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x39"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "plan-equipment-buttons",
+  "w": 360,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x39"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list-loading",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list-showmore",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "search",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "empty",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..662"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "empty-nomuscle",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "detail-loading",
+  "w": 360,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail",
+  "w": 360,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-footer",
+  "w": 360,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-builtin",
+  "w": 360,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "list-offline",
+  "w": 360,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "detail-offline",
+  "w": 360,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "plan-equipment",
+  "w": 390,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x39"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "plan-equipment-buttons",
+  "w": 390,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x39"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list-loading",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list-showmore",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "search",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "empty",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..662"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "empty-nomuscle",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "detail-loading",
+  "w": 390,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail",
+  "w": 390,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-footer",
+  "w": 390,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-builtin",
+  "w": 390,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "list-offline",
+  "w": 390,
+  "findings": [
+   "offscreen x: Arms 364..425",
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "detail-offline",
+  "w": 390,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "plan-equipment",
+  "w": 430,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x39"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "plan-equipment-buttons",
+  "w": 430,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x39"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list-loading",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list-showmore",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "search",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "empty",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..662"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "empty-nomuscle",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "detail-loading",
+  "w": 430,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail",
+  "w": 430,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-footer",
+  "w": 430,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-builtin",
+  "w": 430,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "list-offline",
+  "w": 430,
+  "findings": [
+   "offscreen x: Core 432..490",
+   "offscreen x: Cardio 497..566",
+   "offscreen x: Stretching 573..663"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "detail-offline",
+  "w": 430,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "plan-equipment",
+  "w": 768,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x39"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "plan-equipment-buttons",
+  "w": 768,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x39"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list-loading",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list-showmore",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "search",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "empty",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..852"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "empty-nomuscle",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "detail-loading",
+  "w": 768,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail",
+  "w": 768,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-footer",
+  "w": 768,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-builtin",
+  "w": 768,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "list-offline",
+  "w": 768,
+  "findings": [
+   "offscreen x: Stretching 763..853"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "detail-offline",
+  "w": 768,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "plan-equipment",
+  "w": 1280,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x39"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "plan-equipment-buttons",
+  "w": 1280,
+  "findings": [
+   "tap<44: \"mic\nAsk\" 72x39"
+  ]
+ },
+ {
+  "br": "webkit",
+  "state": "list-loading",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "list",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "list-showmore",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "search",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "empty",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "empty-nomuscle",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-loading",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-footer",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-builtin",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "list-offline",
+  "w": 1280,
+  "findings": []
+ },
+ {
+  "br": "webkit",
+  "state": "detail-offline",
+  "w": 1280,
+  "findings": []
+ }
+]
