@@ -13,6 +13,7 @@ import type { DayStatus } from '../lib/todayTalk';
 import type { TodayOnly } from '../lib/todayOnly';
 import type { UpcomingDay } from '../lib/switchDay';
 import { ChevronIcon, CloseIcon } from '../components/ui/Icons';
+import { LIBRARY_ROWS } from '../data/libraryFiles';
 
 interface Props {
   profile: Profile;
@@ -32,6 +33,8 @@ interface Props {
   onOpenSettings: () => void;
   onViewDay: (dayIndex: number) => void;
   onOpenLibrary: () => void;
+  /** (#431) The Exercises screen: browse and search the built-ins and the library. */
+  onOpenExercises: () => void;
   /** (#219) Today's described day: its own status and reasons, as Today shows them. */
   described?: DayStatus | null;
   /** (#297) The #298 today-only bar, on Today's row only. */
@@ -69,6 +72,7 @@ export default function PlanScreen({
   onOpenSettings,
   onViewDay,
   onOpenLibrary,
+  onOpenExercises,
   described,
   todayBar,
   onUndo,
@@ -219,6 +223,9 @@ export default function PlanScreen({
           </div>
           <button className="secondary" style={{ marginTop: 14 }} onClick={onOpenLibrary}>
             Browse all {EXERCISES.length} exercises
+          </button>
+          <button className="secondary" style={{ marginTop: 8 }} onClick={onOpenExercises}>
+            Search {EXERCISES.length + LIBRARY_ROWS} exercises
           </button>
           <p className="data-note">
             {EQUIPMENT_OPTIONS.filter((item) => profile.equipment.includes(item)).length} primary and{' '}

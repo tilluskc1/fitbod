@@ -35,6 +35,30 @@ const NETWORK_TIMEOUT_MS = 4000;
 // here. Its name does not start with `fitbod-clone-`, so activate never deletes it on a deploy.
 const CATALOG = 'catalog-v1';
 const STORAGE_HOST = 'firebasestorage.googleapis.com';
+// (#431) The exercise library's text files (/library/index.<hash>.json, /library/text.<hash>.json).
+// Named by content hash, so a kept copy never goes stale: cache first, and a new file of the same kind
+// replaces the old one. Like CATALOG, the name does not start with `fitbod-clone-`, so deploys keep it.
+// Bump it only if the files' shape changes.
+const LIBRARY = 'library-v1';
+
+async function serveLibrary(request, event) {
+  const cache = await caches.open(LIBRARY);
+  const cached = await cache.match(request, { ignoreVary: true });
+  if (cached) return cached;
+  const response = await fetchWithTimeout(request);
+  if (response.ok) {
+    const copy = response.clone();
+    const kind = new URL(request.url).pathname.split('/')[2].split('.')[0];
+    event.waitUntil(
+      cache
+        .keys()
+        .then((keys) => Promise.all(keys.filter((key) => new URL(key.url).pathname.startsWith(`/library/${kind}.`)).map((key) => cache.delete(key))))
+        .then(() => cache.put(request, copy))
+        .catch(() => {}),
+    );
+  }
+  return response;
+}
 
 // (#387) A clip the owner attached to a built-in exercise. A <video> asks for byte ranges, which a plain
 // cache hit can't answer: the first time, the request goes through and the whole clip (10 MB at most) is
@@ -161,6 +185,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (url.origin !== self.location.origin) return;
+
+  if (url.pathname.startsWith('/library/')) {
+    event.respondWith(serveLibrary(request, event));
+    return;
+  }
 
   if (request.mode === 'navigate') {
     event.respondWith(
