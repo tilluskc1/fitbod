@@ -864,3 +864,21 @@ export function saveOpenWorkout(state: AppState, sessionId: string, nowMs: numbe
     endedAt: lastActiveIso(open, nowMs),
   });
 }
+
+/**
+ * (#430) The app's Save. From the menu (`atLastActivity`) it ends at last activity, which already leaves
+ * the time away out, so a waiting Resume adds nothing. The logger's Finish ends now, so a Resume's time
+ * away not yet booked goes into `pausedMs` first. Never both: time away is subtracted once.
+ */
+export function finishOpenWorkout(
+  state: AppState,
+  sessionId: string,
+  nowMs: number,
+  options: { atLastActivity: boolean; early: boolean; pending?: PendingResume | null },
+): AppState {
+  if (options.atLastActivity) return saveOpenWorkout(state, sessionId, nowMs);
+  const booked = state.current?.id === sessionId
+    ? { ...state, current: withResumeGap(state.current, options.pending) }
+    : state;
+  return applyFinish(booked, sessionId, { early: options.early, now: new Date(nowMs).toISOString() });
+}

@@ -57,7 +57,6 @@ import
  {
   applyCancel,
   applyCorrection,
-  applyFinish,
   createSession,
   extendRest,
   updatePerformedSet,
@@ -77,7 +76,7 @@ import
   withActivity,
   pendingResumeFor,
   resumedView,
-  withResumeGap,
+  finishOpenWorkout,
   type PendingResume,
   idleState,
   saveOpenWorkout,
@@ -1553,15 +1552,9 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     const id = current.id;
     track(early ? 'workout-cut-short' : 'workout-finished', dayTypeOf(current.name));
     const at = Date.now();
-    // (#430) Finished right after a Resume tap: that Resume's time away is left out too.
-    setState((previous) => {
-      const currentState = previous.current?.id === id
-        ? { ...previous, current: withResumeGap(previous.current, pendingResume) }
-        : previous;
-      return atLastActivity
-        ? saveOpenWorkout(currentState, id, at)
-        : applyFinish(currentState, id, { early, now: new Date(at).toISOString() });
-    });
+    // (#430) Save from the menu ends at last activity, which already leaves the time away out. The logger's
+    // Finish ends now, so a Resume's time away not yet booked goes into pausedMs first; never both.
+    setState((previous) => finishOpenWorkout(previous, id, at, { atLastActivity, early, pending: pendingResume }));
     setRecapId(id);
     setSheet({ kind: 'none' });
     setView('recap');

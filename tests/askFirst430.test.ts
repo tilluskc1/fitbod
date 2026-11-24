@@ -8,6 +8,7 @@ import {
   EXPIRE_AFTER_MS,
   SUSPEND_AFTER_MS,
   elapsedMs,
+  finishOpenWorkout,
   pendingResumeFor,
   resumedView,
   withResumeGap,
@@ -203,6 +204,28 @@ test('the first action after a Resume books its time away once, capped; later ac
   // Finishing right after the tap leaves the time away out as well (App's saveFinish uses withResumeGap).
   assert.equal(withResumeGap(w, pending).pausedMs, 15 * MIN);
   assert.deepEqual(withResumeGap(w, pending).exercises, w.exercises, 'sets untouched');
+});
+
+test('Resume, no action, Save from the menu keeps the minutes (time away subtracted once)', () => {
+  // Last activity 40 min in; away 2 h; Resume tapped; saved at once from the menu (`atLastActivity`).
+  const w = logged(open(), 0, 40 * MIN);
+  const back = at(40 * MIN + 2 * 60 * MIN).getTime();
+  const pending = pendingResumeFor(w, back);
+  assert.equal(pending?.gapMs, 2 * 60 * MIN);
+  const menu = finishOpenWorkout(stateWith(w), w.id, back + 5_000, { atLastActivity: true, early: true, pending });
+  const saved = menu.history[0];
+  assert.equal(saved.endedAt, iso(40 * MIN), 'ends at last activity');
+  assert.equal(saved.pausedMs, 0, 'no Resume gap on top of the end time');
+  assert.deepEqual(trainedMinutes(saved), { minutes: 40, planned: false });
+  assert.equal(progressTotals([saved]).minutes, 40);
+  // The logger's Finish ends now, so there the gap is booked instead; still about 40 minutes.
+  const logger = finishOpenWorkout(stateWith(w), w.id, back, { atLastActivity: false, early: true, pending }).history[0];
+  assert.equal(logger.pausedMs, 2 * 60 * MIN);
+  assert.equal(trainedMinutes(logger).minutes, 40);
+  const recap = readFileSync(new URL('../src/screens/RecapScreen.tsx', import.meta.url), 'utf8');
+  assert.match(recap, /pausedMs/, 'the recap subtracts pausedMs from end - start');
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /finishOpenWorkout\(previous, id, at, \{ atLastActivity, early, pending: pendingResume \}\)/, 'App saves through it');
 });
 
 test('expiry guards: it runs only with a workout open on a visible tab, off the workout screen, outside Recovery, with saves working', () => {
