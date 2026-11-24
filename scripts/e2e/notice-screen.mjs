@@ -23,6 +23,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4193, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -65,7 +78,7 @@ try {
     await page.locator('[role="dialog"] button.len-opt:not([aria-current])').first().click();
     check(await showing(page, /is up\. Skipped/), `${where}: the Switch message does not show on Today`);
     await shot(page, 'today-message', where);
-    await page.getByRole('button', { name: /Start workout/ }).first().click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-header');
     check(!(await showing(page, /is up\. Skipped/)), `${where}: the Switch message followed the user into the logger`);
     const header = await page.locator('.lg-header').boundingBox();
@@ -82,7 +95,7 @@ try {
     check(await showing(page, /discarded|skipped/i), `${where}: leaving the logger for Today lost its message`);
 
     // A recap message does not follow the user into Coach.
-    await page.getByRole('button', { name: /Start workout/ }).first().click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-header');
     await logOneSet(page);
     await page.getByRole('button', { name: 'Finish', exact: true }).click();

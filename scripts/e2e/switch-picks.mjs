@@ -27,6 +27,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4199, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -246,12 +259,12 @@ try {
     await page.close();
   }
 
-  // (#397, replaces the old "a running session disables Switch") Switch is live while a session runs: with no
-  // sets logged the tap ends the empty session and opens Switch (review 3: this check must reach the pill).
-  // The sets-logged path (Finish sheet first) is in scripts/e2e/end-workout.mjs.
+  // (#397, #430) Switch is live while a session runs. Opening it never ends the open workout (#430: asking and
+  // previewing never edit it); picking another day closes an empty one quietly, with no sheet in between.
+  // The sets-logged path (the start-conflict sheet) is in scripts/e2e/end-workout.mjs.
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await onboard(page);
-  await page.locator('.tab-action').click();
+  await startWorkout(page);
   await page.getByRole('button', { name: 'Minimize workout' }).click();
   await page.locator('.t7-hero').waitFor();
   const switchPill = page.getByRole('button', { name: 'Switch workout' });
@@ -260,7 +273,11 @@ try {
   await switchPill.click();
   await page.locator('.sheet--switch').waitFor({ timeout: 3000 }).catch(() => {});
   check(await page.locator('.sheet--switch').count() === 1, '390x844: Switch with an empty session open did not open Switch');
-  check((await stored(page))?.current === null, '390x844: Switch left the empty session open');
+  check((await stored(page))?.current !== null, '390x844: opening Switch ended the open workout (#430)');
+  await page.locator('.sheet--switch button.len-opt:not([aria-current])').first().click();
+  await page.locator('.sheet--switch').waitFor({ state: 'detached', timeout: 3000 }).catch(() => {});
+  check(await page.getByRole('dialog').count() === 0, '390x844: picking a day with an empty workout open asked a question');
+  check((await stored(page))?.current === null, '390x844: picking a day left the empty session open');
   await page.close();
 } finally {
   await browser.close();

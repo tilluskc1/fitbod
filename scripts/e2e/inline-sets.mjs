@@ -24,6 +24,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4184, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -109,7 +122,7 @@ try {
     const errors = [];
     page.on('pageerror', (error) => errors.push(String(error)));
     await onboard(page);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     const name = (await page.locator('.aw-exercise__name').innerText()).trim();
     const target = (await page.locator('.lg-ex__meta').innerText()).match(/Target (\d+) × (\d+)/);
@@ -190,7 +203,7 @@ try {
     check(focused === 'Set 3 reps', `${where}: Next moves to set 3 reps (${focused})`);
     await page.keyboard.type('6');
     await page.reload();
-    const resume = page.getByRole('button', { name: 'Resume workout', exact: true });
+    const resume = page.locator('.rrow__go');
     await Promise.race([page.waitForSelector('.lg-ex'), resume.waitFor()]);
     if (!(await page.locator('.lg-ex').count())) await resume.click();
     await page.waitForSelector('.lg-ex');
@@ -230,7 +243,7 @@ try {
     const where = 'review-1';
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await onboard(page);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     const hint = (await page.locator('.lg-coach').innerText()).match(/Suggested start (\d+)/)?.[1];
 
@@ -246,7 +259,7 @@ try {
     // the cleared set 1 shows the muted suggestion again: nothing stores a cleared cell (owner, #315 item 12).
     await page.reload();
     await page.waitForSelector('.lg-ex').catch(() => {});
-    const resume = page.getByRole('button', { name: 'Resume workout', exact: true });
+    const resume = page.locator('.rrow__go');
     if (!(await page.locator('.lg-ex').count())) await resume.click();
     await page.waitForSelector('.lg-ex');
     r = await rows(page);
@@ -294,7 +307,7 @@ try {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(url).origin });
     const page = await context.newPage();
     await onboard(page);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     const hint = (await page.locator('.lg-coach').innerText()).match(/Suggested start (\d+)/)?.[1];
     const toast = page.locator('.done-toast, .app-alerts .notice-card').first();
@@ -355,7 +368,7 @@ try {
     const where = 'review-2 R4';
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await onboard(page);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     const toast = page.locator('.done-toast, .app-alerts .notice-card').first();
     const toastText = async () => (await toast.count()) ? (await toast.innerText()).replace(/\s+/g, ' ') : '';
@@ -375,7 +388,7 @@ try {
     const where = '390x500';
     const page = await browser.newPage({ viewport: { width: 390, height: 500 } });
     await onboard(page);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     const last = (await rows(page)).length;
     await (await cardCell(page, last)).click();
@@ -398,7 +411,7 @@ try {
     const where = `${width}x${height} rest (#380 review 1)`;
     const page = await browser.newPage({ viewport: { width, height } });
     await onboard(page);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     await logButton(page, 1).click();
     const dock = page.locator('.lg-dock');
@@ -441,7 +454,7 @@ try {
       const where = `${width}x${height} ${value} ${unit} (R3)`;
       const page = await browser.newPage({ viewport: { width, height } });
       await onboard(page, unit);
-      await page.getByRole('button', { name: 'Start workout' }).click();
+      await startWorkout(page);
       await page.waitForSelector('.lg-ex');
       const cell = page.getByLabel(/^Set 1 weight/);
       await cell.click();
@@ -479,7 +492,7 @@ try {
       window.__fakeKeyboard = (visible, offsetTop = 0) => { covered = visible; shifted = offsetTop; fake.dispatchEvent(new Event('resize')); };
     });
     await onboard(page);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     const header = await page.locator('.flow-header').boundingBox();
     for (const n of [1, 3]) {

@@ -21,6 +21,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4187, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const MONDAY = new Date('2026-11-02T12:00:00');
@@ -83,7 +96,7 @@ try {
     page.on('pageerror', (error) => errors.push(String(error)));
     await page.clock.setFixedTime(day(0));
     await onboard(page);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     const noted = await current(page);
     check((await noteLine(page).count()) === 0, `${where}: a first session shows a "Last time" line`);
@@ -120,7 +133,7 @@ try {
     let found = false;
     for (let offset = 1; offset <= 8 && !found; offset += 1) {
       await page.clock.setFixedTime(day(offset * 2));
-      await page.getByRole('button', { name: 'Start workout' }).click();
+      await startWorkout(page);
       await page.waitForSelector('.lg-ex');
       if ((await current(page)) === noted) found = true;
       else {
@@ -139,7 +152,7 @@ try {
       await shot(page, `${width}-last-time`);
 
       await page.reload();
-      const resume = page.getByRole('button', { name: 'Resume workout', exact: true });
+      const resume = page.locator('.rrow__go');
       await Promise.race([page.waitForSelector('.lg-ex'), resume.waitFor()]);
       if (!(await page.locator('.lg-ex').count())) await resume.click();
       await page.waitForSelector('.lg-ex');

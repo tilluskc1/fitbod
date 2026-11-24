@@ -24,6 +24,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4189, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const SHOTS = process.env.E2E_SHOTS;
@@ -52,7 +65,7 @@ async function onboard(page, unit) {
 
 /** Last week's session of today's lead at `kg`, so set 1 opens on it; or, with `firstTime`, a lead never done. */
 async function seedLead(page, { kg, firstTime }) {
-  await page.getByRole('button', { name: 'Start workout' }).click();
+  await startWorkout(page);
   await page.waitForSelector('.lg-ex');
   await page.evaluate(([key, kg, firstTime]) => {
     const stored = JSON.parse(localStorage.getItem(key));
@@ -80,10 +93,10 @@ async function seedLead(page, { kg, firstTime }) {
   }, [KEY, kg, Boolean(firstTime)]);
   await page.reload();
   if (firstTime) {
-    await page.getByRole('button', { name: 'Resume workout', exact: true }).click();
+    await page.locator('.rrow__go').click();
   } else {
     await page.waitForSelector('.t7-hero');
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
   }
   await page.waitForSelector('.lg-ex');
 }

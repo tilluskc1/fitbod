@@ -45,6 +45,19 @@ const clipPlugin = {
 const outDir = mkdtempSync(join(tmpdir(), 'howto-379-'));
 await build({ logLevel: 'silent', plugins: [clipPlugin], build: { outDir, emptyOutDir: true } });
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ build: { outDir }, preview: { port: 4186, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -162,7 +175,7 @@ try {
     check(todayPlay.ok, `${where}: Today's player clip did not advance (${todayPlay.a} → ${todayPlay.b})`);
     await page.keyboard.press('Escape');
 
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     const first = await current(page);
 
@@ -242,7 +255,7 @@ try {
     });
     const rp = await refused.newPage();
     await onboard(rp);
-    await rp.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(rp);
     await rp.waitForSelector('.lg-ex');
     await thumb(rp).click();
     await rp.waitForTimeout(1000);
@@ -273,7 +286,7 @@ try {
   await off.setOffline(true);
   await op.reload();
   await op.waitForSelector('.t7-hero');
-  await op.getByRole('button', { name: 'Start workout' }).click();
+  await startWorkout(op);
   await op.waitForSelector('.lg-ex');
   await thumb(op).click();
   await dialog(op).getByText('Video needs a connection').waitFor({ timeout: 6000 }).catch(() => {});

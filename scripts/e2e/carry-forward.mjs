@@ -22,6 +22,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4183, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -88,7 +101,7 @@ try {
     const errors = [];
     page.on('pageerror', (error) => errors.push(String(error)));
     await onboard(page, unit);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     const name = (await page.locator('.aw-exercise__name').innerText()).trim();
     const target = (await page.locator('.lg-ex__meta').innerText()).match(/Target (\d+) × (\d+)/);
@@ -134,7 +147,7 @@ try {
     await onCard(page, 1);
     await page.getByRole('button', { name: 'Log set 1' }).click();
     await page.reload();
-    const resume = page.getByRole('button', { name: 'Resume workout', exact: true });
+    const resume = page.locator('.rrow__go');
     await Promise.race([page.waitForSelector('.lg-ex'), resume.waitFor()]);
     if (!(await page.locator('.lg-ex').count())) await resume.click();
     await page.waitForSelector('.lg-ex');

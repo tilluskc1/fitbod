@@ -1,7 +1,7 @@
 // The Progress and Coach first-run check (#294), 390x844 and 360x780:
 // - a fresh user sees one empty-state card on Progress and one line on Coach, never a "0" tile or row;
 // - "Start today's workout" opens the same preview as Today's Preview workout;
-// - with a workout running, the button reads "Resume workout" and opens the logger;
+// - (#430) with a workout running, the empty state has no primary button; the slight row's Resume opens the logger;
 // - after a finished workout, and after a restored legacy record, the tiles and Coach's count equal
 //   what the stored history holds (lesson 12: values across screens, not the script's own clicks).
 //
@@ -144,9 +144,10 @@ try {
     await page.getByRole('button', { name: 'Progress' }).click();
     check((await stored(page)).running, `${where}: a workout is running`);
     check(await page.locator('.stat-value').count() === 0, `${where}: a running workout is not counted`);
-    check(await page.locator('.progress-empty').getByRole('button', { name: 'Resume workout' }).count() === 1, `${where}: the button reads Resume workout`);
+    check(await page.locator('.progress-empty').getByRole('button', { name: /Resume workout|Finish|Start/ }).count() === 0, `${where}: the empty state still has a Resume/Finish/Start button`);
+    check(await page.locator('.rrow').count() === 1, `${where}: no resume row on Progress`);
     if (shots) await page.screenshot({ path: join(shots, `294-progress-running-${where}.png`) });
-    await page.locator('.progress-empty').getByRole('button', { name: 'Resume workout' }).click();
+    await page.locator('.rrow__go').click();
     check(await page.locator('.lg-ex').first().isVisible(), `${where}: resume opens the logger`);
 
     // 4. Finish 41 minutes later: tiles and Coach equal the stored history.
