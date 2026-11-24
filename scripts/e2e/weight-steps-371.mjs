@@ -24,6 +24,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4186, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -100,7 +113,7 @@ async function seed(page) {
     localStorage.setItem(key, JSON.stringify(saved));
   }, KEY);
   await page.reload();
-  const resume = page.getByRole('button', { name: 'Resume workout', exact: true });
+  const resume = page.locator('.rrow__go');
   await Promise.race([page.waitForSelector('.lg-ex'), resume.waitFor()]);
   if (!(await page.locator('.lg-ex').count())) await resume.click();
   await page.waitForSelector('.lg-ex');
@@ -132,7 +145,7 @@ try {
     const errors = [];
     page.on('pageerror', (error) => errors.push(String(error)));
     await onboard(page);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     // Real clicks only: a capture listener counts every tap the lifter makes from here.
     await page.evaluate(() => { window.__taps = 0; document.addEventListener('click', (event) => { if (event.isTrusted) window.__taps += 1; }, true); });
@@ -205,7 +218,7 @@ try {
     await travel.locator('.t7-pill--gym').click();
     await travel.getByRole('button', { name: /Travel gym/ }).click();
     await travel.waitForSelector('.t7-today-only');
-    await travel.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(travel);
     await travel.waitForSelector('.lg-ex');
     // (#380) The card names the unit under the number; Later is the first row of More's sheet.
     const unitOf = async () => travel.locator('.lg-focus .lg-field--w small').innerText().catch(() => '');
@@ -231,7 +244,7 @@ try {
     const jump = await browser.newPage({ viewport: { width, height } });
     jump.on('pageerror', (error) => errors.push(String(error)));
     await onboard(jump, 'kg');
-    await jump.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(jump);
     await jump.waitForSelector('.lg-ex');
     await seed(jump);
     const seeded = await weights(jump);

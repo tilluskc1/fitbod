@@ -155,7 +155,7 @@ try {
 
     // 3. A reload mid-round resumes at B2.
     await page.reload();
-    const resume = page.getByRole('button', { name: 'Resume workout', exact: true });
+    const resume = page.locator('.rrow__go');
     if (await resume.count()) await resume.click();
     await page.waitForSelector('.lg-ex');
     const back = await screen(page);

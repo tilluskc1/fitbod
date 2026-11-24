@@ -26,6 +26,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4189, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -52,7 +65,7 @@ async function onboard(page) {
 }
 
 async function finishWorkout(page) {
-  await page.getByRole('button', { name: 'Start workout' }).click();
+  await startWorkout(page);
   await page.waitForSelector('.lg-ex');
   for (let guard = 0; guard < 120; guard += 1) {
     const confirm = page.getByRole('button', { name: 'Confirm' });
@@ -105,13 +118,10 @@ try {
     const page = await context.newPage();
     await onboard(page);
 
-    // 1. No workouts yet: the sheet says so and offers nothing to tap; nothing downloads.
-    check(!(await openSheet(page)), `${where}: the icon downloaded with no workouts`);
-    check(await sheet(page).isVisible(), `${where}: no sheet with no workouts`);
-    check(await sheet(page).getByText('Nothing to back up yet').isVisible(), `${where}: empty sheet does not say "Nothing to back up yet"`);
-    check(!(await sheet(page).getByRole('button', { name: 'Back up now' }).count()), `${where}: empty sheet offers Back up now`);
+    // 1. No workouts yet (#430): the empty page has no backup icon, so nothing can download.
+    await page.getByRole('button', { name: 'Progress' }).click();
+    check(await page.getByRole('button', { name: 'Back up workouts' }).count() === 0, `${where}: the backup icon shows with no workouts`);
     if (shots) await page.screenshot({ path: join(shots, `293-empty-${where}.png`) });
-    await sheet(page).getByRole('button', { name: 'Close' }).click();
     await page.getByRole('button', { name: 'Today', exact: true }).click();
 
     // 2. One workout: the icon asks first. Not now records nothing.

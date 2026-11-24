@@ -5,7 +5,7 @@ import type { Program } from '../data/flagship';
 import { canPerform, capabilitiesFor } from '../lib/capabilities';
 import { catalogRowMeta } from '../lib/liveProgression';
 import { describedChip, feasibilityChip, plainFocus, usualLine } from '../lib/planPage';
-import { sessionProgress, unfinishedSince } from '../lib/session';
+import { idleState, sessionProgress } from '../lib/session';
 import type { MuscleGroup, Profile, Unit, WorkoutRecord } from '../types';
 import Demo from '../components/ui/Demo';
 import TodayOnlyBar from '../components/ui/TodayOnlyBar';
@@ -39,7 +39,7 @@ interface Props {
   onUndo?: () => void;
   /** (#297) A running session: Today's row shows its progress and Resume (#260). */
   current?: WorkoutRecord | null;
-  /** (#399) The clock Today reads, so a session from an earlier day says Unfinished here too. */
+  /** (#430) The clock Today reads, so a suspended workout says Paused here too. */
   now?: Date;
   onResume?: () => void;
   /** (#297) Slots skipped today, marked where the sequence moved them. */
@@ -93,7 +93,7 @@ export default function PlanScreen({
   const todayFocus = described ? '' : plainFocus(focus, todayIds);
   const progress = current ? sessionProgress(current) : null;
   const todayChip = progress
-    ? { tone: 'progress', label: `${current && now && unfinishedSince(current, now) ? 'Unfinished' : 'In progress'} · ${progress.done} of ${progress.total} sets` }
+    ? { tone: 'progress', label: `${current && now && idleState(current, now.getTime()) !== 'active' ? 'Paused' : 'In progress'} · ${progress.done} of ${progress.total} sets` }
     : described ? describedChip(described) : feasibilityChip(program.feasibility);
 
   return (
@@ -150,7 +150,7 @@ export default function PlanScreen({
                   <button type="button" className="plan-row__view" onClick={() => onViewDay(0)}>View</button>
                 )}
               </span>
-              {!current && <TodayOnlyBar bar={todayBar} onUndo={onUndo} />}
+              <TodayOnlyBar bar={todayBar} onUndo={onUndo} />
             </section>
             {upcoming.map((day, index) => (
               <section className="plan-row" key={day.id} aria-label={index === 0 ? 'Next' : 'Then'}>

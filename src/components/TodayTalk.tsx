@@ -16,6 +16,7 @@ import type { Question } from '../lib/planToday';
 import Icon from './ui/Icon';
 import VoiceSheet from './VoiceSheet';
 import { voiceSupported } from '../lib/speech';
+import { ASK_TITLE } from './OpenWorkout';
 import BodyMap from './BodyMap';
 import { talkMapMuscles } from '../lib/bodyMap';
 import type { Shade } from '../lib/bodyMap';
@@ -48,6 +49,20 @@ interface Props {
   openAsk?: number;
   /** (#302) The body map's shading on the Train question: muscles trained in the last 72 h. */
   shade?: Shade;
+  /**
+   * (#430) A request from the centre Ask: `voice` opens the mic sheet under the Ask title, `text` builds
+   * from a typed sentence exactly as a spoken one would. Handled once per id; `onAskHandled` clears it.
+   */
+  ask?: TalkAsk | null;
+  onAskHandled?: (id: number) => void;
+  /** (#430) Voice was refused or is missing: the centre Ask shows its question mark from then on. */
+  onMicBlocked?: () => void;
+}
+
+export interface TalkAsk {
+  id: number;
+  kind: 'voice' | 'text';
+  text?: string;
 }
 
 const QUESTION_TEXT: Record<Question, string> = {
@@ -65,7 +80,7 @@ const minutesLabel = (minutes: number) => (minutes === 60 ? '1 hr' : `${minutes}
  * of answering builds the same day. (#426) The mic is a second way to fill that same sentence —
  * `VoiceSheet` only transcribes; it never parses on its own.
  */
-export default function TodayTalk({ profile, plannedName, todayName, plannedAreas, plannedFocus, savedGear, savedMinutes, base, preview, onStart, onActive, openAsk = 0, shade = {} }: Props) {
+export default function TodayTalk({ profile, plannedName, todayName, plannedAreas, plannedFocus, savedGear, savedMinutes, base, preview, onStart, onActive, openAsk = 0, shade = {}, ask = null, onAskHandled, onMicBlocked }: Props) {
   const [step, setStep] = useState<Question | 'summary' | null>(null);
   const [text, setText] = useState('');
   // Answers sit on top of the text, so typing more never undoes them (see `tapsAfterEdit`).
@@ -167,6 +182,25 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
     go('time');
   };
 
+  // (#430) The centre Ask hands its request here once, so a typed or spoken answer runs the very path
+  // the composer's own mic and text run. Never touches an open workout: it only builds a preview.
+  const [voiceAsked, setVoiceAsked] = useState(false);
+  const handledAsk = useRef(0);
+  useEffect(() => {
+    if (!ask || handledAsk.current === ask.id) return;
+    handledAsk.current = ask.id;
+    if (ask.kind === 'voice') {
+      setStep(null);
+      setBuilt(null);
+      setVoiceAsked(true);
+      setVoiceOpen(true);
+    } else if (ask.text) {
+      voiceConfirm(ask.text);
+    }
+    onAskHandled?.(ask.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ask?.id]);
+
   if (step === null) {
     const micAvailable = !micBlocked && voiceSupported();
     return (
@@ -181,7 +215,7 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
             <Icon name="chevron_right" size={22} />
           </button>
           {micAvailable && (
-            <button type="button" className="tt-mic" aria-label="Plan by voice" onClick={() => { track('plan-today'); setVoiceOpen(true); }}>
+            <button type="button" className="tt-mic" aria-label="Plan by voice" onClick={() => { track('plan-today'); setVoiceAsked(false); setVoiceOpen(true); }}>
               <Icon name="mic" size={18} />
             </button>
           )}
@@ -197,8 +231,9 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
             onEditSlot={voiceEditSlot}
             onPain={voicePain}
             onFallback={voiceFallback}
-            onBlocked={() => { setVoiceOpen(false); setMicBlocked(true); }}
-            onClose={() => setVoiceOpen(false)}
+            onBlocked={() => { setVoiceOpen(false); setMicBlocked(true); onMicBlocked?.(); }}
+            onClose={() => { setVoiceOpen(false); setVoiceAsked(false); }}
+            askTitle={voiceAsked ? ASK_TITLE : undefined}
           />
         )}
       </section>

@@ -78,7 +78,7 @@ test('#134 card: Today shows the offer with Switch and Keep, and hides it when n
     assert.ok(withComposer.indexOf('COMPOSER ENTRY') < withComposer.indexOf('is fresher'), 'card after the composer');
     const none = render({ fresher: null });
     assert.doesNotMatch(none, /is fresher|Switch to|Keep Upper B/);
-    const running = render({ current: { ...upperYesterday, id: 'open', status: 'active', endedAt: null } });
+    const running = render({ workoutOpen: true });
     assert.doesNotMatch(running, /is fresher|Switch to|Keep Upper B/);
   } finally {
     await server.close();

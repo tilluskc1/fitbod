@@ -4,13 +4,20 @@ import { CloseIcon } from './Icons';
 import { FOCUSABLE, trapTarget } from '../../lib/focusTrap';
 
 interface Props {
-  title: string;
+  /** (#430) A node, so a two-line title ("Push is still open" / "3 sets logged") can break where it should. */
+  title: ReactNode;
   subtitle?: string;
+  /** (#430) The larger second line under the title on the workout sheets. */
+  sub2?: ReactNode;
+  /** (#430) A live status chip under the title ("Listening…"). */
+  status?: ReactNode;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   variant?: 'default' | 'adjust' | 'settings' | 'feedback' | 'switch' | 'gym' | 'player' | 'voice';
   headingId?: string;
+  /** (#430) A selector inside the sheet that takes first focus instead of Close: a confirm's Cancel. */
+  initialFocus?: string;
 }
 
 /**
@@ -26,6 +33,9 @@ export default function Sheet({
   footer,
   variant = 'default',
   headingId = 'sheet-title',
+  initialFocus,
+  sub2,
+  status,
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -58,7 +68,8 @@ export default function Sheet({
   });
 
   useEffect(() => {
-    closeRef.current?.focus();
+    const first = initialFocus ? dialogRef.current?.querySelector<HTMLElement>(initialFocus) : null;
+    (first ?? closeRef.current)?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onCloseRef.current();
@@ -73,6 +84,8 @@ export default function Sheet({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+    // Mount-only: first focus is chosen once, when the sheet opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -92,6 +105,8 @@ export default function Sheet({
               {title}
             </h2>
             {subtitle && <p className="sheet-sub">{subtitle}</p>}
+            {sub2 && <p className="sheet-sub2">{sub2}</p>}
+            {status && <span className="sheet-status" role="status"><i aria-hidden="true" />{status}</span>}
           </div>
           <button className="sheet-close" onClick={onClose} ref={closeRef} aria-label="Close">
             <CloseIcon />

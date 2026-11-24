@@ -38,8 +38,8 @@ export function toastShows(notice: Notice | null, sheetOpen: boolean): boolean {
  * shows there; the Problem card says what happened. "No sets logged, so nothing was saved." claims
  * nothing and is not one.
  */
-// (#372) A note saved from the exercise menu says so too.
-const SAVE_CLAIMS = ['Workout saved.', 'Saved for future workouts.', 'Note saved'];
+// (#372) A note saved from the exercise menu says so too. (#430) So does "Saved 3 sets from Push. Pull started."
+const SAVE_CLAIMS = ['Workout saved.', 'Saved for future workouts.', 'Note saved', 'Saved '];
 
 export function claimsSave(notice: Notice | null): boolean {
   return notice !== null && notice.kind === 'done' && SAVE_CLAIMS.some((claim) => notice.text.startsWith(claim));

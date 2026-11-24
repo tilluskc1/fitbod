@@ -22,6 +22,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4190, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -121,7 +134,7 @@ try {
 
     // Train: the exercise title, the set cells, Swap rows, then Discard.
     await page.getByRole('button', { name: 'Today', exact: true }).click();
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     // A long exercise name may wrap like any heading; the button must still be a full target.
     await target(page, page.locator('.aw-exercise__name-btn'), 'exercise title', `${where} Train`, { wraps: true });

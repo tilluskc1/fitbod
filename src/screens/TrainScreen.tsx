@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useWakeLock } from '../lib/wakeLock';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, repsTarget, setUnit } from '../data/flagship';
 import { exerciseById } from '../data/exercises';
-import { elapsedMs, restRemaining, sessionProgress } from '../lib/session';
+import { elapsedMs, idleState, restRemaining, sessionProgress } from '../lib/session';
 import { lastNote } from '../lib/notes';
 import { canMoveLater, pairRound, pairedPendingIndex, partnerOf, restAfterLog } from '../lib/supersets';
 import './supersets.css';
@@ -23,7 +23,7 @@ import HowTo from '../components/ui/HowTo';
 import Sheet from '../components/ui/Sheet';
 import Icon from '../components/ui/Icon';
 import { NoticeCard } from '../components/ui/Notices';
-import { MoreIcon } from '../components/ui/Icons';
+import { HelpIcon, MoreIcon } from '../components/ui/Icons';
 
 interface Props {
   session: WorkoutRecord;
@@ -49,6 +49,11 @@ interface Props {
   goHeavier?: Record<string, number>;
   onMinimize: () => void;
   onFinish: () => void;
+  /**
+   * (#430, spec 7) Ask mid-workout: the logger has no tab bar, so its header carries the centre button's
+   * Ask (same name, same icon). It opens the mid-workout Ask sheet; absent, no Ask shows.
+   */
+  ask?: { onAsk: () => void; voiceBlocked: boolean };
   onUpdateSet: (exerciseIndex: number, setIndex: number, patch: Partial<PerformedSet>, how?: SetEdit) => void;
   /**
    * (#327) A weight more than 10% over last time, held on the set typed: its Heads-up shows under that
@@ -182,6 +187,7 @@ export default function TrainScreen({
   goHeavier = {},
   onMinimize,
   onFinish,
+  ask,
   onUpdateSet,
   held = null,
   onLogSet,
@@ -267,11 +273,13 @@ export default function TrainScreen({
   if (rest > 0 && restOver) setRestOver(false);
   // The render above already advanced prevRest, so the tone reads its own ref.
   const cueFrom = useRef(rest);
+  // (#430) A rest that ran out while the phone was locked past suspension never chimes late on return.
+  const awake = idleState(session, now) === 'active';
   useEffect(() => {
     const prev = cueFrom.current;
     cueFrom.current = rest;
-    if (shouldCue({ prev, remaining: rest, active: restActive, paused: restPaused, muted })) playRestCue();
-  }, [rest, restActive, restPaused, muted]);
+    if (awake && shouldCue({ prev, remaining: rest, active: restActive, paused: restPaused, muted })) playRestCue();
+  }, [rest, restActive, restPaused, muted, awake]);
 
   // Only unskipped, unfinished work is offered. When nothing is left to log,
   // the trainer shows a review state instead of quietly landing on the last
@@ -326,6 +334,11 @@ export default function TrainScreen({
         </button>
         <h1 className="flow-title">{session.name}</h1>
         <div className="flow-header__right">
+          {ask && (
+            <button type="button" className="flow-ask" onClick={ask.onAsk} aria-label="Ask">
+              {ask.voiceBlocked ? <HelpIcon size={22} /> : <Icon name="mic" size={22} />}
+            </button>
+          )}
           <button className="finish-btn" onClick={onFinish}>
             Finish
           </button>

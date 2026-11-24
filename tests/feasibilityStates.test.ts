@@ -8,7 +8,6 @@ import { adaptWorkout, todayGlance } from '../src/lib/adapt.ts';
 import { defaultConstraints } from '../src/lib/constraints.ts';
 import { buildPlan } from '../src/lib/generator.ts';
 import { planSlots, slotProgram } from '../src/lib/sequence.ts';
-import { tabBarAction } from '../src/lib/tabBarAction.ts';
 import type { Profile } from '../src/types.ts';
 
 const base: Profile = {
@@ -98,7 +97,8 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
     assert.doesNotMatch(none.plan, /Add Pull-up bar|feasibility__alt/, 'Plan shows no alternatives');
     // The empty day's own row states no minutes (#200); the header's "usual" line still may.
     assert.equal(rowStats(none.plan)?.[3], undefined, 'no minutes in an empty day row');
-    assert.equal(tabBarAction(null, none.adapted).disabled, true, 'no Start of an empty workout');
+    // (#430) The centre button is Ask in every state; Preview is the start, and it is off for an empty day.
+    assert.equal(none.adapted.exercises.length, 0, 'an empty workout');
     assert.match(none.today, /<button[^>]*disabled=""[^>]*>Preview workout/);
 
     const curls = screens(Today, Plan, noCurls, 'Pull');

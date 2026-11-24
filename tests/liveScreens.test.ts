@@ -7,7 +7,6 @@ import { FULL_BODY_A } from '../src/data/flagship.ts';
 import { exerciseById } from '../src/data/exercises.ts';
 import { adaptWorkout } from '../src/lib/adapt.ts';
 import { catalogRowMeta, liveAdapted, liveExercises, targetCoachLine, targetReason } from '../src/lib/liveProgression.ts';
-import { tabBarAction } from '../src/lib/tabBarAction.ts';
 import { applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
 import { EMPTY_STATE } from '../src/lib/storage.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
@@ -42,10 +41,11 @@ async function withServer<T>(run: (load: (path: string) => Promise<Record<string
   try { return await run((path) => server.ssrLoadModule(path)); } finally { await server.close(); }
 }
 
-function renderToday(Today: unknown, who: Profile, history: WorkoutRecord[], current: WorkoutRecord | null = null) {
+function renderToday(Today: unknown, who: Profile, history: WorkoutRecord[], current: WorkoutRecord | null = null,
+  workoutOpen = false) {
   return renderToStaticMarkup(createElement(Today as never, { profile: who, program: FULL_BODY_A,
     adapted: liveAdapted(adapted, who, history), equipment: 'home', adjusted: false, history,
-    current, now: new Date('2026-11-04T10:00:00.000Z'), onPreview: noop, onAdjust: noop,
+    current, workoutOpen, now: new Date('2026-11-04T10:00:00.000Z'), onPreview: noop, onAdjust: noop,
     onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop }));
 }
 
@@ -105,17 +105,18 @@ test('"Why this target" keeps the precise reason', async () => {
 const startControls = (html: string) =>
   (html.match(/<button[\s\S]*?<\/button>/g) ?? []).filter((button) => /Start|Resume/.test(button));
 
-// (#260) A running session also offers Resume in the dock: the tab bar's own handler (tests/resumeToday260.test.ts).
-test('Today has one Start (the tab action) before a session and Resume in tab and dock during one; Preview only before', async () => {
+// (#430) The centre button is Ask in every state: Today and the tab bar offer no Start or Resume button,
+// and Preview workout stays whether or not a workout is open (ruling 4a).
+test('Today and the tab bar offer no Start or Resume button, with or without an open workout; Preview stays', async () => {
   await withServer(async (load) => {
     const { default: Today } = await load('/src/screens/TodayScreen.tsx');
     const { TabBar } = await load('/src/components/ui/Chrome.tsx');
-    const live = liveAdapted(adapted, profile, []);
-    for (const current of [null, liveSession([])]) {
-      const html = renderToday(Today, profile, [], current) + renderToStaticMarkup(createElement(TabBar as never,
-        { active: 'today', onChange: noop, workoutAction: { ...tabBarAction(current, live), onActivate: noop } }));
-      assert.equal(startControls(html).length, current ? 2 : 1, current ? 'resume' : 'start');
-      assert.equal(html.includes('Preview workout'), !current, 'preview only before a session opens');
+    for (const open of [false, true]) {
+      const html = renderToday(Today, profile, [], null, open) + renderToStaticMarkup(createElement(TabBar as never,
+        { active: 'today', onChange: noop, ask: { onAsk: noop, voiceBlocked: false } }));
+      assert.equal(startControls(html).length, 0, open ? 'no Resume button' : 'no Start button');
+      assert.ok(html.includes('Preview workout'), 'Preview stays');
+      assert.match(html, /aria-label="Ask"/, 'the centre button is Ask');
     }
   });
 });

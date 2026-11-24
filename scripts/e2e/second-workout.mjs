@@ -24,6 +24,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4179, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const MONDAY = new Date('2026-11-02T08:00:00');
@@ -50,7 +63,7 @@ async function onboard(page) {
 
 /** One whole workout: log every set at its prefilled weight (#309), finish, back to Today. */
 async function finishWorkout(page) {
-  await page.getByRole('button', { name: 'Start workout' }).click();
+  await startWorkout(page);
   await page.waitForSelector('.lg-ex');
   for (let guard = 0; guard < 120; guard += 1) {
     const log = page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first();
@@ -96,7 +109,7 @@ try {
     check(Boolean(target), `${where}: the target carries its load (${card})`);
 
     // Two taps and nothing in between: Start, then set 1's check, with no step and no typing.
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     check(await page.getByText(/Suggested start/).count() === 0, `${where}: no suggested start the second time`);
     // (#380) The focus card holds set 1: its "Previous" and its weight input.

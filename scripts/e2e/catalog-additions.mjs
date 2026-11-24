@@ -35,6 +35,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4211, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -155,7 +168,7 @@ try {
     await reopen(page);
     check((await listed(page)) === BUILT_IN + 1, `${where}: next open lists ${BUILT_IN + 1}`);
     await page.getByRole('button', { name: 'Today', exact: true }).click();
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     const lead = (await page.locator('.lg-ex .lg-name, .lg-ex h2').first().innerText().catch(() => '')).trim();
     await page.locator('.lg-acts').getByRole('button', { name: 'Replace' }).click();

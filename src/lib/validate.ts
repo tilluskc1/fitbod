@@ -274,6 +274,10 @@ function validateExercise(value: unknown, path: string): WorkoutExercise {
   };
 }
 
+function lastActiveOf(value: unknown): string | undefined {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : undefined;
+}
+
 function validateWorkout(value: unknown, path: string): WorkoutRecord {
   const raw = record(value, path);
   const status = oneOf(raw.status, `${path}.status`, ['active', 'completed'] as const);
@@ -315,6 +319,8 @@ function validateWorkout(value: unknown, path: string): WorkoutRecord {
     // unrecognised value is rejected rather than replaced with a guess.
     feedback:
       raw.feedback === undefined ? undefined : oneOf(raw.feedback, `${path}.feedback`, FEEDBACK),
+    // (#430) Optional and forgiving: a stamp that does not parse is dropped; the record still loads.
+    ...(lastActiveOf(raw.lastActiveAt) === undefined ? {} : { lastActiveAt: lastActiveOf(raw.lastActiveAt) }),
     exercises: array(raw.exercises, `${path}.exercises`, MAX_EXERCISES).map((item, i) =>
       validateExercise(item, `${path}.exercises[${i}]`),
     ),

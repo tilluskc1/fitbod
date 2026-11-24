@@ -44,11 +44,13 @@ test('adopting another tab closes prescription sheets even when duplicate IDs su
         let splash = true;
         const onStorage = new Function('STORAGE_KEY', 'recovery', 'loadState', 'revisionRef', 'saveUi',
           'setConflict', 'adoptingRef', 'setState', 'setSaveUi', 'setSheet', 'proposalRevisionRef',
-          'setShowSplash', 'splashAfterAdopt', 'return (event)=>{' + body + '}')(
+          'setShowSplash', 'splashAfterAdopt', 'liveRef', 'setView', 'setTab', 'setNotice', 'headsUp',
+          'return (event)=>{' + body + '}')(
           STORAGE_KEY, null, loadState, revisionRef, { kind: 'saved' }, noop, adoptingRef,
           (next: typeof state) => { adopted = next; }, noop,
           (update: (open: typeof sheet) => typeof sheet) => { sheet = update(sheet); }, { current: 0 },
-          (update: (shown: boolean) => boolean) => { splash = update(splash); }, splashAfterAdopt);
+          (update: (shown: boolean) => boolean) => { splash = update(splash); }, splashAfterAdopt,
+          { current: { view: 'tabs', current: null, sheetOpen: false } }, noop, noop, noop, noop);
         onStorage({ key: 'unrelated' });
         assert.equal(sheet.kind, kind, 'unrelated storage changes preserve open UI');
         assert.equal(splash, true, 'unrelated storage changes leave the splash alone');
@@ -106,11 +108,12 @@ test('accepted cross-tab pending-work adoption invalidates old previews but igno
       const noop = () => {};
       const onStorage = new Function('STORAGE_KEY', 'recovery', 'loadState', 'revisionRef', 'saveUi', 'setConflict',
         'adoptingRef', 'setState', 'setSaveUi', 'setSheet', 'proposalRevisionRef', 'setShowSplash', 'splashAfterAdopt',
+        'liveRef', 'setView', 'setTab', 'setNotice', 'headsUp',
         'return(event)=>{' + body + '}')(
         STORAGE_KEY, null, loadState, revisionRef, { kind: scenario === 'conflict' ? 'error' : 'saved' }, noop,
         adoptingRef, (next: typeof before) => { state = next; }, noop,
         (update: (open: typeof sheet) => typeof sheet) => { sheet = update(sheet); }, proposalRevisionRef,
-        noop, splashAfterAdopt);
+        noop, splashAfterAdopt, { current: { view: 'tabs', current: null, sheetOpen: false } }, noop, noop, noop, noop);
       onStorage({ key: scenario === 'wrong-key' ? 'unrelated' : STORAGE_KEY });
       const accepted = scenario === 'accepted';
       assert.equal(sessionProgress(state.current).total, accepted ? 11 : 8, scenario); // 20 min: 8 sets by the timer (#203)
@@ -122,6 +125,53 @@ test('accepted cross-tab pending-work adoption invalidates old previews but igno
       assert.equal(state.current.exercises[0].performed[0].reps, 10);
       const fresh = createProposal({ minutes: 20, equipment: 'home' }, context(), 'fresh-after-update');
       assert.equal(decideProposalApproval(fresh, context(), null), 'accept', scenario);
+    }
+  } finally {
+    if (oldStorage) Object.defineProperty(globalThis, 'localStorage', oldStorage);
+    else Reflect.deleteProperty(globalThis, 'localStorage');
+  }
+});
+
+// (#430) A tab logging a workout that another tab saved or closed goes back to Today and says which.
+test('a logging tab whose workout was saved or closed elsewhere goes to Today with a heads-up', () => {
+  const profile = { goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
+    equipment: ['Dumbbell'], support: [], exclusions: [], loads: {}, unit: 'kg' };
+  const short = adaptWorkout(FULL_BODY_A, { minutes: 20, equipment: 'home' }, [], undefined);
+  const open = createSession({ id: 'open', name: short.name, dayIndex: 0, durationMin: 20,
+    exercises: toWorkoutExercises(short), now: '2026-10-31T10:00:00.000Z' });
+  const source = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  const body = source.match(/const onStorage = \(event: StorageEvent\) => \{([\s\S]*?)\n    \};/)![1];
+  const oldStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  let raw: string | null = null;
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: () => raw, setItem: (_key: string, value: string) => { raw = value; },
+  } });
+  try {
+    const cases = [
+      { view: 'train', next: { ...EMPTY_STATE, profile, current: null, history: [{ ...open, status: 'completed', endedAt: '2026-10-31T10:30:00.000Z' }] },
+        notice: 'This workout was saved in another tab. Find it in Progress.' },
+      { view: 'train', next: { ...EMPTY_STATE, profile, current: null }, notice: 'This workout was closed in another tab.' },
+      { view: 'tabs', next: { ...EMPTY_STATE, profile, current: null }, notice: null },
+      { view: 'train', next: { ...EMPTY_STATE, profile, current: open }, notice: null },
+    ];
+    let revision = 0;
+    for (const { view, next, notice } of cases) {
+      assert.equal(saveState(next as never, revision).ok, true);
+      revision += 1;
+      const noop = () => {};
+      let shownView = view, shownTab = 'progress', said: string | null = null;
+      const onStorage = new Function('STORAGE_KEY', 'recovery', 'loadState', 'revisionRef', 'saveUi',
+        'setConflict', 'adoptingRef', 'setState', 'setSaveUi', 'setSheet', 'proposalRevisionRef',
+        'setShowSplash', 'splashAfterAdopt', 'liveRef', 'setView', 'setTab', 'setNotice', 'headsUp',
+        'return (event)=>{' + body + '}')(
+        STORAGE_KEY, null, loadState, { current: revision - 1 }, { kind: 'saved' }, noop, { current: false }, noop, noop,
+        noop, { current: 0 }, noop, splashAfterAdopt, { current: { view, current: open, sheetOpen: false } },
+        (next: string) => { shownView = next; }, (next: string) => { shownTab = next; },
+        (next: string) => { said = next; }, (text: string) => text);
+      onStorage({ key: STORAGE_KEY });
+      assert.equal(said, notice);
+      assert.equal(shownView, notice ? 'tabs' : view);
+      assert.equal(shownTab, notice ? 'today' : 'progress');
     }
   } finally {
     if (oldStorage) Object.defineProperty(globalThis, 'localStorage', oldStorage);

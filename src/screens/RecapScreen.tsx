@@ -31,8 +31,10 @@ interface Props {
 
 function minutesOf(workout: WorkoutRecord): number {
   if (workout.endedAt) {
+    // (#430) Time away from a resumed workout sits in pausedMs and is left out.
     const span = (Date.parse(workout.endedAt) - Date.parse(workout.date)) / 60000;
-    if (Number.isFinite(span) && span > 0) return Math.max(1, Math.round(span));
+    const away = (workout.pausedMs ?? 0) / 60000;
+    if (Number.isFinite(span) && span > 0) return Math.max(1, Math.round(span - away));
   }
   return workout.durationMin ?? 1;
 }

@@ -25,6 +25,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4192, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -124,7 +137,7 @@ try {
     await toast.waitFor({ timeout: 3000 }).catch(() => {});
     check(await toast.count() === 1, `${where}: no toast after Undo`);
     await clearOf(page, page.locator('.flow-dock .pill-primary'), 'Preview workout', where);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     check(!(await toast.count()), `${where}: the Today toast followed into the logger`);
 
@@ -189,7 +202,7 @@ try {
     await shot(page, 'partial-today', where);
 
     // A full workout: "Workout saved." is a Done toast on the recap and follows it to Today.
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     for (let i = 0; i < 80 && await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').count(); i += 1) {
       await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
@@ -259,7 +272,7 @@ try {
     }
     // Raised after: a carry's Undo is reachable while the save error stands.
     await page.waitForTimeout(4300);
-    await page.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(page);
     await page.waitForSelector('.lg-ex');
     const set1 = page.getByLabel(/^Set 1 weight/);
     // (#380) Set 2 is a list row under the card: "Set 2, 135 lb × 8, edit".

@@ -270,6 +270,12 @@ export interface WorkoutRecord {
    * valid state; nothing infers it, and older records stay valid without it.
    */
   feedback?: WorkoutFeedback;
+  /**
+   * (#430) When the lifter last did something real in this workout (logged, edited or undid a set, started
+   * or changed rest, swapped, skipped, wrote a note, resumed). Never written by a timer tick, a view, Ask or
+   * Preview. Absent on older records, which derive it from set times. Optional so older data still loads.
+   */
+  lastActiveAt?: string;
   exercises: WorkoutExercise[];
 }
 

@@ -53,7 +53,8 @@ test('loads entered in kg keep their exact kg when the list is edited in lb', ()
 
 test('a sheet focuses Close once on mount, not again on every parent re-render', () => {
   const source = readFileSync(new URL('../src/components/ui/Sheet.tsx', import.meta.url), 'utf8');
-  const focusEffect = source.match(/useEffect\(\(\) => \{\s*closeRef\.current\?\.focus\(\);[\s\S]*?\}, (\[[^\]]*\])\);/);
+  // (#430) A confirm may name its own first focus (its Cancel); Close stays the default.
+  const focusEffect = source.match(/useEffect\(\(\) => \{[^}]*?\(first \?\? closeRef\.current\)\?\.focus\(\);[\s\S]*?\}, (\[[^\]]*\])\);/);
   assert.ok(focusEffect, 'the Close-focus effect exists');
   assert.equal(focusEffect[1], '[]', 'it runs on mount only, so a save that re-creates onClose does not jump focus');
 });

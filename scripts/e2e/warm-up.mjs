@@ -24,6 +24,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4183, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const SHOTS = process.env.E2E_SHOTS;
@@ -51,7 +64,7 @@ async function onboard(page, minutes) {
 
 /** Last week's session of today's lead, 5 sets at 60 kg: today's target holds 60 kg. */
 async function seedLead(page) {
-  await page.getByRole('button', { name: 'Start workout' }).click();
+  await startWorkout(page);
   await page.waitForSelector('.lg-ex');
   await page.evaluate(() => {
     const key = 'fitbod-clone-v1';
@@ -71,7 +84,7 @@ async function seedLead(page) {
   });
   await page.reload();
   await page.waitForSelector('.t7-hero');
-  await page.getByRole('button', { name: 'Start workout' }).click();
+  await startWorkout(page);
   await page.waitForSelector('.lg-ex');
 }
 
@@ -138,7 +151,7 @@ try {
 
     // Reload mid-warm-up resumes at the warm-up.
     await page.reload();
-    await page.getByRole('button', { name: 'Resume workout', exact: true }).click();
+    await page.locator('.rrow__go').click();
     await page.waitForSelector('.lg-ex');
     check(await page.getByRole('region', { name: 'Warm-up' }).count() === 1, `${where}: warm-up again after reload`);
     check(await page.locator('.lg-li--warm').count() === 2, `${where}: ramp rows again after reload`);

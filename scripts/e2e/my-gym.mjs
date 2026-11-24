@@ -26,6 +26,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4203, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -98,7 +111,7 @@ async function fits(sheet, where) {
 
 /** Starts today's workout and returns the stored session's exercise ids. */
 async function startedIds(page) {
-  await page.getByRole('button', { name: 'Start workout' }).click();
+  await startWorkout(page);
   await page.waitForSelector('.lg-ex');
   const ids = (await stored(page)).current.exercises.map((exercise) => exercise.exerciseId);
   return { ids };

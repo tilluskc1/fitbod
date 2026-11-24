@@ -3,7 +3,7 @@
 // at 390x844, 360x780 and 390x650 (iPhone Chrome's visible area), with and without the backup
 // reminder, and with the keyboard open on the text box. The entry also clears the dock by at least
 // 8px (#276), including right after Finish while the "Workout saved." toast shows.
-// (#279) The dock's primary label ("Preview workout", or "Resume workout" with a session running)
+// (#279) The dock's primary label ("Preview workout", also with a session running since #430)
 // is one line high; "Short on time or gear?" keeps its whole text and a 44px target; no sideways scroll.
 // A message floats only on Today: on Train it never covers Finish or Minimize, and with a save
 // error showing, Retry and Data stay tappable.
@@ -31,6 +31,19 @@ async function loadPlaywright() {
 }
 
 const { chromium } = await loadPlaywright();
+
+// (#430) The centre button is Ask only: a workout starts from Preview workout -> Start workout. A Start
+// already on screen (the preview sheet, a switched or adapted day) is used as is.
+async function startWorkout(p) {
+  const start = p.getByRole('button', { name: 'Start workout' });
+  const preview = p.getByRole('button', { name: 'Preview workout' });
+  await start.or(preview).first().waitFor();
+  if (!(await start.first().isVisible())) {
+    await preview.first().click();
+    await p.getByRole('dialog').getByRole('button', { name: 'Start workout' }).waitFor();
+  }
+  await p.getByRole('button', { name: 'Start workout' }).first().click();
+}
 const server = await preview({ preview: { port: 4184, strictPort: false }, logLevel: 'silent' });
 const url = server.resolvedUrls.local[0];
 const shots = process.env.E2E_SHOTS;
@@ -57,7 +70,7 @@ async function onboard(page) {
 
 /** One whole workout, so the backup reminder (#243) shows on Today afterwards. */
 async function finishWorkout(page, afterFinish) {
-  await page.getByRole('button', { name: 'Start workout' }).click();
+  await startWorkout(page);
   await page.waitForSelector('.lg-ex');
   for (let guard = 0; guard < 120; guard += 1) {
     const log = page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first();
@@ -254,15 +267,16 @@ try {
     });
     await train.clock.setFixedTime(day(0));
     await onboard(train);
-    await train.getByRole('button', { name: 'Start workout' }).click();
+    await startWorkout(train);
     await train.waitForSelector('.lg-ex');
     await train.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
-    // (#279) A running session (no planner entry then): Today's dock shows Resume on one line.
+    // (#279) A running session (no planner entry then): Today's dock label stays on one line.
+    // (#430) The dock keeps Preview workout; the workout resumes from the row above it.
     await train.getByRole('button', { name: 'Minimize workout' }).click();
     await train.waitForSelector('.t7-hero');
-    await dockLabels(train, `${width}x${height}-running`, 'Resume workout');
+    await dockLabels(train, `${width}x${height}-running`, 'Preview workout');
     await shot(train, `${width}x${height}-running`);
-    await train.locator('.flow-dock .pill-primary').click();
+    await train.locator('.rrow__go').click();
     await train.waitForSelector('.lg-ex');
     await train.locator('.lg-acts').getByRole('button', { name: 'More', exact: true }).click();
     await train.getByRole('button', { name: "Remove today's remaining work" }).click();

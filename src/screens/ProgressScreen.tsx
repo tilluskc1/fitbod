@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { loadModeOf, NEEDS_LOAD_REASON, needsLoad, setText, setUnit } from '../data/flagship';
 import {
   calibrationInputValue, correctionBlur, correctionKeystroke, loadLimitMessage, repsLimitMessage, typedReps, unitLabel,
@@ -9,9 +10,6 @@ import { doneSets, progressTotals, trainedMinutes } from '../lib/progressTotals'
 import type { Profile, Unit, WorkoutFeedback, WorkoutRecord } from '../types';
 import { FEEDBACK_CHOICES, feedbackLabel } from '../lib/feedback';
 import { ArrowIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
-
-/** (#294) Session history with nothing in it. */
-export const NO_WORKOUTS_YET = 'No workouts yet. Your first one will appear here.';
 
 interface Props {
   history: WorkoutRecord[];
@@ -30,14 +28,14 @@ interface Props {
   ) => void;
   onDelete: (workoutId: string) => void;
   onFeedback: (workoutId: string, value: WorkoutFeedback | null) => void;
-  /** (#294) A workout is under way: the empty state resumes it instead of starting today's. */
-  running?: boolean;
-  /** (#406) The running workout is from an earlier day: End or Finish leads, Resume is the quiet link. */
-  unfinished?: boolean;
-  /** Sets logged in the running workout, to choose between End and Finish. */
-  loggedSets?: number;
-  onEnd?: () => void;
-  /** Opens today's preview (Today's Start), or resumes the running workout. */
+  /**
+   * (#430) The open workout's slight resume row (the same one Today shows), or nothing. It replaces the
+   * empty state's Resume and Finish buttons; the empty state then has no primary button.
+   */
+  openRow?: ReactNode;
+  /** (#430) The open workout's name and logged sets, for the empty state's "count once you save" line. */
+  openWorkout?: { name: string; sets: number } | null;
+  /** Opens today's preview (Today's Start). */
   onStartToday: () => void;
   /** Today has nothing to start, as Today's own Preview button is then disabled. */
   startDisabled?: boolean;
@@ -67,10 +65,8 @@ export default function ProgressScreen({
   onCorrect,
   onDelete,
   onFeedback,
-  running = false,
-  unfinished = false,
-  loggedSets = 0,
-  onEnd,
+  openRow,
+  openWorkout = null,
   onStartToday,
   startDisabled = false,
   initialTab = 'overview',
@@ -159,58 +155,70 @@ export default function ProgressScreen({
   });
   const path = points.map((point) => `${point.x},${point.y}`).join(' ');
 
+  // (#430) No finished workout: the page is the title, the open-workout row and one card, as in the mock.
+  // There is nothing to back up or list yet, so the backup icon and the view switch wait for one.
+  const empty = totals.workouts === 0;
+
   return (
     <div className="screen">
       <header className="screen-header">
         <div>
           <h1 className="page-title">Progress.</h1>
         </div>
-        <button className="icon-btn" onClick={onBackup} aria-label="Back up workouts">
-          <DownloadIcon />
-        </button>
+        {!empty && (
+          <button className="icon-btn" onClick={onBackup} aria-label="Back up workouts">
+            <DownloadIcon />
+          </button>
+        )}
       </header>
-      <p className="page-sub">Your records tell the story. No invented scores.</p>
+      {openRow}
+      {!empty && (
+        <>
+          <p className="page-sub">Your records tell the story. No invented scores.</p>
 
-      <div className="segmented" role="tablist" aria-label="Progress views">
-        <button
-          role="tab"
-          aria-selected={tab === 'overview'}
-          className={tab === 'overview' ? 'on' : ''}
-          onClick={() => setTab('overview')}
-        >
-          Overview
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'history'}
-          className={tab === 'history' ? 'on' : ''}
-          onClick={() => setTab('history')}
-        >
-          Session history
-        </button>
-      </div>
+          <div className="segmented" role="tablist" aria-label="Progress views">
+            <button
+              role="tab"
+              aria-selected={tab === 'overview'}
+              className={tab === 'overview' ? 'on' : ''}
+              onClick={() => setTab('overview')}
+            >
+              Overview
+            </button>
+            <button
+              role="tab"
+              aria-selected={tab === 'history'}
+              className={tab === 'history' ? 'on' : ''}
+              onClick={() => setTab('history')}
+            >
+              Session history
+            </button>
+          </div>
+        </>
+      )}
 
-      {tab === 'overview' && totals.workouts === 0 ? (
-        // (#294) No finished workout yet: say what is missing and the one action that fixes it.
-        <div className="empty-state progress-empty">
-          <h2 className="progress-empty__title">Your progress starts with your first workout.</h2>
-          <p>After it, you'll see your workouts, sets and minutes here, and a chart for each lift.</p>
-          {running && unfinished && onEnd ? (
+      {empty ? (
+        // (#294, #430) No finished workout yet: say what is missing and the one action that fixes it.
+        <section className="t7-card progress-empty">
+          <h2 className="progress-empty__title">No finished workouts yet</h2>
+          {openWorkout ? (
+            // (#430) The row above resumes it; nothing here competes with it.
+            <p>
+              Your totals and history show up here after you finish a workout.
+              {openWorkout.sets > 0
+                ? ` Your ${openWorkout.sets} ${openWorkout.name} ${openWorkout.sets === 1 ? 'set counts' : 'sets count'} once you save the workout.`
+                : ''}
+            </p>
+          ) : (
             <>
-              <button className="primary" onClick={onEnd}>
-                {loggedSets === 0 ? 'End workout' : 'Finish workout'}
-              </button>
-              <button className="link-btn" onClick={onStartToday}>
-                Resume
+              <p>After it, you'll see your workouts, sets and minutes here, and a chart for each lift.</p>
+              <button className="primary" onClick={onStartToday} disabled={startDisabled}>
+                Start today's workout
+                <ArrowIcon />
               </button>
             </>
-          ) : (
-            <button className="primary" onClick={onStartToday} disabled={!running && startDisabled}>
-              {running ? 'Resume workout' : "Start today's workout"}
-              <ArrowIcon />
-            </button>
           )}
-        </div>
+        </section>
       ) : tab === 'overview' ? (
         <>
           <div className="stats-3">
@@ -322,9 +330,7 @@ export default function ProgressScreen({
         </>
       ) : (
         <div className="history-list">
-          {/* (#294) Empty or all-skipped records count as none, here as on Overview: no "0 sets" row. */}
-          {totals.workouts === 0 && <p className="note-card">{NO_WORKOUTS_YET}</p>}
-          {(totals.workouts === 0 ? [] : sessions).map((workout) => {
+          {sessions.map((workout) => {
             const parts = dateParts(workout.date);
             const open = openId === workout.id;
             return (
@@ -495,9 +501,11 @@ export default function ProgressScreen({
         </div>
       )}
 
-      <p className="data-note">
-        Records live in this browser only. Export a JSON backup before clearing site data.
-      </p>
+      {!empty && (
+        <p className="data-note">
+          Records live in this browser only. Export a JSON backup before clearing site data.
+        </p>
+      )}
     </div>
   );
 }

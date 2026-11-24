@@ -6,6 +6,7 @@ import { claimsSave, done, dropSaveClaim, headsUp, problem } from '../src/lib/no
 test('a Done that says something was saved is a save claim (#351)', () => {
   assert.equal(claimsSave(done('Workout saved.')), true);
   assert.equal(claimsSave(done('Saved for future workouts. Logged sets are unchanged.')), true);
+  assert.equal(claimsSave(done('Saved 3 sets from Push. Pull started.')), true, '#430 save and start');
   assert.equal(claimsSave(done('No sets logged, so nothing was saved.')), false);
   assert.equal(claimsSave(done('Backup downloaded.')), false);
   assert.equal(claimsSave(done('Restored 2 workouts.')), false);

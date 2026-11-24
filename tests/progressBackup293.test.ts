@@ -4,8 +4,10 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { backupCount } from '../src/lib/backup.ts';
+import { completeSession, createSession, updatePerformedSet } from '../src/lib/session.ts';
 import type { AppState } from '../src/types.ts';
 
+const START = '2026-11-08T10:00:00.000Z';
 const plain = (html: string) => html.replace(/&#x27;/g, "'").replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const workout = (status: 'active' | 'completed') => ({ status }) as AppState['history'][number];
 
@@ -42,11 +44,22 @@ test('#293 the Progress icon opens the sheet instead of exporting', async () => 
   try {
     const { default: ProgressScreen } = await server.ssrLoadModule('/src/screens/ProgressScreen.tsx');
     const noop = () => {};
-    const html = renderToStaticMarkup(createElement(ProgressScreen, {
-      history: [], unit: 'kg', onBackup: noop, onCorrect: noop, onDelete: noop, onFeedback: noop, onGoTrain: noop,
+    const render = (history: AppState['history']) => renderToStaticMarkup(createElement(ProgressScreen, {
+      history, unit: 'kg', onBackup: noop, onCorrect: noop, onDelete: noop, onFeedback: noop, onGoTrain: noop,
     }));
+    let session = createSession({
+      id: 'w1', name: 'Upper A', dayIndex: 0, now: START,
+      exercises: [{
+        exerciseId: 'goblet-squat', name: 'Goblet squat',
+        planned: [{ weight: 20, reps: 10 }], performed: [{ weight: 20, reps: 10, done: false, completedAt: null }],
+      }],
+    });
+    session = updatePerformedSet(session, 0, 0, { done: true }, START);
+    const html = render([completeSession(session, { early: true, now: '2026-11-08T10:20:00.000Z' })]);
     assert.match(html, /aria-label="Back up workouts"/);
     assert.doesNotMatch(html, /Export backup/);
+    // (#430) With no finished workout there is nothing to back up: the empty page shows no icon.
+    assert.doesNotMatch(render([]), /Back up workouts/);
   } finally {
     await server.close();
   }

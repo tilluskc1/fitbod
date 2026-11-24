@@ -52,7 +52,7 @@ const profile = {
   equipment: ['Dumbbell'], support: [], unit: 'kg', loads: {},
 };
 
-async function render(history: WorkoutRecord[], options: { unit?: Unit; running?: boolean } = {}) {
+async function render(history: WorkoutRecord[], options: { unit?: Unit; openWorkout?: { name: string; sets: number } } = {}) {
   const server = await createServer({
     server: { middlewareMode: true, hmr: false, ws: false, watch: null },
     appType: 'custom',
@@ -62,7 +62,7 @@ async function render(history: WorkoutRecord[], options: { unit?: Unit; running?
     const { default: Coach } = await server.ssrLoadModule('/src/screens/CoachScreen.tsx');
     const noop = () => {};
     const progress = renderToStaticMarkup(createElement(Progress, {
-      history, unit: options.unit ?? 'kg', running: options.running ?? false,
+      history, unit: options.unit ?? 'kg', openWorkout: options.openWorkout ?? null,
       onExport: noop, onCorrect: noop, onDelete: noop, onFeedback: noop, onStartToday: noop,
     }));
     const coach = renderToStaticMarkup(createElement(Coach, {
@@ -118,12 +118,14 @@ for (const [label, history] of [
     const { progress, progressText, coach, coachText } = await render(history);
     assert.equal(tiles(progress).length, 0, 'no stat tiles');
     assert.doesNotMatch(progress, /stat-value/);
-    assert.match(progressText, /Your progress starts with your first workout\./);
+    assert.match(progressText, /No finished workouts yet/);
+    // (#430) Nothing to back up or list yet: no backup icon and no Overview / Session history switch.
+    assert.doesNotMatch(progress, /Back up workouts|Progress views|Session history|Records live in this browser/);
     assert.match(progressText, /After it, you'll see your workouts, sets and minutes here, and a chart for each lift\./);
     assert.match(progress, /<button[^>]*class="primary"[^>]*>Start today(?:'|&#x27;)s workout/);
     assert.doesNotMatch(progressText, /Your first session starts the story/, 'the chart empty state is gone');
     assert.doesNotMatch(progressText, /Working loads/, 'no chart card without a workout');
-    assert.match(progress, /class="[^"]*empty-state/);
+    assert.match(progress, /class="t7-card progress-empty"/);
 
     // Coach: one line instead of the context rows.
     assert.match(coachText, /After your first workout I(?:'|&#x27;|’)ll show what changed and why\./);
@@ -133,10 +135,13 @@ for (const [label, history] of [
   });
 }
 
-test('a running session and no finished one: the button reads Resume workout', async () => {
-  const { progress } = await render([], { running: true });
-  assert.match(progress, />Resume workout/);
-  assert.doesNotMatch(progress, /Start today/);
+// (#430) The resume row above the page resumes an open workout; the empty state offers no second button.
+test('an open workout and no finished one: no Start or Resume button; logged sets are promised once saved', async () => {
+  const { progress } = await render([], { openWorkout: { name: 'Push', sets: 3 } });
+  assert.doesNotMatch(progress, /Resume workout|Start today/);
+  assert.match(progress, /Your 3 Push sets count once you save the workout\./);
+  const empty = await render([], { openWorkout: { name: 'Push', sets: 0 } });
+  assert.doesNotMatch(empty.progress, /sets? counts? once/);
 });
 
 /* ---------- one or more finished workouts ---------- */
@@ -150,7 +155,8 @@ for (const unit of ['kg', 'lb'] as const) {
     assert.deepEqual(tiles(progress), ['Workouts 1', 'Sets 13', 'Minutes 41']);
     assert.match(progress, /<p class="stats-note">all time<\/p>/);
     assert.doesNotMatch(progressText, /includes planned time/);
-    assert.doesNotMatch(progressText, /Your progress starts with your first workout/);
+    assert.doesNotMatch(progressText, /No finished workouts yet/);
+    assert.match(progress, /aria-label="Back up workouts"/);
     assert.match(coachText, new RegExp(`Sessions recorded ${totals.workouts} `));
     assert.match(coachText, /FROM YOUR EXERCISE HISTORY/);
   });
@@ -189,9 +195,9 @@ for (const [label, history] of [
   ['only an empty record', [finished('e', [0], 4)]],
   ['only a skipped workout', [finished('s', [0, 0], 9, [0, 1])]],
 ] as const) {
-  test(`Session history with ${label}: the empty line, no "0 sets" row (#294)`, async () => {
+  test(`Session history with ${label}: the empty-state card, no "0 sets" row (#294, #430)`, async () => {
     const text = await renderHistory(history);
-    assert.match(text, /No workouts yet\. Your first one will appear here\./);
+    assert.match(text, /No finished workouts yet/);
     assert.doesNotMatch(text, /0 sets|Upper A/);
   });
 }
