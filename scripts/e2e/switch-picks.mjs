@@ -251,7 +251,9 @@ try {
   // The sets-logged path (Finish sheet first) is in scripts/e2e/end-workout.mjs.
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await onboard(page);
-  await page.locator('.tab-action').click();
+  // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+  await page.getByRole('button', { name: 'Preview workout' }).click();
+  await page.getByRole('button', { name: 'Start workout' }).click();
   await page.getByRole('button', { name: 'Minimize workout' }).click();
   await page.locator('.t7-hero').waitFor();
   const switchPill = page.getByRole('button', { name: 'Switch workout' });

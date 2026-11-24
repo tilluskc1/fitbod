@@ -65,6 +65,8 @@ try {
     await page.locator('[role="dialog"] button.len-opt:not([aria-current])').first().click();
     check(await showing(page, /is up\. Skipped/), `${where}: the Switch message does not show on Today`);
     await shot(page, 'today-message', where);
+    // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: /Start workout/ }).first().click();
     await page.waitForSelector('.lg-header');
     check(!(await showing(page, /is up\. Skipped/)), `${where}: the Switch message followed the user into the logger`);
@@ -82,6 +84,7 @@ try {
     check(await showing(page, /discarded|skipped/i), `${where}: leaving the logger for Today lost its message`);
 
     // A recap message does not follow the user into Coach.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: /Start workout/ }).first().click();
     await page.waitForSelector('.lg-header');
     await logOneSet(page);

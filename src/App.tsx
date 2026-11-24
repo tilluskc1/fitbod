@@ -716,8 +716,10 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   const startWorkout = () => {
     startSession(constraints);
   };
-  // (#260) The tab bar's centre button and Today's Resume: one handler (lesson 9).
-  const openWorkout = current ? () => setView('train') : startWorkout;
+  // (#260) Today's Resume and the tab bar's centre button reopen a running session: one handler
+  // (lesson 9). (#428) Starting one is the separate, explicit path below (Preview, then its own
+  // start action) — every caller of this one already has a session running.
+  const openWorkout = () => setView('train');
 
   /**
    * Skip the slot on offer. Explicit only: nothing skips because a date passed,
@@ -1009,6 +1011,17 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
     track('plan-today');
     setSheet({ kind: 'none' });
     setPlanTodayAsk((count) => count + 1);
+  };
+  /**
+   * (#428) The tab bar's centre button: never starts a workout. It switches to Today (closing
+   * any open sheet, same as any other tab change) and opens "Plan today with me" ready for
+   * voice, the same way its own mic does.
+   */
+  const [planHelperAsk, setPlanHelperAsk] = useState(0);
+  const openPlanHelper = () => {
+    setTab('today');
+    setView('tabs');
+    setPlanHelperAsk((count) => count + 1);
   };
 
   /** A described session (#193) has no planned work to restore into; it is finished or discarded instead. */
@@ -1825,6 +1838,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
                 onStart={startTalk}
                 onActive={setComposing}
                 openAsk={planTodayAsk}
+                voiceAsk={planHelperAsk}
                 shade={bodyShade(state.history, today)}
               />
             ) : undefined}
@@ -1925,8 +1939,8 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             setView('tabs');
           }}
           workoutAction={{
-            ...tabBarAction(current, adapted),
-            onActivate: openWorkout,
+            ...tabBarAction(current),
+            onActivate: current ? openWorkout : openPlanHelper,
             progress: current
               ? (() => {
                   const sets = current.exercises.flatMap((exercise) => exercise.performed);

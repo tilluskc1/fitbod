@@ -155,6 +155,8 @@ try {
     await reopen(page);
     check((await listed(page)) === BUILT_IN + 1, `${where}: next open lists ${BUILT_IN + 1}`);
     await page.getByRole('button', { name: 'Today', exact: true }).click();
+    // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     const lead = (await page.locator('.lg-ex .lg-name, .lg-ex h2').first().innerText().catch(() => '')).trim();

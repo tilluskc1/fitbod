@@ -347,6 +347,27 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    never a default/empty stand-in for state the real action reads. Check: `scripts/e2e/voice-plan-426.mjs`'s
    `staleTaps()` (tap chips, cancel, then speak; the heard-you card and the built summary must agree).
 
+47. **`npm run e2e`'s `&&` chain stops at the first failure, which hides every later script.** #428 changed
+   the tab bar's center button from starting a workout to opening the planner; the chained `e2e` script
+   stops at `planner-reach` (a known, unrelated failure) before ever reaching the ~20 later scripts that
+   assumed the old one-tap start. Running the chain alone would have reported "still red at the same known
+   spot" while new regressions sat unreported past it. Rule: when a change could affect any script, run every
+   `scripts/e2e/*.mjs` individually (one exit code each, after one `npm run build`) instead of trusting the
+   chained `npm run e2e` to surface failures past a known-red one. Check: run each script name and exit code
+   in a loop and compare against the known-failing list by name, not just "did the chain run clean."
+
+48. **An `aria-hidden` caption is still live text to a `hasText`/text-content locator, even though the
+   accessibility tree ignores it.** #428 renamed the tab bar's center-button caption so Playwright's own
+   locators wouldn't collide with the nav bar's "Plan" tab; `aria-hidden="true"` on `<span
+   className="tab-action__label">` hides it from screen readers but not from `.filter({ hasText: ... })` or
+   regex-text matching, which reads rendered text regardless of the accessibility tree. Three e2e scripts
+   (`plan-page.mjs`, `my-gym.mjs`, `standalone-fit.mjs`) broke because `locator('nav.tabbar .tab').filter({
+   hasText: 'Plan' })` matched both the real Plan tab and the button whose hidden caption also said "Plan".
+   Rule: a new or renamed visible caption, even one marked `aria-hidden`, must be checked against every other
+   on-screen label (nav tabs, buttons, headings) for a text collision, and any `getByRole` name match needs
+   `exact: true` unless a substring match is actually wanted. Check: `src/lib/tabBarAction.ts`'s `META` labels
+   stay distinct from `TABS`' labels in `src/components/ui/Chrome.tsx`.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

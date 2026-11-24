@@ -98,6 +98,8 @@ async function fits(sheet, where) {
 
 /** Starts today's workout and returns the stored session's exercise ids. */
 async function startedIds(page) {
+  // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+  await page.getByRole('button', { name: 'Preview workout' }).click();
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
   const ids = (await stored(page)).current.exercises.map((exercise) => exercise.exerciseId);

@@ -132,6 +132,8 @@ try {
     const errors = [];
     page.on('pageerror', (error) => errors.push(String(error)));
     await onboard(page);
+    // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     // Real clicks only: a capture listener counts every tap the lifter makes from here.
@@ -205,6 +207,7 @@ try {
     await travel.locator('.t7-pill--gym').click();
     await travel.getByRole('button', { name: /Travel gym/ }).click();
     await travel.waitForSelector('.t7-today-only');
+    await travel.getByRole('button', { name: 'Preview workout' }).click();
     await travel.getByRole('button', { name: 'Start workout' }).click();
     await travel.waitForSelector('.lg-ex');
     // (#380) The card names the unit under the number; Later is the first row of More's sheet.
@@ -231,6 +234,7 @@ try {
     const jump = await browser.newPage({ viewport: { width, height } });
     jump.on('pageerror', (error) => errors.push(String(error)));
     await onboard(jump, 'kg');
+    await jump.getByRole('button', { name: 'Preview workout' }).click();
     await jump.getByRole('button', { name: 'Start workout' }).click();
     await jump.waitForSelector('.lg-ex');
     await seed(jump);

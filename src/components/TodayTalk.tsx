@@ -46,6 +46,12 @@ interface Props {
   onActive?: (active: boolean) => void;
   /** (#296) Bumped by Switch's "Sore or hurt? Plan today with me": opens at the first question. */
   openAsk?: number;
+  /**
+   * (#428) Bumped by the tab bar's center button: opens the same way its own mic does (voice,
+   * ready to listen) when voice is available, the first question otherwise. Never starts a
+   * workout. Fires on mount too, so it still works after switching tabs into Today.
+   */
+  voiceAsk?: number;
   /** (#302) The body map's shading on the Train question: muscles trained in the last 72 h. */
   shade?: Shade;
 }
@@ -65,7 +71,7 @@ const minutesLabel = (minutes: number) => (minutes === 60 ? '1 hr' : `${minutes}
  * of answering builds the same day. (#426) The mic is a second way to fill that same sentence —
  * `VoiceSheet` only transcribes; it never parses on its own.
  */
-export default function TodayTalk({ profile, plannedName, todayName, plannedAreas, plannedFocus, savedGear, savedMinutes, base, preview, onStart, onActive, openAsk = 0, shade = {} }: Props) {
+export default function TodayTalk({ profile, plannedName, todayName, plannedAreas, plannedFocus, savedGear, savedMinutes, base, preview, onStart, onActive, openAsk = 0, voiceAsk = 0, shade = {} }: Props) {
   const [step, setStep] = useState<Question | 'summary' | null>(null);
   const [text, setText] = useState('');
   // Answers sit on top of the text, so typing more never undoes them (see `tapsAfterEdit`).
@@ -101,6 +107,24 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
       titleRef.current?.focus();
     });
   }, [openAsk]);
+  // (#428) Asked from the tab bar's center button: open the same way its own mic does, falling
+  // back to Q1 when voice isn't available. A plain effect (not the seen-value pattern above) so
+  // it still fires after switching tabs into Today remounts this component with voiceAsk already set.
+  useEffect(() => {
+    if (voiceAsk === 0) return;
+    if (!micBlocked && voiceSupported()) {
+      setStep(null);
+      setVoiceOpen(true);
+    } else {
+      setStep('time');
+    }
+    setBuilt(null);
+    requestAnimationFrame(() => {
+      titleRef.current?.scrollIntoView({ block: 'nearest' });
+      titleRef.current?.focus();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceAsk]);
   // Gear or time changed in another sheet: that newer choice shows through the answers.
   const baseKey = `${base.equipment}:${base.minutes}`;
   const [seenBase, setSeenBase] = useState(baseKey);

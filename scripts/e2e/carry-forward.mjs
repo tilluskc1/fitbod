@@ -88,6 +88,8 @@ try {
     const errors = [];
     page.on('pageerror', (error) => errors.push(String(error)));
     await onboard(page, unit);
+    // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     const name = (await page.locator('.aw-exercise__name').innerText()).trim();

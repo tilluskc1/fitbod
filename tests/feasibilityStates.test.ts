@@ -98,7 +98,8 @@ test('Today and Plan show Limited and Not enough with alternatives, and nothing 
     assert.doesNotMatch(none.plan, /Add Pull-up bar|feasibility__alt/, 'Plan shows no alternatives');
     // The empty day's own row states no minutes (#200); the header's "usual" line still may.
     assert.equal(rowStats(none.plan)?.[3], undefined, 'no minutes in an empty day row');
-    assert.equal(tabBarAction(null, none.adapted).disabled, true, 'no Start of an empty workout');
+    // (#428) Not enough equipment is exactly when the planner helps most: the centre button opens it, never disabled.
+    assert.equal(tabBarAction(null).disabled, false, 'the planner still opens on an empty workout');
     assert.match(none.today, /<button[^>]*disabled=""[^>]*>Preview workout/);
 
     const curls = screens(Today, Plan, noCurls, 'Pull');

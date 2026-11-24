@@ -162,6 +162,8 @@ try {
     check(todayPlay.ok, `${where}: Today's player clip did not advance (${todayPlay.a} → ${todayPlay.b})`);
     await page.keyboard.press('Escape');
 
+    // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     const first = await current(page);
@@ -242,6 +244,7 @@ try {
     });
     const rp = await refused.newPage();
     await onboard(rp);
+    await rp.getByRole('button', { name: 'Preview workout' }).click();
     await rp.getByRole('button', { name: 'Start workout' }).click();
     await rp.waitForSelector('.lg-ex');
     await thumb(rp).click();
@@ -273,6 +276,7 @@ try {
   await off.setOffline(true);
   await op.reload();
   await op.waitForSelector('.t7-hero');
+  await op.getByRole('button', { name: 'Preview workout' }).click();
   await op.getByRole('button', { name: 'Start workout' }).click();
   await op.waitForSelector('.lg-ex');
   await thumb(op).click();

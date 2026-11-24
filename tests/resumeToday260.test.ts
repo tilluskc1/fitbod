@@ -118,9 +118,10 @@ test('#260 with #220: a described session shows its progress, keeps its own stat
   });
 });
 
-test('#260 (lesson 9): Today\'s Resume and the tab bar\'s centre button are one handler', () => {
+test('#260 (lesson 9): Today\'s Resume and the tab bar\'s centre button are one handler while a session runs', () => {
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
-  assert.match(app, /const openWorkout = current \? \(\) => setView\('train'\) : startWorkout;/);
+  assert.match(app, /const openWorkout = \(\) => setView\('train'\);/);
   assert.match(app, /onResume=\{openWorkout\}/);
-  assert.match(app, /onActivate: openWorkout,/);
+  // (#428) Without a session, the centre button opens the planner instead of starting one.
+  assert.match(app, /onActivate: current \? openWorkout : openPlanHelper,/);
 });

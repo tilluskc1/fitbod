@@ -121,6 +121,8 @@ try {
 
     // Train: the exercise title, the set cells, Swap rows, then Discard.
     await page.getByRole('button', { name: 'Today', exact: true }).click();
+    // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     // A long exercise name may wrap like any heading; the button must still be a full target.

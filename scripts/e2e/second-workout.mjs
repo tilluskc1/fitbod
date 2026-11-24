@@ -50,6 +50,8 @@ async function onboard(page) {
 
 /** One whole workout: log every set at its prefilled weight (#309), finish, back to Today. */
 async function finishWorkout(page) {
+  // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+  await page.getByRole('button', { name: 'Preview workout' }).click();
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
   for (let guard = 0; guard < 120; guard += 1) {
@@ -95,7 +97,8 @@ try {
     check(Boolean(last), `${where}: Last session shows the load (${card})`);
     check(Boolean(target), `${where}: the target carries its load (${card})`);
 
-    // Two taps and nothing in between: Start, then set 1's check, with no step and no typing.
+    // (#428) Preview, then Start, then set 1's check, with no step and no typing.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     check(await page.getByText(/Suggested start/).count() === 0, `${where}: no suggested start the second time`);
@@ -121,4 +124,4 @@ if (failures.length > 0) {
   console.error(`FAIL\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('PASS: second workout starts in 2 taps with last week\'s loads and the progressed target');
+console.log('PASS: second workout starts (Preview, then Start) with last week\'s loads and the progressed target');

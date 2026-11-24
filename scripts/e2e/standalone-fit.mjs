@@ -282,6 +282,8 @@ try {
     await page.waitForSelector('.t7-hero');
 
     // The logger.
+    // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     await checkInputs(page, where, 'logger');

@@ -52,6 +52,8 @@ async function onboard(page, unit) {
 
 /** Last week's session of today's lead at `kg`, so set 1 opens on it; or, with `firstTime`, a lead never done. */
 async function seedLead(page, { kg, firstTime }) {
+  // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+  await page.getByRole('button', { name: 'Preview workout' }).click();
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
   await page.evaluate(([key, kg, firstTime]) => {
@@ -83,6 +85,7 @@ async function seedLead(page, { kg, firstTime }) {
     await page.getByRole('button', { name: 'Resume workout', exact: true }).click();
   } else {
     await page.waitForSelector('.t7-hero');
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
   }
   await page.waitForSelector('.lg-ex');

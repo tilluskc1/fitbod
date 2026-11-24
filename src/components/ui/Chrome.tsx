@@ -12,7 +12,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 ];
 
 export type TabBarAction = {
-  /** What the action does now: begin today's workout or reopen the live one. */
+  /** What the action does now: open the planning helper, or reopen the live workout. */
   kind: TabBarActionKind;
   label: string;
   name: string;
@@ -79,7 +79,7 @@ export function TabBar({
                 />
               </svg>
             )}
-            <Icon name="play_arrow" size={28} />
+            <Icon name={workoutAction.kind === 'resume' ? 'play_arrow' : 'mic'} size={28} />
           </span>
           <span className="tab-action__label" aria-hidden="true">{workoutAction.label}</span>
         </button>

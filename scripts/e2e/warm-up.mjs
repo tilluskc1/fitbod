@@ -51,6 +51,8 @@ async function onboard(page, minutes) {
 
 /** Last week's session of today's lead, 5 sets at 60 kg: today's target holds 60 kg. */
 async function seedLead(page) {
+  // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+  await page.getByRole('button', { name: 'Preview workout' }).click();
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
   await page.evaluate(() => {
@@ -71,6 +73,7 @@ async function seedLead(page) {
   });
   await page.reload();
   await page.waitForSelector('.t7-hero');
+  await page.getByRole('button', { name: 'Preview workout' }).click();
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
 }

@@ -253,6 +253,8 @@ try {
 
     // 7. A running session: "In progress · 1 of N sets" and Resume, no bar, no View.
     await openTab(page, 'Today');
+    // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();

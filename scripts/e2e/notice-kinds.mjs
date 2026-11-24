@@ -112,9 +112,9 @@ try {
     check(!(await page.getByRole('button', { name: 'Dismiss message' }).count()), `${where}: the toast has a Dismiss link`);
     const fill = await page.locator(`${TOAST} .done-toast__pill`).evaluate((n) => getComputedStyle(n).backgroundColor);
     check(fill === 'rgb(18, 21, 21)', `${where}: toast fill is ${fill}, not --btn`);
-    await clearOf(page, page.locator('.tab-action'), 'Start', where);
+    await clearOf(page, page.locator('.tab-action'), 'Talk', where);
     await clearOf(page, page.locator('.tabbar'), 'the tab bar', where);
-    await tapLands(page, page.locator('.tab-action'), 'Start', where);
+    await tapLands(page, page.locator('.tab-action'), 'Talk', where);
     await shot(page, 'done', where);
     await page.waitForTimeout(4300);
     check(!(await toast.count()), `${where}: the toast is still up after 4 s`);
@@ -124,6 +124,8 @@ try {
     await toast.waitFor({ timeout: 3000 }).catch(() => {});
     check(await toast.count() === 1, `${where}: no toast after Undo`);
     await clearOf(page, page.locator('.flow-dock .pill-primary'), 'Preview workout', where);
+    // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     check(!(await toast.count()), `${where}: the Today toast followed into the logger`);
@@ -189,6 +191,8 @@ try {
     await shot(page, 'partial-today', where);
 
     // A full workout: "Workout saved." is a Done toast on the recap and follows it to Today.
+    // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     for (let i = 0; i < 80 && await page.locator('button.lg-log:not(.lg-log--back):not([disabled])').count(); i += 1) {
@@ -259,6 +263,7 @@ try {
     }
     // Raised after: a carry's Undo is reachable while the save error stands.
     await page.waitForTimeout(4300);
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     const set1 = page.getByLabel(/^Set 1 weight/);

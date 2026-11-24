@@ -46,6 +46,8 @@ async function onboard(page) {
   await page.getByRole('button', { name: 'At a gym' }).click();
   await page.getByRole('button', { name: 'Build my plan' }).click();
   await page.waitForSelector('.t7-hero');
+  // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+  await page.getByRole('button', { name: 'Preview workout' }).click();
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
 }

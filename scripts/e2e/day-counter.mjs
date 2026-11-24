@@ -48,6 +48,8 @@ async function onboard(page) {
 
 /** One whole workout, back on Today. */
 async function finishWorkout(page) {
+  // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+  await page.getByRole('button', { name: 'Preview workout' }).click();
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
   for (let guard = 0; guard < 120; guard += 1) {
@@ -107,6 +109,7 @@ try {
     noSlot(await page.locator('body').innerText(), `${where} Today after skip`);
     if (shots) await page.screenshot({ path: join(shots, `271-today-after-skip-${where}.png`) });
 
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     noSlot(await page.locator('body').innerText(), `${where} Train`);

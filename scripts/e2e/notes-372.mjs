@@ -83,6 +83,8 @@ try {
     page.on('pageerror', (error) => errors.push(String(error)));
     await page.clock.setFixedTime(day(0));
     await onboard(page);
+    // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+    await page.getByRole('button', { name: 'Preview workout' }).click();
     await page.getByRole('button', { name: 'Start workout' }).click();
     await page.waitForSelector('.lg-ex');
     const noted = await current(page);
@@ -120,6 +122,7 @@ try {
     let found = false;
     for (let offset = 1; offset <= 8 && !found; offset += 1) {
       await page.clock.setFixedTime(day(offset * 2));
+      await page.getByRole('button', { name: 'Preview workout' }).click();
       await page.getByRole('button', { name: 'Start workout' }).click();
       await page.waitForSelector('.lg-ex');
       if ((await current(page)) === noted) found = true;

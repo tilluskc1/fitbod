@@ -67,6 +67,8 @@ const toToday = async (page) => {
 };
 /** Start from Today; the logger is open. */
 async function start(page) {
+  // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+  await page.getByRole('button', { name: 'Preview workout' }).click();
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
 }

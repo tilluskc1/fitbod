@@ -207,7 +207,9 @@ try {
   // A running session: the logger never shows the map.
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await onboard(page);
-  await page.locator('.tab-action').click();
+  // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+  await page.getByRole('button', { name: 'Preview workout' }).click();
+  await page.getByRole('button', { name: 'Start workout' }).click();
   await page.getByRole('button', { name: 'Minimize workout' }).waitFor();
   check(await page.locator('.bm').count() === 0, '390x844: the body map shows in the logger');
   await page.close();

@@ -102,19 +102,20 @@ test('"Why this target" keeps the precise reason', async () => {
   });
 });
 
-const startControls = (html: string) =>
-  (html.match(/<button[\s\S]*?<\/button>/g) ?? []).filter((button) => /Start|Resume/.test(button));
+const resumeControls = (html: string) =>
+  (html.match(/<button[\s\S]*?<\/button>/g) ?? []).filter((button) => /Resume/.test(button));
 
 // (#260) A running session also offers Resume in the dock: the tab bar's own handler (tests/resumeToday260.test.ts).
-test('Today has one Start (the tab action) before a session and Resume in tab and dock during one; Preview only before', async () => {
+// (#428) Before a session, the tab action opens the planner (never "Start"); Preview workout is the explicit start path.
+test('Today opens the planner (not Start) before a session, and Resume in tab and dock during one; Preview only before', async () => {
   await withServer(async (load) => {
     const { default: Today } = await load('/src/screens/TodayScreen.tsx');
     const { TabBar } = await load('/src/components/ui/Chrome.tsx');
-    const live = liveAdapted(adapted, profile, []);
     for (const current of [null, liveSession([])]) {
       const html = renderToday(Today, profile, [], current) + renderToStaticMarkup(createElement(TabBar as never,
-        { active: 'today', onChange: noop, workoutAction: { ...tabBarAction(current, live), onActivate: noop } }));
-      assert.equal(startControls(html).length, current ? 2 : 1, current ? 'resume' : 'start');
+        { active: 'today', onChange: noop, workoutAction: { ...tabBarAction(current), onActivate: noop } }));
+      assert.equal(resumeControls(html).length, current ? 2 : 0, current ? 'resume' : 'no resume yet');
+      assert.match(html, current ? /Resume/ : /Plan today with me/, current ? 'resume' : 'plan helper, not start');
       assert.equal(html.includes('Preview workout'), !current, 'preview only before a session opens');
     }
   });

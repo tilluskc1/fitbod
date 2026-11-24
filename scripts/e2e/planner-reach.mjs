@@ -57,6 +57,8 @@ async function onboard(page) {
 
 /** One whole workout, so the backup reminder (#243) shows on Today afterwards. */
 async function finishWorkout(page, afterFinish) {
+  // (#428) The tab bar's centre button no longer starts a workout: Preview, then its own Start.
+  await page.getByRole('button', { name: 'Preview workout' }).click();
   await page.getByRole('button', { name: 'Start workout' }).click();
   await page.waitForSelector('.lg-ex');
   for (let guard = 0; guard < 120; guard += 1) {
@@ -254,6 +256,7 @@ try {
     });
     await train.clock.setFixedTime(day(0));
     await onboard(train);
+    await train.getByRole('button', { name: 'Preview workout' }).click();
     await train.getByRole('button', { name: 'Start workout' }).click();
     await train.waitForSelector('.lg-ex');
     await train.locator('button.lg-log:not(.lg-log--back):not([disabled])').first().click();
