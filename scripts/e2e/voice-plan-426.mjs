@@ -249,8 +249,8 @@ async function layoutShots(browser, label) {
   }
 }
 
-// CI installs only Chromium (checks.yml); WebKit runs here when a local shot pass asks for it
-// (E2E_SHOTS set), so the owner's Chromium+WebKit layout check has real screenshots from both.
+// CI sets E2E_SHOTS for every group (screenshot artifacts) and installs WebKit too (checks.yml,
+// #435), so this always runs both there; a local shot pass without E2E_SHOTS skips WebKit.
 const chromiumBrowser = await chromium.launch();
 const webkitBrowser = shots ? await webkit.launch() : null;
 try {
