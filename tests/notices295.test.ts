@@ -58,17 +58,25 @@ test('Today shows at most one Heads-up card: install, then backup, then the rest
  * `done`, `headsUp` or `problem` (or is missing from this list) fails here.
  */
 const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> = [
+  // #430: a logging tab whose workout another tab saved or closed.
+  ['headsUp', 'savedThere'],
   ['problem', "'No movement in this workout can be done with that setup.'"],
   ['done', "'Session skipped. Skips earn no progression.'"],
-  ['problem', "'That preview is out of date. Preview again to approve it.'"],
+  // #430: the start-conflict sheet's Save and switch / Save and start.
+  ['done', '`Saved ${setsLabel(sets)} from ${open.name}. ${option.name} is up.`'],
   ['problem', "'No movement in this workout can be done with that setup.'"],
+  ['done', '`Saved ${setsLabel(sets)} from ${open.name}. ${workout.name} started.`'],
+  // #430: Discard and switch.
+  ['done', '`${option.name} is up.'],
+  ['problem', "'No movement in this workout can be done with that setup.'"],
+  ['problem', "'That preview is out of date. Preview again to approve it.'"],
   ['done', '`${minutes} min is now your default length.`'],
   ['done', "'Back to your program.'"],
   ['done', 'CHANGED_FOR_TODAY'],
   ['done', "'Back to your gear.'"],
   ['done', 'CHANGED_FOR_TODAY'],
   ['done', '`${option.name} is up.'],
-  // #296: Switch's "Or train something else". (#397) No "Finish or discard" heads-ups: the chips end or finish first.
+  // #296: Switch's "Or train something else".
   ['done', 'CHANGED_FOR_TODAY'],
   ['done', 'message'],
   ['headsUp', 'text'],
@@ -79,13 +87,16 @@ const CALL_SITES: Array<[kind: 'done' | 'headsUp' | 'problem', starts: string]> 
   // #372: a note saved or removed from the exercise menu.
   ['done', "after === undefined ? 'Note removed.'"],
   ['headsUp', 'liveCarry.note'],
-  // #372's no-sets toast (notes went with the session) now comes from endEmptySession below (#397, lesson 9).
   ['headsUp', 'progress.skipped > 0'],
   ['done', "'Workout saved.'"],
   ['done', '`${slot.name} skipped'],
-  ['done', "'Session discarded. Nothing was added to history.'"],
-  // #397: ending an empty session from Today, the Finish sheet or a chip.
+  // #430: Discard from the workout menu says how many sets went.
+  ['done', 'sets > 0 ? `Workout discarded. ${setsLabel(sets)} deleted.`'],
+  // #397: ending an empty session.
   ['done', 'noSetsNotice(hadNotes)'],
+  // #430: Hide for now; Ask with no plan.
+  ['done', "'Hidden on this phone. Resume it from Plan.'"],
+  ['problem', "'Set up your plan first, then ask about today.'"],
   ['problem', 'refused'],
   ['done', "'Workout deleted.'"],
   ['problem', "'Backup not saved, so nothing was recorded. Try again.'"],

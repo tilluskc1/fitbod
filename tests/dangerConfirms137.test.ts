@@ -66,16 +66,23 @@ test('ConfirmSheet is an in-app dialog: danger action first, cancel below (#137)
   });
 });
 
-test('replacing an open session discards in danger, keep below (#137)', async () => {
-  await withSheets(({ DiscardSessionSheet }) => {
-    const html = renderToStaticMarkup(createElement(DiscardSessionSheet, {
-      currentName: 'Full body A', nextName: 'Full body B', onDiscard: () => {}, onKeep: () => {}, onClose: () => {},
+// (#430) The replace sheet is retired. Discarding an open workout with sets now asks once more with the count;
+// per the #430 spec its Cancel comes first and takes focus, the soft-danger discard sits below it.
+test('discarding an open workout with sets confirms with the count, Cancel first (#137, #430)', async () => {
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
+  try {
+    const { DiscardWorkoutConfirm } = await server.ssrLoadModule('/src/components/OpenWorkout.tsx');
+    const html = renderToStaticMarkup(createElement(DiscardWorkoutConfirm, {
+      name: 'Full body A', sets: 3, onConfirm: () => {}, onCancel: () => {},
     }) as never);
-    assert.deepEqual(buttons(html).filter((button) => button.cls !== 'sheet-close'), [
-      { cls: 'danger', text: 'Discard and start Full body B' },
-      { cls: 'secondary', text: 'Keep current workout' },
+    assert.match(html, /role="dialog"/);
+    assert.deepEqual(buttons(html).filter((button) => !button.cls.includes('sheet-close')), [
+      { cls: 'pill-quiet wide js-cancel', text: 'Cancel' },
+      { cls: 'btn-danger-soft', text: 'Discard 3 sets' },
     ]);
-  });
+  } finally {
+    await server.close();
+  }
 });
 
 test('one button order: the action first, the way out below, Preview included (#137)', async () => {

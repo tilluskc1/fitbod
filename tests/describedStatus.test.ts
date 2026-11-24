@@ -128,14 +128,13 @@ test('#219: Today and Plan show a described day\'s status and reasons as the pre
       const running = createSession({ id: 's', name: live.name, dayIndex: lower.index, exercises: liveExercises(live, gym, []), now: now.toISOString(), durationMin: live.minutes });
       for (const current of [null, running]) {
         const today = renderToStaticMarkup(createElement(Today as never, { profile: gym, program, adapted: live,
-          equipment: talk.equipment, adjusted: true, history: [], current, now, described, onPreview: noop, onAdjust: noop,
+          equipment: talk.equipment, adjusted: true, history: [], current, workoutOpen: current !== null, now, described, onPreview: noop, onAdjust: noop,
           onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop, onReviewChange: noop }));
         const chip = chipOf(today);
         assert.ok(chip, at);
         assert.equal(chip[1], preview.status, `${at}: tone`);
-        // (#260) Running, the chip counts the session's sets; the tone keeps the status.
-        if (current) assert.match(chip[2].trim(), /^In progress · 0 of \d+ sets$/, `${at}: chip`);
-        else assert.equal(chip[2].trim(), word, `${at}: chip`);
+        // (#430, ruling 4a) Running or not, Today reads the plan's status, never "In progress".
+        assert.equal(chip[2].trim(), word, `${at}: chip`);
         const text = plain(today);
         for (const line of reasons) assert.ok(text.includes(`${line.label} ${line.text}`), `${at}: Today lacks ${line.label} ${line.text}`);
         assert.doesNotMatch(text, REQUIREMENT, at);

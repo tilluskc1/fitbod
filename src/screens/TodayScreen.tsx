@@ -315,7 +315,7 @@ export default function TodayScreen({
     backup: Boolean(backup && onBackup && !workoutOpen),
     message: Boolean(message),
     limited: !described && !adjusted && program.feasibility?.status === 'limited',
-    fresher: Boolean(fresher && onPickFresher && onKeepNext),
+    fresher: Boolean(fresher && onPickFresher && onKeepNext && !workoutOpen),
   });
 
   return (

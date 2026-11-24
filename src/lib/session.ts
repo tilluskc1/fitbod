@@ -683,7 +683,7 @@ export function lastActiveIso(workout: WorkoutRecord, nowMs: number): string {
   return new Date(at).toISOString();
 }
 
-/** Stamp a real action. Clamped: a stamp never runs ahead of the clock it was written with. */
+/** Stamp a real action with the clock of the update that made it. */
 export function touch(workout: WorkoutRecord, now: string): WorkoutRecord {
   return { ...workout, lastActiveAt: now };
 }

@@ -9,7 +9,6 @@ import { adaptWorkout } from '../src/lib/adapt.ts';
 import { liveAdapted, liveExercises, targetReason } from '../src/lib/liveProgression.ts';
 import { currentSlot, planSlots, slotProgram } from '../src/lib/sequence.ts';
 import { applyFinish, createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
-import { tabBarAction } from '../src/lib/tabBarAction.ts';
 import type { AppState, Profile } from '../src/types.ts';
 
 const RACK = [10, 15, 18];
@@ -29,7 +28,7 @@ function today(state: AppState) {
 /** Start the current slot, log `sets` of one exercise at `weight × reps`, finish. */
 function finish(state: AppState, exerciseId: string, weight: number, reps: number, sets: number, at: string): AppState {
   const { slot, adapted, stored } = today(state);
-  assert.equal(tabBarAction(null, adapted).disabled, false, 'tab bar Start offers this same slot');
+  assert.ok(adapted.exercises.length > 0, 'Preview > Start offers this same slot');
   let session = createSession({ id: `s-${state.history.length}`, name: adapted.name, dayIndex: slot.index, slotId: slot.id,
     slotSeq: state.programCursor?.seq ?? 0, planRevision: state.planRevision, exercises: stored, now: `${at}T10:00:00.000Z`,
     durationMin: adapted.minutes });

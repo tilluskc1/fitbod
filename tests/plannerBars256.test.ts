@@ -10,8 +10,9 @@ const css = read('src/index.css');
 const rule = (selector: string) => { const at = css.indexOf(`${selector} {`); assert.ok(at >= 0, selector); return css.slice(at, css.indexOf('}', at)); };
 
 test('the tab bar steps aside while the planner is open on Today', () => {
-  assert.match(read('src/App.tsx'), /\{!\(tab === 'today' && composing && !current\) && <TabBar/);
-  assert.match(read('src/screens/TodayScreen.tsx'), /className="flow-dock" hidden=\{composing && !current\}/);
+  // (#430) Today plans the day even while a workout is open, so the planner hides both bars in every state.
+  assert.match(read('src/App.tsx'), /\{!\(tab === 'today' && composing\) && <TabBar/);
+  assert.match(read('src/screens/TodayScreen.tsx'), /className="flow-dock" hidden=\{composing\}/);
 });
 
 test("every planner step and the summary keep their actions in the pinned bar", () => {
@@ -27,7 +28,8 @@ test("every planner step and the summary keep their actions in the pinned bar", 
 
 test('the entry comes before the backup note so the reminder cannot push it under the dock', () => {
   const today = read('src/screens/TodayScreen.tsx');
-  assert.ok(today.indexOf('{!current && composer}') < today.indexOf("{card === 'backup' && onBackup"));
+  const entry = today.indexOf('{composer}');
+  assert.ok(entry >= 0 && entry < today.indexOf("{card === 'backup' && onBackup"));
 });
 
 test('the keyboard inset is what the visual viewport hides, never negative', async () => {

@@ -95,9 +95,9 @@ import {
   TypedAskSheet,
   WorkoutAskSheet,
   WorkoutMenuSheet,
-  setsLabel,
   type ExpiryNoteKind,
 } from './components/OpenWorkout';
+import { setsLabel } from './lib/openWorkout';
 import type { TalkAsk } from './components/TodayTalk';
 import { bigJumpNote, burstLive, burstMark, carryMessage, heldMessage, overLastTime, setAllMessage } from './lib/carry';
 import { loadModeOf, needsLoad, setUnit } from './data/flagship';

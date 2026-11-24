@@ -17,7 +17,8 @@ const session = () => createSession({ id: 'accepted', name: adapted.name, dayInd
 const plain = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const noop = () => {};
 
-test('swap-back segments keep their own accepted targets in Today, details, Why, day and logger', async () => {
+// (#430, ruling 4a) Today shows the plan, never the open workout, so the segment checks live in the sheets and logger.
+test('swap-back segments keep their own accepted targets in details, Why, day and logger', async () => {
   let current = logSet(updatePerformedSet(session(), 0, 0, { weight: 20, reps: 10 }), 0, 0);
   current = swapPendingExercise(current, 0, swapCandidateFor(exerciseById('push-up')!, profile, [], current));
   current = swapPendingExercise(current, 1, swapCandidateFor(exerciseById('dumbbell-floor-press')!, profile, [], current));
@@ -25,26 +26,8 @@ test('swap-back segments keep their own accepted targets in Today, details, Why,
   const pending = current.exercises[1];
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
-    const { default: Today } = await server.ssrLoadModule('/src/screens/TodayScreen.tsx');
     const { ExerciseActionsSheet, WhySheet, DaySheet } = await server.ssrLoadModule('/src/screens/Sheets.tsx');
     const { default: Train } = await server.ssrLoadModule('/src/screens/TrainScreen.tsx');
-    const todayProps = { profile, program: FULL_BODY_A, adapted,
-      equipment: 'home', adjusted: true, history: [], current, now: new Date(), onPreview: noop,
-      onAdjust: noop, onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop };
-    const today = plain(renderToStaticMarkup(createElement(Today, todayProps)));
-    let clicked: unknown[] = [];
-    const tree = Today({ ...todayProps, onOpenExercise: (...args: unknown[]) => { clicked = args; } });
-    const rows: any[] = [];
-    const visit = (node: any) => {
-      if (!node || typeof node !== 'object') return;
-      if (node.props?.className === 'workout-row') rows.push(node);
-      for (const child of [node.props?.children].flat(Infinity)) visit(child);
-    };
-    visit(tree);
-    rows[1].props.onClick();
-    assert.deepEqual(clicked, ['dumbbell-floor-press', 1], 'pending row supplies its segment, not just exercise ID');
-    assert.match(today, /1 set · 9 @ 15 kg each/);
-    assert.match(today, /1 set · 10 @ 20 kg each/);
     const sheetProps = { exerciseId: pending.exerciseId, exerciseName: pending.name, planned: pending.planned,
       history: [], unit: 'kg', onClose: noop };
     assert.match(plain(renderToStaticMarkup(createElement(WhySheet, sheetProps))), /Today(?:’s target)? 10 @ 20 kg each/);

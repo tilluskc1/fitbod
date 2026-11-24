@@ -576,8 +576,11 @@ test('restore keeps local-only workouts and an unrelated active session', () => 
   const merged = mergeImport(local, imported);
   assert.deepEqual(
     merged.state.history.map((workout) => workout.id),
-    ['shared', 'import-only', 'local-only'],
+    // (#430) The backup's own open workout had a done set: it is saved to history, never dropped.
+    ['shared', 'import-only', 'local-only', 'import-active'],
   );
+  assert.equal(merged.summary.backupSessionSavedSets, 1);
+  assert.equal(merged.state.history.at(-1)?.status, 'completed');
   assert.equal(merged.summary.newWorkouts, 1);
   assert.equal(merged.summary.duplicateWorkouts, 1);
   assert.equal(merged.summary.localOnlyWorkouts, 1);

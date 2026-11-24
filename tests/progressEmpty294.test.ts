@@ -52,7 +52,7 @@ const profile = {
   equipment: ['Dumbbell'], support: [], unit: 'kg', loads: {},
 };
 
-async function render(history: WorkoutRecord[], options: { unit?: Unit; running?: boolean } = {}) {
+async function render(history: WorkoutRecord[], options: { unit?: Unit; openWorkout?: { name: string; sets: number } } = {}) {
   const server = await createServer({
     server: { middlewareMode: true, hmr: false, ws: false, watch: null },
     appType: 'custom',
@@ -62,7 +62,7 @@ async function render(history: WorkoutRecord[], options: { unit?: Unit; running?
     const { default: Coach } = await server.ssrLoadModule('/src/screens/CoachScreen.tsx');
     const noop = () => {};
     const progress = renderToStaticMarkup(createElement(Progress, {
-      history, unit: options.unit ?? 'kg', running: options.running ?? false,
+      history, unit: options.unit ?? 'kg', openWorkout: options.openWorkout ?? null,
       onExport: noop, onCorrect: noop, onDelete: noop, onFeedback: noop, onStartToday: noop,
     }));
     const coach = renderToStaticMarkup(createElement(Coach, {
@@ -133,10 +133,13 @@ for (const [label, history] of [
   });
 }
 
-test('a running session and no finished one: the button reads Resume workout', async () => {
-  const { progress } = await render([], { running: true });
-  assert.match(progress, />Resume workout/);
-  assert.doesNotMatch(progress, /Start today/);
+// (#430) The resume row above the page resumes an open workout; the empty state offers no second button.
+test('an open workout and no finished one: no Start or Resume button; logged sets are promised once saved', async () => {
+  const { progress } = await render([], { openWorkout: { name: 'Push', sets: 3 } });
+  assert.doesNotMatch(progress, /Resume workout|Start today/);
+  assert.match(progress, /Your 3 Push sets count once you save the workout\./);
+  const empty = await render([], { openWorkout: { name: 'Push', sets: 0 } });
+  assert.doesNotMatch(empty.progress, /sets? counts? once/);
 });
 
 /* ---------- one or more finished workouts ---------- */

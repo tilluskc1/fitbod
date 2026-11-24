@@ -6,18 +6,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { FULL_BODY_A } from '../src/data/flagship.ts';
 import { adaptWorkout } from '../src/lib/adapt.ts';
-import { buildPlan } from '../src/lib/generator.ts';
 import { liveAdapted, liveExercises } from '../src/lib/liveProgression.ts';
-import { planSlots, todayProgram } from '../src/lib/sequence.ts';
 import { createSession, logSet, updatePerformedSet } from '../src/lib/session.ts';
-import { describedSessionStatus, talkConstraints } from '../src/lib/todayTalk.ts';
-import type { TalkState } from '../src/lib/todayTalk.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
 /**
- * #260: a running session reads as running on Today, after a reload too (Today renders only from
- * the stored session): an "In progress · N of M sets" chip, a primary "Resume workout" in the dock,
- * and no "Short on time or gear?". A day with nothing open is unchanged.
+ * #260: a running session read as running on Today. #430 (ruling 4a) changed the surface: Today always
+ * shows the plan (its own status chip, Preview and the adjust action), and the open workout reads in the
+ * quiet resume row above it (`openRow`) and in the filled set count. Resume lives on that row and in Plan.
  */
 const profile: Profile = {
   name: 'K', goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
@@ -51,23 +47,26 @@ test('#260: the fixture has 2 of 11 sets logged', () => {
   assert.equal(twoDone.exercises.flatMap((exercise) => exercise.performed).filter((set) => set.done).length, 2);
 });
 
-test('#260: a running session shows "In progress · N of M sets", not "Ready"', async () => {
+test('#260 (#430): an open workout leaves Today on the plan: Ready, Preview and the adjust action stay', async () => {
   await withToday((Today) => {
-    const chip = chipOf(render(Today, twoDone));
-    assert.equal(chip?.[3].trim(), 'In progress · 2 of 11 sets');
-    assert.equal(chip?.[1], 'ready', 'lime: live');
-    assert.equal(chip?.[2], 'play_arrow');
-    assert.equal(chipOf(render(Today, fresh))?.[3].trim(), 'In progress · 0 of 11 sets');
+    for (const current of [fresh, twoDone]) {
+      const html = render(Today, current, { workoutOpen: true, logged: 2 });
+      assert.equal(chipOf(html)?.[3].trim(), 'Ready', 'the plan keeps its own status');
+      const dock = dockOf(html);
+      assert.match(dock, /Short on time or gear\?/);
+      assert.match(dock, /<button class="pill-primary">Preview workout/);
+      assert.doesNotMatch(html, /Resume workout|In progress/, 'no Resume or In progress outside the row');
+    }
   });
 });
 
-test('#260: the dock offers Resume workout and no adjust action while a session is open', async () => {
+test('#260 (#430): the open workout reads in the resume row and the set count', async () => {
   await withToday((Today) => {
-    const dock = dockOf(render(Today, twoDone));
-    assert.match(dock, /<button class="pill-primary"[^>]*>Resume workout/);
-    assert.doesNotMatch(dock, /Short on time or gear\?/);
-    assert.doesNotMatch(dock, /Preview workout/);
-    assert.doesNotMatch(render(Today, twoDone), /Short on time or gear\?/);
+    const row = createElement('div', { className: 'rrow-probe' }, 'ROW');
+    const html = render(Today, twoDone, { workoutOpen: true, logged: 2, openRow: row });
+    assert.match(html, /<div class="rrow-probe">ROW<\/div>/);
+    assert.match(plain(html), /2 \/\d+ sets logged/);
+    assert.doesNotMatch(render(Today, null), /rrow-probe/);
   });
 });
 
@@ -83,44 +82,9 @@ test('#260: a day with nothing open is unchanged: Ready, Preview and the adjust 
   });
 });
 
-test('#260 with #220: a described session shows its progress, keeps its own status colour, and after midnight reads as live', async () => {
-  const gym: Profile = {
-    name: 'K', goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 4,
-    equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Kettlebell'], support: ['Bench', 'Rack', 'Pull-up bar'],
-    exclusions: [], loads: {}, unit: 'lb', sessionMinutes: 60,
-  };
-  const slot = planSlots(buildPlan(gym))[0];
-  const talk: TalkState = { equipment: 'home', minutes: 45, train: ['Legs'], skip: ['Back'], sore: ['Back'], pain: false, notices: [] };
-  const constraints = talkConstraints(talk, undefined, slot.focus);
-  const live = liveAdapted(adaptWorkout(todayProgram(gym, slot, [], constraints), constraints, [], gym.goal), gym, []);
-  // planRevision without a slot link: a described session (#220), one set logged.
-  const opened = createSession({ id: 'd', name: live.name, dayIndex: slot.index, planRevision: 1, exercises: liveExercises(live, gym, []),
-    now: START, durationMin: live.minutes });
-  const session = logSet(updatePerformedSet(opened, 0, 0, { weight: 95 }), 0, 0, '2026-11-04T10:02:00.000Z');
-  const sets = session.exercises.flatMap((exercise) => exercise.performed).length;
-  assert.ok(sets > 1);
-  const ask = { date: '2026-11-04', minutes: 45, equipment: ['Dumbbell'], support: [], appliedAt: START, choice: 'home' as const,
-    focus: constraints.focus, skip: constraints.skip };
-  // A planned day the generator rates Limited: what Today falls back to after midnight.
-  const shortDay = todayProgram(gym, slot, [], { equipment: 'bodyweight', minutes: 30 });
-  assert.equal(shortDay.feasibility?.status, 'limited');
-  await withToday((Today) => {
-    const today = render(Today, session, { profile: gym, adapted: live, program: shortDay,
-      described: describedSessionStatus(session, ask, gym) });
-    assert.match(plain(today), /Lower in progress.*Today only/);
-    assert.deepEqual(chipOf(today)?.slice(1).map((part) => part.trim()), ['ready', 'play_arrow', `In progress · 1 of ${sets} sets`]);
-    assert.match(dockOf(today), /Resume workout/);
-    assert.doesNotMatch(today, /Short on time or gear\?/);
-
-    const rolled = render(Today, session, { profile: gym, adapted: live, program: shortDay, described: null });
-    assert.deepEqual(chipOf(rolled)?.slice(1).map((part) => part.trim()), ['ready', 'play_arrow', `In progress · 1 of ${sets} sets`]);
-    assert.doesNotMatch(rolled, /Limited|role="note"/);
-  });
-});
-
-test('#260 (lesson 9): Today\'s Resume and the tab bar\'s centre button are one handler', () => {
+test('#260 (lesson 9): the resume row and Plan resume through the one handler', () => {
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
-  assert.match(app, /const openWorkout = current \? \(\) => setView\('train'\) : startWorkout;/);
-  assert.match(app, /onResume=\{openWorkout\}/);
-  assert.match(app, /onActivate: openWorkout,/);
+  assert.match(app, /<ResumeRow [^>]*onResume=\{\(\) => resumeWorkout\(\)\}/);
+  assert.equal(app.match(/onResume=\{\(\) => resumeWorkout\(\)\}/g)?.length, 2, 'row and Plan');
+  assert.doesNotMatch(app, /const openWorkout = /, 'no second open path');
 });
