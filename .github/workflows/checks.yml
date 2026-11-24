@@ -74,7 +74,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
+          # Name every cached browser in the key (#435): on a cache hit the next step only runs
+          # install-deps, which skips the browser download, so a key that still matched an
+          # old chromium-only cache would leave webkit's binary missing.
+          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-webkit
 
       - name: Install Chromium and WebKit
         run: |
