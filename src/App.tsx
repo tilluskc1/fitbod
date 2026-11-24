@@ -2574,7 +2574,6 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
           openName={current.name}
           sets={openDone}
           nextName={startIntent.kind === 'switch' ? startIntent.option.name : startIntent.nextName}
-          action={startIntent.kind}
           onSaveAndStart={saveAndStart}
           onBack={() => setStartIntent(null)}
           onDiscardAndStart={discardAndStart}

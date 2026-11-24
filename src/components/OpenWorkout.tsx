@@ -5,7 +5,7 @@ import { pendingExerciseIndex, sessionProgress } from '../lib/session';
 import { menuStatus, rowKind, setsLabel } from '../lib/openWorkout';
 import Sheet from './ui/Sheet';
 import Icon from './ui/Icon';
-import { CheckCircleIcon, FlagIcon, HideIcon, LogSetIcon, MoreHorizIcon, SendIcon, SwapIcon } from './ui/Icons';
+import { CheckCircleIcon, FlagIcon, HideIcon, LogSetIcon, MoreHorizIcon, PencilIcon, SendIcon, SwapIcon } from './ui/Icons';
 
 /**
  * (#430) Everything an open workout shows outside the logger: the slight resume row, its `...` sheet and
@@ -151,7 +151,6 @@ export function StartConflictSheet({
   openName,
   sets,
   nextName,
-  action = 'start',
   onSaveAndStart,
   onBack,
   onDiscardAndStart,
@@ -159,15 +158,12 @@ export function StartConflictSheet({
   openName: string;
   sets: number;
   nextName: string;
-  /** `switch`: Switch day, which only moves the plan to that day; nothing starts until Preview > Start. */
-  action?: 'start' | 'switch';
   onSaveAndStart: () => void;
   onBack: () => void;
   onDiscardAndStart: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
-  const verb = action === 'switch' ? 'switch to' : 'start';
-  const Verb = action === 'switch' ? 'Switching to' : 'Starting';
+  // (#430) One wording for Start, Switch and Ask, as in the mock: "start Pull" in every case.
   if (sets === 0) {
     return (
       <Sheet title={`${openName} is still open`} sub2={`It has notes but no sets. You picked ${nextName}.`} onClose={onBack}>
@@ -176,25 +172,25 @@ export function StartConflictSheet({
             Back to {openName}
           </button>
           <button type="button" className="danger" onClick={onDiscardAndStart}>
-            Discard and {verb} {nextName}
+            Discard and start {nextName}
           </button>
         </div>
-        <p className="sheet-copy">{Verb} {nextName} closes {openName}. Its notes are not saved.</p>
+        <p className="sheet-copy">Starting {nextName} closes {openName}. Its notes are not saved.</p>
       </Sheet>
     );
   }
   if (confirming) {
     return (
-      <Sheet key="confirm" title={`Discard ${openName} and ${verb} ${nextName}?`} onClose={() => setConfirming(false)} initialFocus=".js-cancel">
+      <Sheet key="confirm" title={`Discard ${openName} and start ${nextName}?`} onClose={() => setConfirming(false)} initialFocus=".js-cancel">
         <p className="sheet-copy">
-          The {setsLabel(sets)} you logged in {openName} are deleted for good. {action === 'switch' ? `${nextName} is up next.` : `${nextName} starts fresh.`}
+          The {setsLabel(sets)} you logged in {openName} are deleted for good. {nextName} starts fresh.
         </p>
         <div className="sheet-actions">
           <button type="button" className="pill-quiet wide js-cancel" onClick={() => setConfirming(false)}>
             Cancel
           </button>
           <button type="button" className="btn-danger-soft" onClick={onDiscardAndStart}>
-            Discard {setsLabel(sets)} and {verb} {nextName}
+            Discard {setsLabel(sets)} and start {nextName}
           </button>
         </div>
       </Sheet>
@@ -211,14 +207,14 @@ export function StartConflictSheet({
         <div>
           <span className="rec-tag"><CheckCircleIcon size={16} />Recommended · keeps everything</span>
           <button type="button" className="pill-primary" onClick={onSaveAndStart}>
-            Save {setsLabel(sets)} and {verb} {nextName}
+            Save {setsLabel(sets)} and start {nextName}
           </button>
         </div>
         <button type="button" className="pill-quiet wide" onClick={onBack}>
           Back to {openName}
         </button>
         <button type="button" className="danger" onClick={() => setConfirming(true)}>
-          Discard {openName} and {verb} {nextName}
+          Discard {openName} and start {nextName}
         </button>
       </div>
     </Sheet>
@@ -348,6 +344,7 @@ export function TypedAskSheet({
       <p className="sheet-copy">Type how long, what's sore, and what to train.</p>
       <form onSubmit={submit}>
         <div className="search-wrap">
+          <PencilIcon />
           <input
             className="search"
             value={text}

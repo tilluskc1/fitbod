@@ -464,16 +464,31 @@ test('the menu offers Save only with sets; discard confirms with the count; the 
   });
 });
 
-test('start conflict: switch wording, and the notes-only variant offers Back first', async () => {
+test('start conflict: the mock\'s "start" wording for Switch too, and the notes-only variant offers Back first', async () => {
   await withOpenWorkout(({ StartConflictSheet }) => {
-    const sw = plainText(render(StartConflictSheet, { openName: 'Push', sets: 2, nextName: 'Legs', action: 'switch',
+    const sw = plainText(render(StartConflictSheet, { openName: 'Push', sets: 2, nextName: 'Legs',
       onSaveAndStart: noop, onBack: noop, onDiscardAndStart: noop }));
-    assert.match(sw, /Save 2 sets and switch to Legs/);
+    assert.match(sw, /Save 2 sets and start Legs/);
+    assert.match(sw, /Discard Push and start Legs/);
+    assert.doesNotMatch(sw, /switch to/);
     const notes = render(StartConflictSheet, { openName: 'Push', sets: 0, nextName: 'Legs', onSaveAndStart: noop, onBack: noop, onDiscardAndStart: noop });
     assert.match(plainText(notes), /It has notes but no sets/);
     assert.match(notes, /class="pill-primary"[^>]*>Back to Push/);
     assert.match(plainText(notes), /Discard and start Legs/);
   });
+});
+
+// (#430 design check) Details the mock shows that a quick look misses.
+test('design match: typed Ask shows the pencil, the centre shows "Ask", Cancel shows a focus ring', async () => {
+  await withOpenWorkout(({ TypedAskSheet }) => {
+    const typed = render(TypedAskSheet, { onText: noop, onPreview: noop, onClose: noop });
+    assert.match(typed, /class="search-wrap"><svg[^>]*class="ask-pencil"/);
+  });
+  const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  const label = /\.tab-action__label \{([^}]*)\}/.exec(css)?.[1] ?? '';
+  assert.doesNotMatch(label, /clip|width: 1px/, 'the Ask label is not visually hidden');
+  assert.match(label, /font-size: 12px/);
+  assert.match(css, /\.js-cancel:focus \{\s*outline: 2px solid var\(--focus\);/);
 });
 
 test('Ask with a workout open: four ways back, then the plan question; it never starts a workout', async () => {

@@ -118,13 +118,10 @@ try {
     const page = await context.newPage();
     await onboard(page);
 
-    // 1. No workouts yet: the sheet says so and offers nothing to tap; nothing downloads.
-    check(!(await openSheet(page)), `${where}: the icon downloaded with no workouts`);
-    check(await sheet(page).isVisible(), `${where}: no sheet with no workouts`);
-    check(await sheet(page).getByText('Nothing to back up yet').isVisible(), `${where}: empty sheet does not say "Nothing to back up yet"`);
-    check(!(await sheet(page).getByRole('button', { name: 'Back up now' }).count()), `${where}: empty sheet offers Back up now`);
+    // 1. No workouts yet (#430): the empty page has no backup icon, so nothing can download.
+    await page.getByRole('button', { name: 'Progress' }).click();
+    check(await page.getByRole('button', { name: 'Back up workouts' }).count() === 0, `${where}: the backup icon shows with no workouts`);
     if (shots) await page.screenshot({ path: join(shots, `293-empty-${where}.png`) });
-    await sheet(page).getByRole('button', { name: 'Close' }).click();
     await page.getByRole('button', { name: 'Today', exact: true }).click();
 
     // 2. One workout: the icon asks first. Not now records nothing.

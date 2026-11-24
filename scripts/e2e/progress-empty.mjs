@@ -102,16 +102,15 @@ try {
     check(await page.locator('.stat-value').count() === 0, `${where}: Progress shows no stat tiles`);
     const progressText = flat(await page.locator('.screen').innerText());
     check(!/\b0\b/.test(progressText), `${where}: Progress shows no "0" (${progressText.slice(0, 200)})`);
-    check(progressText.includes('Your progress starts with your first workout.'), `${where}: empty-state title`);
+    check(progressText.includes('No finished workouts yet'), `${where}: empty-state title`);
+    // (#430) Nothing to back up or list yet: no backup icon, no Overview / Session history switch.
+    check(await page.getByRole('button', { name: 'Back up workouts' }).count() === 0, `${where}: backup icon shows with no workouts`);
+    check(await page.getByRole('tablist', { name: 'Progress views' }).count() === 0, `${where}: view switch shows with no workouts`);
     check(!progressText.includes('Your first session starts the story'), `${where}: the chart empty state is gone`);
     const box = await empty.boundingBox();
     check(box && box.y + box.height <= height, `${where}: the empty-state card and its button fit on screen`);
     if (shots) await page.screenshot({ path: join(shots, `294-progress-new-${where}.png`) });
 
-    await page.getByRole('tab', { name: 'Session history' }).click();
-    check(flat(await page.locator('.screen').innerText()).includes('No workouts yet. Your first one will appear here.'), `${where}: Session history empty line`);
-    if (shots) await page.screenshot({ path: join(shots, `294-history-new-${where}.png`) });
-    await page.getByRole('tab', { name: 'Overview' }).click();
 
     await page.getByRole('button', { name: 'Coach' }).click();
     check(await page.locator('.context-row').count() === 0, `${where}: Coach hides its context rows for a new user`);

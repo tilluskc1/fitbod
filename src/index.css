@@ -463,6 +463,7 @@ textarea:focus-visible {
 }
 
 .tab-action {
+  position: relative;
   align-self: start;
   justify-self: center;
   min-height: 0;
@@ -475,9 +476,11 @@ textarea:focus-visible {
 
 .tab-action__play {
   position: relative;
-  width: 72px;
-  height: 72px;
-  margin-top: -24px;
+  /* (#430) The mock's 64px raised 30px puts its top 4px lower than Plan's fold allows at 360x780
+     (plan-page.mjs); 60px raised 26px keeps the mock's gap above the label and Plan's third row. */
+  width: 60px;
+  height: 60px;
+  margin-top: -26px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -508,13 +511,16 @@ textarea:focus-visible {
   height: 76px;
 }
 
-/* The centre keeps its text for tests and assistive tech; the ring and icon carry it visually. */
+/* The raised Ask button shows its name under it, as in the #430 mock. */
 .tab-action__label {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
+  left: 50%;
+  top: 40.3px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -795,21 +801,30 @@ textarea:focus-visible {
   margin-top: 16px;
 }
 
-/* (#294) Progress for a user with no finished workout: one dashed card and its one action. */
+/* (#294, #430) Progress for a user with no finished workout: one card, as in the #430 mock. */
 .progress-empty {
-  margin-top: 4px;
-  padding: 28px 18px;
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
 }
 
 .progress-empty__title {
-  font-size: 20px;
+  font-size: 22px;
+  font-weight: 500;
   line-height: 1.25;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   color: var(--text);
 }
 
 .progress-empty p {
-  margin: 8px 0 18px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.progress-empty .primary {
+  margin-top: 10px;
 }
 
 /* (#294) One-word tile labels sit on one line; "all time" and the planned-time note under the row. */
@@ -2262,6 +2277,13 @@ body {
   align-items: center;
   justify-content: center;
   padding: 0 14px;
+}
+
+/* (#430) A destructive confirm opens with focus on Cancel. The sheet moves focus there by script, often
+   right after a tap, when browsers skip :focus-visible; the ring shows on any focus so it is never invisible. */
+.js-cancel:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .text-action {
@@ -5679,6 +5701,9 @@ button.aw-exercise__name-btn {
 .divider-label{font-size:12px;font-weight:500;color:var(--on-surface-variant);margin:16px 2px 8px}
 .search-wrap{position:relative;margin-top:12px}
 .search-wrap .search{margin-top:0;background:#fff}
+/* (#430) The typed Ask field's pencil sits inside the field, as in the mock. */
+.search-wrap .ask-pencil{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);pointer-events:none}
+.search-wrap .search{padding-left:44px}
 
 .note-line{display:flex;align-items:flex-start;gap:10px;margin:12px 0 0;padding:10px 4px 10px 14px;border-radius:14px;background:#fff;border:1px solid rgba(20,40,38,.14);font-size:14px;line-height:20px;color:var(--on-surface)}
 .note-line > svg:first-child,.note-line > .ms:first-child{flex:none;margin-top:1px;color:var(--accent-text)}

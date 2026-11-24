@@ -228,3 +228,13 @@ export function HelpIcon({ size = 28 }: IconProps) {
     </svg>
   );
 }
+
+/** (#430) The pencil in the typed Ask field when voice is blocked (the mock's edit_note; not in the icon font subset). */
+export function PencilIcon({ size = 22 }: IconProps) {
+  return (
+    <svg {...base(size)} className="ask-pencil">
+      <path d="M4 20l1-4L16.5 4.5a2 2 0 012.8 0l.2.2a2 2 0 010 2.8L8 19z" />
+      <path d="M14.5 6.5l3 3" />
+    </svg>
+  );
+}

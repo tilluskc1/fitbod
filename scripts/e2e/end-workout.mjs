@@ -304,14 +304,14 @@ try {
     await page.locator('.sheet--switch button.len-opt:not([aria-current])', { hasText: 'Push' }).first().click();
     await page.getByRole('button', { name: 'Back to Pull' }).waitFor();
     check(/^Pull is still open 1 set logged$/.test(await sheetTitle(page)), `${where} F: the conflict sheet is titled "${await sheetTitle(page)}"`);
-    check(await page.getByRole('button', { name: 'Save 1 set and switch to Push' }).count() === 1, `${where} F: no "Save 1 set and switch to Push"`);
+    check(await page.getByRole('button', { name: 'Save 1 set and start Push' }).count() === 1, `${where} F: no "Save 1 set and start Push"`);
     await shot(page, 'conflict', where);
     await page.getByRole('button', { name: 'Back to Pull' }).click();
     check(JSON.stringify(await stored(page)) === pullOpen, `${where} F: Back changed stored data`);
     await page.getByRole('button', { name: 'Switch workout' }).click();
     await page.locator('.sheet--switch').waitFor();
     await page.locator('.sheet--switch button.len-opt:not([aria-current])', { hasText: 'Push' }).first().click();
-    await page.getByRole('button', { name: 'Save 1 set and switch to Push' }).click();
+    await page.getByRole('button', { name: 'Save 1 set and start Push' }).click();
     await page.waitForSelector('.t7-hero');
     state = await stored(page);
     check(state.current === null && state.history.length === 2 && state.history.every((workout) => doneSets(workout).length === 1),

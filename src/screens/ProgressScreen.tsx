@@ -11,9 +11,6 @@ import type { Profile, Unit, WorkoutFeedback, WorkoutRecord } from '../types';
 import { FEEDBACK_CHOICES, feedbackLabel } from '../lib/feedback';
 import { ArrowIcon, CheckIcon, ChevronIcon, DownloadIcon } from '../components/ui/Icons';
 
-/** (#294) Session history with nothing in it. */
-export const NO_WORKOUTS_YET = 'No workouts yet. Your first one will appear here.';
-
 interface Props {
   history: WorkoutRecord[];
   unit: Unit;
@@ -158,42 +155,52 @@ export default function ProgressScreen({
   });
   const path = points.map((point) => `${point.x},${point.y}`).join(' ');
 
+  // (#430) No finished workout: the page is the title, the open-workout row and one card, as in the mock.
+  // There is nothing to back up or list yet, so the backup icon and the view switch wait for one.
+  const empty = totals.workouts === 0;
+
   return (
     <div className="screen">
       <header className="screen-header">
         <div>
           <h1 className="page-title">Progress.</h1>
         </div>
-        <button className="icon-btn" onClick={onBackup} aria-label="Back up workouts">
-          <DownloadIcon />
-        </button>
+        {!empty && (
+          <button className="icon-btn" onClick={onBackup} aria-label="Back up workouts">
+            <DownloadIcon />
+          </button>
+        )}
       </header>
       {openRow}
-      <p className="page-sub">Your records tell the story. No invented scores.</p>
+      {!empty && (
+        <>
+          <p className="page-sub">Your records tell the story. No invented scores.</p>
 
-      <div className="segmented" role="tablist" aria-label="Progress views">
-        <button
-          role="tab"
-          aria-selected={tab === 'overview'}
-          className={tab === 'overview' ? 'on' : ''}
-          onClick={() => setTab('overview')}
-        >
-          Overview
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'history'}
-          className={tab === 'history' ? 'on' : ''}
-          onClick={() => setTab('history')}
-        >
-          Session history
-        </button>
-      </div>
+          <div className="segmented" role="tablist" aria-label="Progress views">
+            <button
+              role="tab"
+              aria-selected={tab === 'overview'}
+              className={tab === 'overview' ? 'on' : ''}
+              onClick={() => setTab('overview')}
+            >
+              Overview
+            </button>
+            <button
+              role="tab"
+              aria-selected={tab === 'history'}
+              className={tab === 'history' ? 'on' : ''}
+              onClick={() => setTab('history')}
+            >
+              Session history
+            </button>
+          </div>
+        </>
+      )}
 
-      {tab === 'overview' && totals.workouts === 0 ? (
-        // (#294) No finished workout yet: say what is missing and the one action that fixes it.
-        <div className="empty-state progress-empty">
-          <h2 className="progress-empty__title">Your progress starts with your first workout.</h2>
+      {empty ? (
+        // (#294, #430) No finished workout yet: say what is missing and the one action that fixes it.
+        <section className="t7-card progress-empty">
+          <h2 className="progress-empty__title">No finished workouts yet</h2>
           {openWorkout ? (
             // (#430) The row above resumes it; nothing here competes with it.
             <p>
@@ -211,7 +218,7 @@ export default function ProgressScreen({
               </button>
             </>
           )}
-        </div>
+        </section>
       ) : tab === 'overview' ? (
         <>
           <div className="stats-3">
@@ -323,9 +330,7 @@ export default function ProgressScreen({
         </>
       ) : (
         <div className="history-list">
-          {/* (#294) Empty or all-skipped records count as none, here as on Overview: no "0 sets" row. */}
-          {totals.workouts === 0 && <p className="note-card">{NO_WORKOUTS_YET}</p>}
-          {(totals.workouts === 0 ? [] : sessions).map((workout) => {
+          {sessions.map((workout) => {
             const parts = dateParts(workout.date);
             const open = openId === workout.id;
             return (
@@ -496,9 +501,11 @@ export default function ProgressScreen({
         </div>
       )}
 
-      <p className="data-note">
-        Records live in this browser only. Export a JSON backup before clearing site data.
-      </p>
+      {!empty && (
+        <p className="data-note">
+          Records live in this browser only. Export a JSON backup before clearing site data.
+        </p>
+      )}
     </div>
   );
 }
