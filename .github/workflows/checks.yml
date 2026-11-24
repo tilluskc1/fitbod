@@ -76,12 +76,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
 
-      - name: Install Chromium
+      - name: Install Chromium and WebKit
         run: |
           if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
-            playwright install-deps chromium
+            playwright install-deps chromium webkit
           else
-            playwright install --with-deps chromium
+            playwright install --with-deps chromium webkit
           fi
 
       - name: Build
