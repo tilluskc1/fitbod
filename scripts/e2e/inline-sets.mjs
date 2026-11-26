@@ -275,7 +275,10 @@ try {
     await page.keyboard.type('135');
     await (await cardCell(page, 1)).blur();
     await (await cardCell(page, 1)).click();
-    await page.keyboard.press('End');
+    // #416: plain "End" doesn't move the caret in a macOS Chromium text field (Mac key bindings
+    // reserve End for scrolling; Cmd+Right is the native end-of-line equivalent) — without collapsing
+    // the cell's onFocus select-all, the next keystroke would replace the selection instead of appending.
+    await page.keyboard.press('ControlOrMeta+ArrowRight');
     await page.keyboard.type('99'); // 1359, then 13599 lb: over the limit, so the second 9 is not typed
     check(await (await cardCell(page, 1)).inputValue() === '1359', `${where} D1: the cell keeps 1359 when 13599 is capped`);
     const alert = await page.getByRole('alert').innerText().catch(() => '');
@@ -284,7 +287,8 @@ try {
     r = await rows(page);
     check(r[0].weight === '1359', `${where} D1: the capped key leaves 1359 stored (${r[0].weight})`);
     await (await cardReps(page, 1)).click();
-    await page.keyboard.press('End');
+    // #416: see the weight cell above — ControlOrMeta+ArrowRight is the cross-platform end-of-line.
+    await page.keyboard.press('ControlOrMeta+ArrowRight');
     await page.keyboard.type('999'); // 89, 899, then 8999: over the limit, so the last 9 is not typed
     await (await cardReps(page, 1)).blur();
     r = await rows(page);

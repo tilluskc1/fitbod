@@ -160,7 +160,9 @@ try {
     // #309: typing set 1's weight in the row moves the ramps with it (lesson 12: the value the next surface uses).
     const setOne = page.getByRole('textbox', { name: /^Set 1 weight/ });
     await setOne.click();
-    await setOne.press('Control+a');
+    // #416: "Control+a" never selects on macOS (Cmd+A does); every other script uses the
+    // cross-platform shortcut so typing replaces the field instead of inserting into it.
+    await page.keyboard.press('ControlOrMeta+A');
     await setOne.pressSequentially('80');
     // #326: the rows hold set 1's start-of-burst load while it is typed and follow it on blur.
     await setOne.press('Enter');

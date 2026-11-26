@@ -2337,6 +2337,10 @@ body {
 
 .today {
   padding: calc(14px + env(safe-area-inset-top, 0px)) 20px 0;
+  /* (#439) Room to scroll the planner's text box and action bar above an on-screen keyboard
+     that covers the page: without this the flex item never grows past the screen, so there is
+     nothing for position:sticky or scrollIntoView to push against (see src/lib/keyboardInset.ts). */
+  padding-bottom: var(--kb, 0px);
   display: flex;
   flex-direction: column;
   flex: 1;

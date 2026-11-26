@@ -195,7 +195,10 @@ try {
       await onCard(page, 2);
       const input = page.getByLabel(/^Set 2 weight/);
       await input.focus();
-      await input.press('End');
+      // #416: plain "End" doesn't move the caret in a macOS Chromium text field (Mac key bindings
+      // reserve End for scrolling; Cmd+Right is the native end-of-line equivalent), so the cell's
+      // onFocus select-all never collapsed and the first Backspace below deleted the whole value.
+      await input.press('ControlOrMeta+ArrowRight');
       await input.press('Backspace');
       await input.press('Backspace');
       await input.pressSequentially('00');

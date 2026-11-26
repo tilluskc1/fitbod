@@ -347,6 +347,31 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    never a default/empty stand-in for state the real action reads. Check: `scripts/e2e/voice-plan-426.mjs`'s
    `staleTaps()` (tap chips, cancel, then speak; the heard-you card and the built summary must agree).
 
+47. **A macOS Chromium text field does not bind plain `Control+a`, `End` or `Home` the way Windows/Linux
+   do.** #416: three e2e scripts were red on `main` — `warm-up.mjs` used `press('Control+a')` to select a
+   cell's text before typing (a no-op on macOS, where select-all is Cmd+A), and `carry-forward.mjs` /
+   `inline-sets.mjs` used `press('End')` to collapse a cell's focus-triggered select-all before backspacing
+   or appending (also a no-op on macOS, where Mac text-field key bindings reserve End for scrolling and use
+   Cmd+Right for end-of-line). Both left the full value selected, so the next key replaced or deleted the
+   whole field instead of editing from a position — not an app bug, a non-portable shortcut in the test
+   itself. Every other e2e script already used the cross-platform form. Rule: in a Playwright script, always
+   use `ControlOrMeta+A` for select-all and `ControlOrMeta+ArrowRight`/`ArrowLeft` for end/home-of-line in a
+   text field; never the bare `Control+`/`End`/`Home` form. Check: a script that types into a `SetCell` after
+   a click (which selects the field on focus) proves it replaces rather than appends when run on macOS.
+
+48. **`position: sticky` and `scrollIntoView` need scroll room that exists, and a step's own focus must land
+   synchronously.** #439: `planner-reach.mjs` failed at 390×650 because (1) `.today` had no `padding-bottom`
+   reserving space for the on-screen-keyboard inset (`--kb`), so once content fit the screen there was no
+   scrollable overflow for `.tt-bar`'s `position: sticky; bottom: var(--kb)` or `.tt-say`'s `scrollIntoView`
+   to push against — sticky never moves off its static position without real overflow; and (2) `TodayTalk`'s
+   `go()` focused the new step's heading via `requestAnimationFrame`, a race that could still be pending when
+   a tap (or Playwright's `.focus()`) landed on the step's own text box right after the step opened, so the
+   deferred callback fired afterwards and stole focus back. Rule: any flex/scroll area meant to clear a
+   keyboard gets its own `padding-bottom: var(--kb, 0px)` (the existing `#309`/`.lg-body` pattern); a step
+   change's own-element focus goes in a `useLayoutEffect` keyed on the step, not an `requestAnimationFrame` or
+   effect that can still be pending when something else grabs focus next. Check: `scripts/e2e/planner-reach.mjs`
+   at 390×650 with the keyboard open.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

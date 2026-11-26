@@ -102,6 +102,13 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
     onActive?.(step !== null);
     return () => onActive?.(false);
   }, [step, onActive]);
+  // (#439) Focus the step's own heading synchronously, in the same commit as the step change, not
+  // on a later animation frame: a `requestAnimationFrame` callback here could still be pending when
+  // a tap (or a test's `.focus()`) lands on the new step's own text box right after the step opens,
+  // and firing afterwards would steal focus back off it.
+  useLayoutEffect(() => {
+    if (step !== null) titleRef.current?.focus();
+  }, [step]);
   // (#296) Asked from Switch: open at Q1, after the sheet has closed.
   const [seenAsk, setSeenAsk] = useState(openAsk);
   if (seenAsk !== openAsk) {
@@ -127,7 +134,6 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
   const go = (next: Question | 'summary' | null) => {
     setStep(next);
     if (next !== 'summary') setBuilt(null);
-    requestAnimationFrame(() => titleRef.current?.focus());
   };
   /** Build from the answers so far; pain or nothing to train sends the lifter to that question instead. */
   const build = () => {
