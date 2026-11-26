@@ -150,12 +150,21 @@ async function voiceFlow(browser, where) {
   await page.locator('.tt-open').waitFor();
   check(await mic.isVisible(), `${where}: mic hidden after a silent timeout (should only hide on a real failure)`);
 
-  // A permission denial hides the mic for the rest of the session.
+  // A permission denial hides the mic for the rest of the session, with a plain message and the
+  // typing fallback ("Plan today with me") still reachable right where the mic used to be (#440).
   await openListening(page, mic);
   await page.evaluate(() => window.__voiceError('not-allowed'));
   await page.locator('.tt-open').waitFor();
   await mic.waitFor({ state: 'hidden' }).catch(() => {});
   check(!(await mic.isVisible().catch(() => false)), `${where}: mic still shown after a permission denial`);
+  check(await page.getByText('Mic access is off for this site — type your answer instead.').isVisible().catch(() => false),
+    `${where}: no plain message after a permission denial`);
+  await shot(page, `${where}-denied`);
+  await page.locator('.tt-open').click();
+  await page.locator('.tt h2:has-text("How long do you have?")').waitFor();
+  check(true, `${where}: typing fallback unreachable after a permission denial`);
+  await page.locator('.tt-nav .secondary').click();
+  await page.locator('.tt-open').waitFor();
 
   check(errors.length === 0, `${where}: page errors: ${errors.join(' | ')}`);
   await page.close();
@@ -215,6 +224,29 @@ async function errorThenEnd(browser, where) {
   await page.close();
 }
 
+/** (#440) The tab losing focus mid-listen (a call, another app, the lock screen) stops the mic
+ * cleanly through the same path a silence timeout already takes, instead of leaving the sheet
+ * stuck on "Listening…" with a recognizer no one can hear; the mic stays available afterward,
+ * same as any other silent timeout — a focus loss is never a "blocked" reason. */
+async function focusLoss(browser, where) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(installFakeRecognition, 'SpeechRecognition');
+  await onboard(page);
+  const mic = page.locator('.tt-mic');
+
+  await openListening(page, mic);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.getByRole('heading', { name: "Didn't catch that" }).waitFor();
+  check(await mic.isVisible(), `${where}: mic hidden after a focus loss (only a real failure should hide it)`);
+  await shot(page, `${where}-focus-loss`);
+  await page.getByRole('button', { name: 'Use the chips instead' }).click();
+  await page.locator('.tt h2:has-text("How long do you have?")').waitFor();
+  await page.close();
+}
+
 async function noSupport(browser, where) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   // Real Chromium ships its own webkitSpeechRecognition; R1 needs the true no-support case, so remove both.
@@ -257,6 +289,7 @@ try {
   await voiceFlow(chromiumBrowser, 'chromium');
   await staleTaps(chromiumBrowser, 'chromium-stale-taps');
   await errorThenEnd(chromiumBrowser, 'chromium-error-then-end');
+  await focusLoss(chromiumBrowser, 'chromium-focus-loss');
   await noSupport(chromiumBrowser, 'chromium-no-support');
   await layoutShots(chromiumBrowser, 'chromium');
   if (webkitBrowser) await layoutShots(webkitBrowser, 'webkit');
@@ -270,4 +303,4 @@ if (failures.length) {
   console.error(`voice-plan-426: ${failures.length} failure(s)\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log('voice-plan-426: pass — mic entry, R2 disclosure, listening, heard-you slots, stale taps match the build, a network error surviving onend, pain bypass, silent timeout vs. real failure, no-support fallback, and layout at 360/390/430/tablet/desktop in Chromium and WebKit');
+console.log('voice-plan-426: pass — mic entry, R2 disclosure, listening, heard-you slots, stale taps match the build, a network error surviving onend, pain bypass, silent timeout vs. real failure, a denied-permission message with the typing fallback still reachable, a focus loss stopping cleanly, no-support fallback, and layout at 360/390/430/tablet/desktop in Chromium and WebKit');

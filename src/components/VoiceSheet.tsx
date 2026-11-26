@@ -3,11 +3,14 @@ import type { Profile } from '../types';
 import { cardioNotice, composeTalk, gearLabel, talkParse, tapsAfterEdit } from '../lib/todayTalk';
 import type { TalkState, Taps } from '../lib/todayTalk';
 import type { Question } from '../lib/planToday';
-import { newRecognition } from '../lib/speech';
+import { armRecognition } from '../lib/speech';
+import type { SpeechRecognitionLike } from '../lib/speech';
 import Sheet from './ui/Sheet';
 import Icon from './ui/Icon';
 
 type Stage = 'listening' | 'heard' | 'empty' | 'retry';
+/** Why the mic is being hidden for the rest of the session (`onBlocked`'s reason). */
+export type BlockedReason = 'denied' | 'unsupported' | 'error';
 
 interface Props {
   base: TalkState;
@@ -15,6 +18,12 @@ interface Props {
   /** The chips/text left from any earlier session, so the card matches what `onConfirm` will build. */
   taps: Taps;
   text: string;
+  /**
+   * Already constructed, configured and started by the caller's own click handler — the mic
+   * button has no closer gesture to start from. Omitted when the opener (the centre Ask, #430)
+   * has no local click to start from either; this sheet then arms its own on mount.
+   */
+  recognition?: SpeechRecognitionLike;
   /** "Yes": build from this transcript, unedited. */
   onConfirm: (transcript: string) => void;
   /** Tapped one of the four slots: open that question, seeded with this transcript. */
@@ -24,7 +33,7 @@ interface Props {
   /** Nothing usable was heard, or the lifter asked for chips instead. */
   onFallback: () => void;
   /** A start error, unsupported API, or a permission denial: hide the mic for the rest of the session. */
-  onBlocked: () => void;
+  onBlocked: (reason: BlockedReason) => void;
   onClose: () => void;
   /** (#430) Opened from the centre Ask: the listening sheet asks "What do you want to do today?". */
   askTitle?: string;
@@ -39,14 +48,16 @@ const SILENCE_MS = 2000;
  * back to the chips. It parses nothing itself; every reading goes through `talkParse`/`composeTalk`,
  * the same engine typed text already uses, so voice can never disagree with typing.
  */
-export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEditSlot, onPain, onFallback, onBlocked, onClose, askTitle }: Props) {
+export default function VoiceSheet({ base, profile, taps, text, recognition, onConfirm, onEditSlot, onPain, onFallback, onBlocked, onClose, askTitle }: Props) {
   const [stage, setStage] = useState<Stage>('listening');
   const [live, setLive] = useState('');
   const [finalText, setFinalText] = useState('');
   const [retryMessage, setRetryMessage] = useState("Didn't catch that.");
   const [attempt, setAttempt] = useState(0);
   const liveRef = useRef('');
-  const recognitionRef = useRef<ReturnType<typeof newRecognition>>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  // The caller's already-started recognizer, for this mount only; a retry always arms its own.
+  const armedRef = useRef<SpeechRecognitionLike | undefined>(recognition);
   const silenceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // onerror's retry message must survive the onend that follows it in real browsers (the fake
   // recognizer used by the e2e check fires only one or the other, so it can't catch this).
@@ -54,15 +65,20 @@ export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEdi
 
   useEffect(() => {
     erroredRef.current = false;
-    const recognition = newRecognition();
-    if (!recognition) {
-      onBlocked();
+    let active: SpeechRecognitionLike | null;
+    try {
+      active = armedRef.current ?? armRecognition();
+    } catch {
+      onBlocked('error');
       return undefined;
     }
+    armedRef.current = undefined;
+    if (!active) {
+      onBlocked('unsupported');
+      return undefined;
+    }
+    const recognition = active; // local alias, shadowing the prop on purpose: the prop is spent after mount.
     recognitionRef.current = recognition;
-    recognition.lang = navigator.language || 'en-US';
-    recognition.continuous = false;
-    recognition.interimResults = true;
 
     const resetSilence = () => {
       if (silenceRef.current) clearTimeout(silenceRef.current);
@@ -78,7 +94,7 @@ export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEdi
     recognition.onerror = (event) => {
       if (silenceRef.current) clearTimeout(silenceRef.current);
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        onBlocked();
+        onBlocked('denied');
         return;
       }
       // Our own stop()/abort() surfaces as this error in some browsers; onend settles it instead.
@@ -86,7 +102,7 @@ export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEdi
       erroredRef.current = true;
       setRetryMessage(event.error === 'network'
         ? "Voice needs your browser's speech service online."
-        : "Didn't catch that.");
+        : "Say how long, what's sore, and what to train.");
       setStage('retry');
     };
     recognition.onend = () => {
@@ -109,15 +125,16 @@ export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEdi
       }
       setStage('heard');
     };
+    resetSilence();
 
-    try {
-      recognition.start();
-      resetSilence();
-    } catch {
-      onBlocked();
-      return undefined;
-    }
+    // (#440) The tab losing focus mid-listen (a call, another app, the lock screen) stops the mic
+    // cleanly through the same `onend` path a silence timeout already takes, instead of leaving
+    // the sheet stuck on "Listening…" with a recognizer no one can hear.
+    const onVisibilityChange = () => { if (document.hidden) recognition.stop(); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (silenceRef.current) clearTimeout(silenceRef.current);
       recognition.onresult = null;
       recognition.onerror = null;
@@ -128,6 +145,20 @@ export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEdi
   }, [attempt]);
 
   const retry = () => {
+    // (#440) Armed right here, inside the real tap on "Try again" — same reason the mic button
+    // arms before this sheet ever mounts: WebKit needs `start()` inside the gesture itself.
+    let fresh: SpeechRecognitionLike | null;
+    try {
+      fresh = armRecognition();
+    } catch {
+      onBlocked('error');
+      return;
+    }
+    if (!fresh) {
+      onBlocked('unsupported');
+      return;
+    }
+    armedRef.current = fresh;
     liveRef.current = '';
     setLive('');
     setStage('listening');
@@ -157,7 +188,7 @@ export default function VoiceSheet({ base, profile, taps, text, onConfirm, onEdi
   if (stage === 'empty' || stage === 'retry') {
     return (
       <Sheet title="Didn't catch that" onClose={onClose} variant="voice">
-        <p className="tt-warn tt-voice-notheard">{stage === 'retry' ? retryMessage : "Didn't catch that — say how long, what's sore, and what to train."}</p>
+        <p className="tt-warn tt-voice-notheard">{stage === 'retry' ? retryMessage : "Say how long, what's sore, and what to train."}</p>
         <div className="tt-bar">
           <button type="button" className="pill-primary" onClick={retry}>Try again</button>
           <button type="button" className="secondary" onClick={onFallback}>Use the chips instead</button>

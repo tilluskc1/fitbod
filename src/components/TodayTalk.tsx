@@ -15,7 +15,9 @@ import {
 import type { Question } from '../lib/planToday';
 import Icon from './ui/Icon';
 import VoiceSheet from './VoiceSheet';
-import { voiceSupported } from '../lib/speech';
+import type { BlockedReason } from './VoiceSheet';
+import { armRecognition, voiceSupported } from '../lib/speech';
+import type { SpeechRecognitionLike } from '../lib/speech';
 import { ASK_TITLE } from './OpenWorkout';
 import BodyMap from './BodyMap';
 import { talkMapMuscles } from '../lib/bodyMap';
@@ -56,13 +58,15 @@ interface Props {
   ask?: TalkAsk | null;
   onAskHandled?: (id: number) => void;
   /** (#430) Voice was refused or is missing: the centre Ask shows its question mark from then on. */
-  onMicBlocked?: () => void;
+  onMicBlocked?: (reason: BlockedReason) => void;
 }
 
 export interface TalkAsk {
   id: number;
   kind: 'voice' | 'text';
   text?: string;
+  /** (#440) For `kind: 'voice'`: armed by the caller's own click (the centre Ask has no closer gesture here). */
+  recognition?: SpeechRecognitionLike;
 }
 
 const QUESTION_TEXT: Record<Question, string> = {
@@ -92,6 +96,10 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
   // (#426) A start error, unsupported API or a permission denial hides the mic for the rest of this
   // session; chips are never affected. A silent timeout never sets this (see VoiceSheet's onBlocked).
   const [micBlocked, setMicBlocked] = useState(false);
+  // (#440) Only set for a real denial, so the lifter knows why the mic just vanished instead of
+  // guessing; chips/typing are always right there under it either way.
+  const [micDeniedNote, setMicDeniedNote] = useState(false);
+  const voiceRecognitionRef = useRef<SpeechRecognitionLike | undefined>(undefined);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const said = composeTalk(base, text, taps);
   const talk = { ...said, pain: painStops(pain, text, said.pain) };
@@ -192,6 +200,7 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
     if (ask.kind === 'voice') {
       setStep(null);
       setBuilt(null);
+      voiceRecognitionRef.current = ask.recognition;
       setVoiceAsked(true);
       setVoiceOpen(true);
     } else if (ask.text) {
@@ -215,23 +224,55 @@ export default function TodayTalk({ profile, plannedName, todayName, plannedArea
             <Icon name="chevron_right" size={22} />
           </button>
           {micAvailable && (
-            <button type="button" className="tt-mic" aria-label="Plan by voice" onClick={() => { track('plan-today'); setVoiceAsked(false); setVoiceOpen(true); }}>
+            <button
+              type="button"
+              className="tt-mic"
+              aria-label="Plan by voice"
+              onClick={() => {
+                track('plan-today');
+                // (#440) Armed right here, inside the real tap: WebKit needs `start()` (it drives
+                // `getUserMedia`) inside the gesture itself, not after this component re-renders.
+                let armed: SpeechRecognitionLike | null;
+                try {
+                  armed = armRecognition();
+                } catch {
+                  setMicBlocked(true);
+                  onMicBlocked?.('error');
+                  return;
+                }
+                if (!armed) {
+                  setMicBlocked(true);
+                  onMicBlocked?.('unsupported');
+                  return;
+                }
+                voiceRecognitionRef.current = armed;
+                setVoiceAsked(false);
+                setVoiceOpen(true);
+              }}
+            >
               <Icon name="mic" size={18} />
             </button>
           )}
         </div>
         {micAvailable && <p className="tt-hint">Voice uses your browser's speech service.</p>}
+        {micDeniedNote && <p className="tt-hint">Mic access is off for this site — type your answer instead.</p>}
         {voiceOpen && (
           <VoiceSheet
             base={base}
             profile={profile}
             taps={taps}
             text={text}
+            recognition={voiceRecognitionRef.current}
             onConfirm={voiceConfirm}
             onEditSlot={voiceEditSlot}
             onPain={voicePain}
             onFallback={voiceFallback}
-            onBlocked={() => { setVoiceOpen(false); setMicBlocked(true); onMicBlocked?.(); }}
+            onBlocked={(reason) => {
+              setVoiceOpen(false);
+              setMicBlocked(true);
+              setMicDeniedNote(reason === 'denied');
+              onMicBlocked?.(reason);
+            }}
             onClose={() => { setVoiceOpen(false); setVoiceAsked(false); }}
             askTitle={voiceAsked ? ASK_TITLE : undefined}
           />

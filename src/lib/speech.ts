@@ -35,3 +35,20 @@ export function newRecognition(): SpeechRecognitionLike | null {
   const Ctor = speechRecognitionCtor();
   return Ctor ? new Ctor() : null;
 }
+
+/**
+ * A recognizer, configured and already started. WebKit requires `start()` (it drives
+ * `getUserMedia` under the hood) to run synchronously inside the real tap that asked for it, not
+ * after a React render has deferred it — call this directly in the click handler, never inside a
+ * `useEffect`. Null when the browser has none; throws (uncaught) when `start()` itself rejects, so
+ * the caller's own try/catch decides what "blocked" means for its UI.
+ */
+export function armRecognition(): SpeechRecognitionLike | null {
+  const recognition = newRecognition();
+  if (!recognition) return null;
+  recognition.lang = navigator.language || 'en-US';
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.start();
+  return recognition;
+}
