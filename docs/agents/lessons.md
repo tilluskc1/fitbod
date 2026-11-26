@@ -368,7 +368,7 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    a tap (or Playwright's `.focus()`) landed on the step's own text box right after the step opened, so the
    deferred callback fired afterwards and stole focus back. Rule: any flex/scroll area meant to clear a
    keyboard gets its own `padding-bottom: var(--kb, 0px)` (the existing `#309`/`.lg-body` pattern); a step
-   change's own-element focus goes in a `useLayoutEffect` keyed on the step, not an `requestAnimationFrame` or
+   change's own-element focus goes in a `useLayoutEffect` keyed on the step, not a `requestAnimationFrame` or
    effect that can still be pending when something else grabs focus next. Check: `scripts/e2e/planner-reach.mjs`
    at 390×650 with the keyboard open.
 
