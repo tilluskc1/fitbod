@@ -88,7 +88,8 @@ import
   type SlotLink,
 } from './lib/session';
 import { readHiddenResume, writeHiddenResume } from './lib/hiddenResume';
-import { voiceSupported } from './lib/speech';
+import { armRecognition, voiceSupported } from './lib/speech';
+import type { SpeechRecognitionLike } from './lib/speech';
 import {
   DiscardWorkoutConfirm,
   ExpiryNote,
@@ -1652,20 +1653,39 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
   /** (#430) The centre button: Ask, always. It never starts, resumes or ends a workout. */
   const voiceAvailable = !voiceBlocked && voiceSupported();
   const canTalk = Boolean(slot && talkBase);
-  const askToday = (kind: TalkAsk['kind'], text?: string) => {
+  const askToday = (kind: TalkAsk['kind'], text?: string, recognition?: SpeechRecognitionLike) => {
     setSheet({ kind: 'none' });
     if (!canTalk) {
       setNotice(problem('Set up your plan first, then ask about today.'));
       return;
     }
     askSeqRef.current += 1;
-    setTalkAsk({ id: askSeqRef.current, kind, ...(text ? { text } : {}) });
+    setTalkAsk({ id: askSeqRef.current, kind, ...(text ? { text } : {}), ...(recognition ? { recognition } : {}) });
     setView('tabs');
     setTab('today');
   };
+  // (#440) Armed right here, inside the real tap: WebKit needs `start()` (it drives `getUserMedia`)
+  // inside the gesture itself. The centre Ask has no closer gesture to start from — TodayTalk's own
+  // `ask` effect just hands this armed instance straight to VoiceSheet.
+  const startVoiceAsk = () => {
+    let armed: SpeechRecognitionLike | null;
+    try {
+      armed = armRecognition();
+    } catch {
+      setVoiceBlocked(true);
+      setSheet({ kind: 'typedAsk' });
+      return;
+    }
+    if (!armed) {
+      setVoiceBlocked(true);
+      setSheet({ kind: 'typedAsk' });
+      return;
+    }
+    askToday('voice', undefined, armed);
+  };
   const onAsk = () => {
     if (current) setSheet({ kind: 'ask' });
-    else if (voiceAvailable && canTalk) askToday('voice');
+    else if (voiceAvailable && canTalk) startVoiceAsk();
     else setSheet({ kind: 'typedAsk' });
   };
 
@@ -2611,7 +2631,7 @@ function AppRun({ initial, onStartOver }: { initial: LoadedState; onStartOver: (
             setView('train');
           }}
           onFinish={() => setSheet({ kind: 'workoutMenu' })}
-          onVoice={() => askToday('voice')}
+          onVoice={startVoiceAsk}
           onText={(text) => askToday('text', text)}
           onClose={closeSheet}
         />
