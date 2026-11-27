@@ -420,7 +420,7 @@ function setupRack(setup: SetupChoice, equipment: Equipment): number[] | undefin
   return setup === 'hotel' && equipment === 'Dumbbell' ? [...HOTEL_DUMBBELLS].sort((a, b) => a - b) : undefined;
 }
 
-/** Bases that mean "the lifter earned this, or at least didn't fail it" — the only ones a step-down (too-much, a layoff) overrides. */
+/** Bases that mean "the lifter earned this, or at least didn't fail it" — the only ones a too-much step-down overrides. */
 const DELOAD_BASES = new Set<ProgressionBasis>(['load-increase', 'rep-increase', 'go-heavier', 'hold', 'rack-top']);
 
 /** Consecutive unfinished sessions at the same load before progression deloads instead of repeating again (#444). Default picked by product, owner can override. */
@@ -428,8 +428,8 @@ const REPEATED_FAILURE_STREAK = 2;
 
 /**
  * (#442/#444) One step below `weight`, shared by every deload-style step-down: too-much feedback, a
- * stale layoff, a repeated miss. The pound grid when the lifter has no owned rack and reads pounds,
- * else the down-grid mirror `prevLoad`.
+ * repeated miss. The pound grid when the lifter has no owned rack and reads pounds, else the
+ * down-grid mirror `prevLoad`.
  */
 function stepDown(weight: number, increment: number, available: number[], poundStep: number): number {
   return poundStep > 0
