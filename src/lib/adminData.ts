@@ -1,5 +1,6 @@
-import { localDay, type DayType, type EventName, type UsageEvent } from './events.ts';
+import type { DayType, EventName, UsageEvent } from './events.ts';
 import { DAY_TYPES, EVENT_NAMES } from './eventSchema.ts';
+import { dayKey } from './plan.ts';
 
 /**
  * (#359) What the admin pages show, computed in the browser from the documents Firestore returns.
@@ -74,18 +75,18 @@ function noonOf(day: string): Date {
 export function weekOf(day: string): string {
   const at = noonOf(day);
   at.setDate(at.getDate() - ((at.getDay() + 6) % 7));
-  return localDay(at);
+  return dayKey(at);
 }
 
 export function addDays(day: string, days: number): string {
   const at = noonOf(day);
   at.setDate(at.getDate() + days);
-  return localDay(at);
+  return dayKey(at);
 }
 
 /** The weeks shown, oldest first, ending with the week of `now`. */
 export function weeksTo(now: Date, count = WEEKS_READ): string[] {
-  const last = weekOf(localDay(now));
+  const last = weekOf(dayKey(now));
   return Array.from({ length: count }, (_, index) => addDays(last, (index - count + 1) * 7));
 }
 
@@ -151,8 +152,8 @@ export function testerCounts(events: UsageEvent[], feedback: FeedbackItem[], now
     seen.set(id, [...(seen.get(id) ?? []), day]);
   };
   for (const event of events) add(event.testerId, event.date);
-  for (const note of feedback) if (note.createdAt) add(note.testerId, localDay(new Date(note.createdAt)));
-  const thisWeek = weekOf(localDay(now));
+  for (const note of feedback) if (note.createdAt) add(note.testerId, dayKey(new Date(note.createdAt)));
+  const thisWeek = weekOf(dayKey(now));
   const fourWeeks = addDays(thisWeek, -21);
   let newThisWeek = 0;
   let activeThisWeek = 0;
