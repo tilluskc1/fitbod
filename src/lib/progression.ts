@@ -383,7 +383,9 @@ export type ProgressionBasis =
   /** The last session for this exercise was marked "Too much": a step down, not up (#442). */
   | 'deload'
   /** The same unfinished prescription N sessions running, at the same load: a step down, not another repeat (#444). */
-  | 'stalled';
+  | 'stalled'
+  /** The gap since this lift's last session ran past its own rhythm: ease back in (#462). */
+  | 'comeback';
 
 export interface Prescription {
   equipment: Equipment;
@@ -459,6 +461,67 @@ function applyTooMuch(prescription: Prescription, profile: Profile, history: Wor
 }
 
 /**
+ * Multiplier and floor for "this gap means a break" (#462, owner call on 2026-11-26): the gap must
+ * clear BOTH twice the median of the last up-to-6 gaps between this lift's own sessions AND a flat
+ * 14-day floor. The floor was raised from 10 to 14 because strength barely drops in under two
+ * weeks — flagging a comeback that early would feel punishing rather than helpful, including for a
+ * short deliberate skip inside an otherwise tight rhythm (e.g. a 3/3/3/12-day pattern), which must
+ * not be flagged even though 2x its own median alone would clear a lower floor.
+ */
+const LAYOFF_GAP_MULTIPLIER = 2;
+const LAYOFF_MIN_DAYS = 14;
+const LAYOFF_MEDIAN_WINDOW = 6;
+const DAY_MS = 86_400_000;
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+/**
+ * Days `now` sits past this lift's own rhythm, or null when the gap doesn't clear it (or there
+ * isn't enough history yet to know a rhythm at all). Only the lift's own last sessions set that
+ * rhythm — the median window is capped, so a one-off old gap buried further back than that never
+ * widens it (#462, counterexample 4: a genuine long layoff is never masked by old history).
+ */
+function layoffDays(performances: ExercisePerformance[], now: Date): number | null {
+  if (performances.length < 2) return null;
+  const gaps: number[] = [];
+  for (let i = 0; i < performances.length - 1 && gaps.length < LAYOFF_MEDIAN_WINDOW; i += 1) {
+    gaps.push((Date.parse(performances[i].date) - Date.parse(performances[i + 1].date)) / DAY_MS);
+  }
+  const threshold = Math.max(median(gaps) * LAYOFF_GAP_MULTIPLIER, LAYOFF_MIN_DAYS);
+  const current = (now.getTime() - Date.parse(performances[0].date)) / DAY_MS;
+  return current > threshold ? current : null;
+}
+
+/**
+ * (#462) A gap past this lift's own rhythm eases back in: one step down from the last working
+ * weight, reps back to the bottom of the range — the same shape as a repeated failure (#444), not
+ * a step from an all-time peak, so one old heavy or stale session never blocks a real comeback
+ * later (counterexample 3). Never fires on Bodyweight, which has no load to step down, or when
+ * nothing was ever logged at this load.
+ */
+function applyComeback(
+  prescription: Prescription,
+  history: WorkoutRecord[],
+  exerciseId: string,
+  setup: SetupChoice,
+  profile: Profile,
+  now: Date,
+): Prescription {
+  const { last, increment, available, range, equipment } = prescription;
+  if (!last || last.done.length === 0 || equipment === 'Bodyweight') return prescription;
+  if (layoffDays(resolvedPerformanceHistory(history, exerciseId, setup), now) === null) return prescription;
+  const workingWeight = Math.max(...last.done.map((set) => set.weight));
+  const poundStep = unitOf(profile) === 'lb' && available.length === 0 && increment > 0 ? lbStep(equipment) : 0;
+  const weight = stepDown(workingWeight, increment, available, poundStep);
+  if (weight >= workingWeight - 0.001) return prescription;
+  return { ...prescription, weight, reps: range.min, basis: 'comeback' };
+}
+
+/**
  * (#444) How many sessions running, most recent first, this exercise on this setup has been an
  * unfinished `repeat` at this same prescribed load. A session with nothing logged at all breaks the
  * streak — that's silence, not a miss, and must not read as a failure. A different load (a manual
@@ -491,14 +554,22 @@ export function prescribeExercise(
   lead = false,
   dayHasLead = true,
   setup: SetupChoice = 'home',
+  now: Date = new Date(),
 ): Prescription {
   const rack = setupRack(setup, exercise.equipment);
   const from = (source: SetupChoice) => {
     // The saved setup's loads are the ones the user owns: a gym kit's stale rack never caps (#194).
-    const prescription = applyTooMuch(
-      prescribeOn(exercise, profile, history, lead, dayHasLead, source, rack ?? availableLoads({ loads: ownedLoads(profile) }, exercise.equipment)),
-      profile,
+    const prescription = applyComeback(
+      applyTooMuch(
+        prescribeOn(exercise, profile, history, lead, dayHasLead, source, rack ?? availableLoads({ loads: ownedLoads(profile) }, exercise.equipment)),
+        profile,
+        history,
+      ),
       history,
+      exercise.id,
+      source,
+      profile,
+      now,
     );
     if (!rack) return prescription;
     const done = prescription.last?.done ?? [];
@@ -704,6 +775,9 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
       return `${when}: ${logged(workWeight)} marked "Too much". Stepping down to ${logged(weight)} for ${range.min} reps.`;
     case 'stalled':
       return `${when}: ${setsLabel} unfinished at ${logged(workWeight)}, same as the time before. Stepping down to ${logged(weight)} for ${range.min} reps.`;
+    // Plain placeholder pending design copy (#465); not a designed line.
+    case 'comeback':
+      return `${when}: ${logged(workWeight)}. That was a while ago — stepping down to ${logged(weight)} for ${range.min} reps.`;
     case 'first-time':
     default:
       return 'First time — no history yet.';
@@ -748,6 +822,9 @@ export function coachLine(prescription: Prescription, unit: Unit): string {
       return `Marked "Too much" last time — stepping down: ${today}.`;
     case 'stalled':
       return `Stalled at this weight — stepping down: ${today}.`;
+    // Plain placeholder pending design copy (#465); not a designed line.
+    case 'comeback':
+      return `A while since last time — easing in: ${today}.`;
     case 'first-time':
     default:
       return first;

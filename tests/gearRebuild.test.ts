@@ -110,15 +110,15 @@ test('#188: a dumbbell load above the travel rack caps to its top and says so', 
 /** Run today's travel day as prescribed: every planned set done as planned, then finished. */
 const travelSession = (id: string, now: string, history: WorkoutRecord[]) => {
   const { adapted } = day('hotel', 60, history);
-  let session = createSession({ id, name: 'Legs', dayIndex: legs.index, now, exercises: liveExercises(adapted, gym, history) });
+  let session = createSession({ id, name: 'Legs', dayIndex: legs.index, now, exercises: liveExercises(adapted, gym, history, new Date(now)) });
   session.exercises.forEach((exercise, i) => exercise.performed.forEach((_, j) => {
     session = updatePerformedSet(session, i, j, { done: true }, now);
   }));
   return completeSession(session, { early: false, now });
 };
 const gobletSets = (record: WorkoutRecord) => record.exercises.filter((exercise) => exercise.exerciseId === 'goblet-squat');
-const rx = (history: WorkoutRecord[], setup?: EquipmentChoice) => {
-  const prescription = prescribeExercise(goblet, gym, history, true, true, setup);
+const rx = (history: WorkoutRecord[], setup?: EquipmentChoice, now?: Date) => {
+  const prescription = prescribeExercise(goblet, gym, history, true, true, setup, now);
   return { weight: prescription.weight, reps: prescription.reps, basis: prescription.basis };
 };
 
@@ -153,7 +153,7 @@ test('#188: a mid-session switch records each segment\'s setup and never lowers 
     if (!set.done) finished = updatePerformedSet(finished, i, j, { done: true }, '2026-11-03T10:30:00.000Z');
   }));
   const history = [home, completeSession(finished, { early: false, now: '2026-11-03T10:30:00.000Z' })];
-  assert.equal(rx(history).weight, 40, 'home reads only the home sets: 2 of 4 at 40 repeat 40');
+  assert.equal(rx(history, undefined, new Date('2026-11-03T10:31:00.000Z')).weight, 40, 'home reads only the home sets: 2 of 4 at 40 repeat 40');
   // And back again: travel sets done first never pull a home day down either.
   const back = restorePendingWorkout(createSession({ id: 'w-3', name: 'Legs', dayIndex: legs.index, now: '2026-11-04T10:00:00.000Z',
     exercises: liveExercises(day('hotel', 60, [home]).adapted, gym, [home]) }), adaptWorkout(slotProgram(gym, legs, [home]), { minutes: 60, equipment: 'home' }, [], gym.goal), gym, [home]);
@@ -166,7 +166,7 @@ test('#188: travel lifts progress from travel history while home holds', () => {
   let history = [home];
   const seen: { weight: number; reps: number }[] = [];
   for (let k = 0; k < 5; k += 1) {
-    const next = rx(history, 'hotel');
+    const next = rx(history, 'hotel', new Date(`2026-11-1${k}T10:00:00.000Z`));
     seen.push({ weight: next.weight, reps: next.reps });
     history = [...history, travelSession(`t-${k}`, `2026-11-1${k}T10:00:00.000Z`, history)];
   }
@@ -203,8 +203,9 @@ test('#188: the stored setup validates and round-trips through export and restor
 test('#188: a lighter load the user chose, or a mixed-load hold, still drives the next load', () => {
   const home = workout('w-1', '2026-11-01T10:00:00.000Z', 40);
   const lighter = workout('w-2', '2026-11-03T10:00:00.000Z', 40, 35);
-  assert.equal(prescribeExercise(goblet, gym, [home, lighter], true).last?.workoutId, 'w-2', 'typed lighter at their own setup');
-  assert.ok(prescribeExercise(goblet, gym, [home, lighter], true).weight < 40);
+  const afterLighter = new Date('2026-11-03T10:31:00.000Z');
+  assert.equal(prescribeExercise(goblet, gym, [home, lighter], true, true, undefined, afterLighter).last?.workoutId, 'w-2', 'typed lighter at their own setup');
+  assert.ok(prescribeExercise(goblet, gym, [home, lighter], true, true, undefined, afterLighter).weight < 40);
   // Mixed loads hold at the lowest; that session is planned below the last top load but not capped.
   let mixed = createSession({
     id: 'w-4', name: 'Legs', dayIndex: legs.index, now: '2026-11-05T10:00:00.000Z',
@@ -214,9 +215,9 @@ test('#188: a lighter load the user chose, or a mixed-load hold, still drives th
   });
   for (const index of [0, 1, 2]) mixed = updatePerformedSet(mixed, 0, index, { done: true }, '2026-11-05T10:00:00.000Z');
   const held = [home, completeSession(mixed, { early: false, now: '2026-11-05T10:00:00.000Z' })];
-  assert.equal(prescribeExercise(goblet, gym, held, true).weight, 35);
+  assert.equal(prescribeExercise(goblet, gym, held, true, true, undefined, new Date('2026-11-05T10:31:00.000Z')).weight, 35);
   const after = [...held, workout('w-5', '2026-11-07T10:00:00.000Z', 35)];
-  assert.equal(prescribeExercise(goblet, gym, after, true).last?.workoutId, 'w-5');
+  assert.equal(prescribeExercise(goblet, gym, after, true, true, undefined, new Date('2026-11-07T10:31:00.000Z')).last?.workoutId, 'w-5');
 });
 
 test('#188: a load under the lightest travel dumbbell keeps the exercise and asks for the pick', async () => {
@@ -376,13 +377,14 @@ test('#188: at the top travel dumbbell reps climb to the range top, then hold an
   const max = prescribeExercise(goblet, gym, history, true).range.max;
   const steps: { weight: number; reps: number }[] = [];
   for (let k = 0; k < 12; k += 1) {
-    const next = prescribeExercise(goblet, gym, history, true, true, 'hotel');
+    const sessionDate = `2026-10-${String(k + 2).padStart(2, '0')}T10:00:00.000Z`;
+    const next = prescribeExercise(goblet, gym, history, true, true, 'hotel', new Date(sessionDate));
     steps.push({ weight: next.weight, reps: next.reps });
-    history = [...history, labelled(workout(`t-${k}`, `2026-10-${String(k + 2).padStart(2, '0')}T10:00:00.000Z`, next.weight, next.weight, 'goblet-squat', 'Goblet Squat', next.reps), 'hotel')];
+    history = [...history, labelled(workout(`t-${k}`, sessionDate, next.weight, next.weight, 'goblet-squat', 'Goblet Squat', next.reps), 'hotel')];
   }
   assert.ok(steps.every((step) => step.weight === 25 && step.reps <= max), JSON.stringify(steps));
   assert.equal(steps.at(-1)?.reps, max);
-  const held = prescribeExercise(goblet, gym, history, true, true, 'hotel');
+  const held = prescribeExercise(goblet, gym, history, true, true, 'hotel', new Date('2026-10-14T10:00:00.000Z'));
   assert.equal(held.reps, max);
   assert.match(describePrescription(held, 'kg'), new RegExp(`Top travel dumbbell: hold at ${max} reps`));
 });

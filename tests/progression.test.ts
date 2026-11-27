@@ -387,7 +387,8 @@ test('the most recent completed session with the exercise drives the next load',
   const last = lastExercisePerformance(history, 'barbell-bench-press');
   assert.equal(last?.workoutId, 'recent');
   assert.equal(last?.workoutName, 'Push');
-  assert.equal(prescribeExercise(meta('barbell-bench-press'), makeProfile(), history).weight, 57.5);
+  const now = new Date('2026-02-02T10:00:00.000Z');
+  assert.equal(prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', now).weight, 57.5);
 });
 
 test('recorded loads supply both the step and the next selectable load', () => {

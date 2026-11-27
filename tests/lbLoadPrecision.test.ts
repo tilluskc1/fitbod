@@ -269,7 +269,7 @@ test('a logged load reads like its target when accepted unchanged and as typed o
 
         // 8 reps: a rep step, so the recap headline is the new best rather than an earned load.
         const history = finish(first, 'b', '2026-11-04', step, weight, 8);
-        const lines = progressionLines(history[0], bar, history, unit);
+        const lines = progressionLines(history[0], bar, history, unit, new Date('2026-11-04T10:31:00.000Z'));
         assert.match(lines[0].performed ?? '', new RegExp(`best 8 reps @ ${re(shown)} ${unit}`), `${tag} recap best`);
         assert.match(lines[0].reason, new RegExp(`[:,] ${re(shown)} ${unit}`), `${tag} reason/history line`);
         if (weight === step) {
