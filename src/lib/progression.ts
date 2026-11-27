@@ -431,6 +431,9 @@ const REPEATED_FAILURE_STREAK = 2;
 /** Days since a lift's last session before it reads as a layoff, not a lift still warm (#444). Default picked by product, owner can override. */
 const BREAK_DAYS = 10;
 
+/** How many of this lift's recent gaps to check for an existing rhythm this wide before reading one more as a fresh layoff (#444). Default picked by product, owner can override. */
+const BREAK_LOOKBACK = 3;
+
 /**
  * (#442/#444) One step below `weight`, shared by every deload-style step-down: too-much feedback, a
  * stale layoff, a repeated miss. The pound grid when the lifter has no owned rack and reads pounds,
@@ -465,14 +468,13 @@ function applyTooMuch(prescription: Prescription, profile: Profile, history: Wor
 
 /**
  * (#444) A `last` session far enough in the past reads as a layoff, not a lift still warm: a basis
- * that would otherwise hand back (or hold) the pre-break top weight steps down one notch from the
- * heaviest this lift has ever worked (its peak), same step `applyTooMuch` uses. Stepping down from
- * the peak rather than from `last` itself makes this idempotent: once a layoff has already knocked
- * the working weight down to (or past) that notch, a later long gap at the same or a lower weight
- * finds nothing left to cut and leaves the earned basis alone, instead of cutting again every time
- * the lifter's own cadence happens to land past `BREAK_DAYS`. Only overrides the "earned it, or at
- * least didn't fail it" bases — a too-much deload (already applied, if any) is left alone rather
- * than stepped down twice.
+ * that would otherwise hand back (or hold) the pre-break top weight steps down one notch from that
+ * session's actual working weight instead, same step `applyTooMuch` uses. But a gap this wide only
+ * reads as a fresh layoff the first time: if a gap at least this wide already shows up among this
+ * lift's last `BREAK_LOOKBACK` gaps, the lifter's own rhythm for this lift already runs this wide —
+ * whether steady or a short/long mix — so the current gap is that same rhythm, not a new one, and
+ * the override is left alone. Only overrides the "earned it, or at least didn't fail it" bases — a
+ * too-much deload (already applied, if any) is left alone rather than stepped down twice.
  */
 function applyBreak(
   prescription: Prescription,
@@ -486,15 +488,14 @@ function applyBreak(
   if (!last || last.done.length === 0 || equipment === 'Bodyweight' || !DELOAD_BASES.has(basis)) return prescription;
   const days = Math.floor((now.getTime() - new Date(last.date).getTime()) / 86_400_000);
   if (!(days >= BREAK_DAYS)) return prescription;
+  const dates = resolvedPerformanceHistory(history, exerciseId, setup).map((performance) => new Date(performance.date).getTime());
+  for (let i = 0; i + 1 < dates.length && i < BREAK_LOOKBACK; i += 1) {
+    const gapDays = Math.floor((dates[i] - dates[i + 1]) / 86_400_000);
+    if (gapDays >= BREAK_DAYS) return prescription;
+  }
   const workingWeight = Math.max(...last.done.map((set) => set.weight));
-  const peakWeight = Math.max(
-    workingWeight,
-    ...resolvedPerformanceHistory(history, exerciseId, setup)
-      .filter((performance) => performance.done.length > 0)
-      .map((performance) => Math.max(...performance.done.map((set) => set.weight))),
-  );
   const poundStep = unitOf(profile) === 'lb' && available.length === 0 && increment > 0 ? lbStep(equipment) : 0;
-  const weight = stepDown(peakWeight, increment, available, poundStep);
+  const weight = stepDown(workingWeight, increment, available, poundStep);
   if (weight >= workingWeight - 0.001) return prescription;
   return { ...prescription, weight, reps: range.min, basis: 'comeback' };
 }

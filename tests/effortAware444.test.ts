@@ -190,9 +190,11 @@ test('a lifter who always trains 12+ days apart does not ratchet down every sess
   let history: WorkoutRecord[] = [finishedFull('seed', '2025-11-01T10:00:00.000Z', 60)];
   let now = new Date('2025-11-13T10:00:00.000Z'); // 12 days later: the lifter's normal rhythm for this lift.
   let lowestWeight = Infinity;
-  for (let i = 0; i < 6; i += 1) {
+  let lastWeight = 60;
+  for (let i = 0; i < 30; i += 1) {
     const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', now);
     lowestWeight = Math.min(lowestWeight, prescription.weight);
+    lastWeight = prescription.weight;
     history.push(record({
       id: `cadence-${i}`,
       date: now.toISOString(),
@@ -204,16 +206,41 @@ test('a lifter who always trains 12+ days apart does not ratchet down every sess
   }
   // Only the first gap (seed to session 0) is a real break; every later 12-day gap is this lift's own rhythm.
   assert.ok(lowestWeight >= 57.5, `weight should not ratchet below the one real comeback step, got ${lowestWeight}`);
+  // The rhythm must not cap progression at the one post-break step either: 30 sessions of earned progress climbs well past the pre-break top.
+  assert.ok(lastWeight > 60, `a steady rhythm should still climb past the pre-break weight, got ${lastWeight}`);
+});
+
+test('a lift with a tight rhythm still gets a real comeback after a genuine long layoff', () => {
+  let history: WorkoutRecord[] = [finishedFull('seed', '2025-10-01T10:00:00.000Z', 60)];
+  let now = new Date('2025-10-04T10:00:00.000Z'); // every 3 days: a tight, non-break rhythm.
+  for (let i = 0; i < 6; i += 1) {
+    const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', now);
+    history.push(record({
+      id: `tight-${i}`,
+      date: now.toISOString(),
+      exerciseId: 'barbell-bench-press',
+      planned: sets(prescription.weight, prescription.reps, 4),
+      performed: sets(prescription.weight, prescription.reps, 4),
+    }));
+    now = new Date(now.getTime() + 3 * 86_400_000);
+  }
+  const lastWeight = Math.max(...(history.at(-1) as WorkoutRecord).exercises[0].performed.map((set) => set.weight));
+  now = new Date(now.getTime() + 21 * 86_400_000); // a real 3-week layoff, way outside this lift's own 3-day rhythm.
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', now);
+  assert.equal(prescription.basis, 'comeback');
+  assert.ok(prescription.weight < lastWeight, `a real layoff after a tight rhythm should still step down, got ${prescription.weight} vs last ${lastWeight}`);
 });
 
 test('a mixed cadence (some gaps short, some 10+ days) does not ratchet down forever either', () => {
   let history: WorkoutRecord[] = [finishedFull('seed', '2025-11-01T10:00:00.000Z', 60)];
   let now = new Date('2025-11-13T10:00:00.000Z'); // 12 days: a break.
-  const gaps = [12, 3, 12, 3, 12, 3, 12, 3, 12, 3, 12, 3];
+  const gaps = [12, 3, 12, 3, 12, 3, 12, 3, 12, 3, 12, 3, 12, 3, 12, 3];
   let lowestWeight = Infinity;
+  let lastWeight = 60;
   for (const gapDays of gaps) {
     const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', now);
     lowestWeight = Math.min(lowestWeight, prescription.weight);
+    lastWeight = prescription.weight;
     history.push(record({
       id: `mixed-${now.toISOString()}`,
       date: now.toISOString(),
@@ -225,6 +252,8 @@ test('a mixed cadence (some gaps short, some 10+ days) does not ratchet down for
   }
   // One real layoff step (57.5) is expected; it must not compound every time a gap happens to clear 10 days.
   assert.ok(lowestWeight >= 57.5, `weight should not ratchet below the one real comeback step, got ${lowestWeight}`);
+  // Once the mixed rhythm is established, earned progress on the short gaps must still add up, not stay capped at the one post-break step.
+  assert.ok(lastWeight > 60, `an established mixed rhythm should still climb past the pre-break weight, got ${lastWeight}`);
 });
 
 test('an open session across the break boundary is never read as the last completed session', () => {
