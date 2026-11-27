@@ -468,13 +468,27 @@ function applyTooMuch(prescription: Prescription, profile: Profile, history: Wor
  * that would otherwise hand back (or hold) the pre-break top weight steps down one notch from that
  * session's actual working weight instead, same step `applyTooMuch` uses. Only overrides the
  * "earned it, or at least didn't fail it" bases — a too-much deload (already applied, if any) is
- * left alone rather than stepped down twice.
+ * left alone rather than stepped down twice. A lifter whose cadence for this lift already runs this
+ * wide — the session before `last` was itself this far back — isn't coming back from a layoff: that
+ * gap is their rhythm, so it never steps down two sessions running.
  */
-function applyBreak(prescription: Prescription, profile: Profile, now: Date): Prescription {
+function applyBreak(
+  prescription: Prescription,
+  profile: Profile,
+  history: WorkoutRecord[],
+  exerciseId: string,
+  setup: SetupChoice,
+  now: Date,
+): Prescription {
   const { last, basis, increment, available, range, equipment } = prescription;
   if (!last || last.done.length === 0 || equipment === 'Bodyweight' || !DELOAD_BASES.has(basis)) return prescription;
   const days = Math.floor((now.getTime() - new Date(last.date).getTime()) / 86_400_000);
   if (!(days >= BREAK_DAYS)) return prescription;
+  const previous = resolvedPerformanceHistory(history, exerciseId, setup)[1];
+  if (previous) {
+    const priorGap = Math.floor((new Date(last.date).getTime() - new Date(previous.date).getTime()) / 86_400_000);
+    if (priorGap >= BREAK_DAYS) return prescription;
+  }
   const workingWeight = Math.max(...last.done.map((set) => set.weight));
   const poundStep = unitOf(profile) === 'lb' && available.length === 0 && increment > 0 ? lbStep(equipment) : 0;
   const weight = stepDown(workingWeight, increment, available, poundStep);
@@ -522,7 +536,7 @@ export function prescribeExercise(
   const from = (source: SetupChoice) => {
     // The saved setup's loads are the ones the user owns: a gym kit's stale rack never caps (#194).
     const base = prescribeOn(exercise, profile, history, lead, dayHasLead, source, rack ?? availableLoads({ loads: ownedLoads(profile) }, exercise.equipment));
-    const prescription = applyBreak(applyTooMuch(base, profile, history), profile, now);
+    const prescription = applyBreak(applyTooMuch(base, profile, history), profile, history, exercise.id, source, now);
     if (!rack) return prescription;
     const done = prescription.last?.done ?? [];
     if ((prescription.basis === 'go-heavier' || prescription.basis === 'hold') && done.length > 0) {
