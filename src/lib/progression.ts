@@ -480,6 +480,18 @@ function median(values: number[]): number {
 }
 
 /**
+ * A timestamp's own UTC calendar date, midnight. Gaps are measured in whole days this way (not raw
+ * millisecond differences) so the 14-day floor holds regardless of what time of day a session was
+ * logged at, and a daylight-saving shift inside the gap never nudges a day count by an hour (review
+ * finding on #462: a 14-day-apart pair logged at 19:00 instead of 07:00 was crossing the floor on
+ * the clock alone).
+ */
+function calendarDay(ms: number): number {
+  const d = new Date(ms);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+/**
  * Days `now` sits past this lift's own rhythm, or null when the gap doesn't clear it (or there
  * isn't enough history yet to know a rhythm at all). Only the lift's own last sessions set that
  * rhythm — the median window is capped, so a one-off old gap buried further back than that never
@@ -489,10 +501,10 @@ function layoffDays(performances: ExercisePerformance[], now: Date): number | nu
   if (performances.length < 2) return null;
   const gaps: number[] = [];
   for (let i = 0; i < performances.length - 1 && gaps.length < LAYOFF_MEDIAN_WINDOW; i += 1) {
-    gaps.push((Date.parse(performances[i].date) - Date.parse(performances[i + 1].date)) / DAY_MS);
+    gaps.push((calendarDay(Date.parse(performances[i].date)) - calendarDay(Date.parse(performances[i + 1].date))) / DAY_MS);
   }
   const threshold = Math.max(median(gaps) * LAYOFF_GAP_MULTIPLIER, LAYOFF_MIN_DAYS);
-  const current = (now.getTime() - Date.parse(performances[0].date)) / DAY_MS;
+  const current = (calendarDay(now.getTime()) - calendarDay(Date.parse(performances[0].date))) / DAY_MS;
   return current > threshold ? current : null;
 }
 
@@ -501,7 +513,10 @@ function layoffDays(performances: ExercisePerformance[], now: Date): number | nu
  * weight, reps back to the bottom of the range — the same shape as a repeated failure (#444), not
  * a step from an all-time peak, so one old heavy or stale session never blocks a real comeback
  * later (counterexample 3). Never fires on Bodyweight, which has no load to step down, or when
- * nothing was ever logged at this load.
+ * nothing was ever logged at this load. Capped at whatever the prescription already computed
+ * (review finding on #462): a miss already read as `mixed-load`/`stalled`/`range-reset`/etc. picked
+ * a weight below the last session's raw working weight for its own reason, and a comeback must
+ * never undo that correction by stepping down from the uncorrected number instead.
  */
 function applyComeback(
   prescription: Prescription,
@@ -516,7 +531,7 @@ function applyComeback(
   if (layoffDays(resolvedPerformanceHistory(history, exerciseId, setup), now) === null) return prescription;
   const workingWeight = Math.max(...last.done.map((set) => set.weight));
   const poundStep = unitOf(profile) === 'lb' && available.length === 0 && increment > 0 ? lbStep(equipment) : 0;
-  const weight = stepDown(workingWeight, increment, available, poundStep);
+  const weight = Math.min(prescription.weight, stepDown(workingWeight, increment, available, poundStep));
   if (weight >= workingWeight - 0.001) return prescription;
   return { ...prescription, weight, reps: range.min, basis: 'comeback' };
 }

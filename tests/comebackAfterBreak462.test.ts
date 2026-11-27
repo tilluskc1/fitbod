@@ -146,3 +146,42 @@ test('a steady weekly cadence, right on schedule, is never flagged', () => {
   const prescription = prescribe(history, daysAfter('2026-04-01T10:00:00.000Z', 7));
   assert.notEqual(prescription.basis, 'comeback');
 });
+
+test('review finding: a comeback never prescribes heavier than a miss already corrected to', () => {
+  // Two clean 60x8 sessions a week apart set the rhythm, then a mixed-load miss (two sets failed down
+  // at 50) already reads the next session as mixed-load 50 — a long layoff after that must not undo
+  // the correction by stepping down from the raw 60 instead.
+  const clean = (id: string, date: string) =>
+    finished(id, date, 60);
+  const missed: WorkoutRecord = {
+    id: 'm1', date: '2026-01-15T10:00:00.000Z', name: 'Push', dayIndex: 0, status: 'completed',
+    completedEarly: false, endedAt: null,
+    exercises: [{
+      exerciseId: 'barbell-bench-press', name: meta('barbell-bench-press').name,
+      planned: sets(60, 8, 4),
+      performed: [
+        { weight: 60, reps: 8, done: true, completedAt: null },
+        { weight: 60, reps: 8, done: true, completedAt: null },
+        { weight: 50, reps: 8, done: true, completedAt: null },
+        { weight: 50, reps: 8, done: true, completedAt: null },
+      ],
+    }],
+  };
+  const history = [missed, clean('c1', '2026-01-08T10:00:00.000Z'), clean('c0', '2026-01-01T10:00:00.000Z')];
+  const onSchedule = prescribe(history, daysAfter('2026-01-15T10:00:00.000Z', 7));
+  assert.equal(onSchedule.basis, 'mixed-load');
+  assert.equal(onSchedule.weight, 50, 'sanity: the miss alone already corrects to 50');
+  const afterLayoff = prescribe(history, daysAfter('2026-01-15T10:00:00.000Z', 30));
+  assert.equal(afterLayoff.basis, 'comeback');
+  assert.ok(afterLayoff.weight <= 50, `comeback must not exceed the already-corrected 50, got ${afterLayoff.weight}`);
+});
+
+test('review finding: the 14-day floor holds on whole calendar days, not raw hours (time-of-day / DST safe)', () => {
+  // A steady 4-day rhythm ending at 07:00, checked 14 calendar days later but at 19:00 — 12 hours
+  // past the raw millisecond mark. A millisecond-based day count would read this as 14.5 days and
+  // fire; counting whole UTC calendar days must not.
+  const history = steady('2026-04-01T07:00:00.000Z', 4, 7);
+  const now = new Date('2026-04-15T19:00:00.000Z');
+  const prescription = prescribe(history, now);
+  assert.notEqual(prescription.basis, 'comeback');
+});
