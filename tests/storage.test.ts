@@ -354,6 +354,11 @@ test('export round-trips performed values and restore is idempotent', () => {
     ...loaded.state,
     history: loaded.state.history.map((workout) => ({
       ...workout,
+      // (#395) The round trip must also carry an in-progress pause and a feedback answer, not just
+      // performed sets — these are the fields the fixture used to leave out.
+      feedback: 'about-right',
+      pausedAt: '2026-02-01T10:05:00.000Z',
+      pausedMs: 45_000,
       exercises: workout.exercises.map((exercise) => ({
         ...exercise,
         performed: exercise.performed.map((set, index) =>
@@ -375,11 +380,17 @@ test('export round-trips performed values and restore is idempotent', () => {
   assert.equal(workout.exercises[0].performed[0].weight, 22.5);
   assert.equal(workout.exercises[0].performed[0].reps, 8);
   assert.deepEqual(workout.exercises[0].planned[0], { weight: 0, reps: 10 });
+  assert.equal(workout.feedback, 'about-right');
+  assert.equal(workout.pausedAt, '2026-02-01T10:05:00.000Z');
+  assert.equal(workout.pausedMs, 45_000);
 
   const first = mergeImport(EMPTY_STATE, parsed.state);
   assert.equal(first.summary.newWorkouts, 1);
   assert.equal(first.summary.duplicateWorkouts, 0);
   assert.equal(first.state.history.length, 1);
+  assert.equal(first.state.history[0].feedback, 'about-right');
+  assert.equal(first.state.history[0].pausedAt, '2026-02-01T10:05:00.000Z');
+  assert.equal(first.state.history[0].pausedMs, 45_000);
 
   const second = mergeImport(first.state, parsed.state);
   assert.equal(second.summary.newWorkouts, 0);

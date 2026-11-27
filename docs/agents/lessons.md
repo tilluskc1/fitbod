@@ -389,6 +389,16 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    "now" and "today" are the same thing by construction. Check: `npm test` clean on the final SHA, not
    just the new test file.
 
+50. **A status comment claiming a fixture was updated is not proof it was.** #395's own "merged" comment
+   said "The round-trip fixture now has feedback, a non-null `pausedAt` and a non-zero `pausedMs`," but
+   `git log` on `tests/storage.test.ts` and `tests/fixtures/v1-state.json` showed neither file had been
+   touched for those fields since the initial commit — the claim was never actually true on `main`. The
+   other half of the same issue (the safety-copy-failure fix) really was shipped and later refined by
+   `#412`, so the comment read as credible. Rule: before treating an issue as partially or fully done from
+   its own comments, check the claim against `git log -- <file>` / the actual diff, not just the prose.
+   Check: a comment that names specific fields or behavior gets a one-line `grep`/`git log` check on the
+   named file before the issue's remaining scope is trimmed on the strength of that comment alone.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.
