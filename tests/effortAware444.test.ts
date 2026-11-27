@@ -84,7 +84,8 @@ function silent(id: string, date: string, weight: number): WorkoutRecord {
 
 test('two unfinished sessions at the same load deload instead of repeating a third time', () => {
   const history = [unfinished('w1', '2026-01-03T10:00:00.000Z', 60), unfinished('w2', '2026-01-05T10:00:00.000Z', 60)];
-  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home');
+  const now = new Date('2026-01-06T10:00:00.000Z');
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', now);
   assert.equal(prescription.basis, 'stalled');
   assert.equal(prescription.weight, 57.5);
   assert.equal(prescription.reps, prescription.range.min);
@@ -103,7 +104,8 @@ test('a session with nothing logged breaks the failure streak instead of extendi
     silent('w2', '2026-01-04T10:00:00.000Z', 60),
     unfinished('w3', '2026-01-05T10:00:00.000Z', 60),
   ];
-  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home');
+  const now = new Date('2026-01-06T10:00:00.000Z');
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', now);
   assert.equal(prescription.basis, 'repeat');
   assert.equal(prescription.weight, 60);
 });

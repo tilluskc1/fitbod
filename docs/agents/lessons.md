@@ -372,6 +372,23 @@ and how to check it. If a rule can be a script or a test, make it one and say wh
    effect that can still be pending when something else grabs focus next. Check: `scripts/e2e/planner-reach.mjs`
    at 390×650 with the keyboard open.
 
+49. **A new wall-clock-relative progression rule breaks every fixture dated near "now," not just old
+   ones.** #462 added `applyComeback`, comparing a lift's last session to the real current date via a
+   `now: Date = new Date()` default on `prescribeExercise`. `npm test` immediately went red in 8
+   unrelated tests across `effortAware444`, `gearRebuild`, `lbLoadPrecision`, `progression` and the
+   36-session rotation in `rangeChangeLoad139` — every fixture whose history ended more than ~10-20 days
+   before the real date the suite happened to run on (some fixtures used dates "close to today" when
+   written, which drifts further from real `now` every month; others used fixed past dates with a small
+   gap between sessions, so a tiny median made the 10-day floor the active threshold against a huge
+   real-world gap). None of these were comeback tests — they just called `prescribeExercise`,
+   `liveExercises`, `liveAdapted` or `progressionLines` without passing `now`, so the default silently
+   picked up whatever day the suite ran on. Rule: before merging any date-aware rule into progression,
+   run the full suite, not just the new test file — a passing new test proves nothing about fixtures it
+   doesn't touch. Any test exercising 2+ sessions through these functions must pass an explicit `now`
+   pinned close to its own fixture's dates; a bare default is only safe for real production calls, where
+   "now" and "today" are the same thing by construction. Check: `npm test` clean on the final SHA, not
+   just the new test file.
+
 ## Recurring edge cases (put the relevant ones in every brief)
 
 - **Sessions:** running vs not started; a swap mid-session; finishing early; a session open across midnight; legacy records without newer fields.

@@ -101,7 +101,10 @@ test('#139: a lift that leads one day and follows on another never loses load (3
           const lastLoad: Record<string, number> = {};
           for (let n = 0; n < 36; n += 1) {
             const slot = slots[n % slots.length];
-            const exercises = liveExercises(slotProgram(lifter, slot, rows), lifter, rows);
+            // This session's own place on the simulated calendar (#462): the rotation runs every
+            // other day, so "now" has to keep pace with it or a gap-aware rule sees a false layoff.
+            const now = new Date(Date.UTC(2026, 0, 1 + n * 2));
+            const exercises = liveExercises(slotProgram(lifter, slot, rows), lifter, rows, now);
             for (const exercise of exercises) {
               const equipment = exerciseById(exercise.exerciseId)?.equipment;
               const planned = exercise.planned[0]?.weight ?? 0;
@@ -114,7 +117,7 @@ test('#139: a lift that leads one day and follows on another never loses load (3
               lastLoad[exercise.exerciseId] = weight;
             }
             rows.push({
-              id: `w${n}`, date: new Date(Date.UTC(2026, 0, 1 + n * 2)).toISOString(), name: slot.name, dayIndex: slot.index,
+              id: `w${n}`, date: now.toISOString(), name: slot.name, dayIndex: slot.index,
               status: 'completed', completedEarly: false, endedAt: null, exercises,
             });
           }
