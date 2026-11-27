@@ -382,6 +382,16 @@ test('ranked replacements respect the day: no duplicate, no incompatible pair, n
   assert.ok(forTwist.includes('hanging-leg-raise'), forTwist.join(', '));
 });
 
+// #442: Pull-Up (['Back', 'Biceps']) and Chin-Up (['Biceps', 'Back']) train the same two muscles in a
+// different grip order, not a different primary muscle, so each is a swap candidate for the other.
+test('ranked replacements: Pull-Up and Chin-Up swap for each other despite the reversed muscles order', () => {
+  const gym = makeProfile({ equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable'], support: ['Bench', 'Rack', 'Pull-up bar', 'Ab wheel'] });
+  const forPullUp = rankedReplacements(meta('pull-up'), gym).map((item) => item.id);
+  assert.ok(forPullUp.includes('chin-up'), forPullUp.join(', '));
+  const forChinUp = rankedReplacements(meta('chin-up'), gym).map((item) => item.id);
+  assert.ok(forChinUp.includes('pull-up'), forChinUp.join(', '));
+});
+
 test('the logger Replace sheet lists rankedReplacements against today\'s other exercises', () => {
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   // #193: a described session passes the same profile with its skipped work left out.

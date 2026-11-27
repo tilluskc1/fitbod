@@ -102,20 +102,22 @@ test('bodyweight and unloaded work never ramp', () => {
 
 test('ramp rows sit on the lead compound only, until its first set is logged', () => {
   const session = pushDay();
-  assert.equal(rampExerciseIndex(session), 0);
+  assert.equal(rampExerciseIndex(session, 0), true);
   assert.equal(showsGeneralWarmUp(session), true);
   const logged = logSet(session, 0, 0, '2026-11-09T08:10:00.000Z');
-  assert.equal(rampExerciseIndex(logged), -1);
+  assert.equal(rampExerciseIndex(logged, 0), false);
   assert.equal(showsGeneralWarmUp(logged), false);
   // A bodyweight-only day has no lead: general warm-up only.
   const bodyweight = createSession({ id: 'b', name: 'BW', dayIndex: 0, now: '2026-11-09T08:00:00.000Z', exercises: [entry('push-up', 0, 3, 12)] });
-  assert.equal(rampExerciseIndex(bodyweight), -1);
+  assert.equal(rampExerciseIndex(bodyweight, 0), false);
   assert.equal(showsGeneralWarmUp(bodyweight), true);
   // A skipped lead hands nothing on: other lifts start at working weight.
-  assert.equal(rampExerciseIndex(skipExercise(session, 0)), -1);
+  assert.equal(rampExerciseIndex(skipExercise(session, 0), 0), false);
   // Legacy session already under way: no warm-up rows.
   const underway = logSet(session, 1, 0, '2026-11-09T08:10:00.000Z');
   assert.equal(showsGeneralWarmUp(underway), false);
+  // An out-of-range index is simply not a ramp slot.
+  assert.equal(rampExerciseIndex(session, 99), false);
 });
 
 test('a swap of the lead follows the new lead before a working set, never after', () => {
@@ -123,19 +125,40 @@ test('a swap of the lead follows the new lead before a working set, never after'
   // Swapped before any working set: the new lead (now first) carries the rows.
   const before = swapPendingExercise(session, 0, { exerciseId: 'barbell-row', name: 'Barbell Row', weight: 50, reps: 6 } as never);
   assert.equal(before.exercises[0].exerciseId, 'barbell-row');
-  assert.equal(rampExerciseIndex(before), 0);
+  assert.equal(rampExerciseIndex(before, 0), true);
   // Swapped to a lift that cannot lead: no rows anywhere, never on a lift further down (review 1).
   for (const exerciseId of ['cable-fly', 'push-up']) {
     const swapped = swapPendingExercise(session, 0, { exerciseId, name: exerciseId, weight: 0, reps: 12 } as never);
     assert.equal(swapped.exercises[0].exerciseId, exerciseId);
-    assert.equal(rampExerciseIndex(swapped), -1, exerciseId);
+    assert.equal(rampExerciseIndex(swapped, 0), false, exerciseId);
   }
   // A day that opens on push-ups: general warm-up only, even with a loaded press behind it.
   const pushUpsFirst = createSession({ id: 'p', name: 'P', dayIndex: 0, now: '2026-11-09T08:00:00.000Z',
     exercises: [entry('push-up', 0, 3, 12), entry('dumbbell-bench-press', 20, 3, 10)] });
-  assert.equal(rampExerciseIndex(pushUpsFirst), -1);
+  assert.equal(rampExerciseIndex(pushUpsFirst, 0), false);
   const after = swapPendingExercise(logSet(session, 0, 0, '2026-11-09T08:10:00.000Z'), 0, { exerciseId: 'dumbbell-bench-press', name: 'DB', weight: 20, reps: 8 } as never);
-  assert.equal(rampExerciseIndex(after), -1);
+  assert.equal(rampExerciseIndex(after, 0), false);
+});
+
+// #442: every heavy compound ramps wherever it sits, not only the lead slot — and a lift that cannot
+// lead still gets none, even once the actual lead is swapped away.
+test('every heavy compound ramps at its own slot, not only the lead', () => {
+  const session = pushDay();
+  // Slot 0 (barbell bench) and slot 1 (dumbbell bench) are both heavy compounds: both ramp at their
+  // own position, independently of each other and of order.
+  assert.equal(rampExerciseIndex(session, 0), true);
+  assert.equal(rampExerciseIndex(session, 1), true);
+  // Slot 2 (push-up) cannot lead: never ramps, wherever it sits.
+  assert.equal(rampExerciseIndex(session, 2), false);
+  // Logging slot 0's first set takes its ramp away but leaves slot 1's alone (per-slot, not global).
+  const loggedLead = logSet(session, 0, 0, '2026-11-09T08:10:00.000Z');
+  assert.equal(rampExerciseIndex(loggedLead, 0), false);
+  assert.equal(rampExerciseIndex(loggedLead, 1), true);
+  // The lead swapped away to a lift that cannot lead: that slot drops its ramp, but a heavy compound
+  // later in the list still ramps when its turn comes (lesson #23: judged at its own slot).
+  const leadSwapped = swapPendingExercise(session, 0, { exerciseId: 'push-up', name: 'Push-Up', weight: 0, reps: 12 } as never);
+  assert.equal(rampExerciseIndex(leadSwapped, 0), false);
+  assert.equal(rampExerciseIndex(leadSwapped, 1), true);
 });
 
 test('warm-up checks live in memory and change no sets, volume, minutes, bests or next target', () => {
@@ -144,7 +167,7 @@ test('warm-up checks live in memory and change no sets, volume, minutes, bests o
   setWarmUpChecks(session.id, { general: true, timerStartedAt: 1, ramps: ['barbell-bench-press:0', 'barbell-bench-press:1'] });
   assert.deepEqual(warmUpChecks(session.id).ramps.length, 2);
   rampSets({ equipment: 'Barbell', working: 60, unit: 'kg' });
-  rampExerciseIndex(session);
+  rampExerciseIndex(session, 0);
   assert.deepEqual(session, snapshot, 'nothing on the record moved');
 
   let done = session;

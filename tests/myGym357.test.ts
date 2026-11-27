@@ -145,7 +145,7 @@ test('#357 the row shows for gym kits and saved lists, not home or bodyweight', 
   assert.equal(showsMyGym({ ...profileOf(KITS.home, 'Beginner', 3, 45), equipment: ['Dumbbell', 'Cable'] }), false);
 });
 
-test('#357 absent field = identical plans, Limited lines and swaps to main eed9fd9 (snapshot)', () => {
+test('#357 absent field = identical plans, Limited lines and swaps to main, updated for #442 (snapshot)', () => {
   const main = JSON.parse(gunzipSync(readFileSync(FIXTURE)).toString()) as Record<string, string>;
   const now = sweep();
   assert.equal(now.length, Object.keys(main).length);

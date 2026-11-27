@@ -40,7 +40,7 @@ const CABLE: GymItemId[] = ['cable-stack', 'cable-crossover'];
 
 export const EXERCISES: Exercise[] = [
   // Chest
-  { id: 'barbell-bench-press', name: 'Barbell Bench Press', muscles: ['Chest', 'Triceps', 'Shoulders'], equipment: 'Barbell', pattern: 'horizontal_push', secondaryPatterns: ['elbow_extension'], needs: ['barbell', 'bench'], instructions: 'Lie on a flat bench, grip the bar slightly wider than shoulder width, lower it to mid-chest, then press up until your arms are extended.' },
+  { id: 'barbell-bench-press', name: 'Barbell Bench Press', muscles: ['Chest', 'Triceps', 'Shoulders'], equipment: 'Barbell', pattern: 'horizontal_push', secondaryPatterns: ['elbow_extension'], needs: ['barbell', 'bench', 'rack'], instructions: 'Lie on a flat bench, grip the bar slightly wider than shoulder width, lower it to mid-chest, then press up until your arms are extended.' },
   { id: 'dumbbell-floor-press', name: 'Dumbbell Floor Press', muscles: ['Chest', 'Triceps', 'Shoulders'], equipment: 'Dumbbell', pattern: 'horizontal_push', secondaryPatterns: ['elbow_extension'], needs: ['dumbbell'], instructions: 'Lie on your back on the floor with a dumbbell in each hand. Lower until your upper arms touch the floor, pause, then press back up until your arms are straight.' },
   { id: 'dumbbell-bench-press', name: 'Dumbbell Bench Press', muscles: ['Chest', 'Triceps', 'Shoulders'], equipment: 'Dumbbell', pattern: 'horizontal_push', secondaryPatterns: ['elbow_extension'], needs: ['dumbbell', 'bench'], instructions: 'Lie on a flat bench holding dumbbells above your chest. Lower until your elbows are at 90°, then press the weights back up.' },
   { id: 'incline-dumbbell-press', name: 'Incline Dumbbell Press', muscles: ['Chest', 'Shoulders', 'Triceps'], equipment: 'Dumbbell', pattern: 'horizontal_push', secondaryPatterns: ['vertical_push', 'elbow_extension'], needs: ['dumbbell', 'bench'], instructions: 'Set the bench to 30–45°. Press dumbbells from chest level to full extension, keeping your upper back tight.' },
@@ -139,6 +139,20 @@ export const INCOMPATIBLE_GROUPS: string[][] = [
 
 export function areIncompatible(a: string, b: string): boolean {
   return a !== b && INCOMPATIBLE_GROUPS.some((group) => group.includes(a) && group.includes(b));
+}
+
+/**
+ * (#442) Pairs that train the same two muscles in a different list order: Pull-Up (`['Back',
+ * 'Biceps']`) and Chin-Up (`['Biceps', 'Back']`) are a grip difference, not a different primary
+ * muscle. Keeps the swap filter exact for every other pair, which must still share `muscles[0]`.
+ */
+export const SAME_PRIMARY_GROUPS: string[][] = [
+  ['pull-up', 'chin-up'],
+];
+
+/** Whether two exercises count as the same primary muscle for a swap: exact match, or a listed pair. */
+export function samePrimaryMuscle(a: Exercise, b: Exercise): boolean {
+  return a.muscles[0] === b.muscles[0] || SAME_PRIMARY_GROUPS.some((group) => group.includes(a.id) && group.includes(b.id));
 }
 
 /**

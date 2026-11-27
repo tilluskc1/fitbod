@@ -1,4 +1,4 @@
-import type { Capability, Equipment, Exercise, GymItemId, Profile, SupportEquipment } from '../types';
+import type { Capability, Equipment, Exercise, GymItemId, Profile, SupportEquipment } from '../types.ts';
 
 const EQUIPMENT_CAPABILITY: Record<Equipment, Capability | null> = {
   Barbell: 'barbell',
