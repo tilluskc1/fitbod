@@ -1,4 +1,4 @@
-import { EXERCISES, areIncompatible } from '../data/exercises.ts';
+import { EXERCISES, areIncompatible, samePrimaryMuscle } from '../data/exercises.ts';
 import type { Exercise, Profile } from '../types.ts';
 import { canPerform, capabilitiesFor } from './capabilities.ts';
 import { patternsOf } from './feasibility.ts';
@@ -36,7 +36,7 @@ export function rankedReplacements(
   return EXERCISES.filter(
     (candidate) =>
       candidate.id !== exercise.id &&
-      candidate.muscles[0] === exercise.muscles[0] &&
+      samePrimaryMuscle(candidate, exercise) &&
       canPerform(profile, candidate, caps) &&
       !excluded.has(candidate.id) &&
       !others.some((item) => item.id === candidate.id || areIncompatible(item.id, candidate.id)) &&

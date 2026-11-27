@@ -95,15 +95,23 @@ test('a first-time Barbell Bench lead whose suggested start is the empty bar has
   });
 });
 
-test('the suggested start ramps only the lead slot, never a first-time lift further down', async () => {
+// (#442) A heavy compound ramps at its own slot the same way the lead does, including when it sits
+// behind a completed exercise that cannot lead: the suggested-start floor (#345) is the only gate, not
+// the slot's position.
+test('a heavy compound further down the list follows the same suggested-start rule as the lead', async () => {
   await withTrain((render) => {
     const day = createSession({ id: 's326b', name: 'Push', dayIndex: 0, now: at(0), exercises: [
       { exerciseId: 'push-up', name: 'Push-Up', planned: [{ weight: 0, reps: 10 }], performed: [{ weight: 0, reps: 10, done: false, completedAt: null }] },
       { exerciseId: 'dumbbell-bench-press', name: 'Dumbbell Bench Press', planned: [{ weight: 0, reps: 8 }], performed: [{ weight: 0, reps: 8, done: false, completedAt: null }] },
     ] });
     const done = { ...day, exercises: [{ ...day.exercises[0], performed: [{ weight: 0, reps: 10, done: true, completedAt: at(1) }] }, day.exercises[1]] };
+    // Intermediate's suggested start (25 lb) sits under the #345 floor: still no rows, same as the lead.
     const html = render(done, 'lb');
     assert.match(html, /Dumbbell Bench Press/);
     assert.equal(warmRows(html).length, 0);
+    // Advanced's suggested start (35 lb) clears the floor: this slot now ramps, even though it is not
+    // slot 0 and sits behind an already-finished exercise that could never lead (#442).
+    const advanced = render(done, 'lb', { experience: 'Advanced' });
+    assert.equal(warmRows(advanced).length, 2);
   });
 });

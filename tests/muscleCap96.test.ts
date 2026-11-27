@@ -119,11 +119,19 @@ const pairedGroup = (group: string) => !group.includes(' Beginner ') && Number(g
 const changed = keys.filter((key) => !paired(key) && now[key] !== main[key]);
 const setsOf = (value: string) => new Map(value.split('|')[0].split(' ').filter(Boolean).map((item) => [item.split(':')[0], Number(item.split(':')[1])]));
 
+// (#442) Barbell Bench Press now needs a Rack too, same as the squat. A gymless kit's "what adding
+// Barbell would unlock" hint text drops by one and swaps its example, since Bench Press alone still
+// needs a Rack it doesn't have; the exercises and sets themselves are untouched (see `changed` above).
+const benchRackHintOnly = (group: string) => (group.startsWith('home ') || group.startsWith('homeBar ')) && group.endsWith(' 120');
+
 test('beginners get the same days as on main: every kit, length, shortened day and described day', () => {
   assert.equal(keys.length, stored.cases.length);
   assert.deepEqual(changed.filter((key) => field(key).level === 'Beginner'), []);
   // The whole generated output (loads and reps too), byte for byte.
-  assert.deepEqual(Object.keys(after.hashes).filter((group) => group.includes(' Beginner ') && !sameOutput(group)), []);
+  assert.deepEqual(
+    Object.keys(after.hashes).filter((group) => group.includes(' Beginner ') && !benchRackHintOnly(group) && !sameOutput(group)),
+    [],
+  );
 });
 
 test('a day built under 45 minutes, or an intermediate\'s under 60, is unchanged (#229)', () => {

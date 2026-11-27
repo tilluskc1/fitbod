@@ -89,10 +89,10 @@ export function rampWorking(args: { setOneKg: number; suggestedKg: number | null
 
 /**
  * (#344) The ramp burst still in force: one that began in this slot's set 1 while that cell is still the
- * ramp cell (`rampIndex === index`). Anything else is stale and is dropped.
+ * ramp cell (`isRamp`). Anything else is stale and is dropped.
  */
-export function liveRampBurst<T extends { key: string }>(burst: T | null, at: { key: string; rampIndex: number; index: number }): T | null {
-  return burst !== null && burst.key === at.key && at.rampIndex === at.index ? burst : null;
+export function liveRampBurst<T extends { key: string }>(burst: T | null, at: { key: string; isRamp: boolean }): T | null {
+  return burst !== null && burst.key === at.key && at.isRamp ? burst : null;
 }
 
 /** The listed load closest to `kg`, the lighter on a tie. */
@@ -101,15 +101,16 @@ function nearest(loads: number[], kg: number): number {
 }
 
 /**
- * The session index whose exercise carries the ramp rows: the lead slot, which is the session's
- * first exercise, and only while it is a loaded compound with nothing logged. A swap before the
- * first working set hands the rows to the new lead if it can lead (a fly or a push-up gets none);
- * after it, the logged segment keeps the slot and nothing ramps. Never a lift further down.
+ * Whether this session slot carries ramp rows (#442): every heavy compound ramps wherever it sits in
+ * the session, not only the lead slot, as long as it is still unstarted. A swap before its first
+ * working set hands the rows to the new exercise if it can lead (a fly or a push-up gets none); once
+ * logged or skipped, that slot stops ramping. Each slot is judged by its own flags only (lesson #23:
+ * a slot is a position, not a search) — never by searching the list for a name or a pattern elsewhere.
  */
-export function rampExerciseIndex(session: Pick<WorkoutRecord, 'exercises'>): number {
-  const lead = session.exercises[0];
-  if (!lead || leadCompoundId([lead.exerciseId]) === undefined) return -1;
-  return lead.skipped || lead.performed.some((set) => set.done) ? -1 : 0;
+export function rampExerciseIndex(session: Pick<WorkoutRecord, 'exercises'>, index: number): boolean {
+  const entry = session.exercises[index];
+  if (!entry || leadCompoundId([entry.exerciseId]) === undefined) return false;
+  return !entry.skipped && !entry.performed.some((set) => set.done);
 }
 
 /** The general warm-up shows until the session's first set is logged (a started session never shows it). */

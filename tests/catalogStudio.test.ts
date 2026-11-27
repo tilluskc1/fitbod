@@ -21,7 +21,7 @@ test('a card carries what curation needs: frames, muscles, gear, pattern, role, 
   assert.equal(card.frames.length, 2);
   assert.deepEqual(card.muscles, ['Chest', 'Triceps', 'Shoulders']);
   assert.equal(card.equipment, 'Barbell');
-  assert.deepEqual(card.needs, ['barbell', 'bench']);
+  assert.deepEqual(card.needs, ['barbell', 'bench', 'rack']);
   assert.equal(card.pattern, 'horizontal_push');
   assert.equal(card.role, 'Lead');
   assert.match(card.repRange, /^\d+–\d+$/);

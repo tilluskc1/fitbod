@@ -10,7 +10,7 @@ import type {
   WorkoutRecord,
 } from '../types.ts';
 import { lbLoadAtOrUnder, lbNextLoad, lbStep } from './lbGrid.ts';
-import { loadLimitText, loadValue, unitLabel, unitOf } from './units.ts';
+import { loadLimitText, loadValue, toKg, unitLabel, unitOf } from './units.ts';
 import { MAX_WEIGHT } from './validate.ts';
 import { exerciseInWorkout } from './plan.ts';
 import { HOTEL_DUMBBELLS, programExercise } from '../data/flagship.ts';
@@ -285,6 +285,22 @@ export function nextLoad(weight: number, increment: number, available: number[])
   return next > MAX_WEIGHT ? weight : next;
 }
 
+/**
+ * (#442) One step below `weight`, the down-grid mirror of `nextLoad`: with an inventory, the next
+ * owned load down; otherwise the step grid below it. Never below 0, and never above `weight` (so a
+ * missing lower step leaves the caller's own weight as the signal that nothing lower exists).
+ */
+export function prevLoad(weight: number, increment: number, available: number[]): number {
+  if (increment <= 0 || weight <= 0) return weight;
+  if (available.length > 0) {
+    const reachable = [...available].sort((a, b) => a - b).filter((value) => value <= weight - increment / 2);
+    return reachable.length > 0 ? reachable[reachable.length - 1] : weight;
+  }
+  const target = weight - increment;
+  const prev = round(Math.floor((target + 0.001) / increment) * increment);
+  return prev < 0 ? weight : prev;
+}
+
 export interface PerformanceSet {
   weight: number;
   reps: number;
@@ -351,7 +367,9 @@ export type ProgressionBasis =
   /** The rep range moved above the last session's planned reps: a lighter load for its minimum (#139). */
   | 'range-reset'
   /** Already at or above a today-only rack's heaviest load: its top, one more rep (#188). */
-  | 'rack-top';
+  | 'rack-top'
+  /** The last session for this exercise was marked "Too much": a step down, not up (#442). */
+  | 'deload';
 
 export interface Prescription {
   equipment: Equipment;
@@ -388,6 +406,32 @@ function setupRack(setup: SetupChoice, equipment: Equipment): number[] | undefin
   return setup === 'hotel' && equipment === 'Dumbbell' ? [...HOTEL_DUMBBELLS].sort((a, b) => a - b) : undefined;
 }
 
+/** Bases that mean "the lifter earned this, or at least didn't fail it" — the only ones a too-much step-down overrides. */
+const DELOAD_BASES = new Set<ProgressionBasis>(['load-increase', 'rep-increase', 'go-heavier', 'hold', 'rack-top']);
+
+/**
+ * (#442) When the workout `prescription.last` came from was marked "Too much", a basis that would
+ * otherwise hold or climb steps back down from that session's actual working weight instead —
+ * never from a `repeat`/`mixed-load`/`range-reset` basis, which already corrected for a miss.
+ * Bodyweight has no load to step down, so it's left as computed. No lower step exists: hold the
+ * basis as computed rather than claim a deload that didn't move anything.
+ */
+function applyTooMuch(prescription: Prescription, profile: Profile, history: WorkoutRecord[]): Prescription {
+  const { last, basis, increment, available, range, equipment } = prescription;
+  if (!last || last.done.length === 0 || equipment === 'Bodyweight' || !DELOAD_BASES.has(basis)) return prescription;
+  const workout = history.find((item) => item.id === last.workoutId);
+  if (workout?.feedback !== 'too-much') return prescription;
+  const workingWeight = Math.max(...last.done.map((set) => set.weight));
+  const poundStep = unitOf(profile) === 'lb' && available.length === 0 && increment > 0 ? lbStep(equipment) : 0;
+  const weight = poundStep > 0
+    ? lbLoadAtOrUnder(workingWeight - toKg(poundStep, 'lb'), poundStep)
+    : increment > 0
+      ? prevLoad(workingWeight, increment, available)
+      : workingWeight;
+  if (weight >= workingWeight - 0.001) return prescription;
+  return { ...prescription, weight, reps: range.min, basis: 'deload' };
+}
+
 /**
  * `lead`: this is the day's first compound (see `leadCompoundId`). `setup`: where the work
  * runs (#188). The saved setup reads only its own history. A today-only setup follows whichever
@@ -408,7 +452,11 @@ export function prescribeExercise(
   const rack = setupRack(setup, exercise.equipment);
   const from = (source: SetupChoice) => {
     // The saved setup's loads are the ones the user owns: a gym kit's stale rack never caps (#194).
-    const prescription = prescribeOn(exercise, profile, history, lead, dayHasLead, source, rack ?? availableLoads({ loads: ownedLoads(profile) }, exercise.equipment));
+    const prescription = applyTooMuch(
+      prescribeOn(exercise, profile, history, lead, dayHasLead, source, rack ?? availableLoads({ loads: ownedLoads(profile) }, exercise.equipment)),
+      profile,
+      history,
+    );
     if (!rack) return prescription;
     const done = prescription.last?.done ?? [];
     if ((prescription.basis === 'go-heavier' || prescription.basis === 'hold') && done.length > 0) {
@@ -605,6 +653,8 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
       return available.length === 0
         ? `Top of the app's load limit — ${loadLimitText(unit)} The load holds at ${logged(weight)}.`
         : `Top of your available loads at ${range.max} reps — add heavier ${equipment.toLowerCase()} loads to progress further.`;
+    case 'deload':
+      return `${when}: ${logged(workWeight)} marked "Too much". Stepping down to ${logged(weight)} for ${range.min} reps.`;
     case 'first-time':
     default:
       return 'First time — no history yet.';
@@ -645,6 +695,8 @@ export function coachLine(prescription: Prescription, unit: Unit): string {
       return available.length === 0 ? `Top of the app's load limit — own ${today}.` : `Top of your rack — own ${today}.`;
     case 'repeat':
       return last.done.length === 0 ? `Last time wasn't logged. Same plan: ${today}.` : `Finish every set: ${today}.`;
+    case 'deload':
+      return `Marked "Too much" last time — stepping down: ${today}.`;
     case 'first-time':
     default:
       return first;

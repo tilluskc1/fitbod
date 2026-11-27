@@ -568,11 +568,12 @@ export default function TrainScreen({
     onUpdateSet(index, focused, { weight: kg }, { prefill: prefill ?? 0, step: true });
   };
 
-  // #300/#326: the ramp rows' slot, and the load set 1 shows (its typed load, else the suggested start).
-  const rampIndex = mode !== 'none' ? rampExerciseIndex(session) : -1;
+  // #300/#326/#442: whether this slot carries the ramp rows, and the load set 1 shows (its typed load,
+  // else the suggested start). Every heavy compound ramps wherever it sits, judged by its own slot.
+  const isRampSlot = mode !== 'none' && rampExerciseIndex(session, index);
   // #344: set 1's cell can stop being the ramp cell while still focused (its ✓ keeps focus), and then no
   // blur clears the burst. Drop it here, so a later ramp never starts from a stale burst.
-  const burst = liveRampBurst(rampBurst, { key: calibrationKey, rampIndex, index });
+  const burst = liveRampBurst(rampBurst, { key: calibrationKey, isRamp: isRampSlot });
   if (rampBurst !== null && burst === null) setRampBurst(null);
   const setOne = exercise.performed[0];
   const setOneKg = rampWorking({
@@ -610,7 +611,7 @@ export default function TrainScreen({
   const noReps = set.reps <= 0;
   const reason = !set.done && (noLoad || noReps) ? `${key}:reason` : undefined;
   const refused = refusal?.key === key ? `${key}:refused` : undefined;
-  const rampCell = focused === 0 && rampIndex === index;
+  const rampCell = focused === 0 && isRampSlot;
   const weightShown = weightText(set, focused);
   // "lb · bar": the load on the card is the empty barbell (#380).
   const onBar = equipment === 'Barbell' && weightShown !== '' && Math.abs(Number(weightShown) - BAR[unit]) < 0.001;
@@ -790,7 +791,7 @@ export default function TrainScreen({
   // logged, counted or stored. A dumbbell ramps on the rack the logger's own picker offers (Travel's
   // hotel rack on a today-only day), else plate steps. Once every one is ticked they fold to one line.
   const rampRack = equipment === 'Dumbbell' ? rampLoads : rack;
-  const ramps = index === rampIndex
+  const ramps = isRampSlot
     ? rampSets({ equipment, unit, rack: rampRack, working: burst !== null ? burst.kg : setOneKg })
     : [];
   const rampKey = (rampNumber: number) => `${exercise.exerciseId}:${rampNumber}`;
