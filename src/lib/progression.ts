@@ -465,12 +465,14 @@ function applyTooMuch(prescription: Prescription, profile: Profile, history: Wor
 
 /**
  * (#444) A `last` session far enough in the past reads as a layoff, not a lift still warm: a basis
- * that would otherwise hand back (or hold) the pre-break top weight steps down one notch from that
- * session's actual working weight instead, same step `applyTooMuch` uses. Only overrides the
- * "earned it, or at least didn't fail it" bases — a too-much deload (already applied, if any) is
- * left alone rather than stepped down twice. A lifter whose cadence for this lift already runs this
- * wide — the session before `last` was itself this far back — isn't coming back from a layoff: that
- * gap is their rhythm, so it never steps down two sessions running.
+ * that would otherwise hand back (or hold) the pre-break top weight steps down one notch from the
+ * heaviest this lift has ever worked (its peak), same step `applyTooMuch` uses. Stepping down from
+ * the peak rather than from `last` itself makes this idempotent: once a layoff has already knocked
+ * the working weight down to (or past) that notch, a later long gap at the same or a lower weight
+ * finds nothing left to cut and leaves the earned basis alone, instead of cutting again every time
+ * the lifter's own cadence happens to land past `BREAK_DAYS`. Only overrides the "earned it, or at
+ * least didn't fail it" bases — a too-much deload (already applied, if any) is left alone rather
+ * than stepped down twice.
  */
 function applyBreak(
   prescription: Prescription,
@@ -484,14 +486,15 @@ function applyBreak(
   if (!last || last.done.length === 0 || equipment === 'Bodyweight' || !DELOAD_BASES.has(basis)) return prescription;
   const days = Math.floor((now.getTime() - new Date(last.date).getTime()) / 86_400_000);
   if (!(days >= BREAK_DAYS)) return prescription;
-  const previous = resolvedPerformanceHistory(history, exerciseId, setup)[1];
-  if (previous) {
-    const priorGap = Math.floor((new Date(last.date).getTime() - new Date(previous.date).getTime()) / 86_400_000);
-    if (priorGap >= BREAK_DAYS) return prescription;
-  }
   const workingWeight = Math.max(...last.done.map((set) => set.weight));
+  const peakWeight = Math.max(
+    workingWeight,
+    ...resolvedPerformanceHistory(history, exerciseId, setup)
+      .filter((performance) => performance.done.length > 0)
+      .map((performance) => Math.max(...performance.done.map((set) => set.weight))),
+  );
   const poundStep = unitOf(profile) === 'lb' && available.length === 0 && increment > 0 ? lbStep(equipment) : 0;
-  const weight = stepDown(workingWeight, increment, available, poundStep);
+  const weight = stepDown(peakWeight, increment, available, poundStep);
   if (weight >= workingWeight - 0.001) return prescription;
   return { ...prescription, weight, reps: range.min, basis: 'comeback' };
 }

@@ -206,6 +206,27 @@ test('a lifter who always trains 12+ days apart does not ratchet down every sess
   assert.ok(lowestWeight >= 57.5, `weight should not ratchet below the one real comeback step, got ${lowestWeight}`);
 });
 
+test('a mixed cadence (some gaps short, some 10+ days) does not ratchet down forever either', () => {
+  let history: WorkoutRecord[] = [finishedFull('seed', '2025-11-01T10:00:00.000Z', 60)];
+  let now = new Date('2025-11-13T10:00:00.000Z'); // 12 days: a break.
+  const gaps = [12, 3, 12, 3, 12, 3, 12, 3, 12, 3, 12, 3];
+  let lowestWeight = Infinity;
+  for (const gapDays of gaps) {
+    const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', now);
+    lowestWeight = Math.min(lowestWeight, prescription.weight);
+    history.push(record({
+      id: `mixed-${now.toISOString()}`,
+      date: now.toISOString(),
+      exerciseId: 'barbell-bench-press',
+      planned: sets(prescription.weight, prescription.reps, 4),
+      performed: sets(prescription.weight, prescription.reps, 4),
+    }));
+    now = new Date(now.getTime() + gapDays * 86_400_000);
+  }
+  // One real layoff step (57.5) is expected; it must not compound every time a gap happens to clear 10 days.
+  assert.ok(lowestWeight >= 57.5, `weight should not ratchet below the one real comeback step, got ${lowestWeight}`);
+});
+
 test('an open session across the break boundary is never read as the last completed session', () => {
   const completed = finishedFull('w1', '2025-12-20T10:00:00.000Z', 60); // 17 days before NOW: a break on its own
   const open = { ...finishedFull('w2', '2026-01-05T10:00:00.000Z', 60), status: 'active' as const }; // still open, 1 day before NOW
