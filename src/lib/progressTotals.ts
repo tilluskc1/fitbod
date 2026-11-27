@@ -1,5 +1,9 @@
-import type { WorkoutRecord } from '../types.ts';
+import { EXERCISES } from '../data/exercises.ts';
+import type { MuscleGroup, WorkoutRecord } from '../types.ts';
 import { hasWork } from './plan.ts';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEKLY_VOLUME_WINDOW_DAYS = 7;
 
 /**
  * (#294) Time actually trained: finish minus start, the same figure as the recap. A legacy record
@@ -52,4 +56,32 @@ export function progressTotals(history: WorkoutRecord[]): ProgressTotals {
     minutes,
     approx,
   };
+}
+
+/**
+ * (#446) Sets actually done, per muscle group, over the trailing 7 days ending at `now`. Counts
+ * every logged set regardless of the session's overall status — an unfinished session's done sets
+ * still trained the muscle. An exerciseId no longer in the catalog (a removed or renamed exercise)
+ * contributes nothing rather than throwing.
+ */
+export function weeklySetsPerMuscle(
+  history: WorkoutRecord[],
+  now: Date = new Date(),
+): Partial<Record<MuscleGroup, number>> {
+  const windowStart = now.getTime() - WEEKLY_VOLUME_WINDOW_DAYS * DAY_MS;
+  const totals: Partial<Record<MuscleGroup, number>> = {};
+  for (const workout of history) {
+    const at = Date.parse(workout.date);
+    if (!Number.isFinite(at) || at < windowStart || at > now.getTime()) continue;
+    for (const exercise of workout.exercises) {
+      const done = exercise.performed.filter((set) => set.done).length;
+      if (done === 0) continue;
+      const meta = EXERCISES.find((item) => item.id === exercise.exerciseId);
+      if (!meta) continue;
+      for (const muscle of meta.muscles) {
+        totals[muscle] = (totals[muscle] ?? 0) + done;
+      }
+    }
+  }
+  return totals;
 }
