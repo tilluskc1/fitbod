@@ -350,7 +350,6 @@ export function generateWorkout(
   targetCountOverride?: number,
   /** Where the day runs (#188): that setup's own history prescribes it. */
   setup: SetupChoice = 'home',
-  now: Date = new Date(),
 ): GeneratedSession {
   const max = MAX_EXERCISES[profile.experience];
   const fixed = targetCountOverride && targetCountOverride > 0
@@ -392,7 +391,7 @@ export function generateWorkout(
   const spare = (exercise: Exercise) => Number(exercise === freed && exercise !== lead);
   picked.sort((a, b) => spare(a) - spare(b) || tier(a) - tier(b) || focusRank(a) - focusRank(b));
   const prescriptions = picked.map((exercise) =>
-    prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined, setup, now));
+    prescribeExercise(exercise, profile, history, exercise === lead, lead !== undefined, setup));
   const sets = prescriptions.map((prescription) => prescription.sets);
   const rests = picked.map((exercise) => restSecondsFor(exercise, exercise === lead, profile.goal, profile.sessionMinutes ?? 35));
 
@@ -538,7 +537,7 @@ export function generateWorkout(
     // stays out when the day kept fewer than two others for its muscle.
     for (const exercise of short ? [] : thirds) {
       if (picked.filter((item) => item.muscles[0] === exercise.muscles[0]).length < 2) continue;
-      const prescription = prescribeExercise(exercise, profile, history, false, lead !== undefined, setup, now);
+      const prescription = prescribeExercise(exercise, profile, history, false, lead !== undefined, setup);
       picked.push(exercise);
       sets.push(prescription.sets);
       rests.push(restSecondsFor(exercise, false, profile.goal, minutes));

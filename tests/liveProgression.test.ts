@@ -29,9 +29,6 @@ const profile: Profile = {
 
 const constraints = { minutes: 35, equipment: 'home' as const, loads: RACK };
 
-/** Just after this file's 2026-11-02 fixtures and `finish()`'s own `now`. */
-const NOW = new Date('2026-11-02T10:31:00.000Z');
-
 /** The real start path: adapted program → live prescription → session. */
 function startLiveSession(history: WorkoutRecord[] = [], minutes = 35) {
   const adapted = adaptWorkout(FULL_BODY_A, { ...constraints, minutes }, [], undefined);
@@ -40,7 +37,7 @@ function startLiveSession(history: WorkoutRecord[] = [], minutes = 35) {
     name: adapted.name,
     dayIndex: 0,
     durationMin: minutes,
-    exercises: liveExercises(adapted, profile, history, NOW),
+    exercises: liveExercises(adapted, profile, history),
     now: '2026-11-02T10:00:00.000Z',
   });
 }
@@ -86,7 +83,7 @@ test('a logged full target earns the next selectable rack load through the real 
 
   // The next real session — the same path Today and Start use — asks history.
   const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
-  const next = liveExercises(adapted, profile, state.history, NOW)[0];
+  const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 18, 'all three sets at the ceiling move to the next owned load');
   assert.equal(next.planned[0].reps, 8, "reps restart at the bottom of the program's 8–10 range");
   assert.equal(next.originalPlannedSets, 3, 'the original 3-set target is preserved');
@@ -102,7 +99,7 @@ test('a shortened session at the same load does not earn the step', () => {
   const { state } = finish(logged);
 
   const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
-  const next = liveExercises(adapted, profile, state.history, NOW)[0];
+  const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 15, 'two of three required sets is unfinished work');
   assert.equal(next.planned[0].reps, 10);
 });
@@ -118,11 +115,11 @@ test('mixed loads hold instead of rewarding the heaviest set', () => {
   const { state } = finish(logged);
 
   const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
-  const next = liveExercises(adapted, profile, state.history, NOW)[0];
+  const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 15, 'mixed work holds at the lowest working load used');
   assert.equal(next.planned[0].reps, 10);
   assert.match(
-    targetReason('dumbbell-floor-press', profile, state.history, 'kg', false, 'home', NOW) ?? '',
+    targetReason('dumbbell-floor-press', profile, state.history, 'kg') ?? '',
     /different loads.*holds at 15 kg/,
   );
 });
@@ -137,7 +134,7 @@ test('an unlogged or warm-up set is not qualifying evidence', () => {
   const { state } = finish(logged);
 
   const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
-  const next = liveExercises(adapted, profile, state.history, NOW)[0];
+  const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 15, 'two marked sets cannot complete a three-set target');
 });
 
@@ -157,10 +154,10 @@ test('the top of the owned rack holds instead of inventing a heavier load', () =
   const { state } = finish(logged);
 
   const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
-  const next = liveExercises(adapted, profile, state.history, NOW)[0];
+  const next = liveExercises(adapted, profile, state.history)[0];
   assert.equal(next.planned[0].weight, 18);
   assert.equal(next.planned[0].reps, 10);
-  assert.match(targetReason('dumbbell-floor-press', profile, state.history, 'kg', false, 'home', NOW) ?? '', /available loads/);
+  assert.match(targetReason('dumbbell-floor-press', profile, state.history, 'kg') ?? '', /available loads/);
 });
 
 test('correcting a logged set changes the next target without rewriting the record', () => {
@@ -190,7 +187,7 @@ test('correcting a logged set changes the next target without rewriting the reco
   };
 
   const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
-  const next = liveExercises(adapted, profile, corrected.history, NOW)[0];
+  const next = liveExercises(adapted, profile, corrected.history)[0];
   assert.equal(next.planned[0].weight, 15, 'a corrected set removes the earned load step');
   assert.equal(next.planned[0].reps, 9, 'the lowest completed set drives the next rep target');
 });
@@ -201,7 +198,7 @@ test('Today shows the computed target, not the program fixture', () => {
   const { state } = finish(logged);
 
   const adapted = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
-  const live = liveAdapted(adapted, profile, state.history, NOW);
+  const live = liveAdapted(adapted, profile, state.history);
   const press = live.exercises[0];
   assert.equal(press.weight, 18);
   assert.deepEqual(press.targetReps?.slice(0, press.sets), [8, 8, 8]);
@@ -216,7 +213,7 @@ test('recap lines state original, adapted, actual, next and one factual reason',
   const logged = logAll(session, 0, 15, 10);
   const { state, workout } = finish(logged);
 
-  const lines = progressionLines(workout, profile, state.history, 'kg', NOW);
+  const lines = progressionLines(workout, profile, state.history, 'kg');
   const press = lines.find((line) => line.exerciseId === 'dumbbell-floor-press');
   assert.ok(press);
 
@@ -256,7 +253,7 @@ test('a recap with one of three sets done says so instead of reading as the full
   let logged = updatePerformedSet(session, 0, 0, { weight: 15, reps: 10 });
   logged = logSet(logged, 0, 0, '2026-11-02T10:01:00.000Z');
   const { state, workout } = finish(logged);
-  const press = progressionLines(workout, profile, state.history, 'kg', NOW).find(
+  const press = progressionLines(workout, profile, state.history, 'kg').find(
     (line) => line.exerciseId === 'dumbbell-floor-press',
   );
   assert.ok(press);
@@ -267,13 +264,13 @@ test('explanation lines read in the display unit', () => {
   const session = startLiveSession([]);
   const { state, workout } = finish(logAll(session, 0, 15, 10));
   const lb = { ...profile, unit: 'lb' as const };
-  const press = progressionLines(workout, lb, state.history, 'lb', NOW).find(
+  const press = progressionLines(workout, lb, state.history, 'lb').find(
     (line) => line.exerciseId === 'dumbbell-floor-press',
   );
   assert.ok(press);
   assert.match(press.reason, / lb/);
   assert.doesNotMatch(press.reason, / kg/);
-  assert.doesNotMatch(targetReason('dumbbell-floor-press', lb, state.history, 'lb', false, 'home', NOW) ?? '', / kg/);
+  assert.doesNotMatch(targetReason('dumbbell-floor-press', lb, state.history, 'lb') ?? '', / kg/);
 });
 
 test('mid-session adjust, restore and swap-back keep the history-derived numbers, not the fixture', () => {
@@ -281,12 +278,12 @@ test('mid-session adjust, restore and swap-back keep the history-derived numbers
   const { state } = finish(logAll(startLiveSession([]), 0, 15, 10));
   const history = state.history;
   const original = adaptWorkout(FULL_BODY_A, constraints, [], undefined);
-  const live = liveExercises(original, profile, history, NOW);
+  const live = liveExercises(original, profile, history);
 
   // A shortened live session with one squat set logged, then the original restored.
   let short = startLiveSession(history, 20);
   short = logSet(updatePerformedSet(short, 1, 0, { weight: 10, reps: 8 }), 1, 0, '2026-11-02T10:01:00.000Z');
-  const restored = restorePendingWorkout(short, original, profile, history, NOW);
+  const restored = restorePendingWorkout(short, original, profile, history);
   for (const expected of live) {
     const pending = restored.exercises
       .filter((exercise) => exercise.exerciseId === expected.exerciseId)
@@ -298,7 +295,7 @@ test('mid-session adjust, restore and swap-back keep the history-derived numbers
   // Swapping back to a program movement asks the same history.
   const press = exerciseById('dumbbell-floor-press');
   assert.ok(press);
-  const candidate = swapCandidateFor(press, profile, history, null, false, 'home', NOW);
+  const candidate = swapCandidateFor(press, profile, history, null);
   assert.deepEqual({ weight: candidate.weight, reps: candidate.reps }, live[0].planned[0]);
 });
 
@@ -306,16 +303,16 @@ test('in lb, the reason and the target name a rack load with the same number', (
   // 15 kg is on the rack; 3 × 9 holds the load and asks for a rep.
   const { state } = finish(logAll(startLiveSession([]), 0, 15, 9));
   const lb = { ...profile, unit: 'lb' as const };
-  const press = liveAdapted(adaptWorkout(FULL_BODY_A, constraints, [], undefined), lb, state.history, NOW).exercises[0];
+  const press = liveAdapted(adaptWorkout(FULL_BODY_A, constraints, [], undefined), lb, state.history).exercises[0];
   const target = targetSummary(press, press.sets, 'lb').match(/@ ([\d.]+) lb/)?.[1];
-  const reason = targetReason(press.exerciseId, lb, state.history, 'lb', false, 'home', NOW)?.match(/([\d.]+) lb/)?.[1];
+  const reason = targetReason(press.exerciseId, lb, state.history, 'lb')?.match(/([\d.]+) lb/)?.[1];
   assert.ok(target);
   assert.equal(reason, target);
 });
 
 test('a user-typed non-rack load keeps its stored precision in the reason', () => {
   const { state } = finish(logAll(startLiveSession([]), 0, 42.3, 9));
-  assert.match(targetReason('dumbbell-floor-press', profile, state.history, 'kg', false, 'home', NOW) ?? '', /42\.3 kg/);
+  assert.match(targetReason('dumbbell-floor-press', profile, state.history, 'kg') ?? '', /42\.3 kg/);
 });
 
 test('an open slot session gives a non-flagship movement its own rep range, not its planned reps', () => {
@@ -337,7 +334,7 @@ test('recap: finished exercise names its next target; unfinished ones say the ta
   logged = updatePerformedSet(logged, 1, 0, { weight: 10, reps: 8 });
   logged = logSet(logged, 1, 0, '2026-11-02T10:20:00.000Z');
   const { state, workout } = finish(logged);
-  const lines = progressionLines(workout, profile, state.history, 'kg', NOW);
+  const lines = progressionLines(workout, profile, state.history, 'kg');
   assert.ok(lines.length >= 3);
   for (const line of lines) assert.ok(line.next.length > 0, `${line.name} names a next target`);
 

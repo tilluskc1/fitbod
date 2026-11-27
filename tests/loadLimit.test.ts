@@ -148,7 +148,7 @@ test('#109: progression never plans above the load limit; it holds at the top wi
       exercises: [{ exerciseId: 'barbell-row', name: 'Barbell Row', planned: [{ weight: top, reps: 30 }],
         performed: [{ weight: top, reps: 30, done: true, completedAt: NOW }] }],
     }];
-    const prescription = prescribeExercise(row, profile, history, false, true, 'home', new Date(NOW));
+    const prescription = prescribeExercise(row, profile, history);
     assert.equal(prescription.weight, top);
     assert.equal(prescription.basis, 'hold');
     assert.ok(prescription.weight <= MAX_WEIGHT);

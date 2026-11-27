@@ -383,9 +383,7 @@ export type ProgressionBasis =
   /** The last session for this exercise was marked "Too much": a step down, not up (#442). */
   | 'deload'
   /** The same unfinished prescription N sessions running, at the same load: a step down, not another repeat (#444). */
-  | 'stalled'
-  /** The last session for this exercise was far enough back to read as a layoff: ease back in, not the pre-break top (#444). */
-  | 'comeback';
+  | 'stalled';
 
 export interface Prescription {
   equipment: Equipment;
@@ -428,12 +426,6 @@ const DELOAD_BASES = new Set<ProgressionBasis>(['load-increase', 'rep-increase',
 /** Consecutive unfinished sessions at the same load before progression deloads instead of repeating again (#444). Default picked by product, owner can override. */
 const REPEATED_FAILURE_STREAK = 2;
 
-/** Days since a lift's last session before it reads as a layoff, not a lift still warm (#444). Default picked by product, owner can override. */
-const BREAK_DAYS = 10;
-
-/** How many of this lift's recent gaps to check for an existing rhythm this wide before reading one more as a fresh layoff (#444). Default picked by product, owner can override. */
-const BREAK_LOOKBACK = 3;
-
 /**
  * (#442/#444) One step below `weight`, shared by every deload-style step-down: too-much feedback, a
  * stale layoff, a repeated miss. The pound grid when the lifter has no owned rack and reads pounds,
@@ -467,40 +459,6 @@ function applyTooMuch(prescription: Prescription, profile: Profile, history: Wor
 }
 
 /**
- * (#444) A `last` session far enough in the past reads as a layoff, not a lift still warm: a basis
- * that would otherwise hand back (or hold) the pre-break top weight steps down one notch from that
- * session's actual working weight instead, same step `applyTooMuch` uses. But a gap this wide only
- * reads as a fresh layoff the first time: if a gap at least this wide already shows up among this
- * lift's last `BREAK_LOOKBACK` gaps, the lifter's own rhythm for this lift already runs this wide —
- * whether steady or a short/long mix — so the current gap is that same rhythm, not a new one, and
- * the override is left alone. Only overrides the "earned it, or at least didn't fail it" bases — a
- * too-much deload (already applied, if any) is left alone rather than stepped down twice.
- */
-function applyBreak(
-  prescription: Prescription,
-  profile: Profile,
-  history: WorkoutRecord[],
-  exerciseId: string,
-  setup: SetupChoice,
-  now: Date,
-): Prescription {
-  const { last, basis, increment, available, range, equipment } = prescription;
-  if (!last || last.done.length === 0 || equipment === 'Bodyweight' || !DELOAD_BASES.has(basis)) return prescription;
-  const days = Math.floor((now.getTime() - new Date(last.date).getTime()) / 86_400_000);
-  if (!(days >= BREAK_DAYS)) return prescription;
-  const dates = resolvedPerformanceHistory(history, exerciseId, setup).map((performance) => new Date(performance.date).getTime());
-  for (let i = 0; i + 1 < dates.length && i < BREAK_LOOKBACK; i += 1) {
-    const gapDays = Math.floor((dates[i] - dates[i + 1]) / 86_400_000);
-    if (gapDays >= BREAK_DAYS) return prescription;
-  }
-  const workingWeight = Math.max(...last.done.map((set) => set.weight));
-  const poundStep = unitOf(profile) === 'lb' && available.length === 0 && increment > 0 ? lbStep(equipment) : 0;
-  const weight = stepDown(workingWeight, increment, available, poundStep);
-  if (weight >= workingWeight - 0.001) return prescription;
-  return { ...prescription, weight, reps: range.min, basis: 'comeback' };
-}
-
-/**
  * (#444) How many sessions running, most recent first, this exercise on this setup has been an
  * unfinished `repeat` at this same prescribed load. A session with nothing logged at all breaks the
  * streak — that's silence, not a miss, and must not read as a failure. A different load (a manual
@@ -525,7 +483,6 @@ function repeatedFailureStreak(history: WorkoutRecord[], exerciseId: string, set
  * itself. A travel rack is then the only rack: a load is the closest
  * one at or under the target (none: the lifter picks), and a lift that would go past its
  * heaviest load climbs one rep at a time at that load, up to the range top, and holds there.
- * `now`: injectable for tests; a layoff (#444) is measured against it, not a bare `new Date()`.
  */
 export function prescribeExercise(
   exercise: Exercise,
@@ -534,13 +491,15 @@ export function prescribeExercise(
   lead = false,
   dayHasLead = true,
   setup: SetupChoice = 'home',
-  now: Date = new Date(),
 ): Prescription {
   const rack = setupRack(setup, exercise.equipment);
   const from = (source: SetupChoice) => {
     // The saved setup's loads are the ones the user owns: a gym kit's stale rack never caps (#194).
-    const base = prescribeOn(exercise, profile, history, lead, dayHasLead, source, rack ?? availableLoads({ loads: ownedLoads(profile) }, exercise.equipment));
-    const prescription = applyBreak(applyTooMuch(base, profile, history), profile, history, exercise.id, source, now);
+    const prescription = applyTooMuch(
+      prescribeOn(exercise, profile, history, lead, dayHasLead, source, rack ?? availableLoads({ loads: ownedLoads(profile) }, exercise.equipment)),
+      profile,
+      history,
+    );
     if (!rack) return prescription;
     const done = prescription.last?.done ?? [];
     if ((prescription.basis === 'go-heavier' || prescription.basis === 'hold') && done.length > 0) {
@@ -745,8 +704,6 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
       return `${when}: ${logged(workWeight)} marked "Too much". Stepping down to ${logged(weight)} for ${range.min} reps.`;
     case 'stalled':
       return `${when}: ${setsLabel} unfinished at ${logged(workWeight)}, same as the time before. Stepping down to ${logged(weight)} for ${range.min} reps.`;
-    case 'comeback':
-      return `${when}: ${logged(workWeight)}. That was a while ago — easing back in at ${logged(weight)} for ${range.min} reps instead of picking up where you left off.`;
     case 'first-time':
     default:
       return 'First time — no history yet.';
@@ -791,8 +748,6 @@ export function coachLine(prescription: Prescription, unit: Unit): string {
       return `Marked "Too much" last time — stepping down: ${today}.`;
     case 'stalled':
       return `Stalled at this weight — stepping down: ${today}.`;
-    case 'comeback':
-      return `Welcome back — easing in at ${today}.`;
     case 'first-time':
     default:
       return first;

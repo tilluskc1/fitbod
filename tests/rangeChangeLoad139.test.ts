@@ -36,11 +36,8 @@ function history(exerciseId: string, weight: number, planned: number, done: numb
   }];
 }
 
-/** Just after this file's 2026-11-01 fixture: keeps #444's "returning after a break" rule from firing on history this old relative to the real clock. */
-const NOW = new Date('2026-11-02T10:00:00.000Z');
-
 const prescribe = (exerciseId: string, rows: WorkoutRecord[], loads: Profile['loads'] = {}) =>
-  prescribeExercise(exerciseById(exerciseId)!, { ...profile, loads }, rows, false, true, 'home', NOW);
+  prescribeExercise(exerciseById(exerciseId)!, { ...profile, loads }, rows);
 
 test('#139: Face Pull 20 kg × 8 from its old 6–10 range drops to the Epley load for 12', () => {
   // e1RM = 20 × (1 + 8/30) = 25.33; load for 12 = 25.33 / 1.4 = 18.10 → 17.5 on the 2.5 kg cable grid.
@@ -104,10 +101,7 @@ test('#139: a lift that leads one day and follows on another never loses load (3
           const lastLoad: Record<string, number> = {};
           for (let n = 0; n < 36; n += 1) {
             const slot = slots[n % slots.length];
-            // One real day per session (not #444's 10-day comeback window): a 5-day/week
-            // lifter's rotation can space one lift 5+ slots apart without that reading as a layoff.
-            const sessionNow = new Date(Date.UTC(2026, 0, 1 + n));
-            const exercises = liveExercises(slotProgram(lifter, slot, rows), lifter, rows, sessionNow);
+            const exercises = liveExercises(slotProgram(lifter, slot, rows), lifter, rows);
             for (const exercise of exercises) {
               const equipment = exerciseById(exercise.exerciseId)?.equipment;
               const planned = exercise.planned[0]?.weight ?? 0;
@@ -120,7 +114,7 @@ test('#139: a lift that leads one day and follows on another never loses load (3
               lastLoad[exercise.exerciseId] = weight;
             }
             rows.push({
-              id: `w${n}`, date: sessionNow.toISOString(), name: slot.name, dayIndex: slot.index,
+              id: `w${n}`, date: new Date(Date.UTC(2026, 0, 1 + n * 2)).toISOString(), name: slot.name, dayIndex: slot.index,
               status: 'completed', completedEarly: false, endedAt: null, exercises,
             });
           }
@@ -134,14 +128,14 @@ test('#139: a lift that leads one day and follows on another never loses load (3
 test('#139: a goal change from strength to muscle resets the lead to its new minimum', () => {
   // Bench led at 100 × 3 under Get Stronger (3–5); as a Build Muscle lead (4–6): 110 / (34/30) = 97.06 → 95 × 4.
   const bench = exerciseById('barbell-bench-press')!;
-  const prescription = prescribeExercise(bench, { ...profile, goal: 'Build Muscle' }, history(bench.id, 100, 3, 3), true, true, 'home', NOW);
+  const prescription = prescribeExercise(bench, { ...profile, goal: 'Build Muscle' }, history(bench.id, 100, 3, 3), true);
   assert.deepEqual([prescription.weight, prescription.reps, prescription.basis], [95, 4, 'range-reset']);
 });
 
 test('#139: a lead last time that follows today keeps its load (a role change is not a range change)', () => {
   // The record holds bench alone, so it led; today it follows in a 6–10-style range.
   const bench = exerciseById('barbell-bench-press')!;
-  const prescription = prescribeExercise(bench, profile, history(bench.id, 60, 4, 4), false, true, 'home', NOW);
+  const prescription = prescribeExercise(bench, profile, history(bench.id, 60, 4, 4), false);
   assert.equal(prescription.weight, 60);
   assert.notEqual(prescription.basis, 'range-reset');
 });

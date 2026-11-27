@@ -184,7 +184,7 @@ test('warm-up checks live in memory and change no sets, volume, minutes, bests o
 
   const profile = { goal: 'Build Muscle', experience: 'Intermediate', daysPerWeek: 4, unit: 'kg', sessionMinutes: 45,
     equipment: ['Barbell', 'Dumbbell', 'Machine', 'Cable'], support: ['Bench', 'Rack'], exclusions: [], loads: {} } as unknown as Profile;
-  const next = prescribeExercise(exerciseById('barbell-bench-press')!, profile, [withChecks], true, true, 'home', new Date('2026-11-10T09:00:00.000Z'));
+  const next = prescribeExercise(exerciseById('barbell-bench-press')!, profile, [withChecks], true);
   // Only the five working sets at 60 kg count: no 30 or 45 kg set reads as mixed loads or drags the load down.
   assert.equal(next.basis, 'load-increase');
   assert.equal(next.weight, 62.5);

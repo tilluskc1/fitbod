@@ -47,7 +47,7 @@ test('finishing a shortened workout cannot earn progression before its original 
   const history = finishPressAndReload(20);
   const press = exerciseById('dumbbell-floor-press');
   assert.ok(press);
-  const next = prescribeExercise(press, profile, history, false, true, 'home', new Date('2026-11-01T12:00:00.000Z'));
+  const next = prescribeExercise(press, profile, history);
   assert.equal(next.basis, 'repeat');
   assert.equal(next.weight, 15);
   // Two sets of 10 against a 9-rep target is unfinished work: the target repeats (#104).
@@ -68,7 +68,7 @@ test('completing the original target still earns the next load step after finish
   assert.equal(saved.originalPlannedSets, 3);
   assert.equal(saved.planned.length, 3);
   assert.equal(saved.performed.filter((set) => set.done).length, 3);
-  const next = prescribeExercise(press, profile, history, false, true, 'home', new Date('2026-11-01T12:00:00.000Z'));
+  const next = prescribeExercise(press, profile, history);
   // No confirmed rack: the step is earned, but the next dumbbell is the lifter's to pick (#57).
   assert.equal(next.basis, 'go-heavier');
   assert.equal(next.weight, 15);

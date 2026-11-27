@@ -73,7 +73,6 @@ function numbersFor(
   history: WorkoutRecord[],
   lead: boolean,
   setup: SetupChoice,
-  now: Date = new Date(),
 ): Numbers {
   const hold = holdSeconds(exercise.exerciseId);
   if (hold !== null) return { weight: 0, reps: hold };
@@ -84,7 +83,7 @@ function numbersFor(
       reps: exercise.targetReps?.[0] ?? exercise.holdSeconds ?? exercise.repRange[0],
     };
   }
-  const prescription = prescribeExercise(definition, profile, history, lead, true, setup, now);
+  const prescription = prescribeExercise(definition, profile, history, lead, true, setup);
   // Ready to go heavier with no next load the app can name (#165): the set waits for the
   // lifter's own pick instead of repeating last time's load as if it were the target.
   if (prescription.basis === 'go-heavier') return { weight: 0, reps: prescription.reps };
@@ -95,8 +94,8 @@ function numbersFor(
  * The load a "go heavier" target starts above (#165): last time's working load,
  * or null when the exercise's next target is not a go-heavier step.
  */
-export function goHeavierFloor(exerciseId: string, profile: Profile, history: WorkoutRecord[], lead = false, setup: SetupChoice = 'home', now: Date = new Date()): number | null {
-  const prescription = livePrescription(exerciseId, profile, history, lead, setup, now);
+export function goHeavierFloor(exerciseId: string, profile: Profile, history: WorkoutRecord[], lead = false, setup: SetupChoice = 'home'): number | null {
+  const prescription = livePrescription(exerciseId, profile, history, lead, setup);
   return prescription?.basis === 'go-heavier' ? prescription.weight : null;
 }
 
@@ -109,7 +108,6 @@ export function liveAdapted(
   adapted: AdaptedWorkout,
   profile: Profile,
   history: WorkoutRecord[],
-  now: Date = new Date(),
 ): AdaptedWorkout {
   const lead = leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId));
   return {
@@ -117,7 +115,7 @@ export function liveAdapted(
     exercises: adapted.exercises.map((exercise) => {
       const hold = holdSeconds(exercise.exerciseId);
       if (hold !== null) return { ...exercise, weight: 0, targetReps: undefined };
-      const numbers = numbersFor(exercise, profile, history, exercise.exerciseId === lead, adapted.setup ?? 'home', now);
+      const numbers = numbersFor(exercise, profile, history, exercise.exerciseId === lead, adapted.setup ?? 'home');
       return {
         ...exercise,
         weight: numbers.weight,
@@ -136,11 +134,10 @@ export function liveExercises(
   adapted: AdaptedWorkout,
   profile: Profile,
   history: WorkoutRecord[],
-  now: Date = new Date(),
 ): WorkoutExercise[] {
   const lead = leadCompoundId(adapted.exercises.map((exercise) => exercise.exerciseId));
   return adapted.exercises.map((exercise) => {
-    const numbers = numbersFor(exercise, profile, history, exercise.exerciseId === lead, adapted.setup ?? 'home', now);
+    const numbers = numbersFor(exercise, profile, history, exercise.exerciseId === lead, adapted.setup ?? 'home');
     const planned = Array.from({ length: exercise.sets }, () => ({ ...numbers }));
     return {
       exerciseId: exercise.exerciseId,
@@ -182,10 +179,10 @@ export function firstTimeLoaded(
     && exercise.performed.length > 0 && (evenIfLogged || !exercise.performed.some((set) => set.done));
 }
 
-function livePrescription(exerciseId: string, profile: Profile, history: WorkoutRecord[], lead: boolean, setup: SetupChoice = 'home', now: Date = new Date()) {
+function livePrescription(exerciseId: string, profile: Profile, history: WorkoutRecord[], lead: boolean, setup: SetupChoice = 'home') {
   if (holdSeconds(exerciseId) !== null) return null;
   const definition = exerciseById(exerciseId);
-  return definition ? prescribeExercise(definition, profile, history, lead, true, setup, now) : null;
+  return definition ? prescribeExercise(definition, profile, history, lead, true, setup) : null;
 }
 
 /** One line of the "why this number" explanation, or null where none applies. `lead`: the day's first compound. */
@@ -196,9 +193,8 @@ export function targetReason(
   unit: Unit,
   lead = false,
   setup: SetupChoice = 'home',
-  now: Date = new Date(),
 ): string | null {
-  const prescription = livePrescription(exerciseId, profile, history, lead, setup, now);
+  const prescription = livePrescription(exerciseId, profile, history, lead, setup);
   return prescription && describePrescription(prescription, unit);
 }
 
@@ -210,9 +206,8 @@ export function targetCoachLine(
   unit: Unit,
   lead = false,
   setup: SetupChoice = 'home',
-  now: Date = new Date(),
 ): string | null {
-  const prescription = livePrescription(exerciseId, profile, history, lead, setup, now);
+  const prescription = livePrescription(exerciseId, profile, history, lead, setup);
   return prescription && coachLine(prescription, unit);
 }
 
@@ -226,11 +221,10 @@ export function catalogRowMeta(
   dayIds: string[] = [],
   /** Sets the up-next day gives each of its exercises, fitted to the session length (#89). */
   daySets: Record<string, number> = {},
-  now: Date = new Date(),
 ): string {
   const hold = holdSeconds(exercise.id);
   const lead = leadCompoundId(dayIds);
-  const prescription = prescribeExercise(exercise, profile, history, exercise.id === lead, lead !== undefined, 'home', now);
+  const prescription = prescribeExercise(exercise, profile, history, exercise.id === lead, lead !== undefined);
   // Off the day, the sets its role would get there: the same rule the generator uses, never a fixture.
   const sets = daySets[exercise.id] ?? prescription.sets;
   const load =
@@ -266,7 +260,6 @@ export function progressionLines(
   profile: Profile,
   history: WorkoutRecord[],
   unit: Unit,
-  now: Date = new Date(),
 ): ProgressionLine[] {
   const order: string[] = [];
   const segmentsById = new Map<string, WorkoutRecord['exercises']>();
@@ -316,7 +309,7 @@ export function progressionLines(
     }
 
     // The next session runs on the saved setup: a today-only setup never carries over (#188).
-    const prescription = prescribeExercise(definition, profile, history, lead.includes(exerciseId), true, 'home', now);
+    const prescription = prescribeExercise(definition, profile, history, lead.includes(exerciseId));
     const nextLoad = plannedLoad(profile.loads, history, exerciseId, unit);
     const { min, max } = prescription.range;
     return {

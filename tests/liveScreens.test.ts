@@ -11,9 +11,6 @@ import { applyFinish, createSession, logSet, updatePerformedSet } from '../src/l
 import { EMPTY_STATE } from '../src/lib/storage.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
-// Pinned near this file's fixture dates (2026-11-02/04) so progression's break detection (#444)
-// never drifts into a layoff read as real wall-clock time moves on.
-const FIXTURE_NOW = new Date('2026-11-04T10:00:00.000Z');
 const RACK = [10, 15, 18];
 const profile: Profile = {
   name: 'Krishna', goal: 'Build Muscle', experience: 'Beginner', daysPerWeek: 3,
@@ -47,8 +44,8 @@ async function withServer<T>(run: (load: (path: string) => Promise<Record<string
 function renderToday(Today: unknown, who: Profile, history: WorkoutRecord[], current: WorkoutRecord | null = null,
   workoutOpen = false) {
   return renderToStaticMarkup(createElement(Today as never, { profile: who, program: FULL_BODY_A,
-    adapted: liveAdapted(adapted, who, history, FIXTURE_NOW), equipment: 'home', adjusted: false, history,
-    current, workoutOpen, now: FIXTURE_NOW, onPreview: noop, onAdjust: noop,
+    adapted: liveAdapted(adapted, who, history), equipment: 'home', adjusted: false, history,
+    current, workoutOpen, now: new Date('2026-11-04T10:00:00.000Z'), onPreview: noop, onAdjust: noop,
     onWhy: noop, onRestore: noop, onOpenSettings: noop, onOpenExercise: noop }));
 }
 
@@ -100,7 +97,7 @@ test('"Why this target" keeps the precise reason', async () => {
     const { WhySheet } = await load('/src/screens/Sheets.tsx');
     const why = plain(renderToStaticMarkup(createElement(WhySheet as never, { exerciseId: 'dumbbell-floor-press',
       exerciseName: 'Floor press', planned: [{ weight: 18, reps: 8 }], history, unit: 'kg', onClose: noop,
-      reason: targetReason('dumbbell-floor-press', profile, history, 'kg', false, 'home', FIXTURE_NOW) })));
+      reason: targetReason('dumbbell-floor-press', profile, history, 'kg') })));
     assert.match(why, /3 sets at 10 reps \(top of 8–10\), 15 kg\. One step up \(\+3 kg\); reps restart at 8\./);
   });
 });
@@ -136,7 +133,7 @@ function findButton(node: unknown, text: string): Node | null {
 test('Preview lists live targets and its Start calls the start it was given', async () => {
   await withServer(async (load) => {
     const { DaySheet } = await load('/src/screens/Sheets.tsx');
-    const exercises = liveExercises(adapted, profile, earnedHistory(), FIXTURE_NOW);
+    const exercises = liveExercises(adapted, profile, earnedHistory());
     let started = 0;
     const props = { name: 'Full Body A', minutes: 35, exercises, unit: 'kg', onClose: noop };
     const sheet = (DaySheet as (p: object) => unknown)({ ...props, onStart: () => { started += 1; } });
@@ -153,7 +150,7 @@ test('Plan available rows show the live prescription, not the fixture', () => {
   assert.ok(press && plank);
   // Off any day, a row takes its role's sets (#105): a compound with no lead ahead of it gets four, not the fixture's three.
   assert.equal(catalogRowMeta(press, profile, [], 'kg'), '4 sets · 8 reps', 'uncalibrated: no load');
-  assert.equal(catalogRowMeta(press, profile, earnedHistory(), 'kg', [], {}, FIXTURE_NOW), '4 sets · 8 reps · 18 kg each');
+  assert.equal(catalogRowMeta(press, profile, earnedHistory(), 'kg'), '4 sets · 8 reps · 18 kg each');
   assert.equal(catalogRowMeta(plank, profile, [], 'kg'), '3 sets · 45s', 'holds keep seconds');
 });
 

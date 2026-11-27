@@ -65,9 +65,6 @@ function finished(id: string, exerciseId: string, required: number, done: number
   };
 }
 
-/** Just after `finished`'s 2026-11-01 fixture date. */
-const NOW = new Date('2026-11-02T10:00:00.000Z');
-
 const shape = (id: string, profile: Profile, lead = false) => {
   const { sets, range } = roleTarget(def(id), profile, lead);
   return `${sets} × ${range.min}–${range.max}`;
@@ -151,24 +148,24 @@ test('the slot program, live numbers and generator agree on the lead target', ()
 test('double progression inside the lead range: a step at the top, reps restart at the bottom', () => {
   const profile = profileOf();
   const bench = def('barbell-bench-press');
-  const climbing = prescribeExercise(bench, profile, [finished('w1', bench.id, 5, 5, 60, 5)], true, true, 'home', NOW);
+  const climbing = prescribeExercise(bench, profile, [finished('w1', bench.id, 5, 5, 60, 5)], true);
   assert.equal(climbing.basis, 'rep-increase');
   assert.deepEqual([climbing.weight, climbing.reps], [60, 6]);
 
-  const topped = prescribeExercise(bench, profile, [finished('w1', bench.id, 5, 5, 60, 6)], true, true, 'home', NOW);
+  const topped = prescribeExercise(bench, profile, [finished('w1', bench.id, 5, 5, 60, 6)], true);
   assert.equal(topped.basis, 'load-increase');
   assert.deepEqual([topped.weight, topped.reps, topped.sets], [62.5, 4, 5]);
   assert.match(describePrescription(topped, 'kg'), /5 sets at 6 reps.*reps restart at 4/);
 
-  const strong = prescribeExercise(bench, profileOf({ goal: 'Get Stronger' }), [finished('w1', bench.id, 5, 5, 80, 5)], true, true, 'home', NOW);
+  const strong = prescribeExercise(bench, profileOf({ goal: 'Get Stronger' }), [finished('w1', bench.id, 5, 5, 80, 5)], true);
   assert.deepEqual([strong.basis, strong.weight, strong.reps], ['load-increase', 82.5, 3]);
 });
 
 test('small-muscle isolation steps up only at 20 reps', () => {
   const profile = profileOf({ loads: { Machine: [20, 25, 30] } });
   const calf = def('standing-calf-raise');
-  assert.equal(prescribeExercise(calf, profile, [finished('w1', calf.id, 3, 3, 25, 15)], false, true, 'home', NOW).basis, 'rep-increase');
-  const topped = prescribeExercise(calf, profile, [finished('w1', calf.id, 3, 3, 25, 20)], false, true, 'home', NOW);
+  assert.equal(prescribeExercise(calf, profile, [finished('w1', calf.id, 3, 3, 25, 15)]).basis, 'rep-increase');
+  const topped = prescribeExercise(calf, profile, [finished('w1', calf.id, 3, 3, 25, 20)]);
   assert.deepEqual([topped.basis, topped.weight, topped.reps], ['load-increase', 30, 12]);
 });
 
@@ -182,15 +179,15 @@ test('a shortened lead never earns a step', () => {
 test('a beginner lead keeps progressing in 8–10', () => {
   const bench = def('barbell-bench-press');
   const beginner = profileOf({ experience: 'Beginner' });
-  assert.equal(prescribeExercise(bench, beginner, [finished('w1', bench.id, 3, 3, 40, 9)], true, true, 'home', NOW).reps, 10);
-  const topped = prescribeExercise(bench, beginner, [finished('w1', bench.id, 3, 3, 40, 10)], true, true, 'home', NOW);
+  assert.equal(prescribeExercise(bench, beginner, [finished('w1', bench.id, 3, 3, 40, 9)], true).reps, 10);
+  const topped = prescribeExercise(bench, beginner, [finished('w1', bench.id, 3, 3, 40, 10)], true);
   assert.deepEqual([topped.basis, topped.weight, topped.reps], ['load-increase', 42.5, 8]);
 });
 
 test('the recap reads the lead range for the day it was the lead', () => {
   const profile = profileOf();
   const workout = finished('w1', 'barbell-bench-press', 5, 5, 60, 6);
-  const [line] = progressionLines(workout, profile, [workout], 'kg', NOW);
+  const [line] = progressionLines(workout, profile, [workout], 'kg');
   assert.match(line.next, /^4 reps @ 62\.5 kg/);
   assert.match(line.reason, /reps restart at 4/);
 });
@@ -284,7 +281,7 @@ test('bodyweight never takes the heavy lead; a barbell compound does when there 
 test('the reason for a load step prints the reps actually logged', () => {
   const bench = def('barbell-bench-press');
   const record = finished('w1', bench.id, 4, 4, 20, 8);
-  const next = prescribeExercise(bench, profileOf(), [record], true, true, 'home', NOW);
+  const next = prescribeExercise(bench, profileOf(), [record], true);
   assert.equal(next.basis, 'load-increase');
   assert.match(describePrescription(next, 'kg'), /4 sets at 8 reps \(top of 4–6\), 20 kg/);
 });

@@ -16,9 +16,6 @@ import {
 } from '../src/lib/progression.ts';
 import type { Profile, WorkoutRecord } from '../src/types.ts';
 
-/** Just after this file's 2026-01-05 fixtures: keeps #444's "returning after a break" rule from firing on history this old relative to the real clock. */
-const NOW = new Date('2026-01-06T10:00:00.000Z');
-
 function makeProfile(overrides: Partial<Profile> = {}): Profile {
   return {
     goal: 'Build Muscle',
@@ -164,7 +161,7 @@ test('every set at the top of the range adds one step and resets reps', () => {
     }),
   ];
 
-  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', NOW);
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history);
   assert.equal(prescription.basis, 'load-increase');
   assert.equal(prescription.weight, 62.5);
   assert.equal(prescription.reps, 6);
@@ -181,7 +178,7 @@ test('finishing below the top of the range adds a rep at the same load', () => {
     }),
   ];
 
-  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', NOW);
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history);
   assert.equal(prescription.basis, 'rep-increase');
   assert.equal(prescription.weight, 60);
   assert.equal(prescription.reps, 9);
@@ -198,7 +195,7 @@ test('the rep climb is capped at the top of the range', () => {
     }),
   ];
 
-  const prescription = prescribeExercise(meta('lateral-raise'), makeProfile(), history, false, true, 'home', NOW);
+  const prescription = prescribeExercise(meta('lateral-raise'), makeProfile(), history);
   assert.equal(prescription.reps, 15);
   assert.equal(prescription.weight, 10);
 });
@@ -224,7 +221,7 @@ test('repeated segments all count: one swapped-off set of three never progresses
   const last = lastExercisePerformance(history, 'barbell-bench-press');
   assert.equal(last?.plannedSets, 3);
   assert.equal(last?.done.length, 1);
-  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', NOW);
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history);
   assert.equal(prescription.basis, 'repeat');
   assert.equal(prescription.weight, 60);
   assert.equal(prescription.reps, 10);
@@ -249,7 +246,7 @@ test('sets logged across repeated segments all contribute', () => {
   assert.equal(last?.done.length, 2);
   // 2 of the original 3 required sets: still unfinished.
   assert.equal(last?.plannedSets, 3);
-  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', NOW);
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history);
   assert.equal(prescription.basis, 'repeat');
 });
 
@@ -265,7 +262,7 @@ test('a swap replacement that completes the whole slot still earns its step', ()
     ]),
   ];
 
-  const prescription = prescribeExercise(meta('push-up'), makeProfile(), history, false, true, 'home', NOW);
+  const prescription = prescribeExercise(meta('push-up'), makeProfile(), history);
   assert.equal(prescription.basis, 'hold');
   assert.equal(prescription.reps, 20);
 });
@@ -286,7 +283,7 @@ test('an unfinished exercise repeats its load instead of progressing', () => {
     }),
   ];
 
-  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', NOW);
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history);
   assert.equal(prescription.basis, 'repeat');
   assert.equal(prescription.weight, 60);
   assert.equal(prescription.reps, 10);
@@ -303,7 +300,7 @@ test('a session whose sets were never logged repeats the prescription', () => {
     }),
   ];
 
-  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', NOW);
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), history);
   assert.equal(prescription.basis, 'repeat');
   assert.equal(prescription.weight, 70);
   assert.equal(prescription.reps, 8);
@@ -317,12 +314,12 @@ function earlyFinish(exerciseId: string, planned: { weight: number; reps: number
 
 test('an early finish repeats the target instead of lowering it to the logged set (#104)', () => {
   // Bodyweight: Push-Up 4 × 12, one set of 9, finish early.
-  const pushUp = prescribeExercise(meta('push-up'), makeProfile(), earlyFinish('push-up', sets(0, 12), { weight: 0, reps: 9 }), false, true, 'home', NOW);
+  const pushUp = prescribeExercise(meta('push-up'), makeProfile(), earlyFinish('push-up', sets(0, 12), { weight: 0, reps: 9 }));
   assert.equal(pushUp.basis, 'repeat');
   assert.deepEqual([pushUp.weight, pushUp.reps], [0, 12]);
 
   // Loaded: Bench 60 × 8, one lighter set of 6, finish early.
-  const bench = prescribeExercise(meta('barbell-bench-press'), makeProfile(), earlyFinish('barbell-bench-press', sets(60, 8), { weight: 57.5, reps: 6 }), false, true, 'home', NOW);
+  const bench = prescribeExercise(meta('barbell-bench-press'), makeProfile(), earlyFinish('barbell-bench-press', sets(60, 8), { weight: 57.5, reps: 6 }));
   assert.equal(bench.basis, 'repeat');
   assert.deepEqual([bench.weight, bench.reps], [60, 8]);
   assert.match(describePrescription(bench, 'kg'), /^Repeat \d+ × 8 @ 60 kg: .+ was cut short\./);
@@ -332,24 +329,24 @@ test('an early finish repeats the target instead of lowering it to the logged se
 test('an early finish never earns a step from one heavier or longer set (#104)', () => {
   const bench = meta('barbell-bench-press');
   // Heavier: 70 × 6 against 60 × 8 does not move the target to 70.
-  const heavier = prescribeExercise(bench, makeProfile(), earlyFinish(bench.id, sets(60, 8), { weight: 70, reps: 6 }), false, true, 'home', NOW);
+  const heavier = prescribeExercise(bench, makeProfile(), earlyFinish(bench.id, sets(60, 8), { weight: 70, reps: 6 }));
   assert.deepEqual([heavier.basis, heavier.weight, heavier.reps], ['repeat', 60, 8]);
   // Extra reps: 60 × 10 or a lighter 57.5 × 10 against 60 × 8 does not move reps to 10.
   for (const logged of [{ weight: 60, reps: 10 }, { weight: 57.5, reps: 10 }]) {
-    const longer = prescribeExercise(bench, makeProfile(), earlyFinish(bench.id, sets(60, 8), logged), false, true, 'home', NOW);
+    const longer = prescribeExercise(bench, makeProfile(), earlyFinish(bench.id, sets(60, 8), logged));
     assert.deepEqual([longer.basis, longer.weight, longer.reps], ['repeat', 60, 8]);
   }
 });
 
 test('a first loaded session that ends early makes the logged set the baseline', () => {
   // No load was planned yet: the one logged set is the only real number.
-  const first = prescribeExercise(meta('barbell-bench-press'), makeProfile(), earlyFinish('barbell-bench-press', sets(0, 8), { weight: 42.5, reps: 7 }), false, true, 'home', NOW);
+  const first = prescribeExercise(meta('barbell-bench-press'), makeProfile(), earlyFinish('barbell-bench-press', sets(0, 8), { weight: 42.5, reps: 7 }));
   assert.deepEqual([first.basis, first.weight, first.reps], ['repeat', 42.5, 7]);
 });
 
 test('a finished exercise inside an early-finished session follows the normal rule', () => {
   const workout = record({ id: 'w1', date: '2026-01-05T10:00:00.000Z', exerciseId: 'barbell-bench-press', planned: sets(60, 8), performed: sets(60, 8) });
-  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), [{ ...workout, completedEarly: true }], false, true, 'home', NOW);
+  const prescription = prescribeExercise(meta('barbell-bench-press'), makeProfile(), [{ ...workout, completedEarly: true }]);
   assert.equal(prescription.basis, 'rep-increase');
   assert.deepEqual([prescription.weight, prescription.reps], [60, 9]);
 });
@@ -390,7 +387,7 @@ test('the most recent completed session with the exercise drives the next load',
   const last = lastExercisePerformance(history, 'barbell-bench-press');
   assert.equal(last?.workoutId, 'recent');
   assert.equal(last?.workoutName, 'Push');
-  assert.equal(prescribeExercise(meta('barbell-bench-press'), makeProfile(), history, false, true, 'home', new Date('2026-02-02T10:00:00.000Z')).weight, 57.5);
+  assert.equal(prescribeExercise(meta('barbell-bench-press'), makeProfile(), history).weight, 57.5);
 });
 
 test('recorded loads supply both the step and the next selectable load', () => {
@@ -415,7 +412,7 @@ test('recorded loads supply both the step and the next selectable load', () => {
       performed: sets(25, 10),
     }),
   ];
-  const up = prescribeExercise(meta('barbell-bench-press'), profile, history, false, true, 'home', NOW);
+  const up = prescribeExercise(meta('barbell-bench-press'), profile, history);
   assert.equal(up.weight, 30);
   assert.equal(up.reps, 6);
 
@@ -427,7 +424,7 @@ test('recorded loads supply both the step and the next selectable load', () => {
       planned: sets(30, 10),
       performed: sets(30, 10),
     }),
-  ], false, true, 'home', new Date('2026-02-06T10:00:00.000Z'));
+  ]);
   assert.equal(topped.basis, 'hold');
   assert.equal(topped.weight, 30);
   assert.equal(topped.reps, 10);
@@ -446,7 +443,7 @@ test('bodyweight movements hold at the top of the range instead of inventing loa
   ];
 
   // Push-ups climb 10–20 (#133) and hold at 20.
-  const prescription = prescribeExercise(meta('push-up'), makeProfile(), history, false, true, 'home', NOW);
+  const prescription = prescribeExercise(meta('push-up'), makeProfile(), history);
   assert.equal(prescription.increment, 0);
   assert.equal(prescription.basis, 'hold');
   assert.equal(prescription.weight, 0);
@@ -476,23 +473,19 @@ test('generated sessions carry the prescription into planned and performed sets'
       performed: sets(20, 10),
     }),
   );
-  const generatedNow = new Date('2026-01-07T10:00:00.000Z');
 
   const generated = generateWorkout(
     profile,
     { name: 'Push', focus: ['Chest', 'Shoulders', 'Triceps'] },
     0,
     history,
-    undefined,
-    'home',
-    generatedNow,
   );
   assert.ok(generated.exercises.length > 0);
   const lead = leadCompoundId(generated.exercises.map((exercise) => exercise.exerciseId));
 
   for (const exercise of generated.exercises) {
     const definition = meta(exercise.exerciseId);
-    const prescription = prescribeExercise(definition, profile, history, exercise.exerciseId === lead, true, 'home', generatedNow);
+    const prescription = prescribeExercise(definition, profile, history, exercise.exerciseId === lead);
     assert.deepEqual(exercise.planned[0], {
       weight: prescription.weight,
       reps: prescription.reps,
@@ -527,7 +520,7 @@ test('the reason names the real gap to the next load: rack steps, lb display, ba
     const eq = meta(id).equipment;
     const history = [record({ id: 'w1', date: '2026-01-05T10:00:00.000Z', exerciseId: id,
       planned: sets(planned, 12), performed: sets(from, 12) })];
-    const p = prescribeExercise(meta(id), makeProfile({ loads: { [eq]: loads } }), history, false, true, 'home', NOW);
+    const p = prescribeExercise(meta(id), makeProfile({ loads: { [eq]: loads } }), history);
     return { p, text: describePrescription(p, unit) };
   };
   const rack = [10, 15, 18];
@@ -568,7 +561,7 @@ test('one earned step moves to the next owned load on every lb and kg rack (#102
     for (let i = 0; i < rack.length - 1; i += 1) {
       const history = [record({ id: 'w1', date: '2026-01-05T10:00:00.000Z', exerciseId: id,
         planned: sets(stored[i], 30), performed: sets(stored[i], 30) })];
-      const p = prescribeExercise(meta(id), profile, history, false, true, 'home', NOW);
+      const p = prescribeExercise(meta(id), profile, history);
       const label = `${id} ${rack[i]} ${unit}`;
       assert.equal(p.weight, stored[i + 1], `${label}: expected next ${rack[i + 1]} ${unit}`);
       const gap = Math.round((rack[i + 1] - rack[i]) * 100) / 100;
@@ -581,7 +574,7 @@ test('a load typed in the other unit still earns a real dumbbell up, never a +0.
   const step = (rack: number[], typed: number, unit: 'kg' | 'lb') => {
     const history = [record({ id: 'w1', date: '2026-01-05T10:00:00.000Z', exerciseId: 'rear-delt-fly',
       planned: sets(rack[1], 30), performed: sets(typed, 30) })];
-    const p = prescribeExercise(meta('rear-delt-fly'), makeProfile({ loads: { Dumbbell: rack } }), history, false, true, 'home', NOW);
+    const p = prescribeExercise(meta('rear-delt-fly'), makeProfile({ loads: { Dumbbell: rack } }), history);
     return { weight: p.weight, text: describePrescription(p, unit) };
   };
   const lbRack = [6.804, 9.072, 11.34, 13.608]; // 15/20/25/30 lb

@@ -18,11 +18,11 @@ const profile: Profile = {
 };
 
 /** The app's Start path: current slot → adapted → live numbers stored on the session. */
-function today(state: AppState, now: Date = new Date()) {
+function today(state: AppState) {
   const slot = currentSlot(state);
   assert.ok(slot);
   const adapted = adaptWorkout(slotProgram(profile, slot, state.history), { minutes: 60, equipment: 'home', loads: RACK }, [], undefined);
-  return { slot, adapted, shown: liveAdapted(adapted, profile, state.history, now), stored: liveExercises(adapted, profile, state.history, now) };
+  return { slot, adapted, shown: liveAdapted(adapted, profile, state.history), stored: liveExercises(adapted, profile, state.history) };
 }
 
 /** Start the current slot, log `sets` of one exercise at `weight × reps`, finish. */
@@ -48,7 +48,7 @@ test('the cursor walks the configured slots while each slot prescribes from live
   assert.equal(slots.length, 3);
 
   // Slot A: every number is a first session, no fixture load.
-  const a = today(state, new Date('2026-11-01T10:00:00.000Z'));
+  const a = today(state);
   assert.equal(a.slot.id, slots[0].id);
   assert.ok(a.stored.every((exercise) => exercise.planned.every((set) => set.weight === 0)), 'uncalibrated: no fixture load');
   const lift = a.stored.find((exercise) => exerciseById(exercise.exerciseId)?.equipment === 'Dumbbell');
@@ -57,7 +57,7 @@ test('the cursor walks the configured slots while each slot prescribes from live
   state = finish(state, lift.exerciseId, 15, range[1], lift.planned.length, '2026-11-02');
 
   // Slot B: different configured exercises, still first-session numbers.
-  const b = today(state, new Date('2026-11-04T10:00:00.000Z'));
+  const b = today(state);
   assert.equal(b.slot.id, slots[1].id, 'finishing A with work advanced once');
   assert.notDeepEqual(b.stored.map((exercise) => exercise.exerciseId), a.stored.map((exercise) => exercise.exerciseId));
   const other = (stored: typeof b.stored) => stored.find((exercise) => exercise.exerciseId !== lift.exerciseId)!;
@@ -65,18 +65,18 @@ test('the cursor walks the configured slots while each slot prescribes from live
     assert.equal(exercise.planned[0].weight, 0, `${exercise.exerciseId} has no history, so no load`);
   }
   state = finish(state, other(b.stored).exerciseId, 10, 8, 1, '2026-11-04');
-  const c = today(state, new Date('2026-11-06T10:00:00.000Z'));
+  const c = today(state);
   assert.equal(c.slot.id, slots[2].id);
   state = finish(state, other(c.stored).exerciseId, 10, 8, 1, '2026-11-06');
 
   // Wrapped to A (or wherever the lift next appears): the earned rack step.
-  const next = today(state, new Date('2026-11-07T10:00:00.000Z'));
+  const next = today(state);
   assert.equal(next.slot.id, slots[0].id, 'C wraps to A');
   const again = next.stored.find((exercise) => exercise.exerciseId === lift.exerciseId);
   assert.ok(again, 'the lift reappears in its slot');
   assert.deepEqual(again.planned.map((set) => set.weight), again.planned.map(() => 18), 'stored at start: 15 → 18');
   assert.equal(next.shown.exercises.find((exercise) => exercise.exerciseId === lift.exerciseId)?.weight, 18, 'shown on Today');
-  assert.match(targetReason(lift.exerciseId, profile, state.history, 'kg', false, 'home', new Date('2026-11-07T10:00:00.000Z')) ?? '', /One step up/);
+  assert.match(targetReason(lift.exerciseId, profile, state.history, 'kg') ?? '', /One step up/);
 
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
