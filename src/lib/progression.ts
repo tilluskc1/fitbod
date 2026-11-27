@@ -480,15 +480,18 @@ function median(values: number[]): number {
 }
 
 /**
- * A timestamp's own UTC calendar date, midnight. Gaps are measured in whole days this way (not raw
- * millisecond differences) so the 14-day floor holds regardless of what time of day a session was
- * logged at, and a daylight-saving shift inside the gap never nudges a day count by an hour (review
- * finding on #462: a 14-day-apart pair logged at 19:00 instead of 07:00 was crossing the floor on
- * the clock alone).
+ * A timestamp's own local calendar date, midnight, in whatever timezone this code is running in —
+ * the lifter's own device, since this is a client-side computation over that lifter's own history.
+ * Gaps are measured in whole local days this way (not raw millisecond differences), rounded to the
+ * nearest day to absorb the one-off 23/25-hour day a daylight-saving transition inside the gap
+ * would otherwise leave as fractional drift. Review findings on #462: (1) a 14-day-apart pair logged
+ * a few hours later in the day than the prior session was crossing the floor on the clock alone; (2)
+ * an earlier UTC-based version of this fix still drifted a day for anyone outside UTC whose session
+ * crossed UTC midnight at a different local hour than usual.
  */
 function calendarDay(ms: number): number {
   const d = new Date(ms);
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
 /**
@@ -501,10 +504,10 @@ function layoffDays(performances: ExercisePerformance[], now: Date): number | nu
   if (performances.length < 2) return null;
   const gaps: number[] = [];
   for (let i = 0; i < performances.length - 1 && gaps.length < LAYOFF_MEDIAN_WINDOW; i += 1) {
-    gaps.push((calendarDay(Date.parse(performances[i].date)) - calendarDay(Date.parse(performances[i + 1].date))) / DAY_MS);
+    gaps.push(Math.round((calendarDay(Date.parse(performances[i].date)) - calendarDay(Date.parse(performances[i + 1].date))) / DAY_MS));
   }
   const threshold = Math.max(median(gaps) * LAYOFF_GAP_MULTIPLIER, LAYOFF_MIN_DAYS);
-  const current = (calendarDay(now.getTime()) - calendarDay(Date.parse(performances[0].date))) / DAY_MS;
+  const current = Math.round((calendarDay(now.getTime()) - calendarDay(Date.parse(performances[0].date))) / DAY_MS);
   return current > threshold ? current : null;
 }
 

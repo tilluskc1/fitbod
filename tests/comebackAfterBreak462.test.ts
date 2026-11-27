@@ -9,6 +9,10 @@ import type { Profile, WorkoutRecord } from '../src/types.ts';
 // Every counterexample that sank the four earlier fixed-window attempts is covered below, plus the
 // owner's 2026-11-26 call on the 3/3/3/12-day edge case (a short skip must not read as a comeback).
 
+// The gap is counted in whole LOCAL calendar days (review finding on #462) — pin the timezone so
+// this file's results don't depend on whatever zone happens to run the suite.
+process.env.TZ = 'America/Los_Angeles';
+
 function makeProfile(overrides: Partial<Profile> = {}): Profile {
   return {
     goal: 'Build Muscle',
@@ -176,12 +180,30 @@ test('review finding: a comeback never prescribes heavier than a miss already co
   assert.ok(afterLayoff.weight <= 50, `comeback must not exceed the already-corrected 50, got ${afterLayoff.weight}`);
 });
 
-test('review finding: the 14-day floor holds on whole calendar days, not raw hours (time-of-day / DST safe)', () => {
-  // A steady 4-day rhythm ending at 07:00, checked 14 calendar days later but at 19:00 — 12 hours
-  // past the raw millisecond mark. A millisecond-based day count would read this as 14.5 days and
-  // fire; counting whole UTC calendar days must not.
+test('review finding: the 14-day floor holds on whole calendar days, not raw hours', () => {
+  // A steady 4-day rhythm ending at 07:00 UTC, checked 14 calendar days later but at 19:00 UTC — 12
+  // hours past the raw millisecond mark. A millisecond-based day count would read this as 14.5 days
+  // and fire; counting whole calendar days must not.
   const history = steady('2026-04-01T07:00:00.000Z', 4, 7);
   const now = new Date('2026-04-15T19:00:00.000Z');
+  const prescription = prescribe(history, now);
+  assert.notEqual(prescription.basis, 'comeback');
+});
+
+test('review finding: a weekly lifter whose session crosses UTC midnight at local evening is not flagged', () => {
+  // 15:00 Pacific = 23:00 UTC, same local calendar day — a UTC-calendar-day count (the first fix
+  // attempt) would land this session on the *next* UTC date and overcount every gap by a day,
+  // falsely flagging a weekly lifter's on-schedule 14-day skip. Local-day counting must not.
+  const weeklyAt15 = (id: string, isoDate: string) => finished(id, `${isoDate}T23:00:00.000Z`, 60);
+  const history = [
+    weeklyAt15('w4', '2026-01-29'),
+    weeklyAt15('w3', '2026-01-22'),
+    weeklyAt15('w2', '2026-01-15'),
+    weeklyAt15('w1', '2026-01-08'),
+    weeklyAt15('w0', '2026-01-01'),
+  ];
+  // 14 local (Pacific) days after Jan 29, at 17:00 Pacific = Feb 13 01:00 UTC.
+  const now = new Date('2026-02-13T01:00:00.000Z');
   const prescription = prescribe(history, now);
   assert.notEqual(prescription.basis, 'comeback');
 });
