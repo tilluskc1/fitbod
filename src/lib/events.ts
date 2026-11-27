@@ -1,4 +1,5 @@
 import { FIREBASE } from './firebase.ts';
+import { dayKey } from './plan.ts';
 import { appVersion, testerId } from './sendFeedback.ts';
 import { STORAGE_KEY } from './storage.ts';
 // Type-only: the lists live in eventSchema.ts, which only /admin and the tests load.
@@ -37,14 +38,8 @@ export function dayTypeOf(name: string): DayType {
   return match ? (match[1].toLowerCase().replace(' ', '-') as DayType) : 'picked';
 }
 
-/** The local calendar day of `when`, YYYY-MM-DD. */
-export function localDay(when: Date): string {
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}`;
-}
-
 export function usageEvent(event: EventName, dayType: DayType | null, id: string, version: string, now: Date): UsageEvent {
-  return { testerId: id, event, dayType, appVersion: version.slice(0, 40), date: localDay(now), createdAt: now.toISOString() };
+  return { testerId: id, event, dayType, appVersion: version.slice(0, 40), date: dayKey(now), createdAt: now.toISOString() };
 }
 
 const str = (stringValue: string) => ({ stringValue });

@@ -1,5 +1,5 @@
 import type { AppState, WorkoutRecord } from '../types.ts';
-import { APP_MARKER, SCHEMA_VERSION, validateState } from './validate.ts';
+import { APP_MARKER, SCHEMA_VERSION, isRecord, validateState } from './validate.ts';
 import { closeAsSaved, lastActiveMs } from './session.ts';
 export { SCHEMA_VERSION } from './validate.ts';
 
@@ -80,10 +80,6 @@ export function keepSafetyCopy(raw: string): boolean {
 export function mayReplaceOriginal(raw: string): boolean {
   if (!raw) return true;
   return keepSafetyCopy(raw);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isEnvelope(value: unknown): value is Envelope {

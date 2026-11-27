@@ -10,12 +10,12 @@ import {
   enqueue,
   eventFields,
   flushOutbox,
-  localDay,
   readOutbox,
   usageEvent,
   type UsageEvent,
 } from '../src/lib/events.ts';
 import { DAY_TYPES, EVENT_FIELDS, EVENT_NAMES } from '../src/lib/eventSchema.ts';
+import { dayKey } from '../src/lib/plan.ts';
 import { EMPTY_STATE, STORAGE_KEY, serializeExport } from '../src/lib/storage.ts';
 
 // #359 anonymous usage events: an allowlist of six fields, a capped outbox, and a send that never
@@ -90,8 +90,8 @@ test('#359 day type comes from the day name; anything else is a picked day', () 
 });
 
 test('#359 the date is the local calendar day, across midnight', () => {
-  assert.equal(localDay(new Date(2026, 10, 15, 23, 59)), '2026-11-15');
-  assert.equal(localDay(new Date(2026, 10, 16, 0, 1)), '2026-11-16');
+  assert.equal(dayKey(new Date(2026, 10, 15, 23, 59)), '2026-11-15');
+  assert.equal(dayKey(new Date(2026, 10, 16, 0, 1)), '2026-11-16');
 });
 
 test('#359 the outbox keeps 500, dropping the oldest; 500 plus one drops exactly one', () => {
