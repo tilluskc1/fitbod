@@ -100,8 +100,9 @@ export function slotProgram(
   slot: PlanSlot,
   history: WorkoutRecord[],
   setup: EquipmentChoice = 'home',
+  now: Date = new Date(),
 ): Program {
-  const generated = generateWorkout(profile, { name: slot.name, focus: slot.focus, everyMuscle: slot.everyMuscle }, slot.index, history, undefined, setup);
+  const generated = generateWorkout(profile, { name: slot.name, focus: slot.focus, everyMuscle: slot.everyMuscle }, slot.index, history, undefined, setup, now);
   const lead = leadCompoundId(generated.exercises.map((entry) => entry.exerciseId));
   const exercises: ProgramExercise[] = generated.exercises.map((entry) => {
     const catalog = exerciseById(entry.exerciseId);
@@ -145,8 +146,8 @@ export function slotProgram(
  * one under 45 minutes, so a today-only 30 is the day a saved 30 builds (#229). A shorter length of
  * 45 or more keeps the saved day for `adaptWorkout` to trim on the timer's model (#203).
  */
-export function slotProgramAt(profile: Profile, slot: PlanSlot, history: WorkoutRecord[], minutes?: number): Program {
-  return atLength(profile, minutes, (at) => slotProgram(at, slot, history));
+export function slotProgramAt(profile: Profile, slot: PlanSlot, history: WorkoutRecord[], minutes?: number, now: Date = new Date()): Program {
+  return atLength(profile, minutes, (at) => slotProgram(at, slot, history, 'home', now));
 }
 
 function atLength(profile: Profile, minutes: number | undefined, build: (profile: Profile) => Program): Program {
@@ -198,6 +199,7 @@ export function todayProgram(
   plannedSlot: PlanSlot,
   history: WorkoutRecord[],
   today: { minutes?: number; equipment?: EquipmentChoice; focus?: MuscleGroup[]; skip?: MuscleGroup[] } = {},
+  now: Date = new Date(),
 ): Program {
   const saved = profile.sessionMinutes ?? 35;
   // A day the lifter described (#193) is generated like any other, from its own focus, at today's length.
@@ -209,7 +211,7 @@ export function todayProgram(
   // is picked (see `worksSkipped`). Those are no exclusions of the lifter's, so none is offered back.
   const spared = custom ? withSkipped(profile, skip).exclusions.slice(profile.exclusions.length) : [];
   if (spared.length > 0) {
-    const program = todayProgram(withSkipped(profile, skip), plannedSlot, history, { ...today, skip: [], focus });
+    const program = todayProgram(withSkipped(profile, skip), plannedSlot, history, { ...today, skip: [], focus }, now);
     const feasibility = program.feasibility && {
       ...program.feasibility,
       alternatives: program.feasibility.alternatives.filter((alt) => !(alt.exerciseId && spared.includes(alt.exerciseId))),
@@ -219,15 +221,15 @@ export function todayProgram(
   // The saved setup (bodyweight for a profile with no gear) is the program, never a gear rebuild;
   // a described day on it is the lifter's own day, still untagged (#188 follow-up).
   if (!today.equipment || today.equipment === 'home' || today.equipment === savedSetup(profile)) {
-    if (!custom) return slotProgramAt(profile, slot, history, today.minutes);
+    if (!custom) return slotProgramAt(profile, slot, history, today.minutes, now);
     const minutes = today.minutes ?? saved;
-    return slotProgram(minutes === saved ? profile : { ...profile, sessionMinutes: minutes }, slot, history);
+    return slotProgram(minutes === saved ? profile : { ...profile, sessionMinutes: minutes }, slot, history, 'home', now);
   }
   // A described day keeps today's length (#193); a rebuilt planned day follows `slotProgramAt`'s rule.
   const kit = SETUP_KIT[today.equipment];
   const program = custom
-    ? slotProgram({ ...profile, ...kit, sessionMinutes: today.minutes ?? saved }, slot, history, today.equipment)
-    : atLength({ ...profile, ...kit }, today.minutes, (at) => slotProgram(at, slot, history, today.equipment));
+    ? slotProgram({ ...profile, ...kit, sessionMinutes: today.minutes ?? saved }, slot, history, today.equipment, now)
+    : atLength({ ...profile, ...kit }, today.minutes, (at) => slotProgram(at, slot, history, today.equipment, now));
   // Gear chips would add to the saved setup, which today's gear does not change: the reason
   // already names what today's setup cannot train, and the gym sheet switches back.
   const feasibility = program.feasibility && {

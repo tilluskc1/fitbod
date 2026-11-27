@@ -22,8 +22,8 @@ const gym: Profile = {
 };
 const legs = planSlots(buildPlan(gym)).find((slot) => slot.name === 'Legs')!;
 
-const day = (equipment: EquipmentChoice, minutes = 60, history: Parameters<typeof todayProgram>[2] = []) => {
-  const program = todayProgram(gym, legs, history, { minutes, equipment });
+const day = (equipment: EquipmentChoice, minutes = 60, history: Parameters<typeof todayProgram>[2] = [], now: Date = new Date()) => {
+  const program = todayProgram(gym, legs, history, { minutes, equipment }, now);
   return { program, adapted: adaptWorkout(program, { minutes, equipment }, [], gym.goal, gym) }; // the app passes the profile as pairing (#88)
 };
 const patterns = (ids: string[]) => ids.map((id) => exerciseById(id)?.pattern);
@@ -98,42 +98,44 @@ const goblet = exerciseById('goblet-squat')!;
 test('#188: a dumbbell load above the travel rack caps to its top and says so', () => {
   const top = Math.max(...EQUIPMENT_OPTIONS.hotel.loads);
   const history = [workout('w-1', '2026-11-01T10:00:00.000Z', 40)];
-  const { adapted } = day('hotel', 60, history);
+  const now = new Date('2026-11-02T10:00:00.000Z');
+  const { adapted } = day('hotel', 60, history, now);
   const squat = adapted.exercises.find((exercise) => exercise.exerciseId === 'goblet-squat');
   assert.ok(squat, adapted.exercises.map((exercise) => exercise.exerciseId).join());
   assert.equal(squat.weight, top);
   assert.match(adapted.note, new RegExp(`Goblet Squat ${top} kg`));
-  assert.equal(liveAdapted(adapted, gym, history).exercises.find((exercise) => exercise.exerciseId === 'goblet-squat')?.weight, top);
-  assert.ok(liveExercises(adapted, gym, history).find((exercise) => exercise.exerciseId === 'goblet-squat')?.planned.every((set) => set.weight === top));
+  assert.equal(liveAdapted(adapted, gym, history, now).exercises.find((exercise) => exercise.exerciseId === 'goblet-squat')?.weight, top);
+  assert.ok(liveExercises(adapted, gym, history, now).find((exercise) => exercise.exerciseId === 'goblet-squat')?.planned.every((set) => set.weight === top));
 });
 
 /** Run today's travel day as prescribed: every planned set done as planned, then finished. */
 const travelSession = (id: string, now: string, history: WorkoutRecord[]) => {
-  const { adapted } = day('hotel', 60, history);
-  let session = createSession({ id, name: 'Legs', dayIndex: legs.index, now, exercises: liveExercises(adapted, gym, history) });
+  const { adapted } = day('hotel', 60, history, new Date(now));
+  let session = createSession({ id, name: 'Legs', dayIndex: legs.index, now, exercises: liveExercises(adapted, gym, history, new Date(now)) });
   session.exercises.forEach((exercise, i) => exercise.performed.forEach((_, j) => {
     session = updatePerformedSet(session, i, j, { done: true }, now);
   }));
   return completeSession(session, { early: false, now });
 };
 const gobletSets = (record: WorkoutRecord) => record.exercises.filter((exercise) => exercise.exerciseId === 'goblet-squat');
-const rx = (history: WorkoutRecord[], setup?: EquipmentChoice) => {
-  const prescription = prescribeExercise(goblet, gym, history, true, true, setup);
+const rx = (history: WorkoutRecord[], setup?: EquipmentChoice, now: Date = new Date()) => {
+  const prescription = prescribeExercise(goblet, gym, history, true, true, setup, now);
   return { weight: prescription.weight, reps: prescription.reps, basis: prescription.basis };
 };
 
 test('#188: a go-heavier target above the travel rack plans its top, never a 0 kg pick', () => {
   const home = workout('w-1', '2026-11-01T10:00:00.000Z', 40, 40, 'goblet-squat', 'Goblet Squat', 30);
-  const top = prescribeExercise(goblet, gym, [home], true).range.max;
-  const before = rx([home]);
+  const now = new Date('2026-11-02T10:00:00.000Z');
+  const top = prescribeExercise(goblet, gym, [home], true, true, 'home', now).range.max;
+  const before = rx([home], undefined, now);
   assert.equal(before.basis, 'go-heavier');
-  const { adapted } = day('hotel', 60, [home]);
-  const planned = liveExercises(adapted, gym, [home]).find((exercise) => exercise.exerciseId === 'goblet-squat')!;
+  const { adapted } = day('hotel', 60, [home], now);
+  const planned = liveExercises(adapted, gym, [home], now).find((exercise) => exercise.exerciseId === 'goblet-squat')!;
   assert.deepEqual(planned.planned.map((set) => set.weight), planned.planned.map(() => 25));
   assert.ok(planned.planned.every((set) => set.reps === top), 'reps stay inside the range: ' + JSON.stringify(planned.planned));
   assert.equal(planned.setup, 'hotel', 'the session records the setup its sets ran on');
   const travel = travelSession('t-1', '2026-11-02T10:00:00.000Z', [home]);
-  assert.deepEqual(rx([home, travel]), before, 'a travel session never changes the home prescription');
+  assert.deepEqual(rx([home, travel], undefined, now), before, 'a travel session never changes the home prescription');
 });
 
 test('#188: a mid-session switch records each segment\'s setup and never lowers home loads', () => {
@@ -162,11 +164,15 @@ test('#188: a mid-session switch records each segment\'s setup and never lowers 
 
 test('#188: travel lifts progress from travel history while home holds', () => {
   const home = workout('w-1', '2026-11-01T10:00:00.000Z', 18, 18, 'goblet-squat', 'Goblet Squat', 30);
-  const homeNext = rx([home]);
+  // Pinned just after `home`: the home-only check below must not read the elapsed real-world
+  // time since this single home session as a layoff — that's not what this test is about.
+  const homeNow = new Date('2026-11-02T10:00:00.000Z');
+  const homeNext = rx([home], undefined, homeNow);
   let history = [home];
   const seen: { weight: number; reps: number }[] = [];
   for (let k = 0; k < 5; k += 1) {
-    const next = rx(history, 'hotel');
+    const sessionNow = new Date(`2026-11-1${k}T10:00:00.000Z`);
+    const next = rx(history, 'hotel', sessionNow);
     seen.push({ weight: next.weight, reps: next.reps });
     history = [...history, travelSession(`t-${k}`, `2026-11-1${k}T10:00:00.000Z`, history)];
   }
@@ -175,7 +181,7 @@ test('#188: travel lifts progress from travel history while home holds', () => {
     assert.ok(up, JSON.stringify(seen));
   }
   assert.ok(seen.every((step) => EQUIPMENT_OPTIONS.hotel.loads.includes(step.weight)), JSON.stringify(seen));
-  assert.deepEqual(rx(history), homeNext, 'five travel sessions leave home where it was');
+  assert.deepEqual(rx(history, undefined, homeNow), homeNext, 'five travel sessions leave home where it was');
 });
 
 test('#188: records without a setup are the saved setup\'s, and a travel-only exercise starts fresh at home', () => {
@@ -373,16 +379,19 @@ test('#188: a step down the lifter chose at home carries to the next trip', () =
 
 test('#188: at the top travel dumbbell reps climb to the range top, then hold and say so', () => {
   let history = [workout('h', '2026-10-01T10:00:00.000Z', 40, 40, 'goblet-squat', 'Goblet Squat', 6)];
-  const max = prescribeExercise(goblet, gym, history, true).range.max;
+  const startNow = new Date('2026-10-02T10:00:00.000Z');
+  const max = prescribeExercise(goblet, gym, history, true, true, 'home', startNow).range.max;
   const steps: { weight: number; reps: number }[] = [];
+  let now = startNow;
   for (let k = 0; k < 12; k += 1) {
-    const next = prescribeExercise(goblet, gym, history, true, true, 'hotel');
+    const next = prescribeExercise(goblet, gym, history, true, true, 'hotel', now);
     steps.push({ weight: next.weight, reps: next.reps });
-    history = [...history, labelled(workout(`t-${k}`, `2026-10-${String(k + 2).padStart(2, '0')}T10:00:00.000Z`, next.weight, next.weight, 'goblet-squat', 'Goblet Squat', next.reps), 'hotel')];
+    now = new Date(`2026-10-${String(k + 2).padStart(2, '0')}T10:00:00.000Z`);
+    history = [...history, labelled(workout(`t-${k}`, now.toISOString(), next.weight, next.weight, 'goblet-squat', 'Goblet Squat', next.reps), 'hotel')];
   }
   assert.ok(steps.every((step) => step.weight === 25 && step.reps <= max), JSON.stringify(steps));
   assert.equal(steps.at(-1)?.reps, max);
-  const held = prescribeExercise(goblet, gym, history, true, true, 'hotel');
+  const held = prescribeExercise(goblet, gym, history, true, true, 'hotel', now);
   assert.equal(held.reps, max);
   assert.match(describePrescription(held, 'kg'), new RegExp(`Top travel dumbbell: hold at ${max} reps`));
 });

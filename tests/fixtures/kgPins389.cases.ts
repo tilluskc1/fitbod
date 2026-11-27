@@ -23,6 +23,9 @@ function history(exerciseId: string, weight: number, planned: number, done: numb
 const IDS = ['barbell-bench-press', 'back-squat', 'face-pull', 'skull-crusher', 'dumbbell-curl', 'dumbbell-floor-press',
   'kettlebell-goblet-squat', 'leg-press', 'lat-pulldown', 'cable-row', 'push-up', 'pull-up'];
 
+/** Just after this file's 2026-11-01 `history()` fixtures — pinned before break-detection existed. */
+const NOW = new Date('2026-11-02T10:00:00.000Z');
+
 export function kgPinCases() {
   const steps = KIT.flatMap((equipment) => LOADS.flatMap((kg) => RACKS.map((available) =>
     ({ equipment, kg, available, out: weightSteps({ kg, equipment, available, unit: 'kg' }) }))));
@@ -37,7 +40,7 @@ export function kgPinCases() {
     return [20, 25, 61.235, 100].flatMap((weight) => [[8, 8], [10, 10], [12, 12], [6, 6], [20, 20], [8, 12]].flatMap(([planned, done]) =>
       RACKS.slice(0, 2).flatMap((rack) => [undefined, 'kg' as const].map((unit) => {
         const p = prescribeExercise(exercise, { ...profile, unit, loads: rack.length ? { [exercise.equipment]: rack } : {} },
-          history(id, weight, planned, done));
+          history(id, weight, planned, done), false, true, 'home', NOW);
         return { id, weight, planned, done, rack, unit: unit ?? null, out: { weight: p.weight, reps: p.reps, basis: p.basis, increment: p.increment },
           reason: describePrescription(p, 'kg'), coach: coachLine(p, 'kg') };
       }))));

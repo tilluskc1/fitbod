@@ -212,7 +212,7 @@ export default function PlanScreen({
                   <Demo exerciseId={exercise.id} name={exercise.name} className="row-photo" />
                   <span className="row-body">
                     <strong className="row-name">{exercise.name}</strong>
-                    <span className="row-meta">{catalogRowMeta(exercise, profile, history, unit, dayIds, daySets)}</span>
+                    <span className="row-meta">{catalogRowMeta(exercise, profile, history, unit, dayIds, daySets, now)}</span>
                   </span>
                   <span className="chev">
                     <ChevronIcon />

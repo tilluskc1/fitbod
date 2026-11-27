@@ -40,8 +40,12 @@ function finishPress(history: WorkoutRecord[], id: string, day: string, weight: 
   return { history: state.history, workout };
 }
 
+/** An hour after the workout itself: keeps #444's "returning after a break" rule from reading the
+ * recap's own just-finished session, dated in these fixtures, as a layoff against the real clock. */
+const justAfter = (workout: WorkoutRecord) => new Date(Date.parse(workout.date) + 60 * 60 * 1000);
+
 const highlightOf = (run: { history: WorkoutRecord[]; workout: WorkoutRecord }) =>
-  recapHighlight(run.workout, run.history, progressionLines(run.workout, profile, run.history, 'kg'), 'kg');
+  recapHighlight(run.workout, run.history, progressionLines(run.workout, profile, run.history, 'kg', justAfter(run.workout)), 'kg');
 
 test('an earned load step leads the recap, naming the next load and the exercise', () => {
   // Top of the 8–10 range on every set at one rack load earns 18 kg.
@@ -122,7 +126,7 @@ test('rendered recap leads with the highlight and Today shows N of daysPerWeek',
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom' });
   try {
     const { default: Recap } = await server.ssrLoadModule('/src/screens/RecapScreen.tsx');
-    const lines = progressionLines(run.workout, profile, run.history, 'kg');
+    const lines = progressionLines(run.workout, profile, run.history, 'kg', justAfter(run.workout));
     const recap = plain(renderToStaticMarkup(createElement(Recap, { workout: run.workout, progression: lines,
       highlight: recapHighlight(run.workout, run.history, lines, 'kg'), feedbackWrite: null,
       onFeedback: noop, onRetryFeedback: noop, onViewHistory: noop, onBackToday: noop })));

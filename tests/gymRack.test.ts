@@ -33,19 +33,22 @@ const pressedAt = (weight: number, reps: number): WorkoutRecord[] => [{
   }],
 }];
 
+/** Just after this file's 2026-11-04 fixtures. */
+const NOW = new Date('2026-11-05T10:00:00.000Z');
+
 test('a load typed above the listed rack is the next target, at every rep count', () => {
-  const below = prescribeExercise(press, profile, pressedAt(lb(20), range.min));
+  const below = prescribeExercise(press, profile, pressedAt(lb(20), range.min), false, true, 'home', NOW);
   assert.equal(below.basis, 'rep-increase');
   assert.equal(below.weight, lb(20));
   // At the top of the range there is no listed load above 20: the next one up is the lifter's to name.
-  const top = prescribeExercise(press, profile, pressedAt(lb(20), range.max));
+  const top = prescribeExercise(press, profile, pressedAt(lb(20), range.max), false, true, 'home', NOW);
   assert.equal(top.basis, 'go-heavier');
   assert.equal(top.weight, lb(20));
 });
 
 test("Start's target keeps the typed 20, never the rack's 10", () => {
   const adapted = adaptWorkout(FULL_BODY_A, defaultConstraints(profile), [], profile.goal);
-  const live = liveExercises(adapted, profile, pressedAt(lb(20), range.min)).find((entry) => entry.exerciseId === press.id);
+  const live = liveExercises(adapted, profile, pressedAt(lb(20), range.min), NOW).find((entry) => entry.exerciseId === press.id);
   assert.ok(live, 'the floor press is on the day');
   assert.deepEqual([...new Set(live.planned.map((set) => set.weight))], [lb(20)]);
 });
@@ -101,8 +104,8 @@ test("the set editor's rack buttons and typed field are pills, like the rest of 
 
 test("the rack's top typed in the other unit is still the top of the rack, not above it", () => {
   const kgRack: Profile = { ...profile, unit: 'kg', loads: { Dumbbell: [9] } };
-  assert.equal(prescribeExercise(press, kgRack, pressedAt(lb(20), range.max)).basis, 'hold');
-  assert.equal(prescribeExercise(press, kgRack, pressedAt(lb(25), range.max)).basis, 'go-heavier');
+  assert.equal(prescribeExercise(press, kgRack, pressedAt(lb(20), range.max), false, true, 'home', NOW).basis, 'hold');
+  assert.equal(prescribeExercise(press, kgRack, pressedAt(lb(25), range.max), false, true, 'home', NOW).basis, 'go-heavier');
 });
 
 test('a full-gym kit reads as "Gym" on Today, never "Home" (#180)', async () => {

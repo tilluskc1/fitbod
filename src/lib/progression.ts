@@ -320,40 +320,52 @@ export interface ExercisePerformance {
 }
 
 /**
- * The most recent completed session that contains this exercise on this setup (#188).
+ * Every completed session that contains this exercise on this setup, most recent first.
  * Active sessions are ignored: unfinished data must not drive the next prescription.
- * Sets without a recorded setup ran on the saved one ('home'). A today-only setup with
- * no history of its own for this exercise starts from the saved setup's.
+ * Sets without a recorded setup ran on the saved one ('home').
  */
-export function lastExercisePerformance(
-  history: WorkoutRecord[],
-  exerciseId: string,
-  setup: SetupChoice = 'home',
-): ExercisePerformance | null {
-  let latest: ExercisePerformance | null = null;
-  let latestTime = Number.NEGATIVE_INFINITY;
+function exercisePerformanceHistory(history: WorkoutRecord[], exerciseId: string, setup: SetupChoice): ExercisePerformance[] {
+  const entries: { time: number; performance: ExercisePerformance }[] = [];
   for (const workout of history) {
     if (workout.status !== 'completed') continue;
     const own = workout.exercises.filter((exercise) => (exercise.setup ?? 'home') === setup);
     const found = exerciseInWorkout({ ...workout, exercises: own }, exerciseId);
     if (!found) continue;
-    const time = new Date(workout.date).getTime();
-    if (!(time > latestTime)) continue;
-    latestTime = time;
-    latest = {
-      workoutId: workout.id,
-      workoutName: workout.name,
-      date: workout.date,
-      // The slot's original requirement, preserved across swaps; old records
-      // without split markers fall back to their planned totals.
-      plannedSets: found.requirement,
-      plannedWeight: found.firstPlanned?.weight ?? 0,
-      plannedReps: found.firstPlanned?.reps ?? 0,
-      done: found.done.map((set) => ({ weight: set.weight, reps: set.reps })),
-      lead: leadSlotIds(workout.exercises).includes(exerciseId),
-    };
+    entries.push({
+      time: new Date(workout.date).getTime(),
+      performance: {
+        workoutId: workout.id,
+        workoutName: workout.name,
+        date: workout.date,
+        // The slot's original requirement, preserved across swaps; old records
+        // without split markers fall back to their planned totals.
+        plannedSets: found.requirement,
+        plannedWeight: found.firstPlanned?.weight ?? 0,
+        plannedReps: found.firstPlanned?.reps ?? 0,
+        done: found.done.map((set) => ({ weight: set.weight, reps: set.reps })),
+        lead: leadSlotIds(workout.exercises).includes(exerciseId),
+      },
+    });
   }
-  return latest ?? (setup === 'home' ? null : lastExercisePerformance(history, exerciseId, 'home'));
+  // Stable sort: two sessions logged with the same timestamp keep history's own order, same as before.
+  entries.sort((a, b) => b.time - a.time);
+  return entries.map((entry) => entry.performance);
+}
+
+/** A today-only setup with no history of its own for this exercise starts from the saved setup's (#188). */
+function resolvedPerformanceHistory(history: WorkoutRecord[], exerciseId: string, setup: SetupChoice): ExercisePerformance[] {
+  const own = exercisePerformanceHistory(history, exerciseId, setup);
+  if (own.length > 0 || setup === 'home') return own;
+  return exercisePerformanceHistory(history, exerciseId, 'home');
+}
+
+/** The most recent completed session that contains this exercise on this setup (#188). */
+export function lastExercisePerformance(
+  history: WorkoutRecord[],
+  exerciseId: string,
+  setup: SetupChoice = 'home',
+): ExercisePerformance | null {
+  return resolvedPerformanceHistory(history, exerciseId, setup)[0] ?? null;
 }
 
 export type ProgressionBasis =
@@ -369,7 +381,11 @@ export type ProgressionBasis =
   /** Already at or above a today-only rack's heaviest load: its top, one more rep (#188). */
   | 'rack-top'
   /** The last session for this exercise was marked "Too much": a step down, not up (#442). */
-  | 'deload';
+  | 'deload'
+  /** The same unfinished prescription N sessions running, at the same load: a step down, not another repeat (#444). */
+  | 'stalled'
+  /** The last session for this exercise was far enough back to read as a layoff: ease back in, not the pre-break top (#444). */
+  | 'comeback';
 
 export interface Prescription {
   equipment: Equipment;
@@ -406,8 +422,27 @@ function setupRack(setup: SetupChoice, equipment: Equipment): number[] | undefin
   return setup === 'hotel' && equipment === 'Dumbbell' ? [...HOTEL_DUMBBELLS].sort((a, b) => a - b) : undefined;
 }
 
-/** Bases that mean "the lifter earned this, or at least didn't fail it" — the only ones a too-much step-down overrides. */
+/** Bases that mean "the lifter earned this, or at least didn't fail it" — the only ones a step-down (too-much, a layoff) overrides. */
 const DELOAD_BASES = new Set<ProgressionBasis>(['load-increase', 'rep-increase', 'go-heavier', 'hold', 'rack-top']);
+
+/** Consecutive unfinished sessions at the same load before progression deloads instead of repeating again (#444). Default picked by product, owner can override. */
+const REPEATED_FAILURE_STREAK = 2;
+
+/** Days since a lift's last session before it reads as a layoff, not a lift still warm (#444). Default picked by product, owner can override. */
+const BREAK_DAYS = 10;
+
+/**
+ * (#442/#444) One step below `weight`, shared by every deload-style step-down: too-much feedback, a
+ * stale layoff, a repeated miss. The pound grid when the lifter has no owned rack and reads pounds,
+ * else the down-grid mirror `prevLoad`.
+ */
+function stepDown(weight: number, increment: number, available: number[], poundStep: number): number {
+  return poundStep > 0
+    ? lbLoadAtOrUnder(weight - toKg(poundStep, 'lb'), poundStep)
+    : increment > 0
+      ? prevLoad(weight, increment, available)
+      : weight;
+}
 
 /**
  * (#442) When the workout `prescription.last` came from was marked "Too much", a basis that would
@@ -423,13 +458,45 @@ function applyTooMuch(prescription: Prescription, profile: Profile, history: Wor
   if (workout?.feedback !== 'too-much') return prescription;
   const workingWeight = Math.max(...last.done.map((set) => set.weight));
   const poundStep = unitOf(profile) === 'lb' && available.length === 0 && increment > 0 ? lbStep(equipment) : 0;
-  const weight = poundStep > 0
-    ? lbLoadAtOrUnder(workingWeight - toKg(poundStep, 'lb'), poundStep)
-    : increment > 0
-      ? prevLoad(workingWeight, increment, available)
-      : workingWeight;
+  const weight = stepDown(workingWeight, increment, available, poundStep);
   if (weight >= workingWeight - 0.001) return prescription;
   return { ...prescription, weight, reps: range.min, basis: 'deload' };
+}
+
+/**
+ * (#444) A `last` session far enough in the past reads as a layoff, not a lift still warm: a basis
+ * that would otherwise hand back (or hold) the pre-break top weight steps down one notch from that
+ * session's actual working weight instead, same step `applyTooMuch` uses. Only overrides the
+ * "earned it, or at least didn't fail it" bases — a too-much deload (already applied, if any) is
+ * left alone rather than stepped down twice.
+ */
+function applyBreak(prescription: Prescription, profile: Profile, now: Date): Prescription {
+  const { last, basis, increment, available, range, equipment } = prescription;
+  if (!last || last.done.length === 0 || equipment === 'Bodyweight' || !DELOAD_BASES.has(basis)) return prescription;
+  const days = Math.floor((now.getTime() - new Date(last.date).getTime()) / 86_400_000);
+  if (!(days >= BREAK_DAYS)) return prescription;
+  const workingWeight = Math.max(...last.done.map((set) => set.weight));
+  const poundStep = unitOf(profile) === 'lb' && available.length === 0 && increment > 0 ? lbStep(equipment) : 0;
+  const weight = stepDown(workingWeight, increment, available, poundStep);
+  if (weight >= workingWeight - 0.001) return prescription;
+  return { ...prescription, weight, reps: range.min, basis: 'comeback' };
+}
+
+/**
+ * (#444) How many sessions running, most recent first, this exercise on this setup has been an
+ * unfinished `repeat` at this same prescribed load. A session with nothing logged at all breaks the
+ * streak — that's silence, not a miss, and must not read as a failure. A different load (a manual
+ * change, or a deload that already fired) also breaks it: the streak is only ever at one load.
+ */
+function repeatedFailureStreak(history: WorkoutRecord[], exerciseId: string, setup: SetupChoice, weight: number): number {
+  let streak = 0;
+  for (const performance of resolvedPerformanceHistory(history, exerciseId, setup)) {
+    if (performance.done.length === 0) break;
+    if (performance.done.length >= performance.plannedSets) break;
+    if (Math.abs(performance.plannedWeight - weight) > 0.001) break;
+    streak += 1;
+  }
+  return streak;
 }
 
 /**
@@ -440,6 +507,7 @@ function applyTooMuch(prescription: Prescription, profile: Profile, history: Wor
  * itself. A travel rack is then the only rack: a load is the closest
  * one at or under the target (none: the lifter picks), and a lift that would go past its
  * heaviest load climbs one rep at a time at that load, up to the range top, and holds there.
+ * `now`: injectable for tests; a layoff (#444) is measured against it, not a bare `new Date()`.
  */
 export function prescribeExercise(
   exercise: Exercise,
@@ -448,15 +516,13 @@ export function prescribeExercise(
   lead = false,
   dayHasLead = true,
   setup: SetupChoice = 'home',
+  now: Date = new Date(),
 ): Prescription {
   const rack = setupRack(setup, exercise.equipment);
   const from = (source: SetupChoice) => {
     // The saved setup's loads are the ones the user owns: a gym kit's stale rack never caps (#194).
-    const prescription = applyTooMuch(
-      prescribeOn(exercise, profile, history, lead, dayHasLead, source, rack ?? availableLoads({ loads: ownedLoads(profile) }, exercise.equipment)),
-      profile,
-      history,
-    );
+    const base = prescribeOn(exercise, profile, history, lead, dayHasLead, source, rack ?? availableLoads({ loads: ownedLoads(profile) }, exercise.equipment));
+    const prescription = applyBreak(applyTooMuch(base, profile, history), profile, now);
     if (!rack) return prescription;
     const done = prescription.last?.done ?? [];
     if ((prescription.basis === 'go-heavier' || prescription.basis === 'hold') && done.length > 0) {
@@ -520,16 +586,18 @@ function prescribeOn(
   const lowestReps = Math.min(...last.done.map((set) => set.reps));
   const finished = last.done.length >= last.plannedSets;
 
-  // Unfinished work repeats its target exactly: it neither earns nor loses a step (#104).
+  // Unfinished work repeats its target exactly: it neither earns nor loses a step (#104) —
+  // unless this is the same miss N sessions running, at the same load (#444: a stall, not a blip).
   // A first loaded session planned no load, so what was logged becomes the baseline.
   if (!finished) {
     const firstLoad = last.plannedWeight === 0 && workingWeight > 0;
-    return {
-      ...base,
-      weight: firstLoad ? workingWeight : last.plannedWeight,
-      reps: clamp(firstLoad ? lowestReps : last.plannedReps, range.min, range.max),
-      basis: 'repeat',
-    };
+    const weight = firstLoad ? workingWeight : last.plannedWeight;
+    const reps = clamp(firstLoad ? lowestReps : last.plannedReps, range.min, range.max);
+    if (!firstLoad && repeatedFailureStreak(history, exercise.id, setup, weight) >= REPEATED_FAILURE_STREAK) {
+      const down = stepDown(weight, increment, available, poundStep);
+      if (down < weight - 0.001) return { ...base, weight: down, reps: range.min, basis: 'stalled' };
+    }
+    return { ...base, weight, reps, basis: 'repeat' };
   }
 
   // Working sets at different loads are not one qualifying load: the load
@@ -551,8 +619,10 @@ function prescribeOn(
   const sameRole = last.lead === (lead && canLead(exercise));
   if (sameRole && lowestReps < range.min && last.plannedReps > 0 && last.plannedReps < range.min && increment > 0) {
     const estimate = (workingWeight * (1 + lowestReps / 30)) / (1 + range.min / 30);
+    // (#444) No owned load sits at or under the estimate: carry the last successful working weight
+    // forward instead of resetting to the lightest load owned, which can sit far below it.
     const down = available.length > 0
-      ? atOrUnder(available, estimate) ?? available[0]
+      ? atOrUnder(available, estimate) ?? workingWeight
       : poundStep > 0
         ? lbLoadAtOrUnder(estimate, poundStep)
         : Math.max(increment, round(Math.floor((estimate + 0.001) / increment) * increment));
@@ -655,6 +725,10 @@ export function describePrescription(prescription: Prescription, unit: Unit): st
         : `Top of your available loads at ${range.max} reps — add heavier ${equipment.toLowerCase()} loads to progress further.`;
     case 'deload':
       return `${when}: ${logged(workWeight)} marked "Too much". Stepping down to ${logged(weight)} for ${range.min} reps.`;
+    case 'stalled':
+      return `${when}: ${setsLabel} unfinished at ${logged(workWeight)}, same as the time before. Stepping down to ${logged(weight)} for ${range.min} reps.`;
+    case 'comeback':
+      return `${when}: ${logged(workWeight)}. That was a while ago — easing back in at ${logged(weight)} for ${range.min} reps instead of picking up where you left off.`;
     case 'first-time':
     default:
       return 'First time — no history yet.';
@@ -697,6 +771,10 @@ export function coachLine(prescription: Prescription, unit: Unit): string {
       return last.done.length === 0 ? `Last time wasn't logged. Same plan: ${today}.` : `Finish every set: ${today}.`;
     case 'deload':
       return `Marked "Too much" last time — stepping down: ${today}.`;
+    case 'stalled':
+      return `Stalled at this weight — stepping down: ${today}.`;
+    case 'comeback':
+      return `Welcome back — easing in at ${today}.`;
     case 'first-time':
     default:
       return first;

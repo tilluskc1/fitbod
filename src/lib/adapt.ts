@@ -523,6 +523,7 @@ export function swapCandidateFor(
   lead = false,
   /** The setup the swapped sets run on (#188). */
   setup: EquipmentChoice = 'home',
+  now: Date = new Date(),
 ): SwapCandidate {
   const open = session ? latestDoneSet(session, target.id) : null;
   if (open) {
@@ -530,7 +531,7 @@ export function swapCandidateFor(
   }
   const hold = FULL_BODY_A.exercises.find((exercise) => exercise.exerciseId === target.id)?.holdSeconds;
   if (hold) return { exerciseId: target.id, name: target.name, weight: 0, reps: hold };
-  const prescription = prescribeExercise(target, profile, history, lead, true, setup);
+  const prescription = prescribeExercise(target, profile, history, lead, true, setup, now);
   return {
     exerciseId: target.id,
     name: target.name,
@@ -599,6 +600,7 @@ export function restorePendingWorkout(
   original: AdaptedWorkout,
   profile?: Profile | null,
   history: WorkoutRecord[] = [],
+  now: Date = new Date(),
 ): WorkoutRecord {
   const pattern = (id: string) => exerciseById(id)?.pattern ?? id;
   const completed = session.exercises.flatMap((exercise) => {
@@ -609,7 +611,7 @@ export function restorePendingWorkout(
       performed: indices.map((index) => ({ ...exercise.performed[index] })),
     }] : [];
   });
-  const prescription = profile ? liveExercises(original, profile, history) : toWorkoutExercises(original);
+  const prescription = profile ? liveExercises(original, profile, history, now) : toWorkoutExercises(original);
   const inSession = new Set(session.exercises.map((exercise) => exercise.exerciseId));
   // Which prescribed exercise a logged entry counts against (#250), by identity, never by position:
   // 1. the same exercise, every setup segment of it (#188);

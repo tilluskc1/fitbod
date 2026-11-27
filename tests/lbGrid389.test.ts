@@ -46,8 +46,11 @@ function history(exerciseId: string, weight: number, reps: number, sets = 3, pla
   }];
 }
 
+/** Just after this file's 2026-11-01 `history()` fixtures. */
+const NOW = new Date('2026-11-02T10:00:00.000Z');
+
 const prescribe = (id: string, rows: WorkoutRecord[], unit: Unit, loads: Profile['loads'] = {}) =>
-  prescribeExercise(exerciseById(id)!, { ...base, unit, loads }, rows);
+  prescribeExercise(exerciseById(id)!, { ...base, unit, loads }, rows, false, true, 'home', NOW);
 
 // --- #391: the next load ---
 

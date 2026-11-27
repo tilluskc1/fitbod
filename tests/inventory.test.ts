@@ -118,7 +118,7 @@ test('an unknown rack never gets a target it did not log', () => {
     { early: true, now: '2026-11-04T10:30:00.000Z' });
   const press = exerciseById(session.exercises[0].exerciseId);
   assert.ok(press);
-  assert.equal(prescribeExercise(press, unconfirmed, history).weight, typed);
+  assert.equal(prescribeExercise(press, unconfirmed, history, false, true, 'home', new Date('2026-11-05T10:00:00.000Z')).weight, typed);
 });
 
 test('progression stops at the top of the confirmed rack', () => {
@@ -142,7 +142,7 @@ function loggedAt(exerciseId: string, weight: number, reps: number, profile: Pro
   }
   const { history } = applyFinish({ ...EMPTY_STATE, profile, current: session }, session.id,
     { early: true, now: '2026-11-04T10:30:00.000Z' });
-  return prescribeExercise(exercise, profile, history);
+  return prescribeExercise(exercise, profile, history, false, true, 'home', new Date('2026-11-05T10:00:00.000Z'));
 }
 
 const ceiling = (exerciseId: string) => {
